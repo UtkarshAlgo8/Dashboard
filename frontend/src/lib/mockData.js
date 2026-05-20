@@ -633,3 +633,189 @@ export const PRODUCTION_DRILL_BY_PLANT_SECTION = {
     ],
   },
 };
+
+/**
+ * Banbury process-parameter normal ranges (spec 08). Drives the
+ * out-of-range flag and tooltip on Machine Parameter chips per
+ * BRD FR-P55.
+ */
+export const BANBURY_PARAM_RANGES = {
+  dropTemp: { min: 145, max: 158, unit: "°C", label: "Drop Temp" },
+  tcu: { min: 60, max: 78, unit: "°C", label: "TCU" },
+  rotor: { min: 35, max: 45, unit: "rpm", label: "Rotor" },
+  mixTime: { min: 180, max: 220, unit: "s", label: "Mix Time" },
+  power: { min: 220, max: 260, unit: "kW", label: "Power" },
+};
+
+/**
+ * Scrap traceability records (spec 08). Keyed by
+ * `${plantId}/${section}/${machineId}/${itemCode}`. Each entry is
+ * an array of Production ID records consumed by ScrapTraceabilityPanel.
+ *
+ * Item codes that appear in OEE_DRILL_BY_PLANT_SECTION's
+ * quality/scrap detail rows with `traceable: true` MUST have a key
+ * here; otherwise the panel shows the empty state.
+ */
+export const SCRAP_TRACEABILITY = {
+  // Banbury 1 — Final compound COMP-FIN-001 (120 kg traceable scrap)
+  "banmore/mix/banbury-1/COMP-FIN-001": [
+    {
+      productionId: "B1-2026-1015-A-001",
+      shift: "A",
+      operator: "R. Kumar",
+      produced: 1800,
+      scrap: 35,
+      scrapReason: "Underdispersion",
+      batchLot: "FIN-001-LOT-0042",
+      dateTime: "2026-10-15T07:23:00",
+      params: { dropTemp: 152, tcu: 68, rotor: 41, mixTime: 198, power: 234 },
+      alarmParam: null,
+    },
+    {
+      productionId: "B1-2026-1015-A-002",
+      shift: "A",
+      operator: "R. Kumar",
+      produced: 1800,
+      scrap: 28,
+      scrapReason: "Visual flow mark",
+      batchLot: "FIN-001-LOT-0043",
+      dateTime: "2026-10-15T08:14:00",
+      params: { dropTemp: 160, tcu: 70, rotor: 39, mixTime: 205, power: 240 },
+      alarmParam: "dropTemp",
+    },
+    {
+      productionId: "B1-2026-1015-B-001",
+      shift: "B",
+      operator: "S. Iyer",
+      produced: 1800,
+      scrap: 30,
+      scrapReason: "Underdispersion",
+      batchLot: "FIN-001-LOT-0051",
+      dateTime: "2026-10-15T15:48:00",
+      params: { dropTemp: 150, tcu: 66, rotor: 38, mixTime: 188, power: 228 },
+      alarmParam: null,
+    },
+    {
+      productionId: "B1-2026-1015-C-001",
+      shift: "C",
+      operator: "A. Patel",
+      produced: 1800,
+      scrap: 27,
+      scrapReason: "Mooney out of spec",
+      batchLot: "FIN-001-LOT-0061",
+      dateTime: "2026-10-15T23:11:00",
+      params: { dropTemp: 154, tcu: 72, rotor: 47, mixTime: 195, power: 252 },
+      alarmParam: "rotor",
+    },
+  ],
+
+  // Banbury 2 — Final compound COMP-FIN-002 (85 kg traceable scrap)
+  "banmore/mix/banbury-2/COMP-FIN-002": [
+    {
+      productionId: "B2-2026-1015-A-001",
+      shift: "A",
+      operator: "M. Singh",
+      produced: 1850,
+      scrap: 45,
+      scrapReason: "Overdispersion",
+      batchLot: "FIN-002-LOT-0021",
+      dateTime: "2026-10-15T08:02:00",
+      params: { dropTemp: 156, tcu: 75, rotor: 44, mixTime: 226, power: 258 },
+      alarmParam: "mixTime",
+    },
+    {
+      productionId: "B2-2026-1015-B-001",
+      shift: "B",
+      operator: "P. Sharma",
+      produced: 1850,
+      scrap: 40,
+      scrapReason: "Mooney out of spec",
+      batchLot: "FIN-002-LOT-0034",
+      dateTime: "2026-10-15T16:30:00",
+      params: { dropTemp: 153, tcu: 71, rotor: 42, mixTime: 210, power: 246 },
+      alarmParam: null,
+    },
+  ],
+
+  // Banbury 3 — Master compound COMP-MST-005 (95 kg traceable scrap)
+  "banmore/mix/banbury-3/COMP-MST-005": [
+    {
+      productionId: "B3-2026-1015-A-001",
+      shift: "A",
+      operator: "V. Joshi",
+      produced: 2100,
+      scrap: 55,
+      scrapReason: "TCU overshoot",
+      batchLot: "MST-005-LOT-0011",
+      dateTime: "2026-10-15T06:48:00",
+      params: { dropTemp: 159, tcu: 82, rotor: 43, mixTime: 215, power: 263 },
+      alarmParam: "tcu",
+    },
+    {
+      productionId: "B3-2026-1015-B-001",
+      shift: "B",
+      operator: "N. Bose",
+      produced: 2100,
+      scrap: 40,
+      scrapReason: "Underdispersion",
+      batchLot: "MST-005-LOT-0017",
+      dateTime: "2026-10-15T14:55:00",
+      params: { dropTemp: 148, tcu: 64, rotor: 36, mixTime: 192, power: 230 },
+      alarmParam: null,
+    },
+  ],
+
+  // Banbury 5 — multiple traceable item codes
+  "banmore/mix/banbury-5/COMP-FIN-002": [
+    {
+      productionId: "B5-2026-1015-A-001",
+      shift: "A",
+      operator: "J. Reddy",
+      produced: 1750,
+      scrap: 120,
+      scrapReason: "Bearing chatter — visual contamination",
+      batchLot: "FIN-002-LOT-0089",
+      dateTime: "2026-10-15T09:18:00",
+      params: { dropTemp: 165, tcu: 85, rotor: 50, mixTime: 230, power: 275 },
+      alarmParam: "dropTemp",
+    },
+    {
+      productionId: "B5-2026-1015-B-001",
+      shift: "B",
+      operator: "T. Banerjee",
+      produced: 1750,
+      scrap: 120,
+      scrapReason: "Cold-zone underdispersion",
+      batchLot: "FIN-002-LOT-0092",
+      dateTime: "2026-10-15T17:42:00",
+      params: { dropTemp: 142, tcu: 58, rotor: 33, mixTime: 175, power: 215 },
+      alarmParam: "dropTemp",
+    },
+  ],
+  "banmore/mix/banbury-5/COMP-MST-001": [
+    {
+      productionId: "B5-2026-1015-A-002",
+      shift: "A",
+      operator: "J. Reddy",
+      produced: 2050,
+      scrap: 60,
+      scrapReason: "Visual contamination",
+      batchLot: "MST-001-LOT-0023",
+      dateTime: "2026-10-15T11:35:00",
+      params: { dropTemp: 158, tcu: 76, rotor: 44, mixTime: 218, power: 256 },
+      alarmParam: null,
+    },
+    {
+      productionId: "B5-2026-1015-C-001",
+      shift: "C",
+      operator: "K. Menon",
+      produced: 2050,
+      scrap: 50,
+      scrapReason: "Mooney out of spec",
+      batchLot: "MST-001-LOT-0029",
+      dateTime: "2026-10-15T23:05:00",
+      params: { dropTemp: 155, tcu: 73, rotor: 42, mixTime: 209, power: 248 },
+      alarmParam: null,
+    },
+  ],
+};

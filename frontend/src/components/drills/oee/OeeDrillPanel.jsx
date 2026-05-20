@@ -4,13 +4,15 @@ import OverallTiles from "./OverallTiles.jsx";
 import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
+import ScrapTraceabilityPanel from "./ScrapTraceabilityPanel.jsx";
 import { LoadingSkeleton, useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getOeeDrill } from "@/api/drills.js";
 
 /**
  * Composes the OEE drill: overall tiles → machine search → machine
- * table → sub-drill panel (when a cell is selected).
+ * table → sub-drill panel (when a cell is selected) → scrap
+ * traceability panel (when a traceable scrap row is clicked).
  *
  * Phase 1 ships Banmore + Mixing data. Spec 11 widens to TBM /
  * Curing / Stock.
@@ -20,6 +22,7 @@ function OeeDrillPanel({ plantId, section }) {
   const [search, setSearch] = useState("");
   const [selectedCell, setSelectedCell] = useState(null); // { machineId, component } | null
   const [subCategory, setSubCategory] = useState(null);
+  const [traceItemCode, setTraceItemCode] = useState(null);
 
   const { data, isLoading, error } = usePolledQuery(
     () => getOeeDrill({ plantId, section }),
@@ -46,12 +49,23 @@ function OeeDrillPanel({ plantId, section }) {
       ) {
         // Same cell → deselect (FR-P36)
         setSubCategory(null);
+        setTraceItemCode(null);
         return null;
       }
-      // Switching → reset sub-category
+      // Switching → reset sub-category + traceability
       setSubCategory(null);
+      setTraceItemCode(null);
       return { machineId, component };
     });
+  };
+
+  const handleSelectSubCategory = (next) => {
+    setSubCategory(next);
+    setTraceItemCode(null); // changing sub-category resets traceability
+  };
+
+  const handleTraceRowClick = (itemCode) => {
+    setTraceItemCode((current) => (current === itemCode ? null : itemCode));
   };
 
   const selectedMachine = selectedCell
@@ -105,13 +119,26 @@ function OeeDrillPanel({ plantId, section }) {
       />
 
       {selectedMachine && selectedCell && (
-        <SubDrill
-          machine={selectedMachine}
-          component={selectedCell.component}
-          subCategory={subCategory}
-          onSelectSubCategory={setSubCategory}
-          rows={rows}
-        />
+        <>
+          <SubDrill
+            machine={selectedMachine}
+            component={selectedCell.component}
+            subCategory={subCategory}
+            onSelectSubCategory={handleSelectSubCategory}
+            rows={rows}
+            activeTraceItemCode={traceItemCode}
+            onTraceRowClick={handleTraceRowClick}
+          />
+
+          {traceItemCode && (
+            <ScrapTraceabilityPanel
+              plantId={plantId}
+              section={section}
+              machine={selectedMachine}
+              itemCode={traceItemCode}
+            />
+          )}
+        </>
       )}
     </Stack>
   );

@@ -57,6 +57,8 @@ function SubDrill({
   subCategory,
   onSelectSubCategory,
   rows,
+  activeTraceItemCode,
+  onTraceRowClick,
 }) {
   const theme = useTheme();
   const accent = theme.custom.brand[ACCENT_COLOR_KEY[component]];
@@ -125,6 +127,8 @@ function SubDrill({
             component={component}
             subCategory={subCategory}
             rows={rows}
+            activeTraceItemCode={activeTraceItemCode}
+            onTraceRowClick={onTraceRowClick}
           />
         ) : (
           <Box
@@ -151,9 +155,16 @@ function SubDrill({
   );
 }
 
-function DetailTable({ component, subCategory, rows }) {
+function DetailTable({
+  component,
+  subCategory,
+  rows,
+  activeTraceItemCode,
+  onTraceRowClick,
+}) {
   // Column shape varies by (component, subCategory)
   const columns = COLUMNS[`${component}/${subCategory}`] ?? COLUMNS.default;
+  const isScrap = component === "quality" && subCategory === "scrap";
 
   return (
     <TableContainer
@@ -188,19 +199,36 @@ function DetailTable({ component, subCategory, rows }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((row, i) => (
-            <TableRow key={i} hover>
-              {columns.map((c) => (
-                <TableCell
-                  key={c.key}
-                  align={c.align ?? "right"}
-                  sx={{ fontSize: 13 }}
-                >
-                  {c.render ? c.render(row) : row[c.key]}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
+          {rows.map((row, i) => {
+            const traceable = isScrap && row.traceable;
+            const active = traceable && row.itemCode === activeTraceItemCode;
+            return (
+              <TableRow
+                key={i}
+                hover={!traceable}
+                onClick={
+                  traceable ? () => onTraceRowClick(row.itemCode) : undefined
+                }
+                sx={{
+                  cursor: traceable ? "pointer" : "default",
+                  backgroundColor: active ? "primary.light" : undefined,
+                  "&:hover": traceable
+                    ? { backgroundColor: "primary.light" }
+                    : undefined,
+                }}
+              >
+                {columns.map((c) => (
+                  <TableCell
+                    key={c.key}
+                    align={c.align ?? "right"}
+                    sx={{ fontSize: 13 }}
+                  >
+                    {c.render ? c.render(row) : row[c.key]}
+                  </TableCell>
+                ))}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </TableContainer>

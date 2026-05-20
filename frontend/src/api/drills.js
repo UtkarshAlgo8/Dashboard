@@ -3,6 +3,7 @@ import { mockDelay } from "@/lib/mockDelay.js";
 import {
   OEE_DRILL_BY_PLANT_SECTION,
   PRODUCTION_DRILL_BY_PLANT_SECTION,
+  SCRAP_TRACEABILITY,
 } from "@/lib/mockData.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
@@ -52,5 +53,32 @@ export function getProductionDrill({ plantId, section, compound }) {
   }
   return client.get(
     `/plants/${plantId}/production/drills/production?section=${section}&compound=${compound}`,
+  );
+}
+
+/**
+ * Fetch Production ID-level traceability for a scrap entry (spec 08).
+ * Returns [] when the (machine, itemCode) pair has no traceability
+ * data configured.
+ *
+ * @param {object} params
+ * @param {string} params.plantId
+ * @param {string} params.section
+ * @param {string} params.machineId
+ * @param {string} params.itemCode
+ * @returns {Promise<Array>}
+ */
+export function getScrapTraceability({
+  plantId,
+  section,
+  machineId,
+  itemCode,
+}) {
+  if (USE_MOCK) {
+    const key = `${plantId}/${section}/${machineId}/${itemCode}`;
+    return mockDelay(SCRAP_TRACEABILITY[key] ?? []);
+  }
+  return client.get(
+    `/plants/${plantId}/production/drills/scrap-traceability?section=${section}&machine=${machineId}&itemCode=${encodeURIComponent(itemCode)}`,
   );
 }
