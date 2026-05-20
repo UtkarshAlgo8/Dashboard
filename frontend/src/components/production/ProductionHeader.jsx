@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Box,
   IconButton,
   Stack,
@@ -11,6 +10,8 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { useNavigate } from "react-router-dom";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
+import UserMenu from "@/components/user-menu/UserMenu.jsx";
+import { MOCK_USER } from "@/lib/mockData.js";
 
 /**
  * Production-dashboard top header.
@@ -131,18 +132,7 @@ function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
           </IconButton>
         </Tooltip>
 
-        <Avatar
-          sx={{
-            width: 32,
-            height: 32,
-            fontSize: 12,
-            fontWeight: 600,
-            backgroundColor: "primary.main",
-            color: "primary.contrastText",
-          }}
-        >
-          PH
-        </Avatar>
+        <UserMenu user={MOCK_USER} size={32} />
       </Stack>
     </Box>
   );

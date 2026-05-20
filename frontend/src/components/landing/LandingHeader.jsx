@@ -1,4 +1,6 @@
-import { Avatar, Box, Stack, Typography, useTheme } from "@mui/material";
+import { Box, Stack, Typography, useTheme } from "@mui/material";
+import UserMenu from "@/components/user-menu/UserMenu.jsx";
+import { MOCK_USER } from "@/lib/mockData.js";
 
 /**
  * Landing-page top header.
@@ -85,18 +87,7 @@ function LandingHeader() {
         >
           FY 2025-26
         </Box>
-        <Avatar
-          sx={{
-            width: 36,
-            height: 36,
-            fontSize: 13,
-            fontWeight: 600,
-            backgroundColor: "primary.main",
-            color: "primary.contrastText",
-          }}
-        >
-          PH
-        </Avatar>
+        <UserMenu user={MOCK_USER} />
       </Stack>
     </Box>
   );

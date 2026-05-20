@@ -2225,3 +2225,19 @@ for (const section of ["mix", "tbm", "cur", "stk"]) {
 }
 
 export { OTHER_TAB_KPIS_BY_SECTION };
+
+/**
+ * Mock signed-in user for Phase 1 (spec 14). Single role per
+ * Q-USR-01; no auth per Q-AUTH-01. Replaces any real session
+ * lookup. When the backend lands, swap this for a fetched user.
+ */
+export const MOCK_USER = {
+  name: "Rakesh Patel",
+  role: "Plant Head",
+  plant: "Banmore Plant",
+  email: "rakesh.patel@jktyre.example",
+  phone: "+91 98765 43210",
+  employeeId: "JK-PH-00142",
+  joinedDate: "2018-04-12",
+  avatarInitials: "PH",
+};
