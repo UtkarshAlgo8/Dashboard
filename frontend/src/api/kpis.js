@@ -1,6 +1,9 @@
 import client from "./client.js";
 import { mockDelay } from "@/lib/mockDelay.js";
-import { PRODUCTIVITY_KPIS_BY_SECTION } from "@/lib/mockData.js";
+import {
+  PRODUCTIVITY_KPIS_BY_SECTION,
+  OTHER_TAB_KPIS_BY_SECTION,
+} from "@/lib/mockData.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
@@ -24,18 +27,28 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
  */
 export function getKpis({ plantId, section, tab, compound, stockSelector }) {
   if (USE_MOCK) {
-    if (plantId !== "banmore" || tab !== "p") return mockDelay([]);
-    const bucket = PRODUCTIVITY_KPIS_BY_SECTION[section];
-    if (!bucket) return mockDelay([]);
-    if (section === "mix") {
-      const key = compound === "master" ? "master" : "final";
-      return mockDelay(bucket[key] ?? []);
+    if (plantId !== "banmore") return mockDelay([]);
+
+    if (tab === "p") {
+      const bucket = PRODUCTIVITY_KPIS_BY_SECTION[section];
+      if (!bucket) return mockDelay([]);
+      if (section === "mix") {
+        const key = compound === "master" ? "master" : "final";
+        return mockDelay(bucket[key] ?? []);
+      }
+      if (section === "stk") {
+        const key = stockSelector ?? "4roll";
+        return mockDelay(bucket[key] ?? []);
+      }
+      return mockDelay(bucket);
     }
-    if (section === "stk") {
-      const key = stockSelector ?? "4roll";
-      return mockDelay(bucket[key] ?? []);
+
+    if (["q", "c", "d", "m", "s"].includes(tab)) {
+      return mockDelay(OTHER_TAB_KPIS_BY_SECTION[section]?.[tab] ?? []);
     }
-    return mockDelay(bucket);
+
+    // tab === "i" (Inventory) — spec 15
+    return mockDelay([]);
   }
   const query = new URLSearchParams({ section, tab });
   if (compound) query.set("compound", compound);

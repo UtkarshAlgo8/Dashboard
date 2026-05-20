@@ -1941,3 +1941,287 @@ PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION["banmore/stk"] = {
     { machine: "4 Roll Line 3", planned: 400, actual: 420 },
   ],
 };
+
+/**
+ * Q / C / D / M / S KPI templates per tab (spec 12). Baseline
+ * values are mid-section; per-section variants apply a small delta
+ * via SECTION_VARIANT_DELTAS so each section's view differs but
+ * the structure stays uniform. All non-Productivity KPIs are
+ * non-drillable in Phase 1 (BRD §6.12 only describes Productivity
+ * drills).
+ *
+ * Counter KPIs (`days-without-incident`) drive the progress chart
+ * variant in the Trend Modal via pickChartType.
+ */
+const OTHER_TAB_TEMPLATES = {
+  q: [
+    {
+      id: "ftq",
+      name: "First Time Quality",
+      value: 98.4,
+      unit: "%",
+      trend: 0.3,
+      trendFavourable: true,
+      spark: [97.9, 98.0, 98.1, 98.2, 98.3, 98.3, 98.4, 98.4],
+      target: 99,
+      drillable: false,
+    },
+    {
+      id: "defect-rate",
+      name: "Defect Rate",
+      value: 1.6,
+      unit: "%",
+      trend: -0.2,
+      trendFavourable: true,
+      spark: [2.1, 2.0, 1.9, 1.8, 1.7, 1.7, 1.6, 1.6],
+      target: 1.0,
+      drillable: false,
+    },
+    {
+      id: "ncm-hold",
+      name: "NCM Hold",
+      value: 142,
+      unit: "kg",
+      trend: -8.4,
+      trendFavourable: true,
+      spark: [180, 168, 162, 158, 152, 148, 145, 142],
+      target: 100,
+      drillable: false,
+    },
+    {
+      id: "customer-complaints",
+      name: "Customer Complaints",
+      value: 3,
+      unit: "count",
+      trend: -25.0,
+      trendFavourable: true,
+      spark: [5, 5, 4, 4, 4, 3, 3, 3],
+      target: 0,
+      drillable: false,
+    },
+  ],
+  c: [
+    {
+      id: "cost-per-unit",
+      name: "Cost per Unit",
+      value: 248,
+      unit: "₹",
+      trend: -1.2,
+      trendFavourable: true,
+      spark: [256, 254, 252, 251, 250, 249, 248, 248],
+      target: 240,
+      drillable: false,
+    },
+    {
+      id: "energy-cost",
+      name: "Energy Cost",
+      value: 36.5,
+      unit: "₹/unit",
+      trend: 1.8,
+      trendFavourable: false,
+      spark: [34.6, 35.0, 35.4, 35.7, 36.0, 36.2, 36.4, 36.5],
+      target: 34,
+      drillable: false,
+    },
+    {
+      id: "conversion-cost",
+      name: "Conversion Cost",
+      value: 92,
+      unit: "₹/unit",
+      trend: -0.6,
+      trendFavourable: true,
+      spark: [95, 94, 93, 93, 92, 92, 92, 92],
+      target: 88,
+      drillable: false,
+    },
+    {
+      id: "material-cost",
+      name: "Material Cost",
+      value: 156,
+      unit: "₹/unit",
+      trend: 0.4,
+      trendFavourable: false,
+      spark: [154, 154, 155, 155, 155, 156, 156, 156],
+      target: 150,
+      drillable: false,
+    },
+  ],
+  d: [
+    {
+      id: "otif",
+      name: "OTIF",
+      value: 94.3,
+      unit: "%",
+      trend: 0.4,
+      trendFavourable: true,
+      spark: [93.4, 93.6, 93.8, 93.9, 94.0, 94.1, 94.2, 94.3],
+      target: 95,
+      drillable: false,
+    },
+    {
+      id: "schedule-adherence",
+      name: "Schedule Adherence",
+      value: 92.7,
+      unit: "%",
+      trend: -0.3,
+      trendFavourable: false,
+      spark: [93.4, 93.2, 93.0, 92.9, 92.8, 92.7, 92.7, 92.7],
+      target: 95,
+      drillable: false,
+    },
+    {
+      id: "plan-vs-actual",
+      name: "Plan vs Actual",
+      value: 96.8,
+      unit: "%",
+      trend: 0.5,
+      trendFavourable: true,
+      spark: [95.6, 95.9, 96.2, 96.4, 96.5, 96.6, 96.7, 96.8],
+      target: 100,
+      drillable: false,
+    },
+    {
+      id: "order-lead-time",
+      name: "Order Lead Time",
+      value: 4.6,
+      unit: "days",
+      trend: -3.8,
+      trendFavourable: true,
+      spark: [5.6, 5.4, 5.2, 5.0, 4.9, 4.7, 4.6, 4.6],
+      target: 4,
+      drillable: false,
+    },
+  ],
+  m: [
+    {
+      id: "attendance",
+      name: "Attendance",
+      value: 96.2,
+      unit: "%",
+      trend: 0.3,
+      trendFavourable: true,
+      spark: [95.3, 95.5, 95.7, 95.8, 95.9, 96.0, 96.1, 96.2],
+      target: 97,
+      drillable: false,
+    },
+    {
+      id: "manpower-vs-plan",
+      name: "Manpower vs Plan",
+      value: 98.1,
+      unit: "%",
+      trend: 0.1,
+      trendFavourable: true,
+      spark: [97.6, 97.7, 97.8, 97.9, 97.9, 98.0, 98.0, 98.1],
+      target: 100,
+      drillable: false,
+    },
+    {
+      id: "training-hours",
+      name: "Training Hours",
+      value: 184,
+      unit: "hrs",
+      trend: 6.4,
+      trendFavourable: true,
+      spark: [156, 160, 165, 170, 173, 177, 181, 184],
+      target: 200,
+      drillable: false,
+    },
+    {
+      id: "engagement-score",
+      name: "Engagement Score",
+      value: 82.5,
+      unit: "%",
+      trend: 1.6,
+      trendFavourable: true,
+      spark: [79.8, 80.3, 80.8, 81.2, 81.6, 82.0, 82.3, 82.5],
+      target: 85,
+      drillable: false,
+    },
+  ],
+  s: [
+    {
+      id: "days-without-incident",
+      name: "Days Without Incident",
+      value: 142,
+      unit: "days",
+      trend: null,
+      trendFavourable: true,
+      spark: [136, 137, 138, 139, 140, 141, 142, 142],
+      target: 180,
+      drillable: false,
+    },
+    {
+      id: "near-misses",
+      name: "Near Misses",
+      value: 4,
+      unit: "count",
+      trend: -33.3,
+      trendFavourable: true,
+      spark: [7, 6, 6, 5, 5, 4, 4, 4],
+      target: 0,
+      drillable: false,
+    },
+    {
+      id: "safety-observations",
+      name: "Safety Observations",
+      value: 38,
+      unit: "count",
+      trend: 8.6,
+      trendFavourable: true,
+      spark: [32, 33, 34, 35, 36, 37, 38, 38],
+      target: 40,
+      drillable: false,
+    },
+    {
+      id: "audit-score",
+      name: "Audit Score",
+      value: 88.5,
+      unit: "%",
+      trend: 1.2,
+      trendFavourable: true,
+      spark: [85.6, 86.2, 86.8, 87.2, 87.6, 88.0, 88.3, 88.5],
+      target: 95,
+      drillable: false,
+    },
+  ],
+};
+
+/**
+ * Per-section deltas. Multiply numeric KPI values by these per
+ * section so each section's view shows distinct but plausible
+ * numbers. Spark + target also adjust.
+ */
+const SECTION_VARIANT_FACTORS = {
+  mix: 1.0,
+  tbm: 1.06,
+  cur: 0.97,
+  stk: 1.02,
+};
+
+function applyFactor(kpi, factor) {
+  if (factor === 1.0) return kpi;
+  // Trend % and string fields are not scaled. Targets stay as
+  // documented targets (independent of current scale).
+  const scale = (n) => (typeof n === "number" ? +(n * factor).toFixed(2) : n);
+  return {
+    ...kpi,
+    value:
+      typeof kpi.value === "number"
+        ? +(kpi.value * factor).toFixed(2)
+        : kpi.value,
+    spark: kpi.spark?.map(scale) ?? kpi.spark,
+  };
+}
+
+const OTHER_TAB_KPIS_BY_SECTION = {};
+for (const section of ["mix", "tbm", "cur", "stk"]) {
+  OTHER_TAB_KPIS_BY_SECTION[section] = {};
+  const factor = SECTION_VARIANT_FACTORS[section];
+  for (const tab of ["q", "c", "d", "m", "s"]) {
+    OTHER_TAB_KPIS_BY_SECTION[section][tab] = OTHER_TAB_TEMPLATES[tab].map(
+      (kpi) => applyFactor(kpi, factor),
+    );
+  }
+}
+
+export { OTHER_TAB_KPIS_BY_SECTION };

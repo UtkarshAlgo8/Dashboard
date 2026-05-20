@@ -17,25 +17,51 @@
  * @returns {"line" | "bar" | "progress"}
  */
 const ID_TO_TYPE = {
-  // Phase 1 — Mixing > Productivity
+  // Productivity tab
   oee: "line",
   "plan-compliance": "line",
   production: "bar",
   downtime: "bar",
 
-  // Phase 2+ entries — included so callers needn't change
+  // Q (Quality)
   ftq: "line",
+  "defect-rate": "line",
+  "ncm-hold": "bar",
+  "customer-complaints": "bar",
+
+  // C (Cost)
+  "cost-per-unit": "bar",
+  "energy-cost": "bar",
+  "conversion-cost": "bar",
+  "material-cost": "bar",
+
+  // D (Delivery)
+  otif: "line",
+  "schedule-adherence": "line",
+  "plan-vs-actual": "line",
+  "order-lead-time": "bar",
+
+  // M (Morale)
+  attendance: "line",
+  "manpower-vs-plan": "line",
+  "training-hours": "bar",
+  "engagement-score": "line",
+
+  // S (Safety)
+  "days-without-incident": "progress",
+  "near-misses": "bar",
+  "safety-observations": "bar",
+  "audit-score": "line",
+
+  // Phase 2+ Quality / Engineering surfaces
   "scrap-rate": "line",
   mtbf: "line",
   "kwh-mt": "line",
   "power-factor": "line",
   "breakdown-hours": "bar",
-  "ncm-hold": "bar",
-  "customer-complaints": "bar",
   "production-loss": "bar",
   "repeat-failures": "bar",
   "anomalies-detected": "bar",
-  "days-without-incident": "progress",
   "safe-days": "progress",
 };
 

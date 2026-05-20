@@ -18,3 +18,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 6406d22 — fix(usePolledQuery): stop re-fetch loop with inline arrow-function fetchers _(Vishwajit Khanna)_
   - a59909e — spec 09 other-drills _(Vishwajit Khanna)_
   - 37c90ee — spec 10 trend-modal _(Vishwajit Khanna)_
+  - 472f52e — spec 11 other-sections _(Vishwajit Khanna)_
