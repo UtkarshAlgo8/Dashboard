@@ -88,10 +88,10 @@ export const BANMORE_TYRE_MIX = { pcr: 100, tbr: 0 };
  * specs when their consuming KPIs come online.
  */
 export const SECTIONS = [
-  { id: "mix", code: "MIX", name: "Mixing" },
-  { id: "tbm", code: "TBM", name: "TBM" },
-  { id: "cur", code: "CUR", name: "Curing" },
-  { id: "stk", code: "STK", name: "Stock" },
+  { id: "mix", code: "MIX", name: "Mixing", oee: 91.5 },
+  { id: "stk", code: "STK", name: "Stock", oee: 87.2 },
+  { id: "tbm", code: "TBM", name: "TBM", oee: 82.4 },
+  { id: "cur", code: "CUR", name: "Curing", oee: 88.1 },
 ];
 
 /**
@@ -116,7 +116,7 @@ export const CATEGORY_TABS = [
  * the KPI engine arrives in spec 05+.
  */
 export const PLANT_SUMMARIES = {
-  banmore: { prodPct: 92, scrapPct: 1.05 },
+  banmore: { prodPct: 92, scrapPct: 1.05, ftqPct: 95.4, safeDays: 78 },
 };
 
 /**

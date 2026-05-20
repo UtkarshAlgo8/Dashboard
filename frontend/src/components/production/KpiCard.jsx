@@ -8,7 +8,7 @@ import {
 } from "@mui/material";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import Sparkline from "./Sparkline.jsx";
 
@@ -75,14 +75,26 @@ function KpiCard({ kpi, isOpen, onDrillToggle, onTrendOpen }) {
             </IconButton>
           </Tooltip>
           {kpi.drillable && (
-            <ExpandMoreIcon
-              sx={{
-                fontSize: 18,
-                color: "text.disabled",
-                transition: "transform 0.2s",
-                transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-              }}
-            />
+            <Tooltip title={isOpen ? "Collapse" : "Click to drill down"} arrow>
+              <Box
+                sx={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isOpen
+                    ? "primary.main"
+                    : `${theme.custom.brand.orange}1f`,
+                  color: isOpen ? "primary.contrastText" : "primary.main",
+                  transition: "transform 0.2s, background-color 0.15s",
+                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                }}
+              >
+                <KeyboardArrowUpIcon sx={{ fontSize: 18 }} />
+              </Box>
+            </Tooltip>
           )}
         </Stack>
       </Stack>
