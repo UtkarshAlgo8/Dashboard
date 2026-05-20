@@ -17,11 +17,7 @@ function PlantCard({
 }) {
   const theme = useTheme();
 
-  const baseBorderColor = selected
-    ? theme.palette.primary.main
-    : hovered
-      ? theme.palette.primary.main
-      : theme.palette.divider;
+  const highlighted = active && (hovered || selected);
 
   const card = (
     <Box
@@ -30,20 +26,16 @@ function PlantCard({
       onClick={active ? onSelect : undefined}
       sx={{
         backgroundColor: "background.paper",
-        border: 1,
-        borderColor: baseBorderColor,
+        border: 2,
+        borderColor: highlighted
+          ? theme.palette.primary.main
+          : theme.palette.divider,
         borderRadius: 1.25,
         p: 2,
         cursor: active ? "pointer" : "not-allowed",
         opacity: active ? 1 : 0.5,
-        transition: "transform 0.15s, box-shadow 0.15s, border-color 0.15s",
-        boxShadow: hovered && active ? theme.custom.shadow : "none",
-        transform: hovered && active ? "translateY(-2px)" : "none",
-        // Stronger ring when selected
-        ...(selected && {
-          borderWidth: 2,
-          boxShadow: `0 0 0 3px ${theme.palette.primary.light}`,
-        }),
+        transition: "border-color 0.15s, box-shadow 0.15s",
+        boxShadow: highlighted ? theme.custom.shadow : "none",
       }}
     >
       <Stack

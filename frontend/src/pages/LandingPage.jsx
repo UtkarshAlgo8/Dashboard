@@ -1,25 +1,26 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, CircularProgress, Stack, useTheme } from "@mui/material";
+import { Box, CircularProgress, Stack } from "@mui/material";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
 import PlantCardList from "@/components/landing/PlantCardList.jsx";
-import FunctionTileStrip from "@/components/landing/FunctionTileStrip.jsx";
 import IndiaMap from "@/components/landing/IndiaMap.jsx";
+import PlantFunctionModal from "@/components/landing/PlantFunctionModal.jsx";
 import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getPlants, getFunctions } from "@/api/plants.js";
 
 /**
  * Phase 1 active sets — per Q-NAV-01 only Banmore and Production are
- * interactive. Everything else renders visible-but-disabled with a
- * "Phase 2" tooltip. Defined at module scope (not state) because the
- * scope never changes at runtime.
+ * the navigable path. The function modal mirrors the design: every
+ * data-active function (Production, Quality, Engineering) renders
+ * in the active style; Plant Head + Technical render "SOON" per
+ * BRD FR-L15. Clicks on Quality / Engineering toast a "Phase 2"
+ * notice instead of navigating.
  */
 const PHASE_1_ACTIVE_PLANTS = new Set(["banmore"]);
-const PHASE_1_ACTIVE_FUNCTIONS = new Set(["prod"]);
+const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod"]);
 
 function LandingPage() {
-  const theme = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -29,20 +30,38 @@ function LandingPage() {
   const { data: functions } = usePolledQuery(getFunctions, { interval: 0 });
 
   const [hov, setHov] = useState(null);
-  const [sel, setSel] = useState(null);
+  const [modalPlantId, setModalPlantId] = useState(null);
 
-  const selectedPlant = useMemo(
-    () => (sel && plants ? (plants.find((p) => p.id === sel) ?? null) : null),
-    [sel, plants],
+  const modalPlant =
+    modalPlantId && Array.isArray(plants)
+      ? (plants.find((p) => p.id === modalPlantId) ?? null)
+      : null;
+
+  // Functions that render in the "active" style in the modal — the
+  // data-active set from the API. Phase 1 only navigates on
+  // Production.
+  const modalActiveIds = new Set(
+    Array.isArray(functions)
+      ? functions.filter((f) => f.active).map((f) => f.id)
+      : [],
   );
 
+  const openModalFor = (plantId) => {
+    if (!PHASE_1_ACTIVE_PLANTS.has(plantId)) return;
+    setModalPlantId(plantId);
+  };
+
   const handleFunctionSelect = (fn) => {
-    if (!selectedPlant) return;
-    if (fn.id === "prod" && selectedPlant.id === "banmore") {
+    if (!modalPlant) return;
+    if (
+      fn.id === "prod" &&
+      modalPlant.id === "banmore" &&
+      PHASE_1_NAVIGABLE_FUNCTIONS.has(fn.id)
+    ) {
       navigate("/banmore/production");
       return;
     }
-    toast.info(`${fn.name} on ${selectedPlant.name} arrives in Phase 2.`);
+    toast.info(`${fn.name} on ${modalPlant.name} arrives in Phase 2.`);
   };
 
   return (
@@ -75,58 +94,39 @@ function LandingPage() {
               },
             }}
           >
-            {/* Left: plant cards + function tiles strip */}
-            <Stack spacing={2.5}>
-              <PlantCardList
-                plants={plants}
-                activePlantIds={PHASE_1_ACTIVE_PLANTS}
-                hov={hov}
-                sel={sel}
-                onHover={setHov}
-                onLeave={() => setHov(null)}
-                onSelect={setSel}
-              />
+            <PlantCardList
+              plants={plants}
+              activePlantIds={PHASE_1_ACTIVE_PLANTS}
+              hov={hov}
+              sel={modalPlantId}
+              onHover={setHov}
+              onLeave={() => setHov(null)}
+              onSelect={openModalFor}
+            />
 
-              {selectedPlant && (
-                <Box
-                  sx={{
-                    backgroundColor: "background.paper",
-                    border: 1,
-                    borderColor: "divider",
-                    borderRadius: 1.25,
-                    p: 2,
-                    boxShadow: theme.custom.shadow,
-                  }}
-                >
-                  <FunctionTileStrip
-                    functions={functions}
-                    selectedPlant={selectedPlant}
-                    activeFunctionIds={
-                      selectedPlant.id === "banmore"
-                        ? PHASE_1_ACTIVE_FUNCTIONS
-                        : new Set()
-                    }
-                    onSelect={handleFunctionSelect}
-                  />
-                </Box>
-              )}
-            </Stack>
-
-            {/* Right: India map */}
             <Box>
               <IndiaMap
                 plants={plants}
                 activePlantIds={PHASE_1_ACTIVE_PLANTS}
                 hov={hov}
-                sel={sel}
+                sel={modalPlantId}
                 onHover={setHov}
                 onLeave={() => setHov(null)}
-                onSelect={setSel}
+                onSelect={openModalFor}
               />
             </Box>
           </Box>
         )}
       </Box>
+
+      <PlantFunctionModal
+        open={Boolean(modalPlant)}
+        onClose={() => setModalPlantId(null)}
+        plant={modalPlant}
+        functions={Array.isArray(functions) ? functions : []}
+        activeFunctionIds={modalActiveIds}
+        onSelectFunction={handleFunctionSelect}
+      />
     </Box>
   );
 }

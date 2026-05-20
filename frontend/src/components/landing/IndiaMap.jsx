@@ -1,4 +1,4 @@
-import { Box, useTheme } from "@mui/material";
+import { Box, Stack, Typography, useTheme } from "@mui/material";
 import { SP, MAP_W, MAP_H } from "@/lib/indiaMap.js";
 
 /**
@@ -24,8 +24,16 @@ function IndiaMap({
   const muted = theme.palette.divider;
   const fill = theme.custom.surface.soft;
 
+  const hoveredPlant =
+    hov && plants ? (plants.find((p) => p.id === hov) ?? null) : null;
+  const hoveredActive = hoveredPlant
+    ? activePlantIds.has(hoveredPlant.id)
+    : false;
+
   return (
-    <Box sx={{ width: "100%", maxWidth: 540, mx: "auto" }}>
+    <Box
+      sx={{ width: "100%", maxWidth: 540, mx: "auto", position: "relative" }}
+    >
       <svg
         viewBox={`0 0 ${MAP_W} ${MAP_H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
@@ -167,6 +175,81 @@ function IndiaMap({
           );
         })}
       </svg>
+
+      {hoveredPlant && hoveredActive && (
+        <Box
+          sx={{
+            position: "absolute",
+            // sx/sy are in viewBox units; convert to % of map dimensions.
+            left: `${(hoveredPlant.sx / MAP_W) * 100}%`,
+            top: `${(hoveredPlant.sy / MAP_H) * 100}%`,
+            transform: "translate(-50%, calc(-100% - 20px))",
+            backgroundColor: "background.paper",
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1.25,
+            boxShadow: theme.custom.shadow,
+            px: 2,
+            py: 1.5,
+            minWidth: 220,
+            pointerEvents: "none",
+            zIndex: 2,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: "primary.main",
+              mb: 0.25,
+            }}
+          >
+            {hoveredPlant.name}
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: "text.disabled", mb: 1 }}>
+            {hoveredPlant.sub}
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="space-between">
+            <KpiMini label="OE" value={hoveredPlant.oe} />
+            <KpiMini label="OTIF" value={hoveredPlant.otif} />
+            <KpiMini label="YIELD" value={hoveredPlant.yield} />
+          </Stack>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function KpiMini({ label, value }) {
+  return (
+    <Box sx={{ textAlign: "center" }}>
+      <Typography
+        sx={{
+          fontSize: 9,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: 16,
+          fontWeight: 700,
+          color: "success.main",
+          lineHeight: 1,
+        }}
+      >
+        {value}
+        <Typography
+          component="span"
+          sx={{ fontSize: 10, color: "success.main" }}
+        >
+          %
+        </Typography>
+      </Typography>
     </Box>
   );
 }
