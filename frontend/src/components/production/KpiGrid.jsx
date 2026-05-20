@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import KpiCard from "./KpiCard.jsx";
 import CompoundSubSelector from "./CompoundSubSelector.jsx";
-import { LoadingSkeleton, useToast } from "@/components/common";
+import { LoadingSkeleton } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getKpis } from "@/api/kpis.js";
 import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
 import ProductionDrillPanel from "@/components/drills/production/ProductionDrillPanel.jsx";
 import DowntimeDrillPanel from "@/components/drills/downtime/DowntimeDrillPanel.jsx";
 import PlanComplianceDrillPanel from "@/components/drills/plan-compliance/PlanComplianceDrillPanel.jsx";
+import TrendModal from "@/components/trend/TrendModal.jsx";
 
 /**
  * KPI grid for the current (section, tab) view. Polls every 60s
@@ -26,8 +27,8 @@ import PlanComplianceDrillPanel from "@/components/drills/plan-compliance/PlanCo
  */
 function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
   const theme = useTheme();
-  const toast = useToast();
   const [openDrillId, setOpenDrillId] = useState(null);
+  const [trendKpiId, setTrendKpiId] = useState(null);
 
   const showCompound = section === "mix" && tab === "p";
 
@@ -43,9 +44,14 @@ function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
     setOpenDrillId((current) => (current === id ? null : id));
   };
 
-  const handleTrendOpen = () => {
-    toast.info("Trend modal arrives in spec 10.");
+  const handleTrendOpen = (kpiId) => {
+    setTrendKpiId(kpiId);
   };
+
+  const trendKpi =
+    trendKpiId && Array.isArray(kpis)
+      ? (kpis.find((k) => k.id === trendKpiId) ?? null)
+      : null;
 
   const openKpi =
     openDrillId && Array.isArray(kpis)
@@ -174,6 +180,14 @@ function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
             </Typography>
           </Box>
         )}
+
+      <TrendModal
+        open={Boolean(trendKpi)}
+        onClose={() => setTrendKpiId(null)}
+        plantId={plantId}
+        kpi={trendKpi}
+        compound={compound}
+      />
     </Box>
   );
 }
