@@ -12,3 +12,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - feadaf4 — fix: default to mock data when VITE_USE_MOCK_DATA is unset _(Vishwajit Khanna)_
   - 932cd4d — spec 04 production-dashboard-shell _(Vishwajit Khanna)_
   - 8fb9a8b — spec 05 mixing-productivity-kpis _(Vishwajit Khanna)_
+  - 75b7063 — spec 06 oee-drill _(Vishwajit Khanna)_

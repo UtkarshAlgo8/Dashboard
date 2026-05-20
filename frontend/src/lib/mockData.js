@@ -478,3 +478,158 @@ export const OEE_DRILL_BY_PLANT_SECTION = {
     },
   },
 };
+
+/**
+ * Production drill data per plant + section (spec 07). Compound-wise
+ * rows grouped under "master" and "final".
+ *
+ * Row shape:
+ *   { itemCode, machine, planned, actual, batchesPlan, batchesActual }
+ *
+ * Variance is derived in the renderer: (actual - planned) / planned
+ * * 100, colour-coded per FR-P46.
+ *
+ * Machine assignment per FR-P47:
+ *   Master cycles Banbury 1–3 (larger Banburys handle master batches)
+ *   Final cycles Banbury 1–5
+ *
+ * Batch counts derived per FR-P48:
+ *   Master ≈ 1.80 MT/batch
+ *   Final ≈ 1.95 MT/batch
+ */
+export const PRODUCTION_DRILL_BY_PLANT_SECTION = {
+  "banmore/mix": {
+    master: [
+      {
+        itemCode: "COMP-MST-001",
+        machine: "Banbury 1",
+        planned: 34.2,
+        actual: 33.1,
+        batchesPlan: 19,
+        batchesActual: 18,
+      },
+      {
+        itemCode: "COMP-MST-002",
+        machine: "Banbury 2",
+        planned: 28.6,
+        actual: 29.4,
+        batchesPlan: 16,
+        batchesActual: 16,
+      },
+      {
+        itemCode: "COMP-MST-003",
+        machine: "Banbury 3",
+        planned: 41.8,
+        actual: 40.5,
+        batchesPlan: 23,
+        batchesActual: 23,
+      },
+      {
+        itemCode: "COMP-MST-004",
+        machine: "Banbury 1",
+        planned: 22.5,
+        actual: 19.8,
+        batchesPlan: 13,
+        batchesActual: 11,
+      },
+      {
+        itemCode: "COMP-MST-005",
+        machine: "Banbury 2",
+        planned: 36.0,
+        actual: 35.6,
+        batchesPlan: 20,
+        batchesActual: 20,
+      },
+      {
+        itemCode: "COMP-MST-006",
+        machine: "Banbury 3",
+        planned: 30.4,
+        actual: 31.5,
+        batchesPlan: 17,
+        batchesActual: 18,
+      },
+      {
+        itemCode: "COMP-MST-007",
+        machine: "Banbury 1",
+        planned: 47.2,
+        actual: 44.3,
+        batchesPlan: 26,
+        batchesActual: 25,
+      },
+      {
+        itemCode: "COMP-MST-008",
+        machine: "Banbury 2",
+        planned: 44.3,
+        actual: 50.8,
+        batchesPlan: 25,
+        batchesActual: 28,
+      },
+    ],
+    final: [
+      {
+        itemCode: "COMP-FIN-001",
+        machine: "Banbury 1",
+        planned: 22.4,
+        actual: 22.0,
+        batchesPlan: 11,
+        batchesActual: 11,
+      },
+      {
+        itemCode: "COMP-FIN-002",
+        machine: "Banbury 2",
+        planned: 18.6,
+        actual: 17.1,
+        batchesPlan: 10,
+        batchesActual: 9,
+      },
+      {
+        itemCode: "COMP-FIN-003",
+        machine: "Banbury 3",
+        planned: 26.0,
+        actual: 25.9,
+        batchesPlan: 13,
+        batchesActual: 13,
+      },
+      {
+        itemCode: "COMP-FIN-004",
+        machine: "Banbury 4",
+        planned: 21.2,
+        actual: 22.5,
+        batchesPlan: 11,
+        batchesActual: 12,
+      },
+      {
+        itemCode: "COMP-FIN-005",
+        machine: "Banbury 5",
+        planned: 28.4,
+        actual: 24.1,
+        batchesPlan: 15,
+        batchesActual: 12,
+      },
+      {
+        itemCode: "COMP-FIN-006",
+        machine: "Banbury 1",
+        planned: 19.5,
+        actual: 19.0,
+        batchesPlan: 10,
+        batchesActual: 10,
+      },
+      {
+        itemCode: "COMP-FIN-007",
+        machine: "Banbury 2",
+        planned: 23.1,
+        actual: 22.4,
+        batchesPlan: 12,
+        batchesActual: 11,
+      },
+      {
+        itemCode: "COMP-FIN-008",
+        machine: "Banbury 3",
+        planned: 24.0,
+        actual: 25.5,
+        batchesPlan: 12,
+        batchesActual: 13,
+      },
+    ],
+  },
+};
