@@ -5,6 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * ms thereafter. Drops stale results if the component unmounts or
  * deps change mid-flight (token guard).
  *
+ * The fetcher is held in a ref so callers can pass an inline arrow
+ * function — e.g. `usePolledQuery(() => getPlant(id), { deps: [id] })`
+ * — without retriggering the effect every render. Pass any
+ * closure-captured variables via the `deps` option so polling
+ * respects their changes.
+ *
  * Vanilla React — no React Query. Q-DATA-01 resolved to 60-second
  * polling for Phase 1; callers can override with `interval`. Set
  * `enabled: false` to pause (e.g. before a drill panel is opened).
@@ -34,11 +40,20 @@ export function usePolledQuery(fetcher, options = {}) {
   const [isLoading, setIsLoading] = useState(enabled);
 
   const tokenRef = useRef(0);
+  const fetcherRef = useRef(fetcher);
+
+  // Keep the ref pointing at the latest fetcher without re-running
+  // the effect. Inline arrow-function fetchers (the common case)
+  // change reference every render but call the same underlying API.
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  });
 
   const run = useCallback(() => {
     const myToken = ++tokenRef.current;
     setIsLoading(true);
-    fetcher()
+    fetcherRef
+      .current()
       .then((result) => {
         if (tokenRef.current !== myToken) return;
         setData(result);
@@ -50,7 +65,7 @@ export function usePolledQuery(fetcher, options = {}) {
         setError(err);
         setIsLoading(false);
       });
-  }, [fetcher]);
+  }, []);
 
   const refetch = useCallback(() => {
     if (!enabled) return;
@@ -59,13 +74,10 @@ export function usePolledQuery(fetcher, options = {}) {
 
   useEffect(() => {
     if (!enabled) return undefined;
-    // Kick off the initial fetch. The `setIsLoading(true)` inside
-    // `run()` is the canonical async-fetch-in-effect pattern; the
-    // react-hooks plugin flags it as a cascading-render risk but it
-    // is the correct behaviour here (we want isLoading=true until
-    // the promise resolves). The `deps` spread also defeats the
-    // exhaustive-deps check by design — `deps` is forwarded as-is
-    // per the hook's contract.
+    // Async-fetch-in-effect is intentional here; the lint rule
+    // assumes synchronous setState cascading is a problem, but here
+    // setIsLoading(true) + a deferred setData on resolution is the
+    // canonical pattern.
     /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
     run();
     if (interval <= 0) return undefined;
@@ -75,7 +87,7 @@ export function usePolledQuery(fetcher, options = {}) {
       tokenRef.current += 1;
     };
     /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-  }, [enabled, interval, run, ...deps]);
+  }, [enabled, interval, ...deps]);
 
   return { data, error, isLoading, refetch };
 }
