@@ -80,3 +80,42 @@ export const FUNCTIONS = [
  * plant list; consumed later by the tyre-type-filter spec.
  */
 export const BANMORE_TYRE_MIX = { pcr: 100, tbr: 0 };
+
+/**
+ * Production-dashboard sections (spec 04). Default active = "mix".
+ * BRD FR-P4 lists exactly these four. The internal sub-selectors
+ * (Mixing Master/Final, Stock 4Roll/Extruder/...) are added in later
+ * specs when their consuming KPIs come online.
+ */
+export const SECTIONS = [
+  { id: "mix", code: "MIX", name: "Mixing" },
+  { id: "tbm", code: "TBM", name: "TBM" },
+  { id: "cur", code: "CUR", name: "Curing" },
+  { id: "stk", code: "STK", name: "Stock" },
+];
+
+/**
+ * Production-dashboard category tabs (spec 04). Default active = "p"
+ * (Productivity). BRD FR-P7 lists the codes + labels verbatim.
+ * Inventory ("I") replaces the section view when active (BRD §6.13)
+ * — spec 15 implements the Inventory page.
+ */
+export const CATEGORY_TABS = [
+  { id: "p", code: "P", name: "Productivity" },
+  { id: "q", code: "Q", name: "Quality" },
+  { id: "c", code: "C", name: "Cost" },
+  { id: "d", code: "D", name: "Delivery" },
+  { id: "m", code: "M", name: "Morale" },
+  { id: "s", code: "S", name: "Safety" },
+  { id: "i", code: "I", name: "Inventory" },
+];
+
+/**
+ * Plant-card summary pinned at the bottom of the Production
+ * dashboard sidebar (BRD FR-P6). Values are static mocks matching
+ * the artifact's example numbers; replace with derived metrics when
+ * the KPI engine arrives in spec 05+.
+ */
+export const PLANT_SUMMARIES = {
+  banmore: { prodPct: 92, scrapPct: 1.05 },
+};

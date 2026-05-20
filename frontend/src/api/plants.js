@@ -1,6 +1,12 @@
 import client from "./client.js";
 import { mockDelay } from "@/lib/mockDelay.js";
-import { PLANTS, FUNCTIONS } from "@/lib/mockData.js";
+import {
+  PLANTS,
+  FUNCTIONS,
+  SECTIONS,
+  CATEGORY_TABS,
+  PLANT_SUMMARIES,
+} from "@/lib/mockData.js";
 
 // Phase 1 default is mock data (Q-BE-01). Only the explicit string
 // "false" disables it — handles the case where no .env file exists
@@ -38,4 +44,37 @@ export function getPlant(id) {
 export function getFunctions() {
   if (USE_MOCK) return mockDelay(FUNCTIONS);
   return client.get("/functions");
+}
+
+/**
+ * Production-dashboard sections (Mixing / TBM / Curing / Stock).
+ * Static for Phase 1 — same set regardless of plant.
+ *
+ * @returns {Promise<typeof SECTIONS>}
+ */
+export function getSections() {
+  if (USE_MOCK) return mockDelay(SECTIONS);
+  return client.get("/sections");
+}
+
+/**
+ * Production-dashboard category tabs (P/Q/C/D/M/S/I). Static.
+ *
+ * @returns {Promise<typeof CATEGORY_TABS>}
+ */
+export function getCategoryTabs() {
+  if (USE_MOCK) return mockDelay(CATEGORY_TABS);
+  return client.get("/category-tabs");
+}
+
+/**
+ * Plant-card summary (overall OEE, production %, scrap %) for the
+ * Production dashboard sidebar.
+ *
+ * @param {string} plantId
+ * @returns {Promise<{ prodPct: number, scrapPct: number } | null>}
+ */
+export function getPlantSummary(plantId) {
+  if (USE_MOCK) return mockDelay(PLANT_SUMMARIES[plantId] ?? null);
+  return client.get(`/plants/${plantId}/summary`);
 }
