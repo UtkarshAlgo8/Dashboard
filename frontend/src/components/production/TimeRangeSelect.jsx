@@ -32,7 +32,7 @@ function TimeRangeSelect({
 
   const fromDate = parseSafe(from);
   const toDate = parseSafe(to);
-  const label = formatRangeLabel(fromDate, toDate, preset);
+  const label = formatRangeLabel(fromDate, toDate);
 
   return (
     <Stack direction="row" spacing={1} alignItems="center">
@@ -99,18 +99,13 @@ function parseSafe(iso) {
   return isValid(d) ? d : null;
 }
 
-function formatRangeLabel(fromDate, toDate, preset) {
-  if (!fromDate && !toDate) {
-    return preset ? "Filter Date" : "Select date range";
-  }
-  if (fromDate && toDate) {
-    const f = format(fromDate, "dd/MM/yyyy");
-    const t = format(toDate, "dd/MM/yyyy");
-    if (f === t) return f;
-    return `${f} – ${t}`;
-  }
-  if (fromDate) return `From ${format(fromDate, "dd/MM/yyyy")}`;
-  return `To ${format(toDate, "dd/MM/yyyy")}`;
+const PLACEHOLDER = "DD/MM/YYYY";
+
+function formatRangeLabel(fromDate, toDate) {
+  if (!fromDate && !toDate) return "Filter Date";
+  const f = fromDate ? format(fromDate, "dd/MM/yyyy") : PLACEHOLDER;
+  const t = toDate ? format(toDate, "dd/MM/yyyy") : PLACEHOLDER;
+  return `${f} – ${t}`;
 }
 
 export default TimeRangeSelect;

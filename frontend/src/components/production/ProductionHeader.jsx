@@ -85,13 +85,18 @@ function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
           from={timeRange.from}
           to={timeRange.to}
           onPresetChange={(p) =>
-            onTimeRangeChange({ ...timeRange, preset: p, from: "", to: "" })
+            onTimeRangeChange((prev) => ({
+              ...prev,
+              preset: p,
+              from: "",
+              to: "",
+            }))
           }
           onFromChange={(v) =>
-            onTimeRangeChange({ ...timeRange, from: v, preset: null })
+            onTimeRangeChange((prev) => ({ ...prev, from: v, preset: null }))
           }
           onToChange={(v) =>
-            onTimeRangeChange({ ...timeRange, to: v, preset: null })
+            onTimeRangeChange((prev) => ({ ...prev, to: v, preset: null }))
           }
         />
 
@@ -116,8 +121,26 @@ function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
         </Tooltip>
 
         <Tooltip title="Export to PDF (browser print)" arrow>
-          <IconButton size="small" onClick={() => window.print()}>
-            <FileDownloadOutlinedIcon fontSize="small" />
+          <IconButton
+            size="small"
+            onClick={() => window.print()}
+            aria-label="Export to PDF"
+            sx={{
+              width: 34,
+              height: 34,
+              borderRadius: "16px",
+              border: 1,
+              borderColor: theme.custom.brand.ocean,
+              backgroundColor: theme.custom.brand.ocean,
+              color: "primary.contrastText",
+              boxShadow: theme.custom.shadow,
+              "&:hover": {
+                backgroundColor: theme.custom.brand.ocean,
+                borderColor: theme.custom.brand.ocean,
+              },
+            }}
+          >
+            <FileDownloadOutlinedIcon sx={{ fontSize: 20 }} />
           </IconButton>
         </Tooltip>
 
