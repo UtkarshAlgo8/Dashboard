@@ -15,3 +15,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 75b7063 — spec 06 oee-drill _(Vishwajit Khanna)_
   - 2f2de7d — spec 07 production-drill _(Vishwajit Khanna)_
   - 6d75056 — spec 08 scrap-traceability _(Vishwajit Khanna)_
+  - 6406d22 — fix(usePolledQuery): stop re-fetch loop with inline arrow-function fetchers _(Vishwajit Khanna)_

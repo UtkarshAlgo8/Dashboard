@@ -4,6 +4,8 @@ import {
   OEE_DRILL_BY_PLANT_SECTION,
   PRODUCTION_DRILL_BY_PLANT_SECTION,
   SCRAP_TRACEABILITY,
+  DOWNTIME_DRILL_BY_PLANT_SECTION,
+  PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION,
 } from "@/lib/mockData.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
@@ -80,5 +82,46 @@ export function getScrapTraceability({
   }
   return client.get(
     `/plants/${plantId}/production/drills/scrap-traceability?section=${section}&machine=${machineId}&itemCode=${encodeURIComponent(itemCode)}`,
+  );
+}
+
+/**
+ * Fetch the Downtime drill (spec 09) per BRD FR-P60.
+ *
+ * @param {object} params
+ * @param {string} params.plantId
+ * @param {string} params.section
+ * @returns {Promise<Array>}
+ */
+export function getDowntimeDrill({ plantId, section }) {
+  if (USE_MOCK) {
+    const key = `${plantId}/${section}`;
+    return mockDelay(DOWNTIME_DRILL_BY_PLANT_SECTION[key] ?? []);
+  }
+  return client.get(
+    `/plants/${plantId}/production/drills/downtime?section=${section}`,
+  );
+}
+
+const EMPTY_PLAN_COMPLIANCE = { skuWise: [], machineWise: [] };
+
+/**
+ * Fetch the Plan Compliance drill (spec 09) per BRD FR-P61. Returns
+ * both views; consumer toggles client-side.
+ *
+ * @param {object} params
+ * @param {string} params.plantId
+ * @param {string} params.section
+ * @returns {Promise<{ skuWise: Array, machineWise: Array }>}
+ */
+export function getPlanComplianceDrill({ plantId, section }) {
+  if (USE_MOCK) {
+    const key = `${plantId}/${section}`;
+    return mockDelay(
+      PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION[key] ?? EMPTY_PLAN_COMPLIANCE,
+    );
+  }
+  return client.get(
+    `/plants/${plantId}/production/drills/plan-compliance?section=${section}`,
   );
 }

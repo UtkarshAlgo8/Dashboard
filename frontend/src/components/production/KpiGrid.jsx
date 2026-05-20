@@ -7,6 +7,8 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getKpis } from "@/api/kpis.js";
 import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
 import ProductionDrillPanel from "@/components/drills/production/ProductionDrillPanel.jsx";
+import DowntimeDrillPanel from "@/components/drills/downtime/DowntimeDrillPanel.jsx";
+import PlanComplianceDrillPanel from "@/components/drills/plan-compliance/PlanComplianceDrillPanel.jsx";
 
 /**
  * KPI grid for the current (section, tab) view. Polls every 60s
@@ -122,26 +124,56 @@ function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
         </Box>
       )}
 
-      {openKpi && openKpi.id !== "oee" && openKpi.id !== "production" && (
+      {openKpi && openKpi.id === "downtime" && (
         <Box
           sx={{
-            backgroundColor: theme.custom.surface.soft,
+            backgroundColor: "background.paper",
             border: 1,
             borderColor: "divider",
             borderRadius: 1.25,
-            p: 3,
-            textAlign: "center",
+            p: 2,
           }}
         >
-          <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-            {openKpi.name} drill
-          </Typography>
-          <Typography sx={{ fontSize: 12, color: "text.disabled", mt: 0.5 }}>
-            Arrives in spec 08 (Scrap Traceability) · 09 (Downtime / Plan
-            Compliance).
-          </Typography>
+          <DowntimeDrillPanel plantId={plantId} section={section} />
         </Box>
       )}
+
+      {openKpi && openKpi.id === "plan-compliance" && (
+        <Box
+          sx={{
+            backgroundColor: "background.paper",
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1.25,
+            p: 2,
+          }}
+        >
+          <PlanComplianceDrillPanel plantId={plantId} section={section} />
+        </Box>
+      )}
+
+      {openKpi &&
+        !["oee", "production", "downtime", "plan-compliance"].includes(
+          openKpi.id,
+        ) && (
+          <Box
+            sx={{
+              backgroundColor: theme.custom.surface.soft,
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 1.25,
+              p: 3,
+              textAlign: "center",
+            }}
+          >
+            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+              {openKpi.name} drill not configured
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: "text.disabled", mt: 0.5 }}>
+              No drill is wired for this KPI in Phase 1.
+            </Typography>
+          </Box>
+        )}
     </Box>
   );
 }

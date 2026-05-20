@@ -819,3 +819,149 @@ export const SCRAP_TRACEABILITY = {
     },
   ],
 };
+
+/**
+ * Downtime drill data per plant + section (spec 09).
+ * Row shape: { reasonCategory, machine, reason, events, durationMin, lossHrs }
+ * Categories per BRD FR-P60:
+ *   Breakdown — Electrical / Mechanical / Instrumentation
+ *   Setup     — FTC / size change
+ *   PM
+ *   Process
+ *   Utility   — power failure / steam / compressed air
+ *   Other
+ */
+export const DOWNTIME_DRILL_BY_PLANT_SECTION = {
+  "banmore/mix": [
+    {
+      reasonCategory: "Breakdown — Mechanical",
+      machine: "Banbury 5",
+      reason: "Major bearing failure",
+      events: 1,
+      durationMin: 215,
+      lossHrs: 3.6,
+    },
+    {
+      reasonCategory: "Breakdown — Mechanical",
+      machine: "Banbury 1",
+      reason: "Rotor seal leak",
+      events: 1,
+      durationMin: 38,
+      lossHrs: 0.6,
+    },
+    {
+      reasonCategory: "Breakdown — Mechanical",
+      machine: "Banbury 3",
+      reason: "Discharge door stuck",
+      events: 2,
+      durationMin: 62,
+      lossHrs: 1.0,
+    },
+    {
+      reasonCategory: "Breakdown — Electrical",
+      machine: "Banbury 1",
+      reason: "Motor overload trip",
+      events: 2,
+      durationMin: 22,
+      lossHrs: 0.4,
+    },
+    {
+      reasonCategory: "Breakdown — Electrical",
+      machine: "Banbury 3",
+      reason: "Drive VFD fault",
+      events: 1,
+      durationMin: 41,
+      lossHrs: 0.7,
+    },
+    {
+      reasonCategory: "Breakdown — Electrical",
+      machine: "Banbury 5",
+      reason: "Control panel replace",
+      events: 1,
+      durationMin: 95,
+      lossHrs: 1.6,
+    },
+    {
+      reasonCategory: "Breakdown — Instrumentation",
+      machine: "Banbury 2",
+      reason: "TCU sensor drift",
+      events: 1,
+      durationMin: 28,
+      lossHrs: 0.5,
+    },
+    {
+      reasonCategory: "Setup — FTC",
+      machine: "Banbury 1",
+      reason: "Compound changeover",
+      events: 3,
+      durationMin: 24,
+      lossHrs: 0.4,
+    },
+    {
+      reasonCategory: "Setup — size change",
+      machine: "Banbury 5",
+      reason: "Repeated changeover",
+      events: 5,
+      durationMin: 35,
+      lossHrs: 0.6,
+    },
+    {
+      reasonCategory: "PM",
+      machine: "Banbury 2",
+      reason: "Scheduled rotor blade swap",
+      events: 1,
+      durationMin: 45,
+      lossHrs: 0.75,
+    },
+    {
+      reasonCategory: "Process",
+      machine: "Banbury 3",
+      reason: "TCU recovery",
+      events: 3,
+      durationMin: 22,
+      lossHrs: 0.37,
+    },
+    {
+      reasonCategory: "Utility",
+      machine: "All Banburys",
+      reason: "Steam pressure drop",
+      events: 1,
+      durationMin: 18,
+      lossHrs: 1.5,
+    },
+    {
+      reasonCategory: "Other",
+      machine: "Banbury 4",
+      reason: "Hopper clog",
+      events: 1,
+      durationMin: 18,
+      lossHrs: 0.3,
+    },
+  ],
+};
+
+/**
+ * Plan Compliance drill data per plant + section (spec 09). Two
+ * views: SKU-wise and Machine-wise, per BRD FR-P61.
+ */
+export const PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION = {
+  "banmore/mix": {
+    skuWise: [
+      { itemCode: "COMP-MST-001", planned: 34.2, actual: 33.1 },
+      { itemCode: "COMP-MST-002", planned: 28.6, actual: 29.4 },
+      { itemCode: "COMP-MST-003", planned: 41.8, actual: 40.5 },
+      { itemCode: "COMP-MST-004", planned: 22.5, actual: 19.8 },
+      { itemCode: "COMP-FIN-001", planned: 22.4, actual: 22.0 },
+      { itemCode: "COMP-FIN-002", planned: 18.6, actual: 17.1 },
+      { itemCode: "COMP-FIN-003", planned: 26.0, actual: 25.9 },
+      { itemCode: "COMP-FIN-005", planned: 28.4, actual: 24.1 },
+    ],
+    machineWise: [
+      { machine: "Banbury 1", planned: 78.1, actual: 74.1 },
+      { machine: "Banbury 2", planned: 70.3, actual: 69.6 },
+      { machine: "Banbury 3", planned: 91.8, actual: 91.9 },
+      { machine: "Banbury 4", planned: 21.2, actual: 22.5 },
+      { machine: "Banbury 5", planned: 28.4, actual: 24.1 },
+    ],
+  },
+};
