@@ -25,3 +25,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 137d091 — spec 15 inventory-page _(Vishwajit Khanna)_
   - b1b5c65 — cr: landing modal flow + map hover callout _(Vishwajit Khanna)_
   - 5e7d802 — cr: mark Quality + Engineering as SOON in the plant-function modal _(Vishwajit Khanna)_
+  - f1e9ed1 — cr: single date-range picker in TimeRangeSelect _(Vishwajit Khanna)_
