@@ -1,9 +1,9 @@
 import { createBrowserRouter } from "react-router-dom";
-import LandingPagePlaceholder from "@/pages/LandingPagePlaceholder.jsx";
+import LandingPage from "@/pages/LandingPage.jsx";
 import BanmoreProductionPlaceholder from "@/pages/BanmoreProductionPlaceholder.jsx";
 
 const router = createBrowserRouter([
-  { path: "/", element: <LandingPagePlaceholder /> },
+  { path: "/", element: <LandingPage /> },
   { path: "/banmore/production", element: <BanmoreProductionPlaceholder /> },
 ]);
 
