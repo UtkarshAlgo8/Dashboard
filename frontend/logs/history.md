@@ -23,3 +23,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - ace4f83 — spec 13 export-print _(Vishwajit Khanna)_
   - 9613bae — spec 14 user-menu _(Vishwajit Khanna)_
   - 137d091 — spec 15 inventory-page _(Vishwajit Khanna)_
+  - b1b5c65 — cr: landing modal flow + map hover callout _(Vishwajit Khanna)_

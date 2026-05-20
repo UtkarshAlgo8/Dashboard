@@ -5,24 +5,21 @@ import LandingHeader from "@/components/landing/LandingHeader.jsx";
 import PlantCardList from "@/components/landing/PlantCardList.jsx";
 import IndiaMap from "@/components/landing/IndiaMap.jsx";
 import PlantFunctionModal from "@/components/landing/PlantFunctionModal.jsx";
-import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getPlants, getFunctions } from "@/api/plants.js";
 
 /**
- * Phase 1 active sets — per Q-NAV-01 only Banmore and Production are
- * the navigable path. The function modal mirrors the design: every
- * data-active function (Production, Quality, Engineering) renders
- * in the active style; Plant Head + Technical render "SOON" per
- * BRD FR-L15. Clicks on Quality / Engineering toast a "Phase 2"
- * notice instead of navigating.
+ * Phase 1 active sets — per Q-NAV-01 only Banmore + Production are
+ * interactive. Quality / Engineering / Plant Head / Technical all
+ * render with the "SOON" pill in the modal (FR-L15 explicit
+ * deferrals plus the Phase-1 Q-NAV-01 deferral for Quality and
+ * Engineering).
  */
 const PHASE_1_ACTIVE_PLANTS = new Set(["banmore"]);
 const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod"]);
 
 function LandingPage() {
   const navigate = useNavigate();
-  const toast = useToast();
 
   const { data: plants, isLoading: plantsLoading } = usePolledQuery(getPlants, {
     interval: 0,
@@ -37,14 +34,9 @@ function LandingPage() {
       ? (plants.find((p) => p.id === modalPlantId) ?? null)
       : null;
 
-  // Functions that render in the "active" style in the modal — the
-  // data-active set from the API. Phase 1 only navigates on
-  // Production.
-  const modalActiveIds = new Set(
-    Array.isArray(functions)
-      ? functions.filter((f) => f.active).map((f) => f.id)
-      : [],
-  );
+  // Functions that render in the "active" style in the modal. Phase 1
+  // only ships Production; Quality / Engineering join in Phase 2.
+  const modalActiveIds = PHASE_1_NAVIGABLE_FUNCTIONS;
 
   const openModalFor = (plantId) => {
     if (!PHASE_1_ACTIVE_PLANTS.has(plantId)) return;
@@ -53,15 +45,11 @@ function LandingPage() {
 
   const handleFunctionSelect = (fn) => {
     if (!modalPlant) return;
-    if (
-      fn.id === "prod" &&
-      modalPlant.id === "banmore" &&
-      PHASE_1_NAVIGABLE_FUNCTIONS.has(fn.id)
-    ) {
+    if (fn.id === "prod" && modalPlant.id === "banmore") {
       navigate("/banmore/production");
-      return;
     }
-    toast.info(`${fn.name} on ${modalPlant.name} arrives in Phase 2.`);
+    // Inactive rows can't be clicked (PlantFunctionModal guards
+    // onClick), so this handler only fires for the navigable case.
   };
 
   return (
