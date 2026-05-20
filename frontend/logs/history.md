@@ -19,3 +19,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - a59909e — spec 09 other-drills _(Vishwajit Khanna)_
   - 37c90ee — spec 10 trend-modal _(Vishwajit Khanna)_
   - 472f52e — spec 11 other-sections _(Vishwajit Khanna)_
+  - 7bf7691 — spec 12 other-tabs _(Vishwajit Khanna)_

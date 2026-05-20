@@ -11,7 +11,6 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { useNavigate } from "react-router-dom";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
-import { useToast } from "@/components/common";
 
 /**
  * Production-dashboard top header.
@@ -24,7 +23,6 @@ import { useToast } from "@/components/common";
 function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
   const theme = useTheme();
   const navigate = useNavigate();
-  const toast = useToast();
 
   return (
     <Box
@@ -127,19 +125,10 @@ function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
           </Box>
         </Tooltip>
 
-        <Tooltip title="Export PDF arrives in spec 13" arrow>
-          <span>
-            <IconButton
-              size="small"
-              onClick={() =>
-                toast.info(
-                  "Export PDF arrives in spec 13 — will trigger window.print().",
-                )
-              }
-            >
-              <FileDownloadOutlinedIcon fontSize="small" />
-            </IconButton>
-          </span>
+        <Tooltip title="Export to PDF (browser print)" arrow>
+          <IconButton size="small" onClick={() => window.print()}>
+            <FileDownloadOutlinedIcon fontSize="small" />
+          </IconButton>
         </Tooltip>
 
         <Avatar
