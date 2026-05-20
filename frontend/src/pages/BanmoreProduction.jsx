@@ -1,16 +1,11 @@
 import { useState } from "react";
-import {
-  Box,
-  CircularProgress,
-  Stack,
-  Typography,
-  useTheme,
-} from "@mui/material";
+import { Box, CircularProgress, Stack, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
 import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
+import InventoryPage from "@/components/inventory/InventoryPage.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import {
   getPlant,
@@ -121,7 +116,9 @@ function BanmoreProduction() {
               activeTabId={category}
               onSelect={setCategory}
             />
-            {category === "p" ? (
+            {category === "i" ? (
+              <InventoryPage plantId="banmore" />
+            ) : (
               <KpiGrid
                 plantId="banmore"
                 section={section}
@@ -131,22 +128,6 @@ function BanmoreProduction() {
                 stockSelector={stockSelector}
                 onStockSelectorChange={setStockSelector}
               />
-            ) : (
-              <Stack
-                alignItems="center"
-                justifyContent="center"
-                sx={{ flex: 1, py: 8, px: 3, textAlign: "center" }}
-                spacing={1}
-              >
-                <Typography sx={{ fontSize: 16, fontWeight: 600 }}>
-                  Section: {section.toUpperCase()} · Tab:{" "}
-                  {category.toUpperCase()}
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: "text.disabled" }}>
-                  KPIs for this view land in specs 11 (other sections) and 12
-                  (other tabs).
-                </Typography>
-              </Stack>
             )}
           </Box>
         </Box>

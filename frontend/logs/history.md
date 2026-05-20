@@ -21,3 +21,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 472f52e — spec 11 other-sections _(Vishwajit Khanna)_
   - 7bf7691 — spec 12 other-tabs _(Vishwajit Khanna)_
   - ace4f83 — spec 13 export-print _(Vishwajit Khanna)_
+  - 9613bae — spec 14 user-menu _(Vishwajit Khanna)_
