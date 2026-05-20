@@ -119,3 +119,112 @@ export const CATEGORY_TABS = [
 export const PLANT_SUMMARIES = {
   banmore: { prodPct: 92, scrapPct: 1.05 },
 };
+
+/**
+ * Mixing > Productivity KPI definitions (spec 05). Keyed by compound
+ * — "master" and "final" — per BRD FR-P11. Production values 285 MT
+ * (Master) and 183 MT (Final) come from the BRD; other KPIs are
+ * deterministic mocks. Sparkline arrays are 8 points each, recent →
+ * latest.
+ *
+ * KPI shape (drives KpiCard rendering):
+ *   id, name, value, unit, trend, trendFavourable, spark, target, drillable
+ *
+ * As subsequent specs (06, 07, 09) wire up real drills, the
+ * `drillable: true` cards become interactive. Until then, clicking
+ * a drillable card opens a placeholder panel.
+ */
+export const MIXING_PRODUCTIVITY_KPIS = {
+  master: [
+    {
+      id: "oee",
+      name: "OEE",
+      value: 79.4,
+      unit: "%",
+      trend: 1.8,
+      trendFavourable: true,
+      spark: [76.5, 77.1, 77.8, 78.0, 78.6, 78.9, 79.1, 79.4],
+      target: 85,
+      drillable: true,
+    },
+    {
+      id: "production",
+      name: "Production",
+      value: 285,
+      unit: "MT",
+      trend: 4.2,
+      trendFavourable: true,
+      spark: [262, 268, 271, 275, 278, 281, 283, 285],
+      target: 300,
+      drillable: true,
+    },
+    {
+      id: "downtime",
+      name: "Downtime",
+      value: 6.4,
+      unit: "hrs",
+      trend: -8.5,
+      trendFavourable: true,
+      spark: [8.1, 7.6, 7.5, 7.2, 7.0, 6.8, 6.6, 6.4],
+      target: 5,
+      drillable: true,
+    },
+    {
+      id: "plan-compliance",
+      name: "Plan Compliance",
+      value: 94.2,
+      unit: "%",
+      trend: 0.6,
+      trendFavourable: true,
+      spark: [93.4, 93.6, 93.7, 93.9, 94.0, 94.0, 94.1, 94.2],
+      target: 95,
+      drillable: true,
+    },
+  ],
+  final: [
+    {
+      id: "oee",
+      name: "OEE",
+      value: 78.5,
+      unit: "%",
+      trend: -1.1,
+      trendFavourable: false,
+      spark: [79.6, 79.3, 79.1, 79.0, 78.8, 78.7, 78.6, 78.5],
+      target: 85,
+      drillable: true,
+    },
+    {
+      id: "production",
+      name: "Production",
+      value: 183,
+      unit: "MT",
+      trend: 2.4,
+      trendFavourable: true,
+      spark: [171, 173, 175, 177, 179, 180, 182, 183],
+      target: 200,
+      drillable: true,
+    },
+    {
+      id: "downtime",
+      name: "Downtime",
+      value: 5.2,
+      unit: "hrs",
+      trend: -3.7,
+      trendFavourable: true,
+      spark: [6.0, 5.8, 5.7, 5.5, 5.4, 5.3, 5.3, 5.2],
+      target: 5,
+      drillable: true,
+    },
+    {
+      id: "plan-compliance",
+      name: "Plan Compliance",
+      value: 91.6,
+      unit: "%",
+      trend: -1.3,
+      trendFavourable: false,
+      spark: [92.9, 92.7, 92.5, 92.3, 92.1, 91.9, 91.8, 91.6],
+      target: 95,
+      drillable: true,
+    },
+  ],
+};
