@@ -24,3 +24,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 9613bae — spec 14 user-menu _(Vishwajit Khanna)_
   - 137d091 — spec 15 inventory-page _(Vishwajit Khanna)_
   - b1b5c65 — cr: landing modal flow + map hover callout _(Vishwajit Khanna)_
+  - 5e7d802 — cr: mark Quality + Engineering as SOON in the plant-function modal _(Vishwajit Khanna)_
