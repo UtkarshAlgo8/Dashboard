@@ -12,7 +12,8 @@ import {
   useTheme,
 } from "@mui/material";
 import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
-import { LoadingSkeleton, useToast } from "@/components/common";
+import { useToast } from "@/components/common";
+import { TableSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getDowntimeDrill } from "@/api/drills.js";
 
@@ -59,7 +60,7 @@ function DowntimeDrillPanel({ plantId, section }) {
       </Stack>
 
       {isLoading && rows.length === 0 ? (
-        <LoadingSkeleton variant="tableRow" count={6} />
+        <TableSkeleton rows={6} cols={6} />
       ) : rows.length === 0 ? (
         <Box sx={{ py: 4, textAlign: "center", color: "text.disabled" }}>
           <Typography sx={{ fontSize: 13 }}>

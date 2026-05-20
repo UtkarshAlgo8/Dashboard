@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Skeleton,
   Stack,
   Typography,
   useTheme,
@@ -138,9 +139,7 @@ function TrendModal({ open, onClose, plantId, kpi, compound }) {
           }}
         >
           {isLoading && values.length === 0 ? (
-            <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-              Loading…
-            </Typography>
+            <ChartSkeleton />
           ) : values.length === 0 ? (
             <Typography sx={{ fontSize: 13, color: "text.disabled" }}>
               No trend data for this period.
@@ -169,6 +168,37 @@ function TrendModal({ open, onClose, plantId, kpi, compound }) {
         </Box>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ChartSkeleton() {
+  const heights = [40, 60, 90, 70, 110, 80, 130, 100, 140, 120, 150, 130];
+  return (
+    <Stack spacing={1.5} sx={{ width: "100%" }}>
+      <Stack direction="row" spacing={2} alignItems="center">
+        <Skeleton variant="text" width={60} sx={{ fontSize: 11 }} />
+        <Skeleton variant="text" width={60} sx={{ fontSize: 11 }} />
+      </Stack>
+      <Stack
+        direction="row"
+        alignItems="flex-end"
+        spacing={1}
+        sx={{ height: 220 }}
+      >
+        {heights.map((h, i) => (
+          <Skeleton
+            key={i}
+            variant="rounded"
+            sx={{ flex: 1, height: h, alignSelf: "flex-end" }}
+          />
+        ))}
+      </Stack>
+      <Stack direction="row" spacing={1}>
+        {heights.map((_, i) => (
+          <Skeleton key={i} variant="text" sx={{ flex: 1, fontSize: 11 }} />
+        ))}
+      </Stack>
+    </Stack>
   );
 }
 

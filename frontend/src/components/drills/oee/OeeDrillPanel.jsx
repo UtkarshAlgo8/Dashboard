@@ -5,7 +5,8 @@ import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
 import ScrapTraceabilityPanel from "./ScrapTraceabilityPanel.jsx";
-import { LoadingSkeleton, useToast } from "@/components/common";
+import { useToast } from "@/components/common";
+import { OeeDrillSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getOeeDrill } from "@/api/drills.js";
 
@@ -79,11 +80,7 @@ function OeeDrillPanel({ plantId, section }) {
   const rows = rowsKey ? (data?.subDrill?.[rowsKey] ?? []) : null;
 
   if (isLoading && !data) {
-    return (
-      <Stack spacing={2}>
-        <LoadingSkeleton variant="page" count={1} />
-      </Stack>
-    );
+    return <OeeDrillSkeleton />;
   }
 
   if (!data || !data.overall || machines.length === 0) {

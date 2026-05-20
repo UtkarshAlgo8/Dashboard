@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, CircularProgress, Stack } from "@mui/material";
+import { Box } from "@mui/material";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
+import LandingSkeleton from "@/components/landing/LandingSkeleton.jsx";
 import PlantCardList from "@/components/landing/PlantCardList.jsx";
 import IndiaMap from "@/components/landing/IndiaMap.jsx";
 import PlantFunctionModal from "@/components/landing/PlantFunctionModal.jsx";
@@ -67,9 +68,7 @@ function LandingPage() {
         {plantsLoading ||
         !Array.isArray(plants) ||
         !Array.isArray(functions) ? (
-          <Stack alignItems="center" justifyContent="center" sx={{ py: 10 }}>
-            <CircularProgress size={28} />
-          </Stack>
+          <LandingSkeleton />
         ) : (
           <Box
             sx={{

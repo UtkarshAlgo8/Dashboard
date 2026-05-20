@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Box, CircularProgress, Stack, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import InventoryBarChart from "./InventoryBarChart.jsx";
 import InventoryItemTable from "./InventoryItemTable.jsx";
 import DailyInventoryTable from "./DailyInventoryTable.jsx";
+import InventoryPageSkeleton from "./InventoryPageSkeleton.jsx";
 import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getInventory } from "@/api/inventory.js";
@@ -24,11 +25,7 @@ function InventoryPage({ plantId }) {
   if (error) toast.error("Could not load Inventory.");
 
   if (isLoading && !data) {
-    return (
-      <Stack alignItems="center" justifyContent="center" sx={{ py: 8 }}>
-        <CircularProgress size={28} />
-      </Stack>
-    );
+    return <InventoryPageSkeleton />;
   }
 
   if (!data || !data.groups) {

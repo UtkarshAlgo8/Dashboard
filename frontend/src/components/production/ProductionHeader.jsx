@@ -6,12 +6,11 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
-import { useNavigate } from "react-router-dom";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
+import jkLogo from "@/assets/jk-logo.png";
 
 /**
  * Production-dashboard top header.
@@ -23,7 +22,6 @@ import { MOCK_USER } from "@/lib/mockData.js";
  */
 function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
   const theme = useTheme();
-  const navigate = useNavigate();
 
   return (
     <Box
@@ -40,31 +38,22 @@ function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
         gap: 2,
       }}
     >
-      {/* Left: back + brand + plant name */}
+      {/* Left: brand + plant name */}
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton
-          size="small"
-          aria-label="Back to landing"
-          onClick={() => navigate("/")}
-        >
-          <ArrowBackIcon fontSize="small" />
-        </IconButton>
         <Box
+          component="img"
+          src={jkLogo}
+          alt="JK Tyre & Industries Ltd."
           sx={{
-            width: 32,
-            height: 32,
-            borderRadius: 1,
-            backgroundColor: "primary.main",
-            color: "primary.contrastText",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 12,
+            height: 28,
+            width: "auto",
+            objectFit: "contain",
+            display: "block",
           }}
-        >
-          JK
-        </Box>
+        />
+        <Box
+          sx={{ width: "1px", height: 24, backgroundColor: "divider", mx: 1 }}
+        />
         <Box>
           <Typography sx={{ fontSize: 14, fontWeight: 700, lineHeight: 1.1 }}>
             One Factory

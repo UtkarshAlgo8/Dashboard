@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Box, CircularProgress, Stack, useTheme } from "@mui/material";
+import { Box, Stack, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
 import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
+import ProductionBodySkeleton from "@/components/production/ProductionBodySkeleton.jsx";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import {
@@ -64,9 +65,7 @@ function BanmoreProduction() {
       />
 
       {!ready ? (
-        <Stack alignItems="center" justifyContent="center" sx={{ py: 10 }}>
-          <CircularProgress size={28} />
-        </Stack>
+        <ProductionBodySkeleton />
       ) : (
         <Box
           sx={{

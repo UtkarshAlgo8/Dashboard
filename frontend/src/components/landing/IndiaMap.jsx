@@ -23,7 +23,6 @@ function IndiaMap({
   const accent = theme.palette.primary.main;
   const muted = theme.palette.divider;
   const outline = theme.palette.common.black;
-  const background = theme.palette.common.white;
   const fill = theme.custom.surface.soft;
 
   const hoveredPlant =

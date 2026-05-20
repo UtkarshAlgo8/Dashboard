@@ -1,6 +1,7 @@
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
+import jkLogo from "@/assets/jk-logo.png";
 
 /**
  * Landing-page top header.
@@ -27,22 +28,16 @@ function LandingHeader() {
       {/* Brand block */}
       <Stack direction="row" alignItems="center" spacing={2}>
         <Box
+          component="img"
+          src={jkLogo}
+          alt="JK Tyre & Industries Ltd."
           sx={{
-            width: 36,
             height: 36,
-            borderRadius: 1,
-            backgroundColor: "primary.main",
-            color: "primary.contrastText",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: 0.5,
+            width: "auto",
+            objectFit: "contain",
+            display: "block",
           }}
-        >
-          JK
-        </Box>
+        />
         <Box
           sx={{
             width: "1px",

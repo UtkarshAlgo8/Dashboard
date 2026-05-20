@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Box, Stack, Typography, useTheme } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 import KpiCard from "./KpiCard.jsx";
+import KpiCardSkeleton from "./KpiCardSkeleton.jsx";
 import StockSubSelector from "./StockSubSelector.jsx";
-import { LoadingSkeleton } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getKpis } from "@/api/kpis.js";
 import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
@@ -74,9 +74,21 @@ function KpiGrid({
       )}
 
       {isLoading && !Array.isArray(kpis) ? (
-        <Stack spacing={1.5}>
-          <LoadingSkeleton variant="card" count={4} />
-        </Stack>
+        <Box
+          sx={{
+            display: "grid",
+            gap: 2,
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, 1fr)",
+              md: "repeat(auto-fit, minmax(220px, 1fr))",
+            },
+          }}
+        >
+          {Array.from({ length: 4 }).map((_, i) => (
+            <KpiCardSkeleton key={i} />
+          ))}
+        </Box>
       ) : !Array.isArray(kpis) || kpis.length === 0 ? (
         <Box sx={{ py: 4, textAlign: "center", color: "text.disabled" }}>
           <Typography sx={{ fontSize: 13 }}>

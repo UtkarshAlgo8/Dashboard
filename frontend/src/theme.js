@@ -24,6 +24,7 @@ const C = {
   gn: "#1A9A3E",
   pp: "#7C3AED",
   cy: "#0D9488",
+  ocean: "#0077B6",
   sh: "0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04)",
   r: 8,
 };
@@ -88,6 +89,7 @@ theme.custom = {
     red: C.rd,
     purple: C.pp,
     cyan: C.cy,
+    ocean: C.ocean,
   },
   shadow: C.sh,
   radius: C.r,

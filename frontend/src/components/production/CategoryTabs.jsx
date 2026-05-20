@@ -1,15 +1,26 @@
-import { Box, Stack, Typography, useTheme } from "@mui/material";
+import { Box, Button, Stack, Typography, useTheme } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useNavigate } from "react-router-dom";
 
 /**
  * Horizontal category tab strip above the KPI grid (BRD FR-P7).
  * Active tab in primary colour with underline; others muted.
+ * Right-aligned Back button navigates to the landing page.
  */
 function CategoryTabs({ tabs, activeTabId, onSelect }) {
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const backColor = theme.custom.brand.ocean;
   return (
     <Stack
       direction="row"
       spacing={0.5}
-      sx={{ borderBottom: 1, borderColor: "divider", px: 1 }}
+      sx={{
+        borderBottom: 1,
+        borderColor: "divider",
+        px: 1,
+        alignItems: "stretch",
+      }}
     >
       {tabs.map((t) => (
         <TabButton
@@ -19,6 +30,32 @@ function CategoryTabs({ tabs, activeTabId, onSelect }) {
           onClick={() => onSelect(t.id)}
         />
       ))}
+      <Box sx={{ flex: 1 }} />
+      <Stack direction="row" alignItems="center" sx={{ pr: 0.5 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
+          onClick={() => navigate("/")}
+          sx={{
+            textTransform: "none",
+            fontSize: 12,
+            fontWeight: 600,
+            px: 2,
+            py: 0.55,
+            color: "primary.contrastText",
+            borderColor: "divider",
+            backgroundColor: backColor,
+            borderRadius: "16px",
+            "&:hover": {
+              color: "primary.contrastText",
+              backgroundColor: backColor,
+            },
+          }}
+        >
+          Back
+        </Button>
+      </Stack>
     </Stack>
   );
 }

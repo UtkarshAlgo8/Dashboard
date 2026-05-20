@@ -10,7 +10,8 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { LoadingSkeleton, useToast } from "@/components/common";
+import { useToast } from "@/components/common";
+import { PlanComplianceSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getPlanComplianceDrill } from "@/api/drills.js";
 
@@ -35,7 +36,7 @@ function PlanComplianceDrillPanel({ plantId, section }) {
   const hasAny = skuRows.length > 0 || machineRows.length > 0;
 
   if (isLoading && !hasAny) {
-    return <LoadingSkeleton variant="tableRow" count={6} />;
+    return <PlanComplianceSkeleton />;
   }
 
   if (!hasAny) {

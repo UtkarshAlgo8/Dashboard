@@ -13,7 +13,8 @@ import {
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import ParamChip from "./ParamChip.jsx";
-import { EmptyState, LoadingSkeleton, useToast } from "@/components/common";
+import { EmptyState, useToast } from "@/components/common";
+import { TableSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getScrapTraceability } from "@/api/drills.js";
 import { BANBURY_PARAM_RANGES } from "@/lib/mockData.js";
@@ -138,7 +139,7 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
       </Stack>
 
       {isLoading && rows.length === 0 ? (
-        <LoadingSkeleton variant="tableRow" count={4} />
+        <TableSkeleton rows={4} cols={7} />
       ) : rows.length === 0 ? (
         <Box
           sx={{

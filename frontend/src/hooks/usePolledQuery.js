@@ -79,6 +79,11 @@ export function usePolledQuery(fetcher, options = {}) {
     // setIsLoading(true) + a deferred setData on resolution is the
     // canonical pattern.
     /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+    // Drop the previous slice on deps-change so consumers can show a
+    // skeleton instead of stale data from the prior selection.
+    // Background polls (the setInterval below) call run() directly
+    // without resetting data — so polled refreshes stay seamless.
+    setData(null);
     run();
     if (interval <= 0) return undefined;
     const handle = setInterval(run, interval);

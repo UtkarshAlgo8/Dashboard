@@ -14,7 +14,8 @@ import {
   useTheme,
 } from "@mui/material";
 import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
-import { LoadingSkeleton, useToast } from "@/components/common";
+import { useToast } from "@/components/common";
+import { ProductionDrillSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getProductionDrill } from "@/api/drills.js";
 
@@ -186,7 +187,7 @@ function ProductionDrillPanel({ plantId, section, stockSelector }) {
       )}
 
       {isLoading && rows.length === 0 ? (
-        <LoadingSkeleton variant="tableRow" count={6} />
+        <ProductionDrillSkeleton tableType={config.tableType} />
       ) : !selected ? (
         <Box sx={{ py: 4, textAlign: "center", color: "text.disabled" }}>
           <Typography sx={{ fontSize: 13 }}>
