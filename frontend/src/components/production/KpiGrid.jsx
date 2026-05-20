@@ -5,6 +5,7 @@ import CompoundSubSelector from "./CompoundSubSelector.jsx";
 import { LoadingSkeleton, useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getKpis } from "@/api/kpis.js";
+import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
 
 /**
  * KPI grid for the current (section, tab) view. Polls every 60s
@@ -88,7 +89,21 @@ function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
         </Box>
       )}
 
-      {openKpi && (
+      {openKpi && openKpi.id === "oee" && (
+        <Box
+          sx={{
+            backgroundColor: "background.paper",
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1.25,
+            p: 2,
+          }}
+        >
+          <OeeDrillPanel plantId={plantId} section={section} />
+        </Box>
+      )}
+
+      {openKpi && openKpi.id !== "oee" && (
         <Box
           sx={{
             backgroundColor: theme.custom.surface.soft,
@@ -103,8 +118,8 @@ function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
             {openKpi.name} drill
           </Typography>
           <Typography sx={{ fontSize: 12, color: "text.disabled", mt: 0.5 }}>
-            Arrives in spec 06 (OEE) · 07 (Production) · 08 (Scrap Traceability)
-            · 09 (Downtime / Plan Compliance).
+            Arrives in spec 07 (Production) · 08 (Scrap Traceability) · 09
+            (Downtime / Plan Compliance).
           </Typography>
         </Box>
       )}

@@ -1,0 +1,120 @@
+import { useMemo, useState } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import OverallTiles from "./OverallTiles.jsx";
+import MachineSearch from "./MachineSearch.jsx";
+import MachineTable from "./MachineTable.jsx";
+import SubDrill from "./SubDrill.jsx";
+import { LoadingSkeleton, useToast } from "@/components/common";
+import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import { getOeeDrill } from "@/api/drills.js";
+
+/**
+ * Composes the OEE drill: overall tiles → machine search → machine
+ * table → sub-drill panel (when a cell is selected).
+ *
+ * Phase 1 ships Banmore + Mixing data. Spec 11 widens to TBM /
+ * Curing / Stock.
+ */
+function OeeDrillPanel({ plantId, section }) {
+  const toast = useToast();
+  const [search, setSearch] = useState("");
+  const [selectedCell, setSelectedCell] = useState(null); // { machineId, component } | null
+  const [subCategory, setSubCategory] = useState(null);
+
+  const { data, isLoading, error } = usePolledQuery(
+    () => getOeeDrill({ plantId, section }),
+    { interval: 60_000, deps: [plantId, section] },
+  );
+
+  if (error) {
+    toast.error("Could not load OEE drill.");
+  }
+
+  const machines = data?.machines ?? [];
+
+  const filteredMachines = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return machines;
+    return machines.filter((m) => m.name.toLowerCase().includes(q));
+  }, [machines, search]);
+
+  const handleSelectCell = (machineId, component) => {
+    setSelectedCell((current) => {
+      if (
+        current?.machineId === machineId &&
+        current?.component === component
+      ) {
+        // Same cell → deselect (FR-P36)
+        setSubCategory(null);
+        return null;
+      }
+      // Switching → reset sub-category
+      setSubCategory(null);
+      return { machineId, component };
+    });
+  };
+
+  const selectedMachine = selectedCell
+    ? (machines.find((m) => m.id === selectedCell.machineId) ?? null)
+    : null;
+
+  const rowsKey =
+    selectedCell && subCategory
+      ? `${selectedCell.machineId}/${selectedCell.component}/${subCategory}`
+      : null;
+  const rows = rowsKey ? (data?.subDrill?.[rowsKey] ?? []) : null;
+
+  if (isLoading && !data) {
+    return (
+      <Stack spacing={2}>
+        <LoadingSkeleton variant="page" count={1} />
+      </Stack>
+    );
+  }
+
+  if (!data || !data.overall || machines.length === 0) {
+    return (
+      <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
+        <Typography sx={{ fontSize: 13 }}>
+          OEE drill not yet wired for this section — see spec 11.
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Stack spacing={2}>
+      <OverallTiles overall={data.overall} />
+
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
+        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+          Machine-wise breakdown
+        </Typography>
+        <MachineSearch value={search} onChange={setSearch} />
+      </Stack>
+
+      <MachineTable
+        machines={filteredMachines}
+        selectedCell={selectedCell}
+        onSelectCell={handleSelectCell}
+      />
+
+      {selectedMachine && selectedCell && (
+        <SubDrill
+          machine={selectedMachine}
+          component={selectedCell.component}
+          subCategory={subCategory}
+          onSelectSubCategory={setSubCategory}
+          rows={rows}
+        />
+      )}
+    </Stack>
+  );
+}
+
+export default OeeDrillPanel;

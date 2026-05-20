@@ -228,3 +228,253 @@ export const MIXING_PRODUCTIVITY_KPIS = {
     },
   ],
 };
+
+/**
+ * Machines per Production section (spec 06 + spec 11). Phase 1 only
+ * fills `mix`; spec 11 adds TBM (VMI Max, VMI Exium, BJ Modules,
+ * Stage 1, Stage 2), CUR (Tredge 1–6), STK (sub-selector driven).
+ */
+export const MACHINES_BY_SECTION = {
+  mix: [
+    { id: "banbury-1", name: "Banbury 1" },
+    { id: "banbury-2", name: "Banbury 2" },
+    { id: "banbury-3", name: "Banbury 3" },
+    { id: "banbury-4", name: "Banbury 4" },
+    { id: "banbury-5", name: "Banbury 5" },
+  ],
+  tbm: [],
+  cur: [],
+  stk: [],
+};
+
+/**
+ * OEE drill data per plant + section (spec 06). Spec 11 widens to
+ * the other Banmore sections.
+ *
+ * Shape:
+ *   overall: { availability, performance, quality }
+ *   machines: [{ id, name, availability, performance, quality, oee }]
+ *   subDrill: {
+ *     "${machineId}/${component}/${subCategory}": [...rows]
+ *   }
+ *
+ * Threshold logic (per FR-P26):
+ *   Availability: green ≥95%, amber ≥85%, red <85%
+ *   Performance: green ≥95%, amber ≥90%, red <90%
+ *   Quality: green ≥99%, amber ≥98%, red <98%
+ *
+ * Detail-row shapes vary by component (see spec 06 §Mock data
+ * additions). The `traceable` flag on Scrap rows is the hook for
+ * spec 08; here it just sits on the data.
+ */
+export const OEE_DRILL_BY_PLANT_SECTION = {
+  "banmore/mix": {
+    overall: { availability: 91.4, performance: 88.2, quality: 98.6 },
+    machines: [
+      {
+        id: "banbury-1",
+        name: "Banbury 1",
+        availability: 95.3,
+        performance: 91.4,
+        quality: 99.1,
+      },
+      {
+        id: "banbury-2",
+        name: "Banbury 2",
+        availability: 92.1,
+        performance: 88.6,
+        quality: 98.7,
+      },
+      {
+        id: "banbury-3",
+        name: "Banbury 3",
+        availability: 88.7,
+        performance: 86.2,
+        quality: 98.3,
+      },
+      {
+        id: "banbury-4",
+        name: "Banbury 4",
+        availability: 90.8,
+        performance: 87.4,
+        quality: 98.5,
+      },
+      {
+        id: "banbury-5",
+        name: "Banbury 5",
+        availability: 83.5,
+        performance: 84.9,
+        quality: 97.8,
+      },
+    ],
+    subDrill: {
+      // Banbury 1
+      "banbury-1/availability/breakdown": [
+        {
+          reasonCategory: "Mechanical",
+          reason: "Rotor seal leak",
+          events: 1,
+          durationMin: 38,
+        },
+        {
+          reasonCategory: "Electrical",
+          reason: "Motor overload trip",
+          events: 2,
+          durationMin: 22,
+        },
+      ],
+      "banbury-1/availability/setupAdjustment": [
+        { reason: "Compound changeover", events: 3, durationMin: 24 },
+      ],
+      "banbury-1/availability/startup": [
+        { reason: "Cold-start warmup", events: 1, durationMin: 12 },
+      ],
+      "banbury-1/availability/toolChange": [],
+      "banbury-1/performance/minorStoppage": [
+        { reason: "Feeder jam", events: 4, durationMin: 8 },
+      ],
+      "banbury-1/performance/reducedSpeed": [
+        { reason: "TCU recovery", events: 2, durationMin: 14 },
+      ],
+      "banbury-1/quality/defect": [
+        {
+          itemCode: "COMP-FIN-001",
+          defectType: "Underdispersion",
+          qty: 280,
+          totalProduced: 22400,
+        },
+      ],
+      "banbury-1/quality/scrap": [
+        { itemCode: "COMP-FIN-001", qty: 120, traceable: true },
+        { itemCode: "COMP-FIN-003", qty: 60, traceable: false },
+      ],
+
+      // Banbury 2
+      "banbury-2/availability/breakdown": [
+        {
+          reasonCategory: "Instrumentation",
+          reason: "TCU sensor drift",
+          events: 1,
+          durationMin: 28,
+        },
+      ],
+      "banbury-2/availability/setupAdjustment": [],
+      "banbury-2/availability/startup": [],
+      "banbury-2/availability/toolChange": [
+        { reason: "Rotor blade swap", events: 1, durationMin: 45 },
+      ],
+      "banbury-2/performance/minorStoppage": [
+        { reason: "Door interlock", events: 3, durationMin: 5 },
+      ],
+      "banbury-2/performance/reducedSpeed": [],
+      "banbury-2/quality/defect": [],
+      "banbury-2/quality/scrap": [
+        { itemCode: "COMP-FIN-002", qty: 85, traceable: true },
+      ],
+
+      // Banbury 3
+      "banbury-3/availability/breakdown": [
+        {
+          reasonCategory: "Mechanical",
+          reason: "Discharge door stuck",
+          events: 2,
+          durationMin: 62,
+        },
+        {
+          reasonCategory: "Electrical",
+          reason: "Drive VFD fault",
+          events: 1,
+          durationMin: 41,
+        },
+      ],
+      "banbury-3/availability/setupAdjustment": [
+        { reason: "Compound changeover", events: 2, durationMin: 18 },
+      ],
+      "banbury-3/availability/startup": [],
+      "banbury-3/availability/toolChange": [],
+      "banbury-3/performance/minorStoppage": [
+        { reason: "Feeder jam", events: 6, durationMin: 12 },
+      ],
+      "banbury-3/performance/reducedSpeed": [
+        { reason: "TCU recovery", events: 3, durationMin: 22 },
+      ],
+      "banbury-3/quality/defect": [
+        {
+          itemCode: "COMP-MST-005",
+          defectType: "Mooney out of range",
+          qty: 180,
+          totalProduced: 18000,
+        },
+      ],
+      "banbury-3/quality/scrap": [
+        { itemCode: "COMP-MST-005", qty: 95, traceable: true },
+      ],
+
+      // Banbury 4
+      "banbury-4/availability/breakdown": [
+        {
+          reasonCategory: "Mechanical",
+          reason: "Hopper clog",
+          events: 1,
+          durationMin: 18,
+        },
+      ],
+      "banbury-4/availability/setupAdjustment": [],
+      "banbury-4/availability/startup": [],
+      "banbury-4/availability/toolChange": [],
+      "banbury-4/performance/minorStoppage": [
+        { reason: "Feeder jam", events: 2, durationMin: 4 },
+      ],
+      "banbury-4/performance/reducedSpeed": [],
+      "banbury-4/quality/defect": [],
+      "banbury-4/quality/scrap": [],
+
+      // Banbury 5 (worst performer — exercises red thresholds)
+      "banbury-5/availability/breakdown": [
+        {
+          reasonCategory: "Mechanical",
+          reason: "Major bearing failure",
+          events: 1,
+          durationMin: 215,
+        },
+        {
+          reasonCategory: "Electrical",
+          reason: "Control panel replace",
+          events: 1,
+          durationMin: 95,
+        },
+      ],
+      "banbury-5/availability/setupAdjustment": [
+        { reason: "Repeated changeover", events: 5, durationMin: 35 },
+      ],
+      "banbury-5/availability/startup": [
+        { reason: "Post-repair recommissioning", events: 1, durationMin: 40 },
+      ],
+      "banbury-5/availability/toolChange": [],
+      "banbury-5/performance/minorStoppage": [
+        { reason: "Feeder jam", events: 8, durationMin: 22 },
+      ],
+      "banbury-5/performance/reducedSpeed": [
+        { reason: "Cold-zone derate", events: 4, durationMin: 38 },
+      ],
+      "banbury-5/quality/defect": [
+        {
+          itemCode: "COMP-FIN-002",
+          defectType: "Overdispersion",
+          qty: 220,
+          totalProduced: 14000,
+        },
+        {
+          itemCode: "COMP-MST-001",
+          defectType: "Visual contamination",
+          qty: 110,
+          totalProduced: 9000,
+        },
+      ],
+      "banbury-5/quality/scrap": [
+        { itemCode: "COMP-FIN-002", qty: 240, traceable: true },
+        { itemCode: "COMP-MST-001", qty: 110, traceable: true },
+      ],
+    },
+  },
+};
