@@ -1,0 +1,8 @@
+/*
+ * Intentionally empty. MUI's <CssBaseline /> (mounted in src/App.jsx)
+ * handles the global reset. Project styling goes through the MUI
+ * theme (src/theme.js) and component-level `sx` / `styled()` props.
+ *
+ * Do not add hex colour codes here — they are confined to src/theme.js
+ * by scripts/check.sh.
+ */

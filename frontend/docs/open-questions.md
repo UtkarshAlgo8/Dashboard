@@ -1,0 +1,119 @@
+# Open Questions Registry
+
+Living file. Every question raised against the BRD lives here.
+Every assumption made in lieu of a PM answer lives here.
+
+## How this file is used
+
+- Read by Claude at the start of every spec — open items must be
+  surfaced in the spec's Context section.
+- Read by you when a PM clarifies something — grep the ID, find every
+  affected spec, patch the specs (or write a change request if specs
+  have already shipped).
+- Read at retrospectives — the resolved entries are a record of what
+  the BRD missed. The patterns are how next quarter's BRD gets better.
+
+## Status values
+
+- OPEN      - no answer yet; default assumption is in play
+- RESOLVED  - PM/stakeholder has decided; assumption either confirmed
+              or replaced. Affected specs patched.
+- DEFERRED  - intentionally postponed. Trigger for revisit logged.
+- WONTFIX   - decided not to address (e.g. out of scope, non-issue).
+
+## Cost-to-change levels
+
+- LOW    - isolated to one component/endpoint, no data model impact
+- MEDIUM - touches a feature or two, possible API contract tweak
+- HIGH   - schema change, auth flow, or cross-cutting refactor
+
+## Phase 1 decision summary
+
+User confirmed the following Phase 1 scope on 2026-05-20 (resolving the
+ten seed entries Q-AUTH-01 through Q-MOBILE-01):
+
+- **Frontend-only build.** No backend in Phase 1. The frontend ships
+  against deterministic mock data + dummy APIs at `src/api/*.js` so the
+  resource module shape is in place when the backend is built later.
+- **No auth in Phase 1.** Public app behind dev (localhost). Auth
+  pattern selection is deferred to the backend phase.
+- **Polling every 60 seconds** for KPI / drill / trend data (against the
+  dummy APIs in Phase 1; against the real backend later). No WebSocket.
+- **KPI set = prototype/artifact** ([artifact.jsx](artifact.jsx)) for
+  Phase 1.
+- **Single role.** No role branching, no avatar-based routing in Phase 1.
+- **Other dashboards visible-but-disabled** in navigation (Quality /
+  Engineering / Inventory / other plants) with a tooltip.
+- **Export = browser print dialog only.** The dialog's native "Save as
+  PDF" is the download path. No separate Export-PDF UI.
+- **Environment = dev / localhost only.** Staging and prod deferred.
+- **Viewport support = desktop + tablet.** Phone not supported in Phase 1.
+
+The broader BRD gap analysis (122 rows across 8 categories) lives in
+[brd-intake-2026-05-20.md](brd-intake-2026-05-20.md). That table still
+needs to be walked with the PM and the named Heads to convert
+UNANSWERED rows into the full OQR. The ten entries below are the
+narrow subset that gates Day-0 scaffolding; the bigger walk produces
+the remainder.
+
+## Registry
+
+| ID | Question | Category | Affects | Default assumption | Cost to change | Status | Raised | Resolved |
+|----|----------|----------|---------|--------------------|----------------|--------|--------|----------|
+| Q-AUTH-01 | Which auth pattern does the dashboard use? (Pattern A localStorage+cookie, Pattern B memory+httpOnly, Pattern C public/VPN) | Actors | architecture, api-contract, app-shell spec | Pattern C (no auth) for Phase 1; pattern selection deferred to backend phase | HIGH | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-BE-01 | What is the backend repo + base URL serving Banmore Production KPIs? | Integrations | api-contract, all data-flow specs | Phase 1 has no backend. Frontend ships against `src/lib/mockData.js` via dummy resource modules. Backend work starts after Phase 1 ships. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-DATA-01 | Is the dashboard polling-refreshed or push-driven (WebSocket/SSE)? If polling, what interval? | Non-functional | api-contract, landing spec | Polling every 60s. No WebSocket/SSE in Phase 1. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-TR-01 | Time-range presets — what is the exact list? | Entity lifecycle | time-range-filter spec | Per BRD FR-X7: four presets — Today / Week / Month / Year — plus custom From/To. | LOW | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-KPI-01 | Is the KPI list in artifact.jsx the authoritative Phase-1 KPI set? | Entity lifecycle | landing spec | Yes — the prototype KPI list is the Phase-1 scope. Mock data backs it; KPI list may be revised when the BRD intake walk completes. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-USR-01 | Are there role-based views in Phase 1? | Actors | landing spec | No. Phase 1 is single-role, read-only. Avatar may render an initial set but does not gate access. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-NAV-01 | Are Quality / Engineering / Inventory tabs visible-but-disabled in Phase 1 navigation, or hidden entirely? | Non-goals | app-shell spec | Visible but disabled, with a "Phase 2" tooltip. Same for non-Banmore plants. | LOW | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-EXP-01 | Is browser-print PDF the only export format for Phase 1? | Non-goals | export spec | Yes — Export button triggers `window.print()` (per BRD FR-X26). The browser's native "Save as PDF" is the download path. No separate download UI. | LOW | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-ENV-01 | What environments are in scope (dev, staging, prod) and what hosts back them? | Non-functional | architecture, env config | dev=localhost only for Phase 1. Staging and prod deferred to the backend phase. | LOW | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-MOBILE-01 | What's the minimum supported viewport? | Non-functional | every page spec | Desktop + tablet supported in Phase 1. Phone not supported. Exact tablet breakpoint TBD per spec. | LOW | RESOLVED | 2026-05-20 | 2026-05-20 |
+
+## Resolution log
+
+When a question is resolved, append a short note here with the date,
+the decision, and which specs were patched as a result. This is the
+audit trail.
+
+### 2026-05-20
+
+- **Q-AUTH-01 resolved**: Pattern C (no auth) confirmed for Phase 1.
+  Patched: `docs/architecture.md#authentication` (marked Patterns A/B
+  as Phase-2-or-later reference), `docs/product.md` (Phase 1 non-goal
+  re-confirmed). No specs shipped yet.
+- **Q-BE-01 resolved**: backend deferred. Frontend ships against
+  `src/lib/mockData.js`. Patched: `docs/api-contract.md` (marked
+  DRAFT-DEFERRED status), `docs/architecture.md#data-flow` (mock-data
+  toggle becomes the default path for Phase 1).
+- **Q-DATA-01 resolved**: 60-second polling, no push. Patched:
+  `docs/architecture.md#data-flow`. Each KPI / drill / trend spec must
+  reference this cadence.
+- **Q-TR-01 resolved**: four presets — Today / Week / Month / Year —
+  plus custom From/To, per BRD FR-X7. Seed table previously listed
+  "day/week/month/custom" which was incomplete — corrected.
+- **Q-KPI-01 resolved**: prototype KPI list is authoritative for Phase 1.
+  May be revised after the broader BRD walk
+  ([brd-intake-2026-05-20.md](brd-intake-2026-05-20.md)).
+- **Q-USR-01 resolved**: single role, no RBAC enforcement in Phase 1.
+  Patched: `docs/product.md` Personas section already lists Phase 2+
+  for role-specific dashboards.
+- **Q-NAV-01 resolved**: visible-but-disabled for the other plants and
+  the Quality / Engineering / Inventory tabs. App-shell spec must
+  render disabled state with a "Phase 2" tooltip.
+- **Q-EXP-01 resolved**: `window.print()` only. No separate PDF download
+  UI. Print stylesheet hides interactive overlays per BRD FR-X27.
+- **Q-ENV-01 resolved**: dev/localhost only for Phase 1. Patched:
+  `docs/architecture.md#environment-variables` (only `VITE_API_BASE_URL`
+  pointing at localhost is needed; mock-data toggle handles offline dev).
+- **Q-MOBILE-01 resolved**: desktop + tablet supported in Phase 1; phone
+  not supported. Tablet breakpoint to be defined in the app-shell spec.
+
+### Pending (broader BRD walk)
+
+The 122-row intake table at
+[brd-intake-2026-05-20.md](brd-intake-2026-05-20.md) is still pending a
+PM walk. Once walked, the UNANSWERED + escalated-INFERRED rows will be
+added to this registry as Q01, Q02, … and the seed naming convention
+(Q-AUTH-01 etc.) will retire.

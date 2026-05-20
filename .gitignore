@@ -1,0 +1,11 @@
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+
+# Per-side .gitignore handles node_modules, dist, etc.
+# Anything truly shared and machine-local goes here.
+*.local

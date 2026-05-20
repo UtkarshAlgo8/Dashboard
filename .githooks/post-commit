@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Monorepo post-commit dispatcher.
+# Each side maintains its own logs/history.md. If a side hasn't been
+# scaffolded yet, its hook is skipped silently.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+run_side() {
+  local side="$1"
+  local hook="$REPO_ROOT/$side/scripts/log-history.sh"
+  if [ -x "$hook" ] || [ -f "$hook" ]; then
+    ( cd "$REPO_ROOT/$side" && bash scripts/log-history.sh )
+  fi
+}
+
+run_side frontend
+run_side backend

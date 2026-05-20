@@ -1,0 +1,96 @@
+import { createTheme } from "@mui/material/styles";
+
+/**
+ * Artifact palette tokens (from docs/artifact.jsx `const C`).
+ * The single source of truth for hex codes in this project — the
+ * forbidden-pattern grep in scripts/check.sh disallows hex codes
+ * anywhere else.
+ */
+const C = {
+  bg: "#F3F4F8",
+  cd: "#FFFFFF",
+  c2: "#F7F8FA",
+  bd: "#E0E3EA",
+  tx: "#1A1D26",
+  md: "#4A5168",
+  mu: "#8891A5",
+  ac: "#E8651A",
+  aL: "rgba(232,101,26,0.07)",
+  aB: "rgba(232,101,26,0.28)",
+  tl: "#1A9A3E",
+  bl: "#2563EB",
+  rd: "#DC2626",
+  am: "#CA8A04",
+  gn: "#1A9A3E",
+  pp: "#7C3AED",
+  cy: "#0D9488",
+  sh: "0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04)",
+  r: 8,
+};
+
+const theme = createTheme({
+  palette: {
+    mode: "light",
+    primary: { main: C.ac, light: C.aL, dark: C.aB, contrastText: "#FFFFFF" },
+    success: { main: C.gn },
+    warning: { main: C.am },
+    error: { main: C.rd },
+    info: { main: C.bl },
+    text: { primary: C.tx, secondary: C.md, disabled: C.mu },
+    background: { default: C.bg, paper: C.cd },
+    divider: C.bd,
+  },
+  typography: {
+    fontFamily:
+      'Montserrat, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    fontWeightRegular: 400,
+    fontWeightMedium: 500,
+    fontWeightBold: 700,
+  },
+  shape: {
+    borderRadius: C.r,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: { textTransform: "none" },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: { borderRadius: 10 },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: { borderRadius: 10 },
+      },
+    },
+  },
+});
+
+/**
+ * Project-specific tokens that don't map cleanly onto MUI's semantic
+ * palette. Access via `theme.custom.*` in components (typed via JSDoc
+ * since this is JavaScript).
+ */
+theme.custom = {
+  surface: { default: C.bg, paper: C.cd, soft: C.c2 },
+  text: { strong: C.tx, medium: C.md, muted: C.mu },
+  brand: {
+    orange: C.ac,
+    orangeSoft: C.aL,
+    orangeRing: C.aB,
+    teal: C.tl,
+    blue: C.bl,
+    green: C.gn,
+    amber: C.am,
+    red: C.rd,
+    purple: C.pp,
+    cyan: C.cy,
+  },
+  shadow: C.sh,
+  radius: C.r,
+};
+
+export default theme;

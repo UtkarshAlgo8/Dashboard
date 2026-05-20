@@ -1,0 +1,27 @@
+# Logs
+*.log
+# Note: logs/history.md is the change log written by the post-commit hook
+# (see PLAYBOOK.pdf Part I §9). It is intentionally tracked. Per-session
+# cost logs at logs/cost.md are gitignored below.
+logs/cost.md
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
