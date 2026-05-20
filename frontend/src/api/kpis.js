@@ -32,10 +32,6 @@ export function getKpis({ plantId, section, tab, compound, stockSelector }) {
     if (tab === "p") {
       const bucket = PRODUCTIVITY_KPIS_BY_SECTION[section];
       if (!bucket) return mockDelay([]);
-      if (section === "mix") {
-        const key = compound === "master" ? "master" : "final";
-        return mockDelay(bucket[key] ?? []);
-      }
       if (section === "stk") {
         const key = stockSelector ?? "4roll";
         return mockDelay(bucket[key] ?? []);
@@ -43,7 +39,7 @@ export function getKpis({ plantId, section, tab, compound, stockSelector }) {
       return mockDelay(bucket);
     }
 
-    if (["q", "c", "d", "m", "s"].includes(tab)) {
+    if (["q", "c", "m", "s"].includes(tab)) {
       return mockDelay(OTHER_TAB_KPIS_BY_SECTION[section]?.[tab] ?? []);
     }
 

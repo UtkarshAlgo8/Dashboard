@@ -37,24 +37,32 @@ export function getOeeDrill({ plantId, section }) {
 }
 
 /**
- * Fetch compound-wise Production drill rows (spec 07).
- * Phase 1 mock returns Banmore + Mixing only.
+ * Fetch the Production drill bucket for a (plant, section) slice.
+ * Returns the raw sub-selector keyed object — the drill panel picks
+ * the right sub-array based on the section's UX (compound for Mixing,
+ * tyre family for TBM/Curing, category for Stock).
+ *
+ * For Stock the lookup key includes the stockSelector segment because
+ * each sub-selector exposes its own category list.
  *
  * @param {object} params
  * @param {string} params.plantId
- * @param {string} params.section - "mix" (Production drill exists for Mixing only in BRD)
- * @param {"master"|"final"} params.compound
- * @returns {Promise<Array>}
+ * @param {string} params.section - "mix" | "tbm" | "cur" | "stk"
+ * @param {string} [params.stockSelector] - required for section "stk"
+ * @returns {Promise<Record<string, Array>>}
  */
-export function getProductionDrill({ plantId, section, compound }) {
+export function getProductionDrill({ plantId, section, stockSelector }) {
   if (USE_MOCK) {
-    const key = `${plantId}/${section}`;
-    const bucket = PRODUCTION_DRILL_BY_PLANT_SECTION[key];
-    if (!bucket) return mockDelay([]);
-    return mockDelay(bucket[compound] ?? []);
+    const key =
+      section === "stk"
+        ? `${plantId}/${section}/${stockSelector ?? "4roll"}`
+        : `${plantId}/${section}`;
+    return mockDelay(PRODUCTION_DRILL_BY_PLANT_SECTION[key] ?? {});
   }
+  const query =
+    section === "stk" && stockSelector ? `&stockSelector=${stockSelector}` : "";
   return client.get(
-    `/plants/${plantId}/production/drills/production?section=${section}&compound=${compound}`,
+    `/plants/${plantId}/production/drills/production?section=${section}${query}`,
   );
 }
 

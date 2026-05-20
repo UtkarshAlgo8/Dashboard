@@ -104,7 +104,6 @@ export const CATEGORY_TABS = [
   { id: "p", code: "P", name: "Productivity" },
   { id: "q", code: "Q", name: "Quality" },
   { id: "c", code: "C", name: "Cost" },
-  { id: "d", code: "D", name: "Delivery" },
   { id: "m", code: "M", name: "Morale" },
   { id: "s", code: "S", name: "Safety" },
   { id: "i", code: "I", name: "Inventory" },
@@ -121,110 +120,57 @@ export const PLANT_SUMMARIES = {
 };
 
 /**
- * Mixing > Productivity KPI definitions (spec 05). Keyed by compound
- * — "master" and "final" — per BRD FR-P11. Production values 285 MT
- * (Master) and 183 MT (Final) come from the BRD; other KPIs are
- * deterministic mocks. Sparkline arrays are 8 points each, recent →
- * latest.
- *
- * Spec 11 wraps this into PRODUCTIVITY_KPIS_BY_SECTION further down
- * for TBM / Curing / Stock parity; this export stays as the Mixing
- * leaf for backwards compatibility within the file.
+ * Mixing > Productivity KPI definitions. Production card is a single
+ * tile showing Master + Final combined (468 MT); compound selection
+ * moves into the Production drill panel itself (spec-aligned with
+ * docs/artifact.jsx).
  */
-export const MIXING_PRODUCTIVITY_KPIS = {
-  master: [
-    {
-      id: "oee",
-      name: "OEE",
-      value: 79.4,
-      unit: "%",
-      trend: 1.8,
-      trendFavourable: true,
-      spark: [76.5, 77.1, 77.8, 78.0, 78.6, 78.9, 79.1, 79.4],
-      target: 85,
-      drillable: true,
-    },
-    {
-      id: "production",
-      name: "Production",
-      value: 285,
-      unit: "MT",
-      trend: 4.2,
-      trendFavourable: true,
-      spark: [262, 268, 271, 275, 278, 281, 283, 285],
-      target: 300,
-      drillable: true,
-    },
-    {
-      id: "downtime",
-      name: "Downtime",
-      value: 6.4,
-      unit: "hrs",
-      trend: -8.5,
-      trendFavourable: true,
-      spark: [8.1, 7.6, 7.5, 7.2, 7.0, 6.8, 6.6, 6.4],
-      target: 5,
-      drillable: true,
-    },
-    {
-      id: "plan-compliance",
-      name: "Plan Compliance",
-      value: 94.2,
-      unit: "%",
-      trend: 0.6,
-      trendFavourable: true,
-      spark: [93.4, 93.6, 93.7, 93.9, 94.0, 94.0, 94.1, 94.2],
-      target: 95,
-      drillable: true,
-    },
-  ],
-  final: [
-    {
-      id: "oee",
-      name: "OEE",
-      value: 78.5,
-      unit: "%",
-      trend: -1.1,
-      trendFavourable: false,
-      spark: [79.6, 79.3, 79.1, 79.0, 78.8, 78.7, 78.6, 78.5],
-      target: 85,
-      drillable: true,
-    },
-    {
-      id: "production",
-      name: "Production",
-      value: 183,
-      unit: "MT",
-      trend: 2.4,
-      trendFavourable: true,
-      spark: [171, 173, 175, 177, 179, 180, 182, 183],
-      target: 200,
-      drillable: true,
-    },
-    {
-      id: "downtime",
-      name: "Downtime",
-      value: 5.2,
-      unit: "hrs",
-      trend: -3.7,
-      trendFavourable: true,
-      spark: [6.0, 5.8, 5.7, 5.5, 5.4, 5.3, 5.3, 5.2],
-      target: 5,
-      drillable: true,
-    },
-    {
-      id: "plan-compliance",
-      name: "Plan Compliance",
-      value: 91.6,
-      unit: "%",
-      trend: -1.3,
-      trendFavourable: false,
-      spark: [92.9, 92.7, 92.5, 92.3, 92.1, 91.9, 91.8, 91.6],
-      target: 95,
-      drillable: true,
-    },
-  ],
-};
+export const MIXING_PRODUCTIVITY_KPIS = [
+  {
+    id: "oee",
+    name: "OEE",
+    value: 91.5,
+    unit: "%",
+    trend: 1.2,
+    trendFavourable: true,
+    spark: [89.5, 90.1, 90.4, 90.8, 91.0, 91.2, 91.3, 91.5],
+    target: 92,
+    drillable: true,
+  },
+  {
+    id: "production",
+    name: "Production",
+    value: 468,
+    unit: "MT",
+    trend: 2.5,
+    trendFavourable: true,
+    spark: [433, 441, 446, 453, 458, 461, 465, 468],
+    target: 500,
+    drillable: true,
+  },
+  {
+    id: "downtime",
+    name: "Downtime",
+    value: 2.1,
+    unit: "hrs",
+    trend: -2.5,
+    trendFavourable: true,
+    spark: [3.5, 3.2, 3.0, 2.8, 2.5, 2.3, 2.2, 2.1],
+    target: 2,
+    drillable: true,
+  },
+  {
+    id: "plan-compliance",
+    name: "Plan Compliance",
+    value: 92,
+    unit: "%",
+    trend: -0.5,
+    trendFavourable: false,
+    spark: [94, 93.5, 93, 92.8, 92.5, 92.3, 92.1, 92],
+    target: 95,
+    drillable: true,
+  },
+];
 
 /**
  * Machines per Production section (spec 06 + spec 11). Phase 1 only
@@ -648,6 +594,111 @@ export const PRODUCTION_DRILL_BY_PLANT_SECTION = {
         batchesPlan: 12,
         batchesActual: 13,
       },
+    ],
+  },
+  // TBM Production drill: keyed by tyre family per artifact (Passenger
+  // Radial / LT Radial / SCV Radial). Each row: { sku, planned, actual }.
+  "banmore/tbm": {
+    "passenger-radial": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 400, actual: 328 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 450, actual: 383 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 500, actual: 440 },
+      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 550, actual: 495 },
+      { sku: "195/55R16 ULTIMA SPORT 87V TL", planned: 600, actual: 552 },
+      { sku: "175/70R13 ULTIMA NEO 82T EUEX TL", planned: 500, actual: 470 },
+    ],
+    "lt-radial": [
+      { sku: "7.00R15 STEEL KING 10PR L TT", planned: 300, actual: 255 },
+      { sku: "7.00R15 STEEL KING 12PR L TT", planned: 340, actual: 296 },
+      { sku: "215/75R15 115/113S 10PR SK TL", planned: 380, actual: 335 },
+      { sku: "7.00R16 STEEL KING 12PR TT", planned: 420, actual: 378 },
+      { sku: "8.25R16 JETWAY JUH5 14PR TT", planned: 460, actual: 423 },
+    ],
+    "scv-radial": [
+      { sku: "235/65R16 STEELKING+ 121P TL", planned: 200, actual: 160 },
+      { sku: "195R15 ULTIMA NXT 106S TL", planned: 230, actual: 193 },
+      { sku: "215/75R15 STEEL KING+ TL", planned: 260, actual: 226 },
+      { sku: "205/65R16 ULTIMA NXT 107T TL", planned: 290, actual: 261 },
+    ],
+  },
+  // Curing Production drill: same shape as TBM. Higher volumes.
+  "banmore/cur": {
+    "passenger-radial": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 1200, actual: 1062 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 1350, actual: 1228 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 1500, actual: 1400 },
+      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 1650, actual: 1551 },
+      { sku: "195/55R16 ULTIMA SPORT 87V TL", planned: 1800, actual: 1710 },
+    ],
+    "lt-radial": [
+      { sku: "7.00R15 STEEL KING 10PR L TT", planned: 900, actual: 783 },
+      { sku: "7.00R15 STEEL KING 12PR L TT", planned: 980, actual: 872 },
+      { sku: "215/75R15 115/113S 10PR SK TL", planned: 1050, actual: 945 },
+      { sku: "7.00R16 STEEL KING 12PR TT", planned: 1120, actual: 1030 },
+    ],
+    "scv-radial": [
+      { sku: "235/65R16 STEELKING+ 121P TL", planned: 700, actual: 595 },
+      { sku: "195R15 ULTIMA NXT 106S TL", planned: 780, actual: 686 },
+      { sku: "215/75R15 STEEL KING+ TL", planned: 850, actual: 765 },
+      { sku: "205/65R16 ULTIMA NXT 107T TL", planned: 920, actual: 855 },
+    ],
+  },
+  // Stock Production drill: keyed by `${stockSelector}/${category}`.
+  // The categories per sub-selector come from the artifact's stkProd
+  // routing table (artifact.jsx:1221).
+  "banmore/stk/4roll": {
+    "4-roll-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 80, actual: 68 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 100, actual: 87 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 120, actual: 106 },
+      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 140, actual: 126 },
+      { sku: "195/55R16 ULTIMA SPORT 87V TL", planned: 160, actual: 148 },
+    ],
+  },
+  "banmore/stk/extruder": {
+    "sidewall-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 90, actual: 78 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 110, actual: 98 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 130, actual: 117 },
+      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 150, actual: 138 },
+    ],
+    "tread-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 70, actual: 61 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 85, actual: 76 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 100, actual: 91 },
+      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 115, actual: 108 },
+    ],
+  },
+  "banmore/stk/3roll": {
+    "inner-liner-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 60, actual: 51 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 75, actual: 66 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 90, actual: 82 },
+      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 105, actual: 98 },
+    ],
+  },
+  "banmore/stk/cutter": {
+    "ply-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 50, actual: 43 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 65, actual: 58 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 80, actual: 72 },
+    ],
+    "belt-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 55, actual: 48 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 70, actual: 63 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 85, actual: 78 },
+    ],
+  },
+  "banmore/stk/slitter": {
+    "cap-strip-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 40, actual: 35 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 55, actual: 49 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 70, actual: 64 },
+    ],
+    "chaffer-production": [
+      { sku: "145/80R13 Ultima Neo 75S TL", planned: 45, actual: 39 },
+      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 60, actual: 54 },
+      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 75, actual: 69 },
     ],
   },
 };
@@ -1407,7 +1458,7 @@ const TBM_PRODUCTIVITY = [
     trendFavourable: true,
     spark: [4080, 4120, 4160, 4190, 4220, 4240, 4260, 4280],
     target: 4500,
-    drillable: false,
+    drillable: true,
   },
   {
     id: "downtime",
@@ -1454,7 +1505,7 @@ const CUR_PRODUCTIVITY = [
     trendFavourable: true,
     spark: [3970, 4000, 4030, 4055, 4080, 4095, 4105, 4115],
     target: 4300,
-    drillable: false,
+    drillable: true,
   },
   {
     id: "downtime",
@@ -1501,7 +1552,7 @@ const STK_4ROLL_PRODUCTIVITY = [
     trendFavourable: true,
     spark: [1192, 1205, 1212, 1220, 1228, 1232, 1236, 1240],
     target: 1300,
-    drillable: false,
+    drillable: true,
   },
   {
     id: "downtime",
@@ -1533,10 +1584,10 @@ export const PRODUCTIVITY_KPIS_BY_SECTION = {
   cur: CUR_PRODUCTIVITY,
   stk: {
     "4roll": STK_4ROLL_PRODUCTIVITY,
-    extruder: [],
-    "3roll": [],
-    cutter: [],
-    slitter: [],
+    extruder: STK_4ROLL_PRODUCTIVITY,
+    "3roll": STK_4ROLL_PRODUCTIVITY,
+    cutter: STK_4ROLL_PRODUCTIVITY,
+    slitter: STK_4ROLL_PRODUCTIVITY,
   },
 };
 
@@ -1943,17 +1994,10 @@ PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION["banmore/stk"] = {
 };
 
 /**
- * Q / C / D / M / S KPI templates per tab (spec 12). Baseline
- * values are mid-section; per-section variants apply a small delta
- * via SECTION_VARIANT_DELTAS so each section's view differs but
- * the structure stays uniform. All non-Productivity KPIs are
- * non-drillable in Phase 1 (BRD §6.12 only describes Productivity
- * drills).
- *
- * Counter KPIs (`days-without-incident`) drive the progress chart
- * variant in the Trend Modal via pickChartType.
+ * @deprecated retained only to keep prior imports compiling — the live
+ * data now comes from the section-aware builder below. Not exported.
  */
-const OTHER_TAB_TEMPLATES = {
+const _LEGACY_OTHER_TAB_TEMPLATES = {
   q: [
     {
       id: "ftq",
@@ -2213,15 +2257,488 @@ function applyFactor(kpi, factor) {
   };
 }
 
+void _LEGACY_OTHER_TAB_TEMPLATES;
+void SECTION_VARIANT_FACTORS;
+void applyFactor;
+
+/**
+ * Per-section card sets for the Quality, Cost, Morale and Safety
+ * tabs. Cards within a tab are identical across all four sections —
+ * only the drill data (machines, SKUs, defect reasons, areas) varies
+ * per section, matching docs/artifact.jsx#buildKpis (lines 930–962).
+ *
+ * Drill metadata is embedded on each KPI under `drill`:
+ *   { type: "table", title, cols, rows }   — generic table drill
+ *   { type: "budget", allocated, spent, consumedPct }  — Cost > Budget Util.
+ *   null                                   — non-drillable card
+ */
+
+const SECTION_MACHINES = {
+  mix: ["Banbury 1", "Banbury 2", "Banbury 3", "Banbury 4", "Banbury 5"],
+  tbm: ["VMI Max", "VMI Exium", "BJ Modules", "Stage 1", "Stage 2"],
+  cur: ["Tredge 1", "Tredge 2", "Tredge 3", "Tredge 4", "Tredge 5", "Tredge 6"],
+  stk: ["4 Roll #1", "Duplex", "3 Roll #1", "LTBC", "Slitter-1"],
+};
+
+const SECTION_DEFECT_REASONS = {
+  mix: ["Viscosity NC", "Off-Spec", "Cure Rate NC", "Contaminated"],
+  tbm: ["Splice Open", "Ply Wrinkle", "Belt Edge", "Bead Fault"],
+  cur: ["Bladder Mark", "Flash", "Porosity", "Under-cure"],
+  stk: ["Width OOS", "Gauge OOS", "Surface", "Bias Angle"],
+};
+
+const SECTION_AREAS = {
+  mix: ["Banbury Hall", "Mill Area", "Batch-off", "Staff"],
+  tbm: ["VMI Section", "Stage 1/2", "BJ Area", "Staff"],
+  cur: ["Tredge 1-2", "Tredge 3-4", "Tredge 5-6", "Staff"],
+  stk: ["Calender", "Extruder", "Cutter", "Staff"],
+};
+
+const SECTION_TRAIN_AREAS = {
+  mix: ["Banbury Operators", "Mill Operators", "Batch-off", "Supervisors"],
+  tbm: ["VMI Operators", "Stage Operators", "BJ Operators", "Supervisors"],
+  cur: ["Press Operators", "Mould Team", "Loader Operators", "Supervisors"],
+  stk: ["Calender Ops", "Extruder Ops", "Cutter Ops", "Supervisors"],
+};
+
+const SECTION_SAFETY_AREAS = {
+  mix: ["Banbury Hall", "Mill Area", "Batch-off", "Chemical Store"],
+  tbm: ["VMI Bay", "Stage 1/2 Bay", "BJ Bay", "Store Area"],
+  cur: ["Tredge 1-2", "Tredge 3-4", "Tredge 5-6", "Mould Shop"],
+  stk: ["Calender Bay", "Extruder Bay", "Cutter Area", "Store"],
+};
+
+const SECTION_INCIDENT_AREA = {
+  mix: "Banbury",
+  tbm: "VMI Bay",
+  cur: "Tredge",
+  stk: "Calender",
+};
+
+// Representative SKU + compound lists per section (artifact constants).
+const TYRE_PCR = [
+  "145/80R13 Ultima Neo 75S TL",
+  "155R13 ULTIMAX PC1 90/89S TL",
+  "175/70R13 ULTIMA NEO 82T TL",
+  "175/70R13 ULTIMA NEO 82T EUEX TL",
+  "185/65R15 ULTIMA SPORT 88H TL",
+  "195/55R16 ULTIMA SPORT 87V TL",
+];
+const TYRE_LTR = [
+  "7.00R15 STEEL KING 10PR L TT",
+  "215/75R15 115/113S 10PR SK TL",
+];
+const MIX_FINAL_COMPOUNDS = ["MS66", "MT3708", "MT273", "ML405", "MT3704"];
+
+const SECTION_SKUS = {
+  mix: MIX_FINAL_COMPOUNDS,
+  tbm: [...TYRE_PCR, ...TYRE_LTR],
+  cur: [...TYRE_PCR, ...TYRE_LTR],
+  stk: TYRE_PCR,
+};
+
+// Per-section base scrap %, used to vary Quality KPI values per artifact.
+const SECTION_SCRAP_PCT = { mix: 0.5, tbm: 1.8, cur: 0.9, stk: 1.1 };
+// Per-section Specific Power baseline (kWh/MT) per artifact.
+const SECTION_SPEC_POWER = { mix: 312, tbm: 345, cur: 380, stk: 285 };
+
+const TQM_PILLARS = [
+  ["5S / Housekeeping", 4.2, 5],
+  ["Kaizen / CI", 3.5, 5],
+  ["QC Circle", 3.8, 5],
+  ["Suggestion Scheme", 3.6, 5],
+  ["PM Pillar", 4.0, 5],
+];
+
+const SUGGESTION_ROWS = [
+  ["Quality", 18, 12, 6, 85],
+  ["Safety", 12, 10, 2, 42],
+  ["Productivity", 15, 8, 7, 120],
+  ["Cost Reduction", 8, 5, 3, 95],
+];
+
+const NEAR_MISS_ROWS = [
+  ["Unsafe Act", 5, "38%", "4 Closed, 1 Open"],
+  ["Unsafe Condition", 4, "31%", "3 Closed, 1 Open"],
+  ["Housekeeping", 2, "15%", "Closed"],
+  ["Electrical", 1, "8%", "Open"],
+];
+
+function buildQualityKpis(section) {
+  const skus = SECTION_SKUS[section];
+  const machines = SECTION_MACHINES[section];
+  const reasons = SECTION_DEFECT_REASONS[section];
+  const sc = SECTION_SCRAP_PCT[section];
+
+  const ftqValue = +(100 - sc - 0.5).toFixed(1);
+  const defectScrap = Math.round(sc * 50);
+
+  return [
+    {
+      id: "ftq",
+      name: "FTQ",
+      value: ftqValue,
+      unit: "%",
+      trend: 0.3,
+      trendFavourable: true,
+      spark: [95, 95.5, 95.8, 96, 96.2, 96.4, 96.6, ftqValue],
+      target: 99,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Machine-wise FTQ",
+        cols: ["Machine", "FTQ %", "Defects", "Top Defect"],
+        rows: machines
+          .slice(0, 6)
+          .map((m, i) => [
+            m,
+            (98 - i * 1.5).toFixed(1) + "%",
+            3 + i * 3,
+            reasons[i % reasons.length],
+          ]),
+      },
+    },
+    {
+      id: "ds",
+      name: "Defect + Scrap",
+      value: defectScrap,
+      unit: "nos",
+      trend: -5,
+      trendFavourable: true,
+      spark: [40, 38, 35, 32, 30, 28, 26, defectScrap],
+      target: 0,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Defect + Scrap Detail",
+        cols: ["SKU", "Machine", "Issue Type", "Reason"],
+        rows: skus
+          .slice(0, 8)
+          .map((sk, i) => [
+            sk,
+            machines[i % machines.length],
+            i % 2 === 0 ? "Defect" : "Scrap",
+            reasons[i % reasons.length],
+          ]),
+      },
+    },
+    {
+      id: "sr",
+      name: "Scrap Rate",
+      value: sc,
+      unit: "%",
+      trend: -0.5,
+      trendFavourable: true,
+      spark: [sc + 0.4, sc + 0.3, sc + 0.2, sc + 0.1, sc, sc, sc, sc],
+      target: 0.5,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Scrap Detail",
+        cols: ["SKU", "Machine", "Reason", "Qty"],
+        rows: skus
+          .slice(0, 5)
+          .map((sk, i) => [
+            sk,
+            machines[i % machines.length],
+            reasons[i % reasons.length],
+            2 + i * 2,
+          ]),
+      },
+    },
+    {
+      id: "ncm",
+      name: "NCM Hold",
+      value: 5,
+      unit: "batches",
+      trend: -20,
+      trendFavourable: true,
+      spark: [10, 9, 8, 7, 7, 6, 6, 5],
+      target: 0,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "NCM Hold Details",
+        cols: ["SKU", "Batch", "# Batches", "Kgs", "Hold Reason"],
+        rows: skus
+          .slice(0, 5)
+          .map((sk, i) => [
+            sk,
+            "B-" + (2840 + i * 3),
+            1 + Math.floor(i / 2),
+            250 + i * 80,
+            reasons[i % reasons.length],
+          ]),
+      },
+    },
+  ];
+}
+
+function buildCostKpis(section) {
+  const machines = SECTION_MACHINES[section];
+  const sc = SECTION_SCRAP_PCT[section];
+  const spc = SECTION_SPEC_POWER[section];
+
+  return [
+    {
+      id: "spc",
+      name: "Specific Power",
+      value: spc,
+      unit: "kWh/MT",
+      trend: -1.5,
+      trendFavourable: true,
+      spark: [spc + 18, spc + 13, spc + 8, spc + 4, spc + 2, spc, spc, spc],
+      target: spc - 12,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Machine-wise Specific Power",
+        cols: ["Machine", "kWh", "Output", "Sp. Power", "Target", "Variance"],
+        rows: machines.map((m, i) => {
+          const kwh = 280 + i * 25;
+          const outMt = 40 + i * 8;
+          const sp = +(kwh / outMt).toFixed(1);
+          return [m, kwh, outMt + " MT", sp, 6.5, +(sp - 6.5).toFixed(1)];
+        }),
+      },
+    },
+    {
+      id: "scrc",
+      name: "Scrap Cost",
+      value: +(sc * 8).toFixed(1),
+      unit: "₹L",
+      trend: -3,
+      trendFavourable: true,
+      spark: [10, 9.5, 9, 8.5, 8, 8, 8, +(sc * 8).toFixed(1)],
+      target: 5,
+      drillable: false,
+    },
+    {
+      id: "bud",
+      name: "Budget Util.",
+      value: 85,
+      unit: "%",
+      trend: 0,
+      trendFavourable: true,
+      spark: [80, 81, 82, 83, 84, 84, 85, 85],
+      target: 90,
+      drillable: true,
+      drill: {
+        type: "budget",
+        allocated: 28.0,
+        spent: 23.8,
+        consumedPct: 85,
+        unit: "₹ L",
+      },
+    },
+  ];
+}
+
+function buildMoraleKpis(section) {
+  const areas = SECTION_AREAS[section];
+  const trainAreas = SECTION_TRAIN_AREAS[section];
+
+  return [
+    {
+      id: "ab",
+      name: "Absenteeism",
+      value: 3.2,
+      unit: "%",
+      trend: -0.3,
+      trendFavourable: true,
+      spark: [4.2, 4.0, 3.8, 3.6, 3.5, 3.4, 3.3, 3.2],
+      target: 2,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Area-wise Absenteeism",
+        cols: ["Area", "Total", "Present", "Absent", "Rate"],
+        rows: areas.map((a, i) => {
+          const total = 40 + i * 10;
+          return [
+            a,
+            total,
+            38 + i * 10,
+            2,
+            ((2 / total) * 100).toFixed(1) + "%",
+          ];
+        }),
+      },
+    },
+    {
+      id: "tq",
+      name: "TQM Score",
+      value: 3.8,
+      unit: "/5",
+      trend: 0.3,
+      trendFavourable: true,
+      spark: [3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.8],
+      target: 4.5,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "TQM by Pillar",
+        cols: ["Pillar", "Score", "Target", "Gap"],
+        rows: TQM_PILLARS.map(([p, s, t]) => [p, s, t, +(s - t).toFixed(1)]),
+      },
+    },
+    {
+      id: "sg",
+      name: "Suggestions",
+      value: 1.2,
+      unit: "/person",
+      trend: 0.2,
+      trendFavourable: true,
+      spark: [0.7, 0.8, 0.9, 1.0, 1.0, 1.1, 1.1, 1.2],
+      target: 2,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Suggestion Status",
+        cols: ["Category", "Submitted", "Implemented", "Pending", "Savings ₹K"],
+        rows: SUGGESTION_ROWS,
+      },
+    },
+    {
+      id: "tr",
+      name: "Training",
+      value: 4.5,
+      unit: "hrs/m",
+      trend: 0.5,
+      trendFavourable: true,
+      spark: [3.2, 3.5, 3.8, 4.0, 4.2, 4.3, 4.4, 4.5],
+      target: 6,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Training by Area",
+        cols: ["Area", "Plan Hrs", "Actual Hrs", "Compliance %"],
+        rows: trainAreas.map((a, i) => {
+          const plan = 5 + i;
+          const act = +(4 + i * 0.5).toFixed(1);
+          return [a, plan, act, ((act / plan) * 100).toFixed(0) + "%"];
+        }),
+      },
+    },
+  ];
+}
+
+function buildSafetyKpis(section) {
+  const sArea = SECTION_INCIDENT_AREA[section];
+  const auditAreas = SECTION_SAFETY_AREAS[section];
+
+  return [
+    {
+      id: "ri",
+      name: "Reportable",
+      value: 0,
+      unit: "nos",
+      trend: 0,
+      trendFavourable: true,
+      spark: [0, 0, 0, 0, 0, 0, 0, 0],
+      target: 0,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Incident Log (90 Days)",
+        cols: ["Date", "Type", "Area", "Description", "Status"],
+        rows: [
+          [
+            "05-Apr",
+            "First Aid",
+            sArea,
+            "Minor burn from hot surface",
+            "Closed",
+          ],
+          [
+            "18-Mar",
+            "Near Miss",
+            sArea,
+            "Material splash near operator",
+            "Closed",
+          ],
+          [
+            "02-Mar",
+            "Near Miss",
+            sArea,
+            "Guard found missing on conveyor",
+            "Fixed",
+          ],
+        ],
+      },
+    },
+    {
+      id: "fa",
+      name: "First Aid",
+      value: 3,
+      unit: "nos",
+      trend: -25,
+      trendFavourable: true,
+      spark: [6, 5, 5, 4, 4, 4, 3, 3],
+      target: 0,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "First Aid Details",
+        cols: ["Date", "Area", "Injury", "Root Cause"],
+        rows: [
+          ["05-Apr", sArea, "Minor burn", "Hot surface contact"],
+          ["18-Mar", sArea, "Cut finger", "Sharp edge on tool"],
+          ["02-Mar", sArea, "Eye irritation", "Chemical splash"],
+        ],
+      },
+    },
+    {
+      id: "nm",
+      name: "Near Miss",
+      value: 12,
+      unit: "nos",
+      trend: 25,
+      trendFavourable: true,
+      spark: [5, 6, 7, 8, 9, 10, 11, 12],
+      target: null,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Near Miss Categories",
+        cols: ["Category", "Count", "Share", "Status"],
+        rows: NEAR_MISS_ROWS,
+      },
+    },
+    {
+      id: "sa",
+      name: "Safety Audit",
+      value: 94.2,
+      unit: "%",
+      trend: 1.2,
+      trendFavourable: true,
+      spark: [90, 91, 92, 92.5, 93, 93.5, 94, 94.2],
+      target: 100,
+      drillable: true,
+      drill: {
+        type: "table",
+        title: "Audit by Area",
+        cols: ["Area", "Score", "NC Major", "NC Minor", "Observations"],
+        rows: auditAreas.map((a, i) => [
+          a,
+          (96 - i * 1.5).toFixed(1) + "%",
+          0,
+          1 + i,
+          3 + i * 2,
+        ]),
+      },
+    },
+  ];
+}
+
 const OTHER_TAB_KPIS_BY_SECTION = {};
 for (const section of ["mix", "tbm", "cur", "stk"]) {
-  OTHER_TAB_KPIS_BY_SECTION[section] = {};
-  const factor = SECTION_VARIANT_FACTORS[section];
-  for (const tab of ["q", "c", "d", "m", "s"]) {
-    OTHER_TAB_KPIS_BY_SECTION[section][tab] = OTHER_TAB_TEMPLATES[tab].map(
-      (kpi) => applyFactor(kpi, factor),
-    );
-  }
+  OTHER_TAB_KPIS_BY_SECTION[section] = {
+    q: buildQualityKpis(section),
+    c: buildCostKpis(section),
+    m: buildMoraleKpis(section),
+    s: buildSafetyKpis(section),
+  };
 }
 
 export { OTHER_TAB_KPIS_BY_SECTION };

@@ -22,6 +22,8 @@ function IndiaMap({
   const theme = useTheme();
   const accent = theme.palette.primary.main;
   const muted = theme.palette.divider;
+  const outline = theme.palette.common.black;
+  const background = theme.palette.common.white;
   const fill = theme.custom.surface.soft;
 
   const hoveredPlant =
@@ -32,7 +34,14 @@ function IndiaMap({
 
   return (
     <Box
-      sx={{ width: "100%", maxWidth: 540, mx: "auto", position: "relative" }}
+      sx={{
+        width: "100%",
+        maxWidth: 540,
+        mx: "auto",
+        position: "relative",
+        // backgroundColor: background,
+        borderRadius: 1.25,
+      }}
     >
       <svg
         viewBox={`0 0 ${MAP_W} ${MAP_H}`}
@@ -52,22 +61,31 @@ function IndiaMap({
               operator="out"
               result="ring"
             />
-            <feFlood floodColor={muted} floodOpacity="1" result="color" />
+            <feFlood floodColor={outline} floodOpacity="0.7" result="color" />
             <feComposite in="color" in2="ring" operator="in" />
           </filter>
         </defs>
 
-        {/* Fill layer */}
+        {/* White background behind the map */}
+        {/* <rect x="0" y="0" width={MAP_W} height={MAP_H} fill={background} /> */}
+
+        {/* Fill layer (light surface fill inside the country) */}
         <g>
           {SP.map((s, i) => (
-            <path key={`f-${i}`} d={s.d} fill={fill} stroke="none" />
+            <path
+              key={`f-${i}`}
+              d={s.d}
+              fill={fill}
+              stroke={muted}
+              strokeWidth="0.3"
+            />
           ))}
         </g>
 
-        {/* Outline layer */}
+        {/* Outline layer (black, visible country border) */}
         <g filter="url(#india-outline)">
           {SP.map((s, i) => (
-            <path key={`o-${i}`} d={s.d} fill="black" stroke="none" />
+            <path key={`o-${i}`} d={s.d} fill={outline} stroke="none" />
           ))}
         </g>
 
