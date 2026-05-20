@@ -6,6 +6,21 @@
 *.swp
 *.swo
 
-# Per-side .gitignore handles node_modules, dist, etc.
-# Anything truly shared and machine-local goes here.
+# Build artefacts + machine-local config.
+# Listed at the workspace root (in addition to each side's own
+# .gitignore) so IDE source-control panels apply them globally — git
+# itself reads the nested gitignores, but some VS Code workspaces
+# don't traverse them when reporting untracked files.
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-ssr/
+**/dist-ssr/
+
 *.local
+*.log
+
+# Environment overrides
+.env.local
+**/.env.local

@@ -26,3 +26,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - b1b5c65 — cr: landing modal flow + map hover callout _(Vishwajit Khanna)_
   - 5e7d802 — cr: mark Quality + Engineering as SOON in the plant-function modal _(Vishwajit Khanna)_
   - f1e9ed1 — cr: single date-range picker in TimeRangeSelect _(Vishwajit Khanna)_
+  - 3550a17 — cr: replace TimeRangeSelect popover with custom Date Filter modal _(Vishwajit Khanna)_
