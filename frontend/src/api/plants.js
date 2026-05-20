@@ -2,7 +2,10 @@ import client from "./client.js";
 import { mockDelay } from "@/lib/mockDelay.js";
 import { PLANTS, FUNCTIONS } from "@/lib/mockData.js";
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === "true";
+// Phase 1 default is mock data (Q-BE-01). Only the explicit string
+// "false" disables it — handles the case where no .env file exists
+// and the var is undefined.
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
 /**
  * @returns {Promise<typeof PLANTS>}

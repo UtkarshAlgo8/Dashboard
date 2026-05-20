@@ -8,3 +8,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
 ## 2026-05-20
   - a0c3228 — scaffold + spec 01 app-shell _(Vishwajit Khanna)_
   - 5804b8c — spec 02 mock-data-layer _(Vishwajit Khanna)_
+  - b0a4e92 — spec 03 landing-page _(Vishwajit Khanna)_

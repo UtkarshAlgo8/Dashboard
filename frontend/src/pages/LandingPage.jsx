@@ -57,7 +57,9 @@ function LandingPage() {
       <LandingHeader />
 
       <Box sx={{ flex: 1, px: 3, py: 3 }}>
-        {plantsLoading || !plants || !functions ? (
+        {plantsLoading ||
+        !Array.isArray(plants) ||
+        !Array.isArray(functions) ? (
           <Stack alignItems="center" justifyContent="center" sx={{ py: 10 }}>
             <CircularProgress size={28} />
           </Stack>
