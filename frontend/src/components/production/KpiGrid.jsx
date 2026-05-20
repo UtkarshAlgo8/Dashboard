@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import KpiCard from "./KpiCard.jsx";
 import CompoundSubSelector from "./CompoundSubSelector.jsx";
+import StockSubSelector from "./StockSubSelector.jsx";
 import { LoadingSkeleton } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getKpis } from "@/api/kpis.js";
@@ -25,18 +26,27 @@ import TrendModal from "@/components/trend/TrendModal.jsx";
  * @param {(c: string) => void} [props.onCompoundChange] - required
  *   if Mixing+Productivity is showing.
  */
-function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
+function KpiGrid({
+  plantId,
+  section,
+  tab,
+  compound,
+  onCompoundChange,
+  stockSelector,
+  onStockSelectorChange,
+}) {
   const theme = useTheme();
   const [openDrillId, setOpenDrillId] = useState(null);
   const [trendKpiId, setTrendKpiId] = useState(null);
 
   const showCompound = section === "mix" && tab === "p";
+  const showStockSelector = section === "stk" && tab === "p";
 
   const { data: kpis, isLoading } = usePolledQuery(
-    () => getKpis({ plantId, section, tab, compound }),
+    () => getKpis({ plantId, section, tab, compound, stockSelector }),
     {
       interval: 60_000,
-      deps: [plantId, section, tab, compound],
+      deps: [plantId, section, tab, compound, stockSelector],
     },
   );
 
@@ -62,6 +72,12 @@ function KpiGrid({ plantId, section, tab, compound, onCompoundChange }) {
     <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
       {showCompound && (
         <CompoundSubSelector value={compound} onChange={onCompoundChange} />
+      )}
+      {showStockSelector && (
+        <StockSubSelector
+          value={stockSelector}
+          onChange={onStockSelectorChange}
+        />
       )}
 
       {isLoading && !Array.isArray(kpis) ? (

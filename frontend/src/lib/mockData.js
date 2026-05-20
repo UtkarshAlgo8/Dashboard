@@ -127,12 +127,9 @@ export const PLANT_SUMMARIES = {
  * deterministic mocks. Sparkline arrays are 8 points each, recent →
  * latest.
  *
- * KPI shape (drives KpiCard rendering):
- *   id, name, value, unit, trend, trendFavourable, spark, target, drillable
- *
- * As subsequent specs (06, 07, 09) wire up real drills, the
- * `drillable: true` cards become interactive. Until then, clicking
- * a drillable card opens a placeholder panel.
+ * Spec 11 wraps this into PRODUCTIVITY_KPIS_BY_SECTION further down
+ * for TBM / Curing / Stock parity; this export stays as the Mixing
+ * leaf for backwards compatibility within the file.
  */
 export const MIXING_PRODUCTIVITY_KPIS = {
   master: [
@@ -242,9 +239,30 @@ export const MACHINES_BY_SECTION = {
     { id: "banbury-4", name: "Banbury 4" },
     { id: "banbury-5", name: "Banbury 5" },
   ],
-  tbm: [],
-  cur: [],
-  stk: [],
+  // TBM per BRD FR-P13. No sub-selector.
+  tbm: [
+    { id: "vmi-max", name: "VMI Max" },
+    { id: "vmi-exium", name: "VMI Exium" },
+    { id: "bj-modules", name: "BJ Modules" },
+    { id: "stage-1", name: "Stage 1" },
+    { id: "stage-2", name: "Stage 2" },
+  ],
+  // Curing per BRD FR-P15. Press counts in display name.
+  cur: [
+    { id: "tredge-1", name: "Tredge 1 (8 press)" },
+    { id: "tredge-2", name: "Tredge 2 (8 press)" },
+    { id: "tredge-3", name: "Tredge 3 (10 press)" },
+    { id: "tredge-4", name: "Tredge 4 (10 press)" },
+    { id: "tredge-5", name: "Tredge 5 (8 press)" },
+    { id: "tredge-6", name: "Tredge 6 (6 press)" },
+  ],
+  // Stock — Phase 1 only fills the 4 Roll sub-selector's machine
+  // list. Other sub-selectors render the empty state (Phase 2).
+  stk: [
+    { id: "stk-4roll-1", name: "4 Roll Line 1" },
+    { id: "stk-4roll-2", name: "4 Roll Line 2" },
+    { id: "stk-4roll-3", name: "4 Roll Line 3" },
+  ],
 };
 
 /**
@@ -1355,4 +1373,571 @@ export const MIXING_PRODUCTIVITY_TRENDS = {
       },
     },
   },
+};
+
+/**
+ * Productivity-tab KPIs grouped by section (spec 11). Phase 1
+ * coverage:
+ *   mix → reuses MIXING_PRODUCTIVITY_KPIS (compound-keyed)
+ *   tbm → flat 4-KPI array
+ *   cur → flat 4-KPI array
+ *   stk → keyed by Stock sub-selector; only "4roll" is populated
+ *
+ * Production KPI in non-Mixing sections is non-drillable per BRD
+ * §6.10 (Mixing-only).
+ */
+const TBM_PRODUCTIVITY = [
+  {
+    id: "oee",
+    name: "OEE",
+    value: 82.1,
+    unit: "%",
+    trend: 1.4,
+    trendFavourable: true,
+    spark: [79.8, 80.2, 80.6, 81.0, 81.3, 81.7, 81.9, 82.1],
+    target: 85,
+    drillable: true,
+  },
+  {
+    id: "production",
+    name: "Production",
+    value: 4280,
+    unit: "nos",
+    trend: 2.1,
+    trendFavourable: true,
+    spark: [4080, 4120, 4160, 4190, 4220, 4240, 4260, 4280],
+    target: 4500,
+    drillable: false,
+  },
+  {
+    id: "downtime",
+    name: "Downtime",
+    value: 3.8,
+    unit: "hrs",
+    trend: -5.0,
+    trendFavourable: true,
+    spark: [5.0, 4.7, 4.5, 4.3, 4.1, 4.0, 3.9, 3.8],
+    target: 3,
+    drillable: true,
+  },
+  {
+    id: "plan-compliance",
+    name: "Plan Compliance",
+    value: 95.6,
+    unit: "%",
+    trend: 0.8,
+    trendFavourable: true,
+    spark: [94.4, 94.7, 94.9, 95.1, 95.3, 95.4, 95.5, 95.6],
+    target: 95,
+    drillable: true,
+  },
+];
+
+const CUR_PRODUCTIVITY = [
+  {
+    id: "oee",
+    name: "OEE",
+    value: 87.4,
+    unit: "%",
+    trend: 0.6,
+    trendFavourable: true,
+    spark: [86.3, 86.5, 86.7, 86.9, 87.1, 87.2, 87.3, 87.4],
+    target: 90,
+    drillable: true,
+  },
+  {
+    id: "production",
+    name: "Production",
+    value: 4115,
+    unit: "nos",
+    trend: 1.7,
+    trendFavourable: true,
+    spark: [3970, 4000, 4030, 4055, 4080, 4095, 4105, 4115],
+    target: 4300,
+    drillable: false,
+  },
+  {
+    id: "downtime",
+    name: "Downtime",
+    value: 4.6,
+    unit: "hrs",
+    trend: -2.3,
+    trendFavourable: true,
+    spark: [5.2, 5.0, 4.9, 4.8, 4.7, 4.7, 4.6, 4.6],
+    target: 4,
+    drillable: true,
+  },
+  {
+    id: "plan-compliance",
+    name: "Plan Compliance",
+    value: 93.8,
+    unit: "%",
+    trend: -0.4,
+    trendFavourable: false,
+    spark: [94.5, 94.3, 94.2, 94.1, 94.0, 93.9, 93.9, 93.8],
+    target: 95,
+    drillable: true,
+  },
+];
+
+const STK_4ROLL_PRODUCTIVITY = [
+  {
+    id: "oee",
+    name: "OEE",
+    value: 84.0,
+    unit: "%",
+    trend: 0.9,
+    trendFavourable: true,
+    spark: [82.6, 82.9, 83.2, 83.4, 83.6, 83.8, 83.9, 84.0],
+    target: 88,
+    drillable: true,
+  },
+  {
+    id: "production",
+    name: "Production",
+    value: 1240,
+    unit: "units",
+    trend: 1.2,
+    trendFavourable: true,
+    spark: [1192, 1205, 1212, 1220, 1228, 1232, 1236, 1240],
+    target: 1300,
+    drillable: false,
+  },
+  {
+    id: "downtime",
+    name: "Downtime",
+    value: 4.1,
+    unit: "hrs",
+    trend: -1.4,
+    trendFavourable: true,
+    spark: [4.6, 4.5, 4.4, 4.3, 4.2, 4.2, 4.1, 4.1],
+    target: 3.5,
+    drillable: true,
+  },
+  {
+    id: "plan-compliance",
+    name: "Plan Compliance",
+    value: 92.6,
+    unit: "%",
+    trend: 0.3,
+    trendFavourable: true,
+    spark: [92.0, 92.1, 92.2, 92.3, 92.4, 92.5, 92.6, 92.6],
+    target: 95,
+    drillable: true,
+  },
+];
+
+export const PRODUCTIVITY_KPIS_BY_SECTION = {
+  mix: MIXING_PRODUCTIVITY_KPIS,
+  tbm: TBM_PRODUCTIVITY,
+  cur: CUR_PRODUCTIVITY,
+  stk: {
+    "4roll": STK_4ROLL_PRODUCTIVITY,
+    extruder: [],
+    "3roll": [],
+    cutter: [],
+    slitter: [],
+  },
+};
+
+/**
+ * OEE drill data for TBM / Curing / Stock (spec 11). Same shape as
+ * OEE_DRILL_BY_PLANT_SECTION["banmore/mix"]; sub-drill maps are
+ * intentionally lean — 1–2 detail rows per (machine, component,
+ * sub-category) to keep the file manageable. Empty combos exercise
+ * the FR-P42 empty state.
+ */
+OEE_DRILL_BY_PLANT_SECTION["banmore/tbm"] = {
+  overall: { availability: 94.6, performance: 91.2, quality: 99.0 },
+  machines: [
+    {
+      id: "vmi-max",
+      name: "VMI Max",
+      availability: 96.4,
+      performance: 92.5,
+      quality: 99.3,
+    },
+    {
+      id: "vmi-exium",
+      name: "VMI Exium",
+      availability: 94.8,
+      performance: 91.4,
+      quality: 99.1,
+    },
+    {
+      id: "bj-modules",
+      name: "BJ Modules",
+      availability: 93.1,
+      performance: 90.2,
+      quality: 98.8,
+    },
+    {
+      id: "stage-1",
+      name: "Stage 1",
+      availability: 95.7,
+      performance: 91.7,
+      quality: 99.0,
+    },
+    {
+      id: "stage-2",
+      name: "Stage 2",
+      availability: 92.8,
+      performance: 90.0,
+      quality: 98.7,
+    },
+  ],
+  subDrill: {
+    "vmi-max/availability/breakdown": [
+      {
+        reasonCategory: "Mechanical",
+        reason: "Drum bearing wear",
+        events: 1,
+        durationMin: 28,
+      },
+    ],
+    "vmi-max/availability/setupAdjustment": [],
+    "vmi-max/availability/startup": [],
+    "vmi-max/availability/toolChange": [
+      { reason: "Size changeover", events: 2, durationMin: 22 },
+    ],
+    "vmi-max/performance/minorStoppage": [
+      { reason: "Material misalign", events: 3, durationMin: 6 },
+    ],
+    "vmi-max/performance/reducedSpeed": [],
+    "vmi-max/quality/defect": [
+      {
+        itemCode: "TYRE-PCR-A1",
+        defectType: "Bead misplace",
+        qty: 18,
+        totalProduced: 1380,
+      },
+    ],
+    "vmi-max/quality/scrap": [
+      { itemCode: "TYRE-PCR-A1", qty: 6, traceable: false },
+    ],
+    "bj-modules/availability/breakdown": [
+      {
+        reasonCategory: "Electrical",
+        reason: "Servo drive trip",
+        events: 2,
+        durationMin: 41,
+      },
+    ],
+    "bj-modules/availability/setupAdjustment": [],
+    "bj-modules/availability/startup": [],
+    "bj-modules/availability/toolChange": [],
+    "bj-modules/performance/minorStoppage": [
+      { reason: "Conveyor jam", events: 5, durationMin: 14 },
+    ],
+    "bj-modules/performance/reducedSpeed": [],
+    "bj-modules/quality/defect": [],
+    "bj-modules/quality/scrap": [],
+    "stage-2/availability/breakdown": [
+      {
+        reasonCategory: "Mechanical",
+        reason: "Hydraulic seal leak",
+        events: 1,
+        durationMin: 35,
+      },
+    ],
+    "stage-2/quality/defect": [
+      {
+        itemCode: "TYRE-PCR-B3",
+        defectType: "Ply misalign",
+        qty: 12,
+        totalProduced: 720,
+      },
+    ],
+    "stage-2/quality/scrap": [
+      { itemCode: "TYRE-PCR-B3", qty: 4, traceable: false },
+    ],
+  },
+};
+
+OEE_DRILL_BY_PLANT_SECTION["banmore/cur"] = {
+  overall: { availability: 95.8, performance: 93.5, quality: 99.4 },
+  machines: [
+    {
+      id: "tredge-1",
+      name: "Tredge 1 (8 press)",
+      availability: 96.5,
+      performance: 94.0,
+      quality: 99.5,
+    },
+    {
+      id: "tredge-2",
+      name: "Tredge 2 (8 press)",
+      availability: 95.2,
+      performance: 93.4,
+      quality: 99.4,
+    },
+    {
+      id: "tredge-3",
+      name: "Tredge 3 (10 press)",
+      availability: 94.8,
+      performance: 92.6,
+      quality: 99.2,
+    },
+    {
+      id: "tredge-4",
+      name: "Tredge 4 (10 press)",
+      availability: 96.1,
+      performance: 94.1,
+      quality: 99.5,
+    },
+    {
+      id: "tredge-5",
+      name: "Tredge 5 (8 press)",
+      availability: 95.4,
+      performance: 93.2,
+      quality: 99.3,
+    },
+    {
+      id: "tredge-6",
+      name: "Tredge 6 (6 press)",
+      availability: 96.8,
+      performance: 93.9,
+      quality: 99.6,
+    },
+  ],
+  subDrill: {
+    "tredge-1/availability/breakdown": [
+      {
+        reasonCategory: "Mechanical",
+        reason: "Bladder rupture",
+        events: 1,
+        durationMin: 32,
+      },
+    ],
+    "tredge-3/availability/breakdown": [
+      {
+        reasonCategory: "Instrumentation",
+        reason: "Pressure transducer fault",
+        events: 1,
+        durationMin: 26,
+      },
+    ],
+    "tredge-3/availability/setupAdjustment": [],
+    "tredge-3/performance/minorStoppage": [
+      { reason: "Slow press cycle", events: 4, durationMin: 18 },
+    ],
+    "tredge-3/quality/defect": [
+      {
+        itemCode: "TYRE-PCR-C2",
+        defectType: "Cure short",
+        qty: 8,
+        totalProduced: 980,
+      },
+    ],
+    "tredge-3/quality/scrap": [],
+  },
+};
+
+OEE_DRILL_BY_PLANT_SECTION["banmore/stk"] = {
+  overall: { availability: 92.4, performance: 90.0, quality: 99.0 },
+  machines: [
+    {
+      id: "stk-4roll-1",
+      name: "4 Roll Line 1",
+      availability: 93.6,
+      performance: 90.8,
+      quality: 99.2,
+    },
+    {
+      id: "stk-4roll-2",
+      name: "4 Roll Line 2",
+      availability: 92.1,
+      performance: 89.5,
+      quality: 99.0,
+    },
+    {
+      id: "stk-4roll-3",
+      name: "4 Roll Line 3",
+      availability: 91.5,
+      performance: 89.7,
+      quality: 98.8,
+    },
+  ],
+  subDrill: {
+    "stk-4roll-1/availability/breakdown": [
+      {
+        reasonCategory: "Mechanical",
+        reason: "Roll alignment slip",
+        events: 1,
+        durationMin: 20,
+      },
+    ],
+    "stk-4roll-2/performance/reducedSpeed": [
+      { reason: "Material tension trim", events: 2, durationMin: 12 },
+    ],
+    "stk-4roll-3/quality/defect": [
+      {
+        itemCode: "STK-SHT-A1",
+        defectType: "Thickness variance",
+        qty: 28,
+        totalProduced: 4200,
+      },
+    ],
+    "stk-4roll-3/quality/scrap": [
+      { itemCode: "STK-SHT-A1", qty: 12, traceable: false },
+    ],
+  },
+};
+
+/**
+ * Downtime drill rows for TBM / Curing / Stock (spec 11). Lean but
+ * realistic.
+ */
+DOWNTIME_DRILL_BY_PLANT_SECTION["banmore/tbm"] = [
+  {
+    reasonCategory: "Breakdown — Mechanical",
+    machine: "BJ Modules",
+    reason: "Conveyor drive slip",
+    events: 1,
+    durationMin: 32,
+    lossHrs: 0.54,
+  },
+  {
+    reasonCategory: "Breakdown — Electrical",
+    machine: "Stage 2",
+    reason: "Encoder failure",
+    events: 1,
+    durationMin: 28,
+    lossHrs: 0.46,
+  },
+  {
+    reasonCategory: "Setup — size change",
+    machine: "VMI Max",
+    reason: "Size changeover",
+    events: 2,
+    durationMin: 22,
+    lossHrs: 0.37,
+  },
+  {
+    reasonCategory: "PM",
+    machine: "VMI Exium",
+    reason: "Scheduled servo lubrication",
+    events: 1,
+    durationMin: 18,
+    lossHrs: 0.3,
+  },
+  {
+    reasonCategory: "Process",
+    machine: "Stage 1",
+    reason: "Material change wait",
+    events: 2,
+    durationMin: 12,
+    lossHrs: 0.2,
+  },
+];
+
+DOWNTIME_DRILL_BY_PLANT_SECTION["banmore/cur"] = [
+  {
+    reasonCategory: "Breakdown — Mechanical",
+    machine: "Tredge 1 (8 press)",
+    reason: "Bladder rupture",
+    events: 1,
+    durationMin: 32,
+    lossHrs: 0.6,
+  },
+  {
+    reasonCategory: "Breakdown — Instrumentation",
+    machine: "Tredge 3 (10 press)",
+    reason: "Pressure transducer fault",
+    events: 1,
+    durationMin: 26,
+    lossHrs: 0.5,
+  },
+  {
+    reasonCategory: "PM",
+    machine: "Tredge 4 (10 press)",
+    reason: "Scheduled bladder swap",
+    events: 1,
+    durationMin: 45,
+    lossHrs: 0.9,
+  },
+  {
+    reasonCategory: "Utility",
+    machine: "All Tredges",
+    reason: "Steam pressure low",
+    events: 1,
+    durationMin: 22,
+    lossHrs: 2.2,
+  },
+];
+
+DOWNTIME_DRILL_BY_PLANT_SECTION["banmore/stk"] = [
+  {
+    reasonCategory: "Breakdown — Mechanical",
+    machine: "4 Roll Line 1",
+    reason: "Roll alignment slip",
+    events: 1,
+    durationMin: 20,
+    lossHrs: 0.33,
+  },
+  {
+    reasonCategory: "Process",
+    machine: "4 Roll Line 2",
+    reason: "Material tension trim",
+    events: 2,
+    durationMin: 12,
+    lossHrs: 0.2,
+  },
+  {
+    reasonCategory: "Setup — FTC",
+    machine: "4 Roll Line 3",
+    reason: "Compound changeover",
+    events: 1,
+    durationMin: 28,
+    lossHrs: 0.47,
+  },
+];
+
+/**
+ * Plan Compliance drill data for TBM / Curing / Stock (spec 11).
+ * Machine-wise + SKU-wise variants.
+ */
+PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION["banmore/tbm"] = {
+  skuWise: [
+    { itemCode: "TYRE-PCR-A1", planned: 1400, actual: 1370 },
+    { itemCode: "TYRE-PCR-A2", planned: 1200, actual: 1230 },
+    { itemCode: "TYRE-PCR-B1", planned: 980, actual: 945 },
+    { itemCode: "TYRE-PCR-B3", planned: 720, actual: 680 },
+  ],
+  machineWise: [
+    { machine: "VMI Max", planned: 920, actual: 905 },
+    { machine: "VMI Exium", planned: 860, actual: 855 },
+    { machine: "BJ Modules", planned: 740, actual: 705 },
+    { machine: "Stage 1", planned: 880, actual: 870 },
+    { machine: "Stage 2", planned: 700, actual: 685 },
+  ],
+};
+
+PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION["banmore/cur"] = {
+  skuWise: [
+    { itemCode: "TYRE-PCR-C1", planned: 1200, actual: 1190 },
+    { itemCode: "TYRE-PCR-C2", planned: 980, actual: 920 },
+    { itemCode: "TYRE-PCR-C3", planned: 1100, actual: 1080 },
+  ],
+  machineWise: [
+    { machine: "Tredge 1 (8 press)", planned: 760, actual: 745 },
+    { machine: "Tredge 2 (8 press)", planned: 740, actual: 730 },
+    { machine: "Tredge 3 (10 press)", planned: 900, actual: 845 },
+    { machine: "Tredge 4 (10 press)", planned: 880, actual: 875 },
+    { machine: "Tredge 5 (8 press)", planned: 720, actual: 710 },
+    { machine: "Tredge 6 (6 press)", planned: 540, actual: 535 },
+  ],
+};
+
+PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION["banmore/stk"] = {
+  skuWise: [
+    { itemCode: "STK-SHT-A1", planned: 4200, actual: 4150 },
+    { itemCode: "STK-SHT-A2", planned: 3600, actual: 3520 },
+    { itemCode: "STK-SHT-B1", planned: 2800, actual: 2710 },
+  ],
+  machineWise: [
+    { machine: "4 Roll Line 1", planned: 430, actual: 420 },
+    { machine: "4 Roll Line 2", planned: 410, actual: 400 },
+    { machine: "4 Roll Line 3", planned: 400, actual: 420 },
+  ],
 };

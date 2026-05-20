@@ -17,3 +17,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 6d75056 — spec 08 scrap-traceability _(Vishwajit Khanna)_
   - 6406d22 — fix(usePolledQuery): stop re-fetch loop with inline arrow-function fetchers _(Vishwajit Khanna)_
   - a59909e — spec 09 other-drills _(Vishwajit Khanna)_
+  - 37c90ee — spec 10 trend-modal _(Vishwajit Khanna)_

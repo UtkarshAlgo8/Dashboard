@@ -40,6 +40,7 @@ function BanmoreProduction() {
   const [section, setSection] = useState("mix");
   const [category, setCategory] = useState("p");
   const [compound, setCompound] = useState("final"); // Mixing > Productivity default per FR-P11
+  const [stockSelector, setStockSelector] = useState("4roll"); // Stock default per FR-P18
   const [timeRange, setTimeRange] = useState({
     preset: "today",
     from: "",
@@ -120,13 +121,15 @@ function BanmoreProduction() {
               activeTabId={category}
               onSelect={setCategory}
             />
-            {section === "mix" && category === "p" ? (
+            {category === "p" ? (
               <KpiGrid
                 plantId="banmore"
                 section={section}
                 tab={category}
                 compound={compound}
                 onCompoundChange={setCompound}
+                stockSelector={stockSelector}
+                onStockSelectorChange={setStockSelector}
               />
             ) : (
               <Stack
