@@ -1,7 +1,13 @@
 import { useMemo } from "react";
 import { Box, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
-import HighchartsReact from "highcharts-react-official";
+import HighchartsReactImport from "highcharts-react-official";
+
+// highcharts-react-official 3.x ships as a UMD bundle. Depending on
+// the Vite CJS-interop path the default import resolves to either
+// the React component or to a wrapper object whose `.default` is
+// the component. Normalise both shapes here.
+const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
 /**
  * Trend modal line chart, powered by Highcharts. Same props the
