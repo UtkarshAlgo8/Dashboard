@@ -208,7 +208,8 @@ function aggregateOee(machines) {
   const avg = (k) => {
     const vals = machines.map((m) => m[k]).filter((v) => typeof v === "number");
     if (vals.length === 0) return null;
-    return vals.reduce((a, b) => a + b, 0) / vals.length;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return Math.round(mean * 100) / 100;
   };
   return {
     availability: avg("availability"),
@@ -280,10 +281,18 @@ export function toTrendSeries(rows) {
 
 /* ---------- helpers ---------- */
 
+/**
+ * Coerce upstream value → number, NaN/null-safe. Rounds to 2 decimals
+ * so the API never emits values like 91.66666666666667 (SQL AVG
+ * produces those for monthly/yearly aggregates). 2 decimals is enough
+ * for every KPI in the artifact; downstream callers can format
+ * further (e.g. drop the decimal when the value is a whole number).
+ */
 function numberOrNull(v) {
   if (v === null || v === undefined || v === "" || v === NAN) return null;
   const n = typeof v === "number" ? v : Number.parseFloat(v);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100) / 100;
 }
 
 function attrName(attr) {
