@@ -61,7 +61,10 @@ the remainder.
 | ID | Question | Category | Affects | Default assumption | Cost to change | Status | Raised | Resolved |
 |----|----------|----------|---------|--------------------|----------------|--------|--------|----------|
 | Q-AUTH-01 | Which auth pattern does the dashboard use? (Pattern A localStorage+cookie, Pattern B memory+httpOnly, Pattern C public/VPN) | Actors | architecture, api-contract, app-shell spec | Pattern C (no auth) for Phase 1; pattern selection deferred to backend phase | HIGH | RESOLVED | 2026-05-20 | 2026-05-20 |
-| Q-BE-01 | What is the backend repo + base URL serving Banmore Production KPIs? | Integrations | api-contract, all data-flow specs | Phase 1 has no backend. Frontend ships against `src/lib/mockData.js` via dummy resource modules. Backend work starts after Phase 1 ships. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-BE-01 | What is the backend repo + base URL serving Banmore Production KPIs? | Integrations | api-contract, all data-flow specs | Originally "no backend". Reversed 2026-05-26 (CR-06): backend lives at `backend/` in this monorepo. Node + Express, no DB. Proxies a single upstream API. Base URL `http://localhost:3001/api/v1` for dev. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-26 |
+| Q-GB-01 | What do `gold_bi.drill_down_attribute` and `gold_bi.production_ids` actually contain row-by-row? | Integrations | backend/src/transformers.js | Documented schema only, no value examples yet. Transformers code against best-effort guesses (JSON string for attribute, single ID string for production_ids). First real query closes this. | LOW | OPEN | 2026-05-26 | |
+| Q-GB-02 | Are `gold_bi.section`/`category` values exactly `"Mixing"`/`"Productivity"` (etc.) — case, spelling, spacing? | Integrations | backend/src/queries.js | Maps assume exact human-string match. Mismatches would surface as empty result sets, not errors. First real query verifies. | LOW | OPEN | 2026-05-26 | |
+| Q-GB-03 | Is `gold_bi.date` ISO 8601 (`YYYY-MM-DD`) or another format? | Integrations | backend/src/queries.js | `WHERE date >= 'YYYY-MM-DD'` clauses assume ISO. If different, queries return empty. First real query verifies; add a normalisation pass in transformer if needed. | LOW | OPEN | 2026-05-26 | |
 | Q-DATA-01 | Is the dashboard polling-refreshed or push-driven (WebSocket/SSE)? If polling, what interval? | Non-functional | api-contract, landing spec | Polling every 60s. No WebSocket/SSE in Phase 1. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
 | Q-TR-01 | Time-range presets — what is the exact list? | Entity lifecycle | time-range-filter spec | Per BRD FR-X7 originally Today / Week / Month / Year + custom; revised by CR-05 to three presets: Today / Month / Year + custom (Week dropped). | LOW | RESOLVED | 2026-05-20 | 2026-05-26 |
 | Q-SH-01 | Does the new Shift selector (Today only) filter mock data, or is it pure UI for Phase 1? | Entity lifecycle | TimeRangeSelect, ProductionHeader, BanmoreProduction | Pure UI for Phase 1. State lives on the page and is wired through props so consumers can opt in later when shift-tagged mock data lands. No API filter wiring. | LOW | RESOLVED | 2026-05-26 | 2026-05-26 |
@@ -125,6 +128,22 @@ audit trail.
     drill rows in `mockData.js`. ProductionDrillPanel rewritten with
     `View by` (Machine/SKU/Machine+SKU) and `Unit` (Mixing MT/Batches,
     Stock Units/Kg) lenses. Spec `07-production-drill.md` patched.
+
+### 2026-05-26 (afternoon)
+
+- **CR-06 — backend integration** (Q-BE-01 reversed):
+  - **Q-BE-01 re-resolved**: backend is in. Single upstream API
+    over parquet (SELECT-only SQL). Lives at `backend/` in this
+    monorepo. Node + Express, no DB, no ORM.
+  - **Q-GB-01 raised, OPEN**: gold_bi.drill_down_attribute /
+    production_ids value examples needed. Resolution = first real
+    query. Code uses best-effort guesses until then.
+  - **Q-GB-02 raised, OPEN**: section/category vocabulary match.
+    Code assumes exact human-string equality.
+  - **Q-GB-03 raised, OPEN**: date column format. Code assumes
+    ISO 8601 in WHERE clauses.
+  - Backend scaffold committed before frontend flips off mocks
+    (CR-06 sequencing — three commits).
 
 ### Pending (broader BRD walk)
 
