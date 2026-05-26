@@ -20,7 +20,13 @@ import jkLogo from "@/assets/jk-logo.png";
  * Export toasts a "wait for spec 13" hint, avatar click is a no-op
  * (spec 14).
  */
-function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
+function ProductionHeader({
+  plant,
+  timeRange,
+  onTimeRangeChange,
+  shift,
+  onShiftChange,
+}) {
   const theme = useTheme();
 
   return (
@@ -98,6 +104,8 @@ function ProductionHeader({ plant, timeRange, onTimeRangeChange }) {
           onToChange={(v) =>
             onTimeRangeChange((prev) => ({ ...prev, to: v, preset: null }))
           }
+          shift={shift}
+          onShiftChange={onShiftChange}
         />
 
         {/* TyreType badge — Banmore is PCR-only per FR-X2 */}

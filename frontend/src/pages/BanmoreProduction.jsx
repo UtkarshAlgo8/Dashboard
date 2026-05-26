@@ -41,6 +41,11 @@ function BanmoreProduction() {
     from: "",
     to: "",
   });
+  // CR-05: shift filter is UI-only for Phase 1 (Q-SH-01 resolved
+  // "pure UI"). Visible only while the Today preset is active.
+  // Wired through to the dashboard so consumers can opt in later
+  // when shift-tagged mock data lands.
+  const [shift, setShift] = useState("all");
 
   const ready =
     !plantLoading &&
@@ -62,6 +67,8 @@ function BanmoreProduction() {
         plant={plant}
         timeRange={timeRange}
         onTimeRangeChange={setTimeRange}
+        shift={shift}
+        onShiftChange={setShift}
       />
 
       {!ready ? (

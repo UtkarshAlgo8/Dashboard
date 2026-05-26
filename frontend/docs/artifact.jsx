@@ -20,7 +20,7 @@ const FUNCTIONS=[
   {id:"ph",name:"Plant Head",icon:"\u2302",active:false},
   {id:"prod",name:"Production",icon:"\u26A1",active:true},
   {id:"qual",name:"Quality",icon:"\u25C6",active:true},
-  {id:"tech",name:"Technical",icon:"\u2699",active:false},
+  {id:"tech",name:"Technical",icon:"\u2699",active:true},
   {id:"eng",name:"Engineering",icon:"\u2692",active:true}
 ];
 
@@ -226,7 +226,7 @@ const TYRE_LTR=["7.00R15 STEEL KING 10PR L TT","7.00R15 STEEL KING 12PR L TT","2
 const TYRE_SCV=["235/65R16 STEELKING+ 121P TL","195R15 ULTIMA NXT 106S TL","215/75R15 STEEL KING+ TL","205/65R16 ULTIMA NXT 107T TL"];
 const DELAY_REASONS=["SET UP & FTC","Defective Capstrip","SIZE CHANGE","No tread","NO CHAFER","Defective tread","DEVELOPMENT","POWER FAILURE","Machine error","PREV MAINTENANCE","PROCESS MAJOR ISSUE","GREEN TYRE","MOULD CHANGE","BLADDER CHANGE","ICE CLEANING","FTC - FIRST TYRE CERTIFICATION","TECH. OTHERS"];
 
-const PLANT={oee:87.2,ftq:95.4,scrap:1.05,safeDays:78,prod:92};
+const PLANT={oee:87.2,ftq:95.4,scrap:1.05,safeDays:78,prod:92,prodCount:9210};
 
 /* ═══ PER-SECTION OEE DRILL DATA ═══ */
 /* Each section's OE drill carries machine table (drillData) + sub-categories (subData) */
@@ -410,15 +410,24 @@ function _autoPreset(from,to){
   if(d<=180)return"Month";
   return"Year";
 }
-function TimeRangeSelect({preset,setPreset,from,to,setFrom,setTo,compact}){
-  const presets=["Today","Week","Month","Year"];
+function TimeRangeSelect({preset,setPreset,from,to,setFrom,setTo,compact,shift,setShift}){
+  const presets=["Today","Month","Year"];
   const onPreset=p=>{const r=_rangeFromPreset(p);setPreset(p);setFrom(r.from);setTo(r.to);};
   const onFrom=e=>{setFrom(e.target.value);setPreset("");};
   const onTo=e=>{setTo(e.target.value);setPreset("");};
   const days=_daysBetween(from,to);
-  return(<div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-    <div style={{display:"flex",gap:1,background:C.bg,borderRadius:10,padding:2}}>
-      {presets.map(t=>(<button key={t} onClick={()=>onPreset(t)} style={{padding:"3px 9px",borderRadius:8,border:"none",fontSize:11,fontWeight:preset===t?700:400,background:preset===t?C.cd:"transparent",color:preset===t?C.tx:C.mu,cursor:"pointer"}}>{t}</button>))}
+  return(<div style={{display:"flex",alignItems:"flex-start",gap:6,flexWrap:"wrap"}}>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3}}>
+      <div style={{display:"flex",gap:1,background:C.bg,borderRadius:10,padding:2}}>
+        {presets.map(t=>(<button key={t} onClick={()=>onPreset(t)} style={{padding:"3px 9px",borderRadius:8,border:"none",fontSize:11,fontWeight:preset===t?700:400,background:preset===t?C.cd:"transparent",color:preset===t?C.tx:C.mu,cursor:"pointer"}}>{t}</button>))}
+      </div>
+      {/* Shift dropdown nested directly under Today pill — only when Today is active */}
+      {preset==="Today"&&setShift&&(<select value={shift||"All"} onChange={e=>setShift(e.target.value)} title="Filter by shift" style={{marginLeft:4,padding:"2px 6px",border:"1px solid "+C.bd,borderRadius:6,background:(shift&&shift!=="All")?C.aL:C.cd,fontSize:10,fontFamily:"inherit",color:(shift&&shift!=="All")?C.ac:C.mu,fontWeight:600,cursor:"pointer",outline:"none"}}>
+        <option value="All">All Shifts</option>
+        <option value="A">Shift A</option>
+        <option value="B">Shift B</option>
+        <option value="C">Shift C</option>
+      </select>)}
     </div>
     <div title="From \u2013 To" style={{display:"flex",alignItems:"center",gap:2,padding:"2px 6px",border:"1px solid "+C.bd,borderRadius:8,background:C.cd}}>
       <input type="date" value={from||""} onChange={onFrom} style={{border:"none",outline:"none",background:"transparent",fontSize:11,fontFamily:"inherit",color:C.tx,padding:"2px 0",width:96}}/>
@@ -864,49 +873,40 @@ function DTable({cols,rows}){return(<div style={{overflowX:"auto"}}><table style
 function SubDrill({title,items,onSelect,selected}){return(<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{items.map(it=>(<button key={it} onClick={e=>{e.stopPropagation();onSelect(it);}} style={{padding:"5px 12px",borderRadius:999,border:"1px solid "+(selected===it?C.aB:C.bd),background:selected===it?C.aL:C.c2,color:selected===it?C.ac:C.tx,fontSize:13,fontWeight:600,cursor:"pointer"}}>{it}</button>))}</div>);}
 
 /* ═══ BUILD KPIS ═══ */
-function buildKpis(sec,tab,stockSub,mixSub){
+function buildKpis(sec,tab,stockSub){
   const s=sec;
   if(tab==="P"){
     if(s.id==="MIX") return [
       {id:"oee",n:"OEE",v:s.oee,u:"%",tr:1.2,sp_:[89.5,90.1,90.8,91.5],sc_:C.ac,drillType:"mixOEE",drillData:MIX_OEE_DATA,subData:MIX_OEE_SUBDATA},
-      {id:"prod",n:"Production",v:mixSub==="Master"?"285":"183",u:"MT",tr:mixSub==="Master"?2.8:2.1,sp_:mixSub==="Master"?[265,272,278,285]:[170,175,180,183],sc_:C.tl,drillType:"mixProd",mixSub:mixSub},
+      {id:"prod",n:"Production",v:"468",u:"MT",tr:2.5,sp_:[435,447,458,468],sc_:C.tl,drillType:"mixProd"},
       {id:"dt",n:"Downtime",v:s.dt,u:"hrs",tr:-2.5,sp_:[3.5,3,2.5,2.1],sc_:C.rd,drillType:"downtime",drillData:[
         ["BD-ELEC","Banbury 1","Motor overload trip",2,45,"0.75"],["BD-MECH","Banbury 3","Ram cylinder seal leak",1,62,"1.03"],["BD-INST","Banbury 2","Thermocouple failure",1,18,"0.30"],
         ["SETUP","Banbury 4","SET UP & FTC",3,35,"0.58"],["SETUP","Banbury 1","SIZE CHANGE",2,28,"0.47"],
         ["PM","Banbury 5","PREV MAINTENANCE",1,120,"2.00"],["PROCESS","Banbury 2","PROCESS MAJOR ISSUE",1,25,"0.42"],
         ["UTILITY","Banbury Hall","POWER FAILURE",1,15,"0.25"],["OTHER","Open Mill","TECH. OTHERS",2,22,"0.37"]
       ]},
-      {id:"comp",n:"Plan Compliance",v:"92",u:"%",tr:-0.5,sp_:[94,93,92.5,92],sc_:C.bl,drillType:"compliance",
-        skuData:(mixSub==="Master"?MIX_MASTER:MIX_FINAL).slice(0,6).map((s,i)=>[s,50+i*8,Math.round((50+i*8)*(0.85+i*0.02)),((Math.round((50+i*8)*(0.85+i*0.02))/(50+i*8))*100).toFixed(1)+"%"]),
-        machData:[["Banbury 1",120,112,"93.3%"],["Banbury 2",115,95,"82.6%"],["Banbury 3",110,106,"96.4%"],["Banbury 4",108,98,"90.7%"],["Banbury 5",105,76,"72.4%"]]
-      }
+      {id:"comp",n:"Plan Compliance",v:"92",u:"%",tr:-0.5,sp_:[94,93,92.5,92],sc_:C.bl}
     ];
     if(s.id==="TBM") return [
       {id:"oee",n:"OEE",v:s.oee,u:"%",tr:0.6,sp_:[80.5,81.2,81.8,82.4],sc_:C.ac,drillType:"mixOEE",drillData:TBM_OEE_DATA,subData:TBM_OEE_SUBDATA},
-      {id:"prod",n:"Production",v:"1,086",u:"nos",tr:1.5,sp_:[1020,1040,1060,1086],sc_:C.tl,drillType:"tbmProd"},
+      {id:"prod",n:"Production",v:"1,086",u:"nos",tr:1.5,sp_:[1020,1040,1060,1086],sc_:C.tl,drillType:"tbmProd",secId:"TBM"},
       {id:"dt",n:"Downtime",v:s.dt,u:"hrs",tr:-1.8,sp_:[7,6.5,6,5.8],sc_:C.rd,drillType:"downtime",drillData:[
         ["SETUP","VMI Max","SET UP & FTC",4,65,"1.08"],["SETUP","Stage 1","SIZE CHANGE",3,48,"0.80"],["MATERIAL","VMI Max","No tread",2,35,"0.58"],
         ["MATERIAL","Stage 2","NO CHAFER",2,28,"0.47"],["MATERIAL","VMI Exium","Defective tread",1,22,"0.37"],["MATERIAL","BJ Modules","Defective Capstrip",1,18,"0.30"],
         ["BD-MECH","Stage 1","Machine error",2,52,"0.87"],["PM","VMI Max","PREV MAINTENANCE",1,90,"1.50"],
         ["DEV","VMI Exium","DEVELOPMENT",1,30,"0.50"],["UTILITY","TBM Hall","POWER FAILURE",1,12,"0.20"],["OTHER","Stage 2","TECH. OTHERS",2,15,"0.25"]
       ]},
-      {id:"comp",n:"Plan Compliance",v:"83",u:"%",tr:-2.0,sp_:[87,85,84,83],sc_:C.bl,drillType:"compliance",
-        skuData:TYRE_PCR.slice(0,3).concat(TYRE_LTR.slice(0,2)).map((s,i)=>[s,200+i*50,Math.round((200+i*50)*(0.78+i*0.03)),((Math.round((200+i*50)*(0.78+i*0.03))/(200+i*50))*100).toFixed(1)+"%"]),
-        machData:[["VMI Max",280,218,"77.9%"],["VMI Exium",210,185,"88.1%"],["BJ Modules",150,132,"88.0%"],["Stage 1",350,298,"85.1%"],["Stage 2",310,253,"81.6%"]]
-      }
+      {id:"comp",n:"Plan Compliance",v:"83",u:"%",tr:-2.0,sp_:[87,85,84,83],sc_:C.bl}
     ];
     if(s.id==="CUR") return [
       {id:"oee",n:"OEE",v:s.oee,u:"%",tr:0.5,sp_:[86.8,87.2,87.8,88.1],sc_:C.ac,drillType:"mixOEE",drillData:CUR_OEE_DATA,subData:CUR_OEE_SUBDATA},
-      {id:"prod",n:"Production",v:"9,210",u:"nos",tr:1.8,sp_:[8800,8950,9100,9210],sc_:C.tl,drillType:"tbmProd"},
+      {id:"prod",n:"Production",v:"9,210",u:"nos",tr:1.8,sp_:[8800,8950,9100,9210],sc_:C.tl,drillType:"tbmProd",secId:"CUR"},
       {id:"dt",n:"Downtime",v:s.dt,u:"hrs",tr:-1.5,sp_:[4.5,4,3.5,3.2],sc_:C.rd,drillType:"downtime",drillData:[
         ["MOULD","Tredge 1","MOULD CHANGE",6,85,"1.42"],["MOULD","Tredge 3","MOULD CHANGE",4,72,"1.20"],["BLADDER","Tredge 2","BLADDER CHANGE",3,55,"0.92"],
         ["CLEANING","Tredge 4","ICE CLEANING",2,32,"0.53"],["SETUP","Tredge 1","FTC - FIRST TYRE CERTIFICATION",2,28,"0.47"],
         ["BD-MECH","Tredge 3","Hydraulic leak",1,45,"0.75"],["PM","Tredge 5","PREV MAINTENANCE",1,60,"1.00"],["OTHER","Tredge 6","TECH. OTHERS",1,12,"0.20"]
       ]},
-      {id:"comp",n:"Plan Compliance",v:"89",u:"%",tr:-0.8,sp_:[91,90,89.5,89],sc_:C.bl,drillType:"compliance",
-        skuData:TYRE_PCR.slice(0,2).concat(TYRE_LTR.slice(0,2),TYRE_SCV.slice(0,2)).map((s,i)=>[s,1500+i*200,Math.round((1500+i*200)*(0.86+i*0.02)),((Math.round((1500+i*200)*(0.86+i*0.02))/(1500+i*200))*100).toFixed(1)+"%"]),
-        machData:[["Tredge 1",2800,2580,"92.1%"],["Tredge 2",2100,1890,"90.0%"],["Tredge 3",1400,1180,"84.3%"],["Tredge 4",1400,1250,"89.3%"],["Tredge 5",700,650,"92.9%"],["Tredge 6",700,660,"94.3%"]]
-      }
+      {id:"comp",n:"Plan Compliance",v:"89",u:"%",tr:-0.8,sp_:[91,90,89.5,89],sc_:C.bl}
     ];
     /* Stock */
     const stkMachines={"4 Roll":["4 Roll #1","4 Roll #2"],"Extruder":["Duplex","Triplex","Quadraplex"],"3 Roll":["3 Roll #1","3 Roll #2"],"Cutter":["LTBC","HTBC"],"Slitter":["Slitter-1","Slitter-2"]};
@@ -921,10 +921,7 @@ function buildKpis(sec,tab,stockSub,mixSub){
         ["MATERIAL",ms[0]||stockSub,"No tread",1,22,"0.37"],["BD-MECH",ms[0]||stockSub,"Machine error",1,38,"0.63"],
         ["PM",ms[0]||stockSub,"PREV MAINTENANCE",1,80,"1.33"],["OTHER",ms[0]||stockSub,"TECH. OTHERS",2,18,"0.30"]
       ]},
-      {id:"comp",n:"Plan Compliance",v:"88",u:"%",tr:-1.2,sp_:[91,90,89,88],sc_:C.bl,drillType:"compliance",
-        skuData:TYRE_PCR.slice(0,4).map((s,i)=>[s,100+i*30,Math.round((100+i*30)*(0.85+i*0.03)),((Math.round((100+i*30)*(0.85+i*0.03))/(100+i*30))*100).toFixed(1)+"%"]),
-        machData:ms.map((m,i)=>[m,200+i*40,Math.round((200+i*40)*(0.84+i*0.04)),((Math.round((200+i*40)*(0.84+i*0.04))/(200+i*40))*100).toFixed(1)+"%"])
-      }
+      {id:"comp",n:"Plan Compliance",v:"88",u:"%",tr:-1.2,sp_:[91,90,89,88],sc_:C.bl}
     ];
   }
   if(tab==="Q"){
@@ -933,8 +930,8 @@ function buildKpis(sec,tab,stockSub,mixSub){
     const reasons=s.id==="MIX"?["Viscosity NC","Off-Spec","Cure Rate NC","Contaminated"]:s.id==="TBM"?["Splice Open","Ply Wrinkle","Belt Edge","Bead Fault"]:s.id==="CUR"?["Bladder Mark","Flash","Porosity","Under-cure"]:["Width OOS","Gauge OOS","Surface","Bias Angle"];
     return [
       {id:"ftq",n:"FTQ",v:(100-s.sc-0.5).toFixed(1),u:"%",tr:0.3,sp_:[95,95.5,95.8,96],sc_:C.gn,drillType:"table",drillTitle:"Machine-wise FTQ",drillCols:["Machine","FTQ %","Defects","Top Defect"],drillRows:machines.slice(0,6).map((m,i)=>[m,(98-i*1.5).toFixed(1)+"%",3+i*3,reasons[i%reasons.length]])},
-      {id:"ds",n:"Defect + Scrap",v:Math.round(s.sc*50),u:"nos",tr:-5,sp_:[40,35,30,25],sc_:C.rd,drillType:"table",drillTitle:"Defect + Scrap Detail",drillCols:["SKU","Machine","Issue Type","Reason"],drillRows:skus.slice(0,8).map((sk,i)=>[sk,machines[i%machines.length],i%2===0?"Defect":"Scrap",reasons[i%reasons.length]])},
-      {id:"sr",n:"Scrap Rate",v:s.sc,u:"%",tr:-0.5,sp_:[s.sc+0.3,s.sc+0.2,s.sc+0.1,s.sc],sc_:C.tl,drillType:"table",drillTitle:"Scrap Detail",drillCols:["SKU","Machine","Reason","Qty"],drillRows:skus.slice(0,5).map((sk,i)=>[sk,machines[i%machines.length],reasons[i%reasons.length],2+i*2])},
+      {id:"ds",n:"Scrap",v:Math.round(s.sc*50),u:"nos",tr:-5,sp_:[40,35,30,25],sc_:C.rd,drillType:"table",drillTitle:"Scrap Detail",drillCols:["SKU","Machine","Reason"],drillRows:skus.slice(0,8).map((sk,i)=>[sk,machines[i%machines.length],reasons[i%reasons.length]])},
+      {id:"rw",n:"Rework",v:Math.round(s.sc*30),u:"nos",tr:-3,sp_:[Math.round(s.sc*38),Math.round(s.sc*34),Math.round(s.sc*32),Math.round(s.sc*30)],sc_:C.am,drillType:"table",drillTitle:"Rework Detail",drillCols:["SKU","Machine","Defect","Qty","Status"],drillRows:skus.slice(0,5).map((sk,i)=>[sk,machines[i%machines.length],reasons[i%reasons.length],3+i*2,i%2===0?"In progress":"Pending"])},
       {id:"ncm",n:"NCM Hold",v:"5",u:"batches",tr:-20,sp_:[8,7,6,5],sc_:C.am,drillType:"table",drillTitle:"NCM Hold Details",drillCols:["SKU","Batch","# Batches","Kgs","Hold Reason"],drillRows:skus.slice(0,5).map((sk,i)=>[sk,"B-"+(2840+i*3),1+Math.floor(i/2),250+i*80,reasons[i%reasons.length]])}
     ];
   }
@@ -989,7 +986,9 @@ function KpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
 /* ═══ DRILL PANEL ═══ */
 function DrillPanel({kpi,sub,setSub,spcP,setSpcP}){
   const [machSearch,setMachSearch]=useState("");
-  useEffect(()=>{setMachSearch("");},[kpi&&kpi.id]);
+  const [prodView,setProdView]=useState("machine");
+  const [prodUnit,setProdUnit]=useState("");
+  useEffect(()=>{setMachSearch("");setProdView("machine");setProdUnit("");},[kpi&&kpi.id]);
   if(!kpi||!kpi.drillType) return null;
 
   if(kpi.drillType==="mixOEE"){
@@ -1162,44 +1161,87 @@ function DrillPanel({kpi,sub,setSub,spcP,setSpcP}){
   }
 
   if(kpi.drillType==="mixProd"){
-    const ms=kpi.mixSub||"Final";
-    const list=ms==="Master"?MIX_MASTER.slice(0,6):MIX_FINAL.slice(0,8);
-    const baseP=ms==="Master"?30:25,stepP=ms==="Master"?5:6,ratio=ms==="Master"?0.88:0.85;
-    /* Avg batch size for MT \u2194 batch count (Master ~1.80 MT/batch, Final ~1.95 MT/batch) */
-    const mtPerBatch=ms==="Master"?1.80:1.95;
-    /* Machine assignment by compound index. Master prefers Banbury 1\u20133, Final spreads 1\u20135 */
-    const machines=ms==="Master"?["Banbury 1","Banbury 2","Banbury 3","Banbury 1","Banbury 2","Banbury 3"]:["Banbury 1","Banbury 2","Banbury 3","Banbury 4","Banbury 5","Banbury 1","Banbury 2","Banbury 3"];
-    const rows=list.map((cc,i)=>{
-      const plan=baseP+i*stepP;
-      const act=Math.round(plan*(ratio+i*0.02));
+    const cats=["Master Compound","Final Compound"];
+    const activeCat=sub||"Master Compound";
+    /* Master compounds: smaller volumes, MIX_MASTER list, 1.80 MT/batch, Banbury 1\u20133 */
+    const masterRows=MIX_MASTER.slice(0,6).map((cc,i)=>{
+      const plan=30+i*5;
+      const act=Math.round(plan*(0.88+i*0.02));
+      const mtPerBatch=1.80;
       const bPlan=Math.round(plan/mtPerBatch);
       const bAct=Math.round(act/mtPerBatch);
-      const variance=(((act-plan)/plan)*100).toFixed(1)+"%";
-      const mc=machines[i]||("Banbury "+((i%5)+1));
-      return{mc,cc,plan,act,bPlan,bAct,variance};
+      const achievement=((act/plan)*100).toFixed(1)+"%";
+      const mc=["Banbury 1","Banbury 2","Banbury 3","Banbury 1","Banbury 2","Banbury 3"][i]||("Banbury "+((i%3)+1));
+      return{type:"Master",mc,cc,plan,act,bPlan,bAct,achievement};
     });
-    const filtered=rows.filter(r=>!machSearch||r.mc.toLowerCase().includes(machSearch.toLowerCase()));
-    return(<Card title={ms+" Compound \u2014 Compound-wise Production"} accent={C.tl}>
-      {/* Machine search */}
+    /* Final compounds: MIX_FINAL list, 1.95 MT/batch, Banbury 1\u20135 */
+    const finalRows=MIX_FINAL.slice(0,8).map((cc,i)=>{
+      const plan=25+i*6;
+      const act=Math.round(plan*(0.85+i*0.02));
+      const mtPerBatch=1.95;
+      const bPlan=Math.round(plan/mtPerBatch);
+      const bAct=Math.round(act/mtPerBatch);
+      const achievement=((act/plan)*100).toFixed(1)+"%";
+      const mc=["Banbury 1","Banbury 2","Banbury 3","Banbury 4","Banbury 5","Banbury 1","Banbury 2","Banbury 3"][i]||("Banbury "+((i%5)+1));
+      return{type:"Final",mc,cc,plan,act,bPlan,bAct,achievement};
+    });
+    /* Pick rows by selected sub-tab */
+    const detailRows=activeCat==="Master Compound"?masterRows:finalRows;
+    /* Aggregations for View by toggle */
+    const machAgg={};
+    detailRows.forEach(r=>{if(!machAgg[r.mc])machAgg[r.mc]={mc:r.mc,plan:0,act:0,bPlan:0,bAct:0,ccs:0};machAgg[r.mc].plan+=r.plan;machAgg[r.mc].act+=r.act;machAgg[r.mc].bPlan+=r.bPlan;machAgg[r.mc].bAct+=r.bAct;machAgg[r.mc].ccs++;});
+    const machRows=Object.values(machAgg).map(r=>({...r,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    const ccAgg={};
+    detailRows.forEach(r=>{if(!ccAgg[r.cc])ccAgg[r.cc]={cc:r.cc,type:r.type,plan:0,act:0,bPlan:0,bAct:0,machs:new Set()};ccAgg[r.cc].plan+=r.plan;ccAgg[r.cc].act+=r.act;ccAgg[r.cc].bPlan+=r.bPlan;ccAgg[r.cc].bAct+=r.bAct;ccAgg[r.cc].machs.add(r.mc);});
+    const ccRows=Object.values(ccAgg).map(r=>({...r,machCount:r.machs.size,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    /* Pick rows based on prodView */
+    const rawRows=prodView==="machine"?machRows:prodView==="sku"?ccRows:detailRows;
+    const filtered=rawRows.filter(r=>{if(!machSearch)return true;if(prodView==="sku")return [...r.machs].some(m=>m.toLowerCase().includes(machSearch.toLowerCase()));return r.mc.toLowerCase().includes(machSearch.toLowerCase());});
+    const activeUnit=prodUnit||"MT";
+    /* Column set depends on selected unit AND view */
+    const planCol=activeUnit==="Batches"?"Batches Plan":"Planned (MT)";
+    const actCol=activeUnit==="Batches"?"Batches Actual":"Actual (MT)";
+    const cols=prodView==="machine"?["Machine","Compounds",planCol,actCol,"Achievement"]:prodView==="sku"?["Item Code","Machines",planCol,actCol,"Achievement"]:["Machine","Item Code",planCol,actCol,"Achievement"];
+    return(<Card title={"Mixing \u2014 "+activeCat+" Production"} accent={C.tl}>
+      <SubDrill items={cats} selected={activeCat} onSelect={v=>setSub(v)}/>
+      {/* View by + Unit toggles */}
+      <div style={{display:"flex",alignItems:"center",gap:14,marginTop:8,marginBottom:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>View by</span>
+          <div style={{display:"flex",gap:4}}>
+            {[{k:"machine",l:"Machine"},{k:"sku",l:"SKU"},{k:"both",l:"Machine + SKU"}].map(o=>{const a=prodView===o.k;return(<button key={o.k} onClick={()=>setProdView(o.k)} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+(a?C.aB:C.bd),background:a?C.aL:C.c2,color:a?C.ac:C.tx,fontSize:12,fontWeight:a?700:500,cursor:"pointer"}}>{o.l}</button>);})}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>Unit</span>
+          <div style={{display:"flex",gap:4}}>
+            {[{k:"MT",l:"MT"},{k:"Batches",l:"Batches"}].map(o=>{const a=activeUnit===o.k;return(<button key={o.k} onClick={()=>setProdUnit(o.k)} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+(a?C.aB:C.bd),background:a?C.aL:C.c2,color:a?C.ac:C.tx,fontSize:12,fontWeight:a?700:500,cursor:"pointer"}}>{o.l}</button>);})}
+          </div>
+        </div>
+      </div>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
         <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>Search Machine</span>
         <input type="text" value={machSearch} onChange={e=>setMachSearch(e.target.value)} placeholder="e.g. Banbury 2" style={{padding:"5px 10px",border:"1px solid "+C.bd,borderRadius:6,fontSize:12,outline:"none",width:200,background:C.cd,color:C.tx,fontFamily:"inherit"}}/>
         {machSearch&&<button onClick={()=>setMachSearch("")} style={{padding:"4px 10px",border:"1px solid "+C.bd,borderRadius:6,background:C.c2,fontSize:11,cursor:"pointer",color:C.mu}}>Clear</button>}
-        <span style={{marginLeft:"auto",fontSize:11,color:C.mu}}>{filtered.length} of {rows.length} compounds</span>
+        <span style={{marginLeft:"auto",fontSize:11,color:C.mu}}>{filtered.length} of {rawRows.length} rows in {activeCat}</span>
       </div>
       <div style={{maxHeight:340,overflowY:"auto",overflowX:"auto",border:"1px solid "+C.bd,borderRadius:6}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-        <thead style={{position:"sticky",top:0,background:C.cd,zIndex:1}}><tr>{["Machine","Item Code","Planned (MT)","Actual (MT)","Batches Plan","Batches Actual","Variance"].map((c,i)=>(<th key={i} style={{textAlign:i<=1?"left":"right",padding:"7px 10px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:12,background:C.cd,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
-        <tbody>{filtered.length===0?(<tr><td colSpan={7} style={{padding:"24px 10px",textAlign:"center",color:C.mu,fontSize:13,fontStyle:"italic"}}>No machines match "{machSearch}"</td></tr>):filtered.map((r,i)=>{
-          const vNum=parseFloat(r.variance);
-          const vCol=vNum<-5?C.rd:vNum<0?C.am:C.gn;
+        <thead style={{position:"sticky",top:0,background:C.cd,zIndex:1}}><tr>{cols.map((c,i)=>{const lastIdxLeft=prodView==="machine"?0:1;return(<th key={i} style={{textAlign:i<=lastIdxLeft?"left":"right",padding:"7px 10px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:12,background:C.cd,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>);})}</tr></thead>
+        <tbody>{filtered.length===0?(<tr><td colSpan={cols.length} style={{padding:"24px 10px",textAlign:"center",color:C.mu,fontSize:13,fontStyle:"italic"}}>No rows match "{machSearch}"</td></tr>):filtered.map((r,i)=>{
+          const aNum=parseFloat(r.achievement);
+          const aCol=aNum>=100?C.gn:aNum>=95?C.am:C.rd;
+          const planVal=activeUnit==="Batches"?r.bPlan:r.plan;
+          const actVal=activeUnit==="Batches"?r.bAct:r.act;
           return(<tr key={i} style={{background:i%2===0?"transparent":C.c2}}>
-            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.mc}</td>
-            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{r.cc}</td>
-            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.plan}</td>
-            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:600,color:C.tx}}>{r.act}</td>
-            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.bPlan}</td>
-            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:600}}>{r.bAct}</td>
-            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:vCol}}>{r.variance}</td>
+            {prodView==="machine"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.mc}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.ccs}</td></>}
+            {prodView==="sku"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{r.cc}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.machCount}</td></>}
+            {prodView==="both"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.mc}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{r.cc}</td></>}
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{planVal}</td>
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:600,color:C.tx}}>{actVal}</td>
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:aCol}}>{r.achievement}</td>
           </tr>);
         })}</tbody>
       </table></div>
@@ -1207,22 +1249,162 @@ function DrillPanel({kpi,sub,setSub,spcP,setSpcP}){
   }
 
   if(kpi.drillType==="tbmProd"){
-    const sel=sub||"";
-    return(<Card title="Production Drill-down" accent={C.tl}>
-      <SubDrill items={["Passenger Radial","LT Radial","SCV Radial"]} selected={sel} onSelect={v=>setSub(sel===v?"":v)}/>
-      {sel==="Passenger Radial"&&<DTable cols={["SKU","Planned","Actual","Variance"]} rows={TYRE_PCR.map((s,i)=>[s,400+i*50,Math.round((400+i*50)*(0.82+i*0.03)),(((Math.round((400+i*50)*(0.82+i*0.03))-(400+i*50))/(400+i*50))*100).toFixed(1)+"%"])}/>}
-      {sel==="LT Radial"&&<DTable cols={["SKU","Planned","Actual","Variance"]} rows={TYRE_LTR.map((s,i)=>[s,300+i*40,Math.round((300+i*40)*(0.85+i*0.02)),(((Math.round((300+i*40)*(0.85+i*0.02))-(300+i*40))/(300+i*40))*100).toFixed(1)+"%"])}/>}
-      {sel==="SCV Radial"&&<DTable cols={["SKU","Planned","Actual","Variance"]} rows={TYRE_SCV.map((s,i)=>[s,200+i*30,Math.round((200+i*30)*(0.80+i*0.04)),(((Math.round((200+i*30)*(0.80+i*0.04))-(200+i*30))/(200+i*30))*100).toFixed(1)+"%"])}/>}
+    const isCur=kpi.secId==="CUR";
+    const machines=isCur?["Tredge 1","Tredge 2","Tredge 3","Tredge 4","Tredge 5","Tredge 6"]:["VMI Max","VMI Exium","BJ Modules","Stage 1","Stage 2"];
+    const cats=["Passenger Radial","LT Radial","SCV Radial"];
+    const activeCat=sub||"Passenger Radial";
+    const skuByCat={"Passenger Radial":TYRE_PCR.slice(0,4),"LT Radial":TYRE_LTR.slice(0,3),"SCV Radial":TYRE_SCV.slice(0,3)};
+    const allSKUs=skuByCat[activeCat]||[];
+    const skuPerMc=Math.max(1,Math.ceil(allSKUs.length/machines.length));
+    const base=isCur?380:42;
+    const step=isCur?40:8;
+    const ratio=isCur?0.88:0.82;
+    /* Full detail rows (machine × SKU) */
+    const detailRows=[];
+    machines.forEach((mc,i)=>{
+      for(let j=0;j<skuPerMc;j++){
+        const idx=i*skuPerMc+j;
+        if(allSKUs.length===0)break;
+        const sku=allSKUs[idx%allSKUs.length];
+        const plan=base+i*step+j*(isCur?60:12);
+        const act=Math.round(plan*(ratio+i*0.015+j*0.008));
+        detailRows.push({mc,sku,plan,act});
+      }
+    });
+    /* Aggregate by machine */
+    const machAgg={};
+    detailRows.forEach(r=>{if(!machAgg[r.mc])machAgg[r.mc]={mc:r.mc,plan:0,act:0,skus:0};machAgg[r.mc].plan+=r.plan;machAgg[r.mc].act+=r.act;machAgg[r.mc].skus++;});
+    const machRows=Object.values(machAgg).map(r=>({...r,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    /* Aggregate by SKU */
+    const skuAgg={};
+    detailRows.forEach(r=>{if(!skuAgg[r.sku])skuAgg[r.sku]={sku:r.sku,plan:0,act:0,machs:new Set()};skuAgg[r.sku].plan+=r.plan;skuAgg[r.sku].act+=r.act;skuAgg[r.sku].machs.add(r.mc);});
+    const skuRows=Object.values(skuAgg).map(r=>({...r,machCount:r.machs.size,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    /* Pick rows based on prodView and apply machine search */
+    const bothRows=detailRows.map(r=>({...r,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    const rawRows=prodView==="machine"?machRows:prodView==="sku"?skuRows:bothRows;
+    const filtered=rawRows.filter(r=>{if(!machSearch)return true;if(prodView==="sku")return [...r.machs].some(m=>m.toLowerCase().includes(machSearch.toLowerCase()));return r.mc.toLowerCase().includes(machSearch.toLowerCase());});
+    const title=isCur?"Curing \u2014 Production Drill-down":"Tyre Building \u2014 Production Drill-down";
+    /* Column config per view */
+    const colCfg=prodView==="machine"?["Machine","SKUs","Planned (nos)","Actual (nos)","Achievement"]:prodView==="sku"?["Item Code (SKU)","Machines","Planned (nos)","Actual (nos)","Achievement"]:["Machine","Item Code (SKU)","Planned (nos)","Actual (nos)","Achievement"];
+    return(<Card title={title} accent={C.tl}>
+      <SubDrill items={cats} selected={activeCat} onSelect={v=>setSub(v)}/>
+      {/* View toggle */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8,marginBottom:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>View by</span>
+        <div style={{display:"flex",gap:4}}>
+          {[{k:"machine",l:"Machine"},{k:"sku",l:"SKU"},{k:"both",l:"Machine + SKU"}].map(o=>{const a=prodView===o.k;return(<button key={o.k} onClick={()=>setProdView(o.k)} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+(a?C.aB:C.bd),background:a?C.aL:C.c2,color:a?C.ac:C.tx,fontSize:12,fontWeight:a?700:500,cursor:"pointer"}}>{o.l}</button>);})}
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+        <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>Search Machine</span>
+        <input type="text" value={machSearch} onChange={e=>setMachSearch(e.target.value)} placeholder={isCur?"e.g. Tredge 3":"e.g. VMI Max"} style={{padding:"5px 10px",border:"1px solid "+C.bd,borderRadius:6,fontSize:12,outline:"none",width:200,background:C.cd,color:C.tx,fontFamily:"inherit"}}/>
+        {machSearch&&<button onClick={()=>setMachSearch("")} style={{padding:"4px 10px",border:"1px solid "+C.bd,borderRadius:6,background:C.c2,fontSize:11,cursor:"pointer",color:C.mu}}>Clear</button>}
+        <span style={{marginLeft:"auto",fontSize:11,color:C.mu}}>{filtered.length} of {rawRows.length} rows {"in "+activeCat}</span>
+      </div>
+      <div style={{maxHeight:340,overflowY:"auto",overflowX:"auto",border:"1px solid "+C.bd,borderRadius:6}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead style={{position:"sticky",top:0,background:C.cd,zIndex:1}}><tr>{colCfg.map((c,i)=>(<th key={i} style={{textAlign:(prodView==="both"?i<=1:i<=1)?"left":"right",padding:"7px 10px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:12,background:C.cd,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{filtered.length===0?(<tr><td colSpan={5} style={{padding:"24px 10px",textAlign:"center",color:C.mu,fontSize:13,fontStyle:"italic"}}>No rows match "{machSearch}"</td></tr>):filtered.map((r,i)=>{
+          const aNum=parseFloat(r.achievement);
+          const aCol=aNum>=100?C.gn:aNum>=95?C.am:C.rd;
+          return(<tr key={i} style={{background:i%2===0?"transparent":C.c2}}>
+            {prodView==="machine"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.mc}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.skus}</td></>}
+            {prodView==="sku"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{r.sku}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.machCount}</td></>}
+            {prodView==="both"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.mc}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{r.sku}</td></>}
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.plan}</td>
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:600,color:C.tx}}>{r.act}</td>
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:aCol}}>{r.achievement}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
     </Card>);
   }
 
   if(kpi.drillType==="stkProd"){
-    const sel=sub||"";
-    const prodMap={"4 Roll":{cats:["4 Roll Production"],skus:TYRE_PCR},"Extruder":{cats:["Sidewall Production","Tread Production"],skus:TYRE_PCR},"3 Roll":{cats:["Inner Liner Production"],skus:TYRE_PCR},"Cutter":{cats:["Ply Production","Belt Production"],skus:TYRE_PCR},"Slitter":{cats:["Cap Strip Production","Chaffer Production"],skus:TYRE_PCR}};
-    const pm=prodMap[kpi.stockSub]||{cats:["Production"],skus:TYRE_PCR};
-    return(<Card title={"Production \u2014 "+kpi.stockSub} accent={C.tl}>
-      <SubDrill items={pm.cats} selected={sel} onSelect={v=>setSub(sel===v?"":v)}/>
-      {sel&&<DTable cols={["SKU","Planned","Actual","Variance"]} rows={pm.skus.slice(0,5).map((s,i)=>[s,80+i*20,Math.round((80+i*20)*(0.84+i*0.03)),(((Math.round((80+i*20)*(0.84+i*0.03))-(80+i*20))/(80+i*20))*100).toFixed(1)+"%"])}/>}
+    const stockSub=kpi.stockSub||"4 Roll";
+    const stkMachines={"4 Roll":["4 Roll #1","4 Roll #2"],"Extruder":["Duplex","Triplex","Quadraplex"],"3 Roll":["3 Roll #1","3 Roll #2"],"Cutter":["LTBC","HTBC"],"Slitter":["Slitter-1","Slitter-2"]};
+    const machines=stkMachines[stockSub]||["Machine 1","Machine 2"];
+    const catMap={"4 Roll":["Belt Production","Ply Production"],"Extruder":["Sidewall Production","Tread Production"],"3 Roll":["Inner Liner Production"],"Cutter":["Ply Production","Belt Production"],"Slitter":["Cap Strip Production","Chafer Production"]};
+    const cats=catMap[stockSub]||["Production"];
+    const activeCat=sub||cats[0];
+    const skuMap={
+      "4 Roll":{"Belt Production":["BeltPly-PCR-001","BeltPly-TBR-001"],"Ply Production":["BeltPly-PCR-002","BeltPly-LTR-001"]},
+      "Extruder":{"Sidewall Production":["Sidewall-PCR-001","Sidewall-LTR-001"],"Tread Production":["Tread-PCR-001","Tread-PCR-002"]},
+      "3 Roll":{"Inner Liner Production":["I.Liner-PCR-001","I.Liner-LTR-001"]},
+      "Cutter":{"Ply Production":["Ply-PCR-001","Ply-PCR-002"],"Belt Production":["Belt-PCR-001"]},
+      "Slitter":{"Cap Strip Production":["Capstrip-PCR-001","Capstrip-PCR-002"],"Chafer Production":["Chafer-PCR-001"]}
+    };
+    const skus=(skuMap[stockSub]&&skuMap[stockSub][activeCat])||["SKU-001","SKU-002"];
+    const skuPerMc=Math.max(1,Math.ceil(skus.length/machines.length));
+    const detailRows=[];
+    machines.forEach((mc,i)=>{
+      for(let j=0;j<skuPerMc;j++){
+        const idx=i*skuPerMc+j;
+        if(idx>=skus.length)break;
+        const sku=skus[idx];
+        const plan=120+i*40+j*30;
+        const act=Math.round(plan*(0.85+i*0.025+j*0.01));
+        detailRows.push({mc,sku,plan,act});
+      }
+    });
+    const machAgg={};
+    detailRows.forEach(r=>{if(!machAgg[r.mc])machAgg[r.mc]={mc:r.mc,plan:0,act:0,skus:0};machAgg[r.mc].plan+=r.plan;machAgg[r.mc].act+=r.act;machAgg[r.mc].skus++;});
+    const machRows=Object.values(machAgg).map(r=>({...r,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    const skuAgg={};
+    detailRows.forEach(r=>{if(!skuAgg[r.sku])skuAgg[r.sku]={sku:r.sku,plan:0,act:0,machs:new Set()};skuAgg[r.sku].plan+=r.plan;skuAgg[r.sku].act+=r.act;skuAgg[r.sku].machs.add(r.mc);});
+    const skuRows=Object.values(skuAgg).map(r=>({...r,machCount:r.machs.size,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    const bothRows=detailRows.map(r=>({...r,achievement:((r.act/r.plan)*100).toFixed(1)+"%"}));
+    const rawRows=prodView==="machine"?machRows:prodView==="sku"?skuRows:bothRows;
+    const filtered=rawRows.filter(r=>{if(!machSearch)return true;if(prodView==="sku")return [...r.machs].some(m=>m.toLowerCase().includes(machSearch.toLowerCase()));return r.mc.toLowerCase().includes(machSearch.toLowerCase());});
+    /* Unit conversion: ~3.87 kg per unit (from 4820 kg / 1245 units) */
+    const activeUnit=prodUnit||"Units";
+    const unitFactor=activeUnit==="Kg"?3.87:1;
+    const unitLbl=activeUnit==="Kg"?"kg":"units";
+    const colCfg=prodView==="machine"?["Machine","SKUs","Planned ("+unitLbl+")","Actual ("+unitLbl+")","Achievement"]:prodView==="sku"?["Item Code (SKU)","Machines","Planned ("+unitLbl+")","Actual ("+unitLbl+")","Achievement"]:["Machine","Item Code (SKU)","Planned ("+unitLbl+")","Actual ("+unitLbl+")","Achievement"];
+    return(<Card title={stockSub+" \u2014 Production Drill-down"} accent={C.tl}>
+      <SubDrill items={cats} selected={activeCat} onSelect={v=>setSub(v)}/>
+      <div style={{display:"flex",alignItems:"center",gap:14,marginTop:8,marginBottom:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>View by</span>
+          <div style={{display:"flex",gap:4}}>
+            {[{k:"machine",l:"Machine"},{k:"sku",l:"SKU"},{k:"both",l:"Machine + SKU"}].map(o=>{const a=prodView===o.k;return(<button key={o.k} onClick={()=>setProdView(o.k)} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+(a?C.aB:C.bd),background:a?C.aL:C.c2,color:a?C.ac:C.tx,fontSize:12,fontWeight:a?700:500,cursor:"pointer"}}>{o.l}</button>);})}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>Unit</span>
+          <div style={{display:"flex",gap:4}}>
+            {[{k:"Units",l:"Units"},{k:"Kg",l:"Kg"}].map(o=>{const a=activeUnit===o.k;return(<button key={o.k} onClick={()=>setProdUnit(o.k)} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+(a?C.aB:C.bd),background:a?C.aL:C.c2,color:a?C.ac:C.tx,fontSize:12,fontWeight:a?700:500,cursor:"pointer"}}>{o.l}</button>);})}
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+        <span style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".3px"}}>Search Machine</span>
+        <input type="text" value={machSearch} onChange={e=>setMachSearch(e.target.value)} placeholder={"e.g. "+(machines[0]||"")} style={{padding:"5px 10px",border:"1px solid "+C.bd,borderRadius:6,fontSize:12,outline:"none",width:200,background:C.cd,color:C.tx,fontFamily:"inherit"}}/>
+        {machSearch&&<button onClick={()=>setMachSearch("")} style={{padding:"4px 10px",border:"1px solid "+C.bd,borderRadius:6,background:C.c2,fontSize:11,cursor:"pointer",color:C.mu}}>Clear</button>}
+        <span style={{marginLeft:"auto",fontSize:11,color:C.mu}}>{filtered.length} of {rawRows.length} rows {"in "+activeCat}</span>
+      </div>
+      <div style={{maxHeight:340,overflowY:"auto",overflowX:"auto",border:"1px solid "+C.bd,borderRadius:6}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead style={{position:"sticky",top:0,background:C.cd,zIndex:1}}><tr>{colCfg.map((c,i)=>(<th key={i} style={{textAlign:i<=1?"left":"right",padding:"7px 10px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:12,background:C.cd,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{filtered.length===0?(<tr><td colSpan={5} style={{padding:"24px 10px",textAlign:"center",color:C.mu,fontSize:13,fontStyle:"italic"}}>No rows match "{machSearch}"</td></tr>):filtered.map((r,i)=>{
+          const aNum=parseFloat(r.achievement);
+          const aCol=aNum>=100?C.gn:aNum>=95?C.am:C.rd;
+          const planVal=Math.round(r.plan*unitFactor);
+          const actVal=Math.round(r.act*unitFactor);
+          return(<tr key={i} style={{background:i%2===0?"transparent":C.c2}}>
+            {prodView==="machine"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.mc}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.skus}</td></>}
+            {prodView==="sku"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{r.sku}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.machCount}</td></>}
+            {prodView==="both"&&<><td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.mc}</td>
+              <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{r.sku}</td></>}
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{planVal}</td>
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:600,color:C.tx}}>{actVal}</td>
+            <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:aCol}}>{r.achievement}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
     </Card>);
   }
 
@@ -1399,6 +1581,7 @@ function ProductionDashboard({plant,onBack}){
   const [secId,setSecId]=useState("TBM");
   const [catId,setCatId]=useState("P");
   const [tf,setTf]=useState("Today");
+  const [shift,setShift]=useState("All");
   const _r0=_rangeFromPreset("Today");
   const [tfFrom,setTfFrom]=useState(_r0.from);
   const [tfTo,setTfTo]=useState(_r0.to);
@@ -1406,14 +1589,13 @@ function ProductionDashboard({plant,onBack}){
   const [drillSub,setDrillSub]=useState("");
   const [spcP,setSpcP]=useState(0);
   const [stockSub,setStockSub]=useState("4 Roll");
-  const [mixSub,setMixSub]=useState("Final");
   const [tyreType,setTyreType]=useState(isBanmorePlant(plant)?"PCR":"All");
   const [trendKpi,setTrendKpi]=useState(null);
 
   const sec=SEC.find(s=>s.id===secId);
   const cat=TABS.find(c=>c.id===catId);
   const isInv=catId==="I";
-  const kpis=isInv?[]:buildKpis(sec,catId,stockSub,mixSub);
+  const kpis=isInv?[]:buildKpis(sec,catId,stockSub);
   const toggle=id=>{setOpenKpi(openKpi===id?null:id);setDrillSub("");setSpcP(0);};
   const openKpiObj=openKpi?kpis.find(k=>k.id===openKpi):null;
 
@@ -1431,7 +1613,7 @@ function ProductionDashboard({plant,onBack}){
         <span style={{fontSize:13,color:C.ac,fontWeight:700,background:C.aL,padding:"3px 10px",borderRadius:8,marginLeft:4}}>{plant?plant.name.split(" ")[0].toUpperCase():"BTP"}</span>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo}/>
+        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo} shift={shift} setShift={setShift}/>
         <TyreTypeFilter value={tyreType} onChange={setTyreType} plant={plant}/>
         <ExportButton/>
         <UserMenu plant={plant} role="PH" onLogout={onBack}/>
@@ -1459,7 +1641,7 @@ function ProductionDashboard({plant,onBack}){
         <div style={{marginTop:"auto",padding:"8px 10px",borderTop:"1px solid "+C.bd}}>
           <div style={{fontSize:11,color:C.mu,textTransform:"uppercase",letterSpacing:".8px",marginBottom:2}}>Plant</div>
           <div style={{fontSize:18,fontWeight:700,color:rc(PLANT.oee)}}>{PLANT.oee}%<span style={{fontSize:11,color:C.mu,fontWeight:400,marginLeft:2}}>OEE</span></div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>{[{l:"Prod",v:PLANT.prod+"%",c:rc(PLANT.prod)},{l:"Scrap",v:PLANT.scrap+"%",c:C.rd}].map(x=>(<span key={x.l} style={{fontSize:11,fontWeight:600,color:x.c,background:x.c+"18",padding:"1px 4px",borderRadius:3}}>{x.l}:{x.v}</span>))}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>{[{l:"Prod",v:fmt(PLANT.prodCount)+" nos",c:C.gn},{l:"Scrap",v:PLANT.scrap+"%",c:C.rd}].map(x=>(<span key={x.l} style={{fontSize:11,fontWeight:600,color:x.c,background:x.c+"18",padding:"1px 4px",borderRadius:3}}>{x.l}:{x.v}</span>))}</div>
         </div>
       </div>
 
@@ -1480,10 +1662,7 @@ function ProductionDashboard({plant,onBack}){
           {STOCK_SUBS.map(ss=>(<button key={ss} onClick={()=>{setStockSub(ss);setOpenKpi(null);setDrillSub("");}} style={{padding:"5px 14px",borderRadius:999,border:"1px solid "+(stockSub===ss?C.aB:C.bd),background:stockSub===ss?C.aL:C.c2,color:stockSub===ss?C.ac:C.tx,fontSize:13,fontWeight:600,cursor:"pointer"}}>{ss}</button>))}
         </div>}
 
-        {/* Mixing sub-selector (Master / Final compound) */}
-        {secId==="MIX"&&catId==="P"&&<div style={{display:"flex",gap:4,padding:"6px 0"}}>
-          {MIX_SUBS.map(ms=>(<button key={ms} onClick={()=>{setMixSub(ms);setOpenKpi(null);setDrillSub("");}} style={{padding:"5px 14px",borderRadius:999,border:"1px solid "+(mixSub===ms?C.aB:C.bd),background:mixSub===ms?C.aL:C.c2,color:mixSub===ms?C.ac:C.tx,fontSize:13,fontWeight:600,cursor:"pointer"}}>{ms} Compound</button>))}
-        </div>}
+        {/* Mixing Master/Final selector moved into Production drill-down */}
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
           <div style={{fontSize:12,color:C.am,fontWeight:600}}>{"\u25B8"} Click any KPI card to expand drill-down</div>
@@ -1512,27 +1691,7 @@ function ProductionDashboard({plant,onBack}){
         {/* Cost extras */}
         {catId==="C"&&openKpiObj&&openKpiObj.drillType==="budget"&&null}
 
-        {/* Safety extras */}
-        {catId==="S"&&<Card title="Safety Record" accent={C.gn}>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
-            <div style={{fontSize:44,fontWeight:700,color:C.gn,lineHeight:1}}>{sec.id==="MIX"?142:sec.id==="TBM"?78:sec.id==="CUR"?210:98}</div>
-            <div style={{fontSize:13,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:"1px"}}>Days Without Reportable Incident</div>
-            <div style={{width:"50%",height:4,background:C.bd,borderRadius:999,marginTop:4}}><div style={{width:Math.min(100,((sec.id==="MIX"?142:sec.id==="TBM"?78:sec.id==="CUR"?210:98)/365)*100)+"%",height:"100%",background:C.gn,borderRadius:999}}/></div>
-            <div style={{fontSize:11,color:C.mu}}>Target: 365 days</div>
-          </div>
-        </Card>}
-
-        {/* Morale extras */}
-        {catId==="M"&&<Card title="Manpower Summary" accent={C.bl}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(90px,1fr))",gap:6}}>
-            <MetricTile label="Total" value={sec.id==="MIX"?245:sec.id==="TBM"?310:sec.id==="CUR"?280:180} color={C.bl}/>
-            <MetricTile label="Present" value={sec.id==="MIX"?238:sec.id==="TBM"?297:sec.id==="CUR"?270:174} color={C.gn}/>
-            <MetricTile label="Absent" value={sec.id==="MIX"?7:sec.id==="TBM"?13:sec.id==="CUR"?10:6} color={C.rd}/>
-            <MetricTile label="Permanent" value={sec.id==="MIX"?125:sec.id==="TBM"?150:sec.id==="CUR"?140:95} color={C.tl}/>
-            <MetricTile label="Contract" value={sec.id==="MIX"?120:sec.id==="TBM"?160:sec.id==="CUR"?140:85} color={C.am}/>
-            <MetricTile label="Attend%" value="96.5%" color={C.gn}/>
-          </div>
-        </Card>}
+        {/* Safety Record and Manpower Summary strips removed per request */}
       </div>
     </div>)}
 
@@ -2633,10 +2792,10 @@ function QualityDashboard({plant,onBack}){
   const [openKpi,setOpenKpi]=useState(null);
   const [sub,setSub]=useState("");
   const [tf,setTf]=useState("Today");
+  const [shift,setShift]=useState("All");
   const _r0q=_rangeFromPreset("Today");
   const [tfFrom,setTfFrom]=useState(_r0q.from);
   const [tfTo,setTfTo]=useState(_r0q.to);
-  const [shift,setShift]=useState("All");
   const [tyreType,setTyreType]=useState(isBanmorePlant(plant)?"PCR":"All");
   const [trendKpi,setTrendKpi]=useState(null);
 
@@ -2669,7 +2828,7 @@ function QualityDashboard({plant,onBack}){
         <select value={shift} onChange={e=>setShift(e.target.value)} style={{padding:"5px 8px",fontSize:13,border:"1px solid "+C.bd,borderRadius:6,background:C.cd,color:C.tx,cursor:"pointer"}}>
           <option>All Shifts</option><option>A</option><option>B</option><option>C</option>
         </select>
-        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo}/>
+        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo} shift={shift} setShift={setShift}/>
         <TyreTypeFilter value={tyreType} onChange={setTyreType} plant={plant}/>
         <ExportButton/>
         <UserMenu plant={plant} role="QH" onLogout={onBack}/>
@@ -3614,10 +3773,10 @@ function EngineeringDashboard({plant,onBack}){
   const [openKpi,setOpenKpi]=useState(null);
   const [sub,setSub]=useState("");
   const [tf,setTf]=useState("Today");
+  const [shift,setShift]=useState("All");
   const _r0e=_rangeFromPreset("Today");
   const [tfFrom,setTfFrom]=useState(_r0e.from);
   const [tfTo,setTfTo]=useState(_r0e.to);
-  const [shift,setShift]=useState("All");
   const [anomSel,setAnomSel]=useState(null);
   const [liveOpen,setLiveOpen]=useState(false);
   const [tyreType,setTyreType]=useState(isBanmorePlant(plant)?"PCR":"All");
@@ -3656,7 +3815,7 @@ function EngineeringDashboard({plant,onBack}){
         <select value={shift} onChange={e=>setShift(e.target.value)} style={{padding:"5px 8px",fontSize:13,border:"1px solid "+C.bd,borderRadius:6,background:C.cd,color:C.tx,cursor:"pointer"}}>
           <option>All Shifts</option><option>A</option><option>B</option><option>C</option>
         </select>
-        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo}/>
+        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo} shift={shift} setShift={setShift}/>
         <TyreTypeFilter value={tyreType} onChange={setTyreType} plant={plant} disabled={ttDisabled} disabledReason="Plant-wide infrastructure metrics — filter not applicable on this tab"/>
         <ExportButton/>
         <UserMenu plant={plant} role="EH" onLogout={onBack}/>
@@ -3747,13 +3906,815 @@ function EngineeringDashboard({plant,onBack}){
   </div>);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   TECHNICAL DASHBOARD
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const TECH_VERTICALS=[
+  {id:"stock",name:"Stock",group:"core",icon:"\u2630",subTabs:["Mixing","4 Roll","Extruder","3 Roll","Cutter","Slitter"]},
+  {id:"bc",name:"Build & Cure",group:"core",icon:"\u25C6",subTabs:["Building","Curing","Uniformity"]},
+  {id:"ttc",name:"TTC",group:"support",icon:"\u25CE"},
+  {id:"srt",name:"SRT / Claims",group:"support",icon:"\u2691"},
+  {id:"mould",name:"Mould Shop",group:"support",icon:"\u25A0"},
+  {id:"npi",name:"NPI / NPD",group:"support",icon:"\u2604",subTabs:["Trials","Projects","VEPIP"]}
+];
+
+/* Health strip pills */
+const TECH_STOCK_HEALTH={
+  upstream:{label:"HOLDS UPSTREAM",v1:"14 batches NOK",v2:"4 over 24h",color:C.am},
+  downstream:{label:"DOWNSTREAM RISK",v1:"3 SKUs at risk",v2:"P185/65R15, P195/65R15...",color:C.rd},
+  material:{label:"MATERIAL AGEING",v1:"8 RM lots > 60d",v2:"\u20B94.2L exposure",color:C.bl}
+};
+const TECH_BC_ACTION={
+  yield:{label:"TODAY'S YIELD",v1:"Building 96.4%",v2:"Curing 95.1%",v3:"Straight Pass 91.2%",color:C.gn},
+  actions:{label:"OPEN ACTIONS",v1:"7 RCA open",v2:"3 over 7 days",v3:"2 critical",color:C.am}
+};
+
+/* Pareto data per sub-tab (top defects/reasons) */
+const TECH_PARETO={
+  "Mixing":[["Mooney scorch",42],["ML out of spec",31],["SG drift",18],["Cure-time variation",12],["Carbon weighing",8],["Polymer charge",5]],
+  "4 Roll":[["Edge frill",28],["Gauge variation",22],["Coverage low",16],["Splice fail",11],["Foreign matter",8]],
+  "Extruder":[["Profile under-gauge",34],["Tread scorch",19],["Bare spot",14],["Cold-feed lump",9],["Width drift",7]],
+  "3 Roll":[["Gauge variation",24],["Edge defect",18],["Coverage",13],["Splice",8]],
+  "Cutter":[["Length deviation",26],["Angle error",17],["Splice",13],["End count",9],["Width",6]],
+  "Slitter":[["Width tolerance",21],["Edge fray",14],["Reel length",9],["Splice",6]],
+  "Building":[["Splice open",38],["Ply mis-position",27],["Bead seating",19],["Sidewall scuff",14],["Capstrip overlap",11],["Inner-liner crack",7]],
+  "Curing":[["Bladder leak",41],["Mould dirty",28],["Cure under-time",17],["Bare cure",13],["Tread chunk",9],["Foreign body",6]],
+  "Uniformity":[["RFV high",34],["LFV high",26],["Conicity",18],["Imbalance static",14],["Run-out RO-OA",9],["Lateral run-out",6]],
+  "Trials":[["Spec compliance",18],["Compound issue",14],["Process drift",9],["RM availability",6]]
+};
+
+/* Mock SCADA parameter strip for Mixing batch drill */
+const TECH_MIX_SCADA_SPEC={
+  "Drop Temp":{u:"\u00B0C",lo:148,hi:158,nom:154},
+  "TCU":{u:"\u00B0C",lo:65,hi:75,nom:70},
+  "Mixer Power":{u:"kW",lo:260,hi:310,nom:285},
+  "Calories":{u:"kcal",lo:14000,hi:17000,nom:15500},
+  "Carbon Time":{u:"s",lo:65,hi:85,nom:75},
+  "Polymer Time":{u:"s",lo:35,hi:55,nom:45},
+  "Oil Time":{u:"s",lo:20,hi:40,nom:28},
+  "RAM Pressure":{u:"bar",lo:5.5,hi:6.5,nom:6.0},
+  "Mixing RPM":{u:"rpm",lo:28,hi:38,nom:33},
+  "Repass":{u:"nos",lo:0,hi:0,nom:0},
+  "Cycle Time":{u:"s",lo:170,hi:200,nom:185}
+};
+
+/* KPI builder per vertical/sub-tab */
+function buildTechKpis(vId,subTab){
+  if(vId==="stock"&&subTab==="Mixing") return [
+    {id:"labpass",n:"Lab Pass Rate",v:"96.4",u:"%",tr:-1.2,sp_:[97.8,97.2,96.8,96.4],sc_:C.gn,target:"98",drillType:"techMixingLabPass"},
+    {id:"offspec",n:"Off-spec Batches",v:"14",u:"batches",tr:18,sp_:[8,9,12,14],sc_:C.rd,drillType:"techMixingOffspec"},
+    {id:"oknok",n:"OK/NOK Inventory",v:"22",u:"NOK held",tr:5,sp_:[18,20,21,22],sc_:C.am,drillType:"techMixingHold"},
+    {id:"cscrap",n:"Compound Scrap",v:"840",u:"kg",tr:-8,sp_:[1100,980,910,840],sc_:C.gn,drillType:"techMixingScrap"},
+    {id:"rmrej",n:"RM Rejection",v:"2.8",u:"%",tr:3,sp_:[2.5,2.6,2.7,2.8],sc_:C.am,drillType:"techMixingRM"},
+    {id:"overage",n:"Overage Material",v:"8",u:"lots > 60d",tr:0,sp_:[8,8,8,8],sc_:C.am,drillType:"techMixingOverage"},
+    {id:"devcomp",n:"Development Trials",v:"6",u:"compounds",tr:0,sp_:[5,5,6,6],sc_:C.bl,drillType:"techMixingDev"}
+  ];
+  if(vId==="stock"&&subTab!=="Mixing") return [
+    {id:"pareto",n:"Defect Pareto",v:TECH_PARETO[subTab]?TECH_PARETO[subTab][0][0]:"\u2014",u:"top",tr:0,sp_:[12,14,18,21],sc_:C.am,
+      drillType:"table",drillTitle:subTab+" \u2014 Defect Pareto by SKU",
+      drillCols:["Defect","Count","Top SKU","Top Machine","Trend","Action"],
+      drillRows:(TECH_PARETO[subTab]||[]).map((d,i)=>[d[0],d[1],["P195/65R15","P185/65R15","P205/55R16","LT235/75R15","P215/55R17"][i%5],subTab+" #"+(i%3+1),i===0?"\u25B2 +14%":i===1?"\u25B2 +6%":"\u25BC -3%",i===0?"RCA open":"Monitor"])
+    },
+    {id:"cpk",n:"Gauge / Width CpK",v:"1.21",u:"CpK",tr:-3,sp_:[1.28,1.25,1.23,1.21],sc_:C.am,
+      drillType:"table",drillTitle:subTab+" \u2014 CpK by SKU",
+      drillCols:["SKU","Samples","Mean","StdDev","Cp","CpK","Status"],
+      drillRows:[["P195/65R15",48,3.42,0.14,1.45,1.28,"Capable"],["P185/65R15",42,3.40,0.16,1.32,1.18,"Marginal"],["P205/55R16",38,3.45,0.18,1.21,0.92,"Not capable"],["LT235/75R15",28,3.50,0.12,1.62,1.48,"Capable"],["P215/55R17",24,3.38,0.20,1.08,0.78,"Not capable"]]
+    },
+    {id:"oos",n:"Out-of-spec Lots",v:"7",u:"lots",tr:14,sp_:[5,5,6,7],sc_:C.rd,
+      drillType:"table",drillTitle:subTab+" \u2014 Out-of-spec Lots",
+      drillCols:["Lot ID","SKU","Machine","Shift","Measurement","Spec","Disposition"],
+      drillRows:[["LOT-"+subTab.slice(0,3).toUpperCase()+"-4218","P195/65R15",subTab+" #1","A","3.62 mm","3.40 \u00B1 0.15","Hold"],["LOT-"+subTab.slice(0,3).toUpperCase()+"-4220","P185/65R15",subTab+" #1","A","3.18 mm","3.40 \u00B1 0.15","Rework"],["LOT-"+subTab.slice(0,3).toUpperCase()+"-4225","P205/55R16",subTab+" #2","B","3.68 mm","3.40 \u00B1 0.15","Hold"],["LOT-"+subTab.slice(0,3).toUpperCase()+"-4231","P215/55R17",subTab+" #2","B","3.21 mm","3.40 \u00B1 0.15","Released w/ waiver"],["LOT-"+subTab.slice(0,3).toUpperCase()+"-4238","LT235/75R15",subTab+" #1","C","3.64 mm","3.40 \u00B1 0.15","Hold"],["LOT-"+subTab.slice(0,3).toUpperCase()+"-4241","P195/65R15",subTab+" #1","C","3.22 mm","3.40 \u00B1 0.15","Rework"],["LOT-"+subTab.slice(0,3).toUpperCase()+"-4245","P185/65R15",subTab+" #2","C","3.66 mm","3.40 \u00B1 0.15","Scrap"]]
+    },
+    {id:"scrap",n:"Scrap",v:subTab==="Extruder"?"380":subTab==="4 Roll"?"245":"165",u:"kg",tr:-5,sp_:[280,260,245,230],sc_:C.gn,
+      drillType:"table",drillTitle:subTab+" \u2014 Scrap by Defect",
+      drillCols:["Defect","Kg","% of Total","Top SKU","Operator/Shift","Linked Upstream"],
+      drillRows:[["Gauge variation",92,"38%","P195/65R15","R.Singh / A","Compound MS66 batch BT-MS-15042"],["Edge defect",54,"22%","P185/65R15","K.Yadav / B","\u2014"],["Splice issue",38,"16%","P205/55R16","S.Sharma / B","\u2014"],["Contamination",24,"10%","LT235/75R15","M.Patel / C","RM lot NR-2401-08"],["Profile drift",18,"7%","P215/55R17","R.Singh / A","Extruder profile drift"],["Other",16,"7%","\u2014","\u2014","\u2014"]]
+    }
+  ];
+  if(vId==="bc"&&subTab==="Building") return [
+    {id:"ftq",n:"Building FTQ",v:"96.4",u:"%",tr:0.5,sp_:[95.5,95.9,96.2,96.4],sc_:C.gn,target:"97",
+      drillType:"table",drillTitle:"Building FTQ \u2014 By Defect & Machine",
+      drillCols:["Defect","Count","Top SKU","Top Machine","Operator","Shift","Action"],
+      drillRows:[["Splice open",32,"P195/65R15","VMI Max","R.Singh","A","RCA in progress"],["Bare spot",18,"P205/55R16","VMI Exium","S.Sharma","B","CAPA closed"],["Bead distortion",14,"P185/65R15","BJ Module 1","K.Yadav","B","Monitor"],["Sidewall lap",8,"LT235/75R15","Stage 1","M.Patel","C","Operator training"],["Liner wrinkle",6,"P215/55R17","Stage 2","R.Singh","A","Equipment check"]]
+    },
+    {id:"sp",n:"Straight Pass Ratio",v:"91.2",u:"%",tr:-1.8,sp_:[93.0,92.5,91.8,91.2],sc_:C.am,target:"93",
+      drillType:"table",drillTitle:"Straight Pass Ratio \u2014 Disposition Breakdown",
+      drillCols:["Disposition","Tyres","% of Build","Top Reason","Top SKU"],
+      drillRows:[["Straight Pass",4396,"91.2%","\u2014","All SKUs"],["Rework",312,"6.5%","Splice repair","P195/65R15"],["Hold",84,"1.7%","Inspection pending","P205/55R16"],["Scrap",28,"0.6%","Bead damage","LT235/75R15"]]
+    },
+    {id:"pareto",n:"Defect Pareto",v:"Splice open",u:"top",tr:0,sp_:[32,35,37,38],sc_:C.am,
+      drillType:"table",drillTitle:"Building Defect Pareto \u2014 By Machine",
+      drillCols:["Defect","Count","VMI Max","VMI Exium","BJ Modules","Stage 1","Stage 2"],
+      drillRows:[["Splice open",38,18,12,5,2,1],["Bare spot",21,4,3,8,4,2],["Bead distortion",14,2,3,7,1,1],["Sidewall lap",9,1,2,2,3,1],["Liner wrinkle",6,1,1,1,2,1],["Other",4,1,1,1,1,0]]
+    },
+    {id:"gtw",n:"Green Tyre Weight",v:"94.8",u:"% in spec",tr:-0.6,sp_:[95.5,95.2,95.0,94.8],sc_:C.am,
+      drillType:"table",drillTitle:"Green Tyre Weight \u2014 By SKU",
+      drillCols:["SKU","Samples","Target (kg)","Mean (kg)","% in tolerance","Trend","Linked Upstream"],
+      drillRows:[["P195/65R15",148,8.42,8.48,"92.5%","\u25BC -1.2%","Extruder profile drift"],["P185/65R15",132,7.86,7.85,"96.2%","\u25B2 +0.4%","\u2014"],["P205/55R16",98,9.12,9.18,"93.8%","\u25BC -0.8%","Compound MS67 batch"],["LT235/75R15",72,11.42,11.40,"97.2%","\u25B2 +0.6%","\u2014"],["P215/55R17",68,9.62,9.65,"95.0%","\u2014","\u2014"]]
+    },
+    {id:"mtc",n:"MTC Compliance TBM",v:"98.2",u:"%",tr:0.3,sp_:[97.9,98.0,98.1,98.2],sc_:C.gn,
+      drillType:"table",drillTitle:"MTC Compliance TBM \u2014 Violations",
+      drillCols:["SKU","Built On","Authorised On","Tyres","Shift","Reason"],
+      drillRows:[["P195/65R15","VMI Max","VMI Exium",24,"B","Scheduled machine PM"],["P205/55R16","BJ Module 1","BJ Module 2",18,"A","Equipment breakdown"],["LT235/75R15","Stage 2","Stage 1",12,"C","Operator transfer"],["P215/55R17","BJ Module 1","BJ Module 2",8,"B","Building bay reallocation"]]
+    },
+    {id:"newdef",n:"New Defects (7d)",v:"3",u:"types",tr:0,sp_:[2,2,3,3],sc_:C.rd,
+      drillType:"table",drillTitle:"New Defects \u2014 Last 7 Days",
+      drillCols:["Defect","First Seen","Affected SKU","Affected Machine","Count","Action Owner","Status"],
+      drillRows:[["Inner liner wrinkle near bead","13-May","P195/65R15","VMI Max",4,"Process Eng","RCA assigned"],["Carcass overlap drift","11-May","LT235/75R15","Stage 1",2,"TBM Eng","Monitoring"],["Apex pull-out","08-May","P205/55R16","BJ Module 1",3,"Building Eng","CAPA review"]]
+    }
+  ];
+  if(vId==="bc"&&subTab==="Curing") return [
+    {id:"cscrap",n:"Cured Tyre Scrap",v:"82",u:"tyres",tr:12,sp_:[68,72,76,82],sc_:C.rd,
+      drillType:"table",drillTitle:"Cured Tyre Scrap \u2014 By Defect",
+      drillCols:["Defect","Count","Top SKU","Top Press","Mould","Recipe","Action"],
+      drillRows:[["Bladder Leak",34,"P195/65R15","Press 07","M-014","R-PCR-001","RCA in progress"],["Mould Heat",18,"P185/65R15","Press 03","M-008","R-PCR-002","CAPA review"],["Bare Tread",12,"P205/55R16","Press 05","M-021","R-PCR-001","Monitoring"],["Cure Knot",8,"P215/55R17","Press 09","M-019","R-PCR-003","RCA pending"],["Pinch",6,"LT235/75R15","Press 01","M-030","R-LTR-001","Closed"],["Other",4,"\u2014","\u2014","\u2014","\u2014","\u2014"]]
+    },
+    {id:"bladder",n:"Bladder Scrap",v:"34",u:"tyres",tr:42,sp_:[20,24,28,34],sc_:C.rd,drillType:"techCureBladder"},
+    {id:"cftq",n:"Curing FTQ",v:"95.1",u:"%",tr:-1.2,sp_:[96.5,96.0,95.5,95.1],sc_:C.am,target:"97",
+      drillType:"table",drillTitle:"Curing FTQ \u2014 Reason Pareto",
+      drillCols:["Reason","Count","% of Failures","Top SKU","Top Press","Action"],
+      drillRows:[["Bladder issue",34,"41%","P195/65R15","Press 07","Bladder replacement"],["Mould heat",18,"22%","P185/65R15","Press 03","Heat trace check"],["Bare tread",12,"15%","P205/55R16","Press 05","Process review"],["Cure knot",8,"10%","P215/55R17","Press 09","RCA"],["Recipe dev",6,"7%","\u2014","\u2014","Trial setup"],["Other",4,"5%","\u2014","\u2014","Monitor"]]
+    },
+    {id:"xray",n:"X-Ray Defect",v:"0.42",u:"%",tr:8,sp_:[0.35,0.38,0.40,0.42],sc_:C.am,
+      drillType:"table",drillTitle:"X-Ray Defect \u2014 By Type",
+      drillCols:["Defect Type","Count","Top SKU","Top Press","Linked Tyre IDs"],
+      drillRows:[["Separation",8,"P195/65R15","Press 07","TYR-156721, TYR-156845"],["Foreign body",5,"P185/65R15","Press 03","TYR-156889, TYR-156912"],["Ply ending",3,"P205/55R16","Press 05","TYR-156934"],["Air pocket",2,"LT235/75R15","Press 01","TYR-156967"],["Cord shift",1,"P215/55R17","Press 09","TYR-156988"]]
+    },
+    {id:"ftc",n:"Curing FTC Compliance",v:"97.8",u:"%",tr:0.4,sp_:[97.2,97.5,97.6,97.8],sc_:C.gn,
+      drillType:"table",drillTitle:"Curing FTC Compliance \u2014 Recipe Violations",
+      drillCols:["SKU","Recipe Used","Correct Recipe","Press","Tyres","Shift","Reason"],
+      drillRows:[["P195/65R15","R-PCR-002","R-PCR-001","Press 04",18,"B","Recipe master old version"],["P185/65R15","R-PCR-003","R-PCR-002","Press 07",12,"A","Operator selection error"],["LT235/75R15","R-LTR-002","R-LTR-001","Press 02",8,"C","Recipe migration pending"]]
+    },
+    {id:"mtc",n:"MTC Compliance Curing",v:"96.5",u:"%",tr:-0.2,sp_:[96.8,96.7,96.6,96.5],sc_:C.gn,
+      drillType:"table",drillTitle:"MTC Compliance Curing \u2014 Press Violations",
+      drillCols:["SKU","Cured On","Authorised Press","Tyres","Shift","Reason"],
+      drillRows:[["P195/65R15","Press 12","Press 07",28,"B","Press 07 breakdown"],["P185/65R15","Press 14","Press 03",18,"A","Scheduled PM"],["P205/55R16","Press 06","Press 05",12,"C","Mould transfer"],["LT235/75R15","Press 04","Press 01",8,"B","Recipe alignment"]]
+    },
+    {id:"cta",n:"Cut Tyre A+B",v:"94.2",u:"%",tr:-0.8,sp_:[95.5,95.0,94.6,94.2],sc_:C.am,
+      drillType:"table",drillTitle:"Cut Tyre Analysis \u2014 Rating Distribution",
+      drillCols:["Rating","Samples","% of Total","Top Issue Area","Top SKU","Observer"],
+      drillRows:[["A",24,"50%","\u2014","All SKUs","V.Krishnan"],["B",21,"44%","Sidewall finish","P195/65R15","V.Krishnan"],["C",2,"4%","Bead area","P185/65R15","V.Krishnan"],["D",1,"2%","Tread depth","LT235/75R15","V.Krishnan"]]
+    },
+    {id:"zero",n:"Zero-KM Defect",v:"5",u:"tyres",tr:25,sp_:[3,4,4,5],sc_:C.rd,
+      drillType:"table",drillTitle:"Zero-KM Defect \u2014 Held at Dispatch",
+      drillCols:["Tyre ID","SKU","Defect","Press","Quantity","Status","Dispatch Hold Time"],
+      drillRows:[["TYR-157124","P195/65R15","Sidewall finish","Press 07",1,"Held","09:42 AM"],["TYR-157156","P185/65R15","Bead area finish","Press 03",1,"Cleared after rework","10:18 AM"],["TYR-157189","P205/55R16","Tread cap separation","Press 05",1,"Scrapped","11:04 AM"],["TYR-157221","LT235/75R15","Sidewall ink mark","Press 01",1,"Cleared","02:32 PM"],["TYR-157245","P215/55R17","Bead distortion","Press 09",1,"Held","03:18 PM"]]
+    },
+    {id:"rework",n:"Rework vs Inventory",v:"23",u:"open",tr:9,sp_:[18,20,21,23],sc_:C.am,
+      drillType:"table",drillTitle:"Rework Inventory \u2014 Ageing",
+      drillCols:["Ageing","Tyres","SKU Mix","Top Defect","Owner","Target Close"],
+      drillRows:[["0\u20131 day",12,"PCR mix","Sidewall finish","Process Eng","18-May"],["1\u20133 days",7,"P185/65R15","Bead area","Process Eng","20-May"],["3\u20137 days",3,"P205/55R16","Tread cap","Tech Head","22-May"],[">7 days",1,"LT235/75R15","Sidewall lap","Tech Head","19-May"]]
+    }
+  ];
+  if(vId==="bc"&&subTab==="Uniformity") return [
+    {id:"uy",n:"Uniformity Yield",v:"93.8",u:"%",tr:-1.4,sp_:[95.5,95.0,94.4,93.8],sc_:C.am,target:"96",drillType:"techUniYield"},
+    {id:"btt",n:"Balancing Yield TT",v:"95.2",u:"%",tr:0.3,sp_:[94.7,94.9,95.0,95.2],sc_:C.gn,
+      drillType:"table",drillTitle:"Balancing Yield TT (Tread-True) \u2014 Failing Parameters",
+      drillCols:["Parameter","Yield %","Failing Tyres","Top SKU","Trace To"],
+      drillRows:[["Imbalance Static","96.8%",62,"P195/65R15","Curing Press 07"],["Imbalance Upper","97.2%",54,"P185/65R15","TBM VMI Max"],["Imbalance Lower","97.5%",48,"P205/55R16","Curing Press 05"]]
+    },
+    {id:"btl",n:"Balancing Yield TL",v:"92.7",u:"%",tr:-0.8,sp_:[93.8,93.4,93.0,92.7],sc_:C.am,
+      drillType:"table",drillTitle:"Balancing Yield TL (Tread-Lateral) \u2014 Failing Parameters",
+      drillCols:["Parameter","Yield %","Failing Tyres","Top SKU","Trace To"],
+      drillRows:[["Imbalance Static","94.2%",98,"P195/65R15","Curing Press 07"],["Imbalance Upper","95.1%",84,"P185/65R15","TBM Stage 1"],["Imbalance Lower","94.8%",92,"LT235/75R15","Curing Press 01"]]
+    },
+    {id:"grade",n:"Tyre Grading A+B",v:"91.5",u:"%",tr:-0.5,sp_:[92.4,92.0,91.7,91.5],sc_:C.am,
+      drillType:"table",drillTitle:"Tyre Grading Distribution",
+      drillCols:["Grade","Tyres","% of Total","Top SKU","Top Reason"],
+      drillRows:[["A",2940,"64.8%","All","\u2014"],["B",1212,"26.7%","P195/65R15","Minor RFV variation"],["C",312,"6.9%","P185/65R15","Conicity drift"],["D",72,"1.6%","LT235/75R15","Imbalance out of spec"]]
+    },
+    {id:"bulge",n:"Bulge-Dent Yield",v:"98.4",u:"%",tr:0.1,sp_:[98.2,98.3,98.3,98.4],sc_:C.gn,
+      drillType:"table",drillTitle:"Bulge-Dent Yield \u2014 Upper / Lower Split",
+      drillCols:["Location","Yield %","Failed Tyres","Top SKU","Top Press","Top Mould"],
+      drillRows:[["Upper sidewall","98.7%",42,"P195/65R15","Press 07","M-014"],["Lower sidewall","98.2%",58,"P185/65R15","Press 03","M-008"]]
+    }
+  ];
+  if(vId==="ttc") return [
+    {id:"complete",n:"Tests Completed Today",v:"61",u:"tests",tr:8,sp_:[52,55,58,61],sc_:C.bl,
+      drillType:"table",drillTitle:"Tests Completed Today \u2014 By Machine",
+      drillCols:["Machine","Tests","Pending","Pass","Fail","Pass %","Avg Distance (km)","Avg Hours"],
+      drillRows:[["Midland",18,4,16,2,"88.9%",18420,98],["ITW Akron",12,6,10,2,"83.3%",24000,128],["Plunger",16,12,15,1,"93.8%","\u2014","\u2014"],["Shearography",10,8,9,1,"90.0%","\u2014","\u2014"],["RRCA",5,3,4,1,"80.0%","\u2014","\u2014"]]
+    },
+    {id:"passrate",n:"Pass Rate",v:"89.4",u:"%",tr:-1.2,sp_:[91.2,90.5,90.0,89.4],sc_:C.am,target:"92",
+      drillType:"table",drillTitle:"Pass Rate \u2014 By Failure Mode",
+      drillCols:["Failure Mode","Count","% of Failures","Top SKU","Linked Claims","Trend"],
+      drillRows:[["Belt edge separation",4,"30.8%","P195/65R15","CLM-2024-887","\u25B2 +12%"],["Bead area crack",3,"23.1%","P185/65R15","CLM-2024-851","\u25BC -8%"],["Tread separation",2,"15.4%","P205/55R16","\u2014","\u25B2 +4%"],["Sidewall failure",2,"15.4%","LT235/75R15","CLM-2024-794","\u2014"],["Carcass failure",1,"7.7%","P215/55R17","\u2014","\u2014"],["Other",1,"7.7%","\u2014","\u2014","\u2014"]]
+    },
+    {id:"pareto",n:"Failure Pareto",v:"Belt edge",u:"top",tr:0,sp_:[8,9,11,13],sc_:C.am,
+      drillType:"table",drillTitle:"Test Failure Pareto",
+      drillCols:["Failure","Count","Cumulative %","Top SKU","Top Machine"],
+      drillRows:[["Belt edge",13,"31%","P195/65R15","ITW Akron"],["Bead crack",9,"52%","P185/65R15","Midland"],["Tread sep",6,"66%","P205/55R16","Midland"],["Sidewall",5,"78%","LT235/75R15","ITW Akron"],["Carcass",4,"88%","P215/55R17","ITW Akron"],["Other",5,"100%","\u2014","\u2014"]]
+    },
+    {id:"alerts",n:"Tyre Fail Alerts",v:"2",u:"alerts",tr:0,sp_:[1,2,2,2],sc_:C.rd,
+      drillType:"table",drillTitle:"Tyre Fail Alerts \u2014 Machine Stops & Bursts",
+      drillCols:["Time","Tyre ID","SKU","Machine","Alert Type","Immediate Action","Status"],
+      drillRows:[["09:42","TYR-156721","P195/65R15","ITW Akron","Machine stop \u2014 vibration","Tyre inspected, sidewall crack found","Escalated"],["14:18","TYR-156889","P185/65R15","Midland","Tyre burst","Test area cleared, RCA initiated","RCA open"]]
+    },
+    {id:"pending",n:"Pending Queue",v:"33",u:"tests",tr:6,sp_:[28,30,32,33],sc_:C.am,
+      drillType:"table",drillTitle:"Pending Test Queue \u2014 Ageing",
+      drillCols:["Tyre ID","SKU","Test Type","Queue Age","Machine","Priority","Owner"],
+      drillRows:[["TYR-157021","P195/65R15","Belt Endurance","18h","ITW Akron","High","TTC Lead"],["TYR-157089","P185/65R15","High Speed","12h","Midland","High","TTC Lead"],["TYR-157124","P205/55R16","Plunger","6h","Plunger","Normal","TTC Tech"],["TYR-157156","LT235/75R15","Bead Endurance","24h","ITW Akron","High","TTC Lead"],["TYR-157189","P215/55R17","Shearography","4h","Shearography","Normal","TTC Tech"]]
+    }
+  ];
+  if(vId==="srt") return [
+    {id:"cases",n:"SRT Cases Open",v:"47",u:"cases",tr:-4,sp_:[52,50,49,47],sc_:C.gn,drillType:"techSrtCases"},
+    {id:"pcr",n:"Claim PPM \u2014 PCR 12mo",v:"118",u:"PPM",tr:-3,sp_:[124,122,120,118],sc_:C.gn,target:"<120",
+      drillType:"table",drillTitle:"Claim PPM PCR \u2014 SKU Contribution",
+      drillCols:["SKU","Claims (12mo)","Tyres Produced","PPM","Top Failure","Trend"],
+      drillRows:[["P195/65R15",18,148000,"122","Belt edge","\u25BC -2%"],["P185/65R15",14,142000,"99","Bead crack","\u25BC -8%"],["P205/55R16",12,98000,"122","Tread sep","\u25B2 +4%"],["P215/55R17",8,72000,"111","Sidewall","\u2014"],["P225/65R17",6,42000,"143","Bulge","\u25B2 +12%"]]
+    },
+    {id:"lcv",n:"Claim PPM \u2014 LCV 12mo",v:"143",u:"PPM",tr:5,sp_:[128,135,140,143],sc_:C.am,target:"<140",
+      drillType:"table",drillTitle:"Claim PPM LCV \u2014 SKU Contribution",
+      drillCols:["SKU","Claims (12mo)","Tyres Produced","PPM","Top Failure","Trend"],
+      drillRows:[["LT235/75R15",12,72000,"167","Bead area","\u25B2 +14%"],["LT225/75R15",8,48000,"167","Belt edge","\u25B2 +8%"],["LT255/70R16",5,38000,"132","Sidewall","\u2014"],["LT265/70R17",4,32000,"125","Tread sep","\u25BC -4%"]]
+    },
+    {id:"tbr",n:"Claim PPM \u2014 TBR 12mo",v:"86",u:"PPM",tr:-2,sp_:[91,89,88,86],sc_:C.gn,target:"<90",
+      drillType:"table",drillTitle:"Claim PPM TBR \u2014 SKU Contribution",
+      drillCols:["SKU","Claims (12mo)","Tyres Produced","PPM","Top Failure","Trend"],
+      drillRows:[["295/80R22.5",8,98000,"82","Belt separation","\u25BC -4%"],["315/80R22.5",6,68000,"88","Bead crack","\u25BC -2%"],["10.00R20",4,52000,"77","Tread sep","\u25BC -8%"],["11.00R20",3,38000,"79","Sidewall","\u2014"]]
+    },
+    {id:"early",n:"Early Failure",v:"24",u:"% of claims",tr:3,sp_:[21,22,23,24],sc_:C.am,
+      drillType:"table",drillTitle:"Early Failure \u2014 Timing Bands",
+      drillCols:["Timing","Cases","% of Total","Top Failure","Linked Abnormalities"],
+      drillRows:[["0\u20133 months",18,"38%","Bladder leak","4 process events"],["3\u20136 months",14,"30%","Belt edge","2 process events"],["6\u201312 months",15,"32%","Tread sep","1 process event"]]
+    },
+    {id:"topmode",n:"Top Failure Mode",v:"Belt separation",u:"mode",tr:0,sp_:[8,9,10,11],sc_:C.am,
+      drillType:"table",drillTitle:"Top Failure Modes \u2014 By Contribution",
+      drillCols:["Failure Mode","Cases","SKU Mix","Top Plant","Trend","RCA Status"],
+      drillRows:[["Belt separation",11,"PCR mix","Banmore","\u25B2 +8%","RCA open"],["Bead crack",8,"P185/65R15, LT235/75R15","Chennai","\u25BC -4%","CAPA closed"],["Tread separation",7,"P205/55R16","Mysore","\u25B2 +4%","RCA open"],["Sidewall failure",6,"PCR mix","Banmore","\u2014","Monitoring"],["Bulge / dent",4,"P225/65R17","Banmore","\u25B2 +12%","RCA assigned"]]
+    },
+    {id:"rca",n:"Open RCA / CAPA",v:"19",u:"cases",tr:5,sp_:[15,17,18,19],sc_:C.am,
+      drillType:"table",drillTitle:"Open RCA / CAPA Cases",
+      drillCols:["Case ID","Failure Mode","SKU","Owner","Days Open","Status","Target Close"],
+      drillRows:[["RCA-2024-091","Belt edge","P195/65R15","Tech Eng",18,"In progress","30-May"],["RCA-2024-094","Bead crack","P185/65R15","Curing",12,"In progress","02-Jun"],["RCA-2024-097","Tread sep","P215/55R17","TBM",8,"Data review","10-Jun"],["RCA-2024-099","Bulge","P225/65R17","Curing",6,"New","15-Jun"],["RCA-2024-101","Sidewall","LT235/75R15","Mixing",4,"New","20-Jun"]]
+    }
+  ];
+  if(vId==="mould") return [
+    {id:"dirty",n:"Dirty Mould",v:"18",u:"events",tr:15,sp_:[13,14,16,18],sc_:C.am,
+      drillType:"table",drillTitle:"Dirty Mould \u2014 By Mould ID",
+      drillCols:["Mould ID","Press","Cures Since Clean","Spec Limit","SKU","Status","Last Clean"],
+      drillRows:[["M-014","Press 07",380,250,"P195/65R15","OVERDUE","12-May"],["M-008","Press 03",290,250,"P185/65R15","OVERDUE","14-May"],["M-021","Press 05",220,250,"P205/55R16","Due in 30","15-May"],["M-019","Press 09",180,250,"P215/55R17","OK","16-May"],["M-030","Press 01",90,250,"LT235/75R15","OK","17-May"]]
+    },
+    {id:"heat",n:"Mould Heat Excursions",v:"7",u:"events",tr:-12,sp_:[10,9,8,7],sc_:C.gn,
+      drillType:"table",drillTitle:"Mould Heat Excursions \u2014 Event Log",
+      drillCols:["Time","Mould ID","Press","Spec","Actual","Affected Tyres","Root Cause"],
+      drillRows:[["08:42","M-014","Press 07","172\u00B0C","186\u00B0C",18,"Steam valve drift"],["10:18","M-019","Press 09","172\u00B0C","165\u00B0C",12,"Boiler pressure drop"],["13:24","M-008","Press 03","172\u00B0C","182\u00B0C",8,"Thermocouple drift"],["15:48","M-021","Press 05","172\u00B0C","178\u00B0C",4,"Recipe transition"]]
+    },
+    {id:"bd",n:"Mould Breakdowns",v:"3.4",u:"hrs",tr:-8,sp_:[4.2,3.9,3.6,3.4],sc_:C.gn,
+      drillType:"table",drillTitle:"Mould Breakdowns \u2014 Event Log",
+      drillCols:["Time","Mould ID","Press","Breakdown Type","Hours Lost","Maintenance Action","Closure"],
+      drillRows:[["07:18","M-014","Press 07","Bladder seal damage",1.4,"Bladder replaced","Closed"],["11:04","M-019","Press 09","Mould guide pin wear",0.8,"Pin replaced","Closed"],["14:42","M-008","Press 03","Mould bolt loosening",1.2,"Bolts retorqued","Closed"]]
+    },
+    {id:"qissues",n:"Dirty Mould Quality",v:"12",u:"defects",tr:9,sp_:[9,10,11,12],sc_:C.am,
+      drillType:"table",drillTitle:"Dirty Mould Quality Issues \u2014 Defect Trace",
+      drillCols:["Defect","Mould ID","Cures Since Clean","Affected SKU","Affected Tyres","Cleaning Action"],
+      drillRows:[["Tread imprint blur","M-014",380,"P195/65R15",4,"Scheduled for cleaning"],["Sidewall ink",  "M-008",290,"P185/65R15",3,"Already cleaned today"],["Bead area finish","M-021",220,"P205/55R16",3,"Monitoring"],["Side serial ink","M-014",380,"P195/65R15",2,"Scheduled for cleaning"]]
+    },
+    {id:"mscrap",n:"Mould Scrap",v:"19",u:"tyres",tr:11,sp_:[14,16,17,19],sc_:C.am,
+      drillType:"table",drillTitle:"Mould-related Scrap \u2014 By Mould",
+      drillCols:["Defect","Mould ID","SKU","Press","Cure Count at Scrap","Scrap Tyres"],
+      drillRows:[["Tread cap separation","M-014","P195/65R15","Press 07",385,8],["Bare tread","M-008","P185/65R15","Press 03",294,5],["Sidewall defect","M-021","P205/55R16","Press 05",224,3],["Bead distortion","M-019","P215/55R17","Press 09",182,3]]
+    }
+  ];
+  if(vId==="npi"&&subTab==="Trials") return [
+    {id:"comp",n:"NPI Compliance",v:"88.5",u:"%",tr:2,sp_:[85,86,87,88.5],sc_:C.gn,target:"90",
+      drillType:"table",drillTitle:"NPI Compliance \u2014 Activity-wise",
+      drillCols:["Trial ID","Activity","Planned Date","Actual Date","Status","Owner"],
+      drillRows:[["NPI-2024-007","Compound finalisation","12-Apr","10-Apr","On time","R&D Eng"],["NPI-2024-007","Build trial","25-Apr","27-Apr","Delayed 2d","Tech Head"],["NPI-2024-009","Field test start","05-May","\u2014","Pending","Tech Head"],["NPI-2024-011","Lab trial","15-May","14-May","On time","Compound Eng"],["NPI-2024-014","Concept review","20-May","\u2014","Scheduled","R&D Eng"]]
+    },
+    {id:"active",n:"Active Trials",v:"14",u:"trials",tr:0,sp_:[12,13,14,14],sc_:C.bl,
+      drillType:"table",drillTitle:"Active Trials \u2014 Status Board",
+      drillCols:["Trial ID","Product","Stage","Owner","Days Open","Target Close","Status"],
+      drillRows:[["NPI-2024-007","P195/65R15 new compound","Build trial","R&D Eng",42,"15-Jun","On track"],["NPI-2024-009","P215/55R17 ECO","Field test","Tech Head",78,"30-Jun","Delayed"],["NPI-2024-011","LT235/75R15 HD","Compound trial","Compound Eng",15,"10-Jul","On track"],["NPI-2024-014","TBR 295/80R22.5","Concept","R&D Eng",8,"30-Sep","New"]]
+    },
+    {id:"rmtr",n:"Trial RM Inventory",v:"32",u:"lots",tr:0,sp_:[30,31,32,32],sc_:C.bl,
+      drillType:"table",drillTitle:"Trial RM Inventory \u2014 Ageing",
+      drillCols:["RM Type","Lots","Quantity (MT)","Ageing (days avg)","Linked Trial","Status"],
+      drillRows:[["Natural Rubber NR-Trial",4,1.8,"42","NPI-2024-007","Available"],["Synthetic SBR-Trial",6,2.4,"28","NPI-2024-009","Available"],["Carbon Black N-Trial",8,3.2,"18","NPI-2024-011","Available"],["Silica Trial",5,1.4,"35","NPI-2024-007","Available"],["Oils Trial",4,0.8,"52","NPI-2024-009","Use within 30d"],["Chemicals Trial",5,0.5,"24","NPI-2024-014","Available"]]
+    },
+    {id:"consist",n:"Product Consistency",v:"91.2",u:"score",tr:1.2,sp_:[89,90,91,91.2],sc_:C.gn,
+      drillType:"table",drillTitle:"Product Consistency \u2014 By Trial",
+      drillCols:["Trial ID","Product","Parameter","Variance","Score","Status"],
+      drillRows:[["NPI-2024-007","P195/65R15","Tyre weight","\u00B10.4%",94.2,"OK"],["NPI-2024-007","P195/65R15","Uniformity","\u00B11.2%",92.8,"OK"],["NPI-2024-009","P215/55R17","Tyre weight","\u00B10.8%",88.4,"Watch"],["NPI-2024-011","LT235/75R15","Tyre weight","\u00B10.6%",91.5,"OK"]]
+    }
+  ];
+  if(vId==="npi"&&subTab==="Projects") return [
+    {id:"active",n:"Active Projects",v:"23",u:"projects",tr:0,sp_:[20,21,22,23],sc_:C.bl,
+      drillType:"table",drillTitle:"Active Improvement Projects",
+      drillCols:["Project","Type","Owner","Stage","Days Open","Status"],
+      drillRows:[["Bladder life extension","Process","Curing Eng","Trial run",65,"On track"],["Mooney variance reduction","RM","Compound Eng","Implementation",42,"On track"],["Carbon char optimisation","Cost","RMS Lead","Implementation",128,"Delayed"],["NR supplier qualification","Supplier","RM Lead","Audit",24,"New"],["Steam pressure stabilisation","Process","Utilities",18,"Trial run","On track"]]
+    },
+    {id:"mile",n:"Milestones This Week",v:"8",u:"due",tr:0,sp_:[6,7,8,8],sc_:C.am,
+      drillType:"table",drillTitle:"Milestones Due This Week",
+      drillCols:["Project","Milestone","Target Date","Owner","Status"],
+      drillRows:[["Bladder life extension","Trial complete","17-May","Curing Eng","On track"],["Mooney variance reduction","Final approval","18-May","Compound Eng","On track"],["Carbon char optimisation","Lab trial 2","19-May","RMS Lead","Delayed"],["NR supplier qualification","First lot test","20-May","RM Lead","On track"],["Steam pressure stabilisation","Pilot run","21-May","Utilities","On track"]]
+    },
+    {id:"closed",n:"Closed YTD",v:"42",u:"projects",tr:0,sp_:[38,40,41,42],sc_:C.gn,
+      drillType:"table",drillTitle:"Closed Projects YTD",
+      drillCols:["Project","Type","Closed Date","Savings (\u20B9L)","Owner"],
+      drillRows:[["Calender scrap reduction","Process","08-Mar",24,"Stock Eng"],["Bladder hold-time tuning","Process","18-Mar",18,"Curing Eng"],["Oil dosing accuracy","Process","02-Apr",22,"Process Eng"],["Bead wire utilisation","Cost","18-Apr",15,"TBM Eng"]]
+    },
+    {id:"tqm",n:"TQM Score",v:"86.3",u:"score",tr:0.8,sp_:[85,85.5,86,86.3],sc_:C.gn,
+      drillType:"table",drillTitle:"TQM Score \u2014 By Component",
+      drillCols:["Component","Score","Target","Gap","Top Observation"],
+      drillRows:[["5S / Housekeeping",4.2,5,-0.8,"Mould store needs reorganisation"],["Kaizen / CI",3.5,5,-1.5,"Suggestion implementation lag"],["QC Circle",3.8,5,-1.2,"Member engagement low"],["Suggestion Scheme",3.6,5,-1.4,"Reward cycle delayed"],["PM Pillar",4.0,5,-1.0,"Visual mgmt board needs update"]]
+    }
+  ];
+  if(vId==="npi"&&subTab==="VEPIP") return [
+    {id:"target",n:"VEPIP Savings Target",v:"\u20B92.4Cr",u:"FY",tr:0,sp_:[2.4,2.4,2.4,2.4],sc_:C.bl,
+      drillType:"table",drillTitle:"VEPIP Savings Target \u2014 By Initiative",
+      drillCols:["Project","Initiative","Target (\u20B9L)","Type","Owner"],
+      drillRows:[["VP-101","Carbon black grade optimisation",42,"RM","Compound Eng"],["VP-104","Oil dosing accuracy",28,"Process","Process Eng"],["VP-107","Bead wire utilisation",32,"RM","TBM Eng"],["VP-109","Cure cycle time reduction",18,"Process","Curing Eng"],["VP-112","Reject reduction at Calender",24,"Process","Stock Eng"]]
+    },
+    {id:"ach",n:"VEPIP Savings Achieved",v:"\u20B91.6Cr",u:"YTD",tr:0,sp_:[1.2,1.4,1.5,1.6],sc_:C.gn,
+      drillType:"table",drillTitle:"VEPIP Savings Achieved YTD",
+      drillCols:["Project","Initiative","Target (\u20B9L)","Achieved (\u20B9L)","% of Target","Status"],
+      drillRows:[["VP-101","Carbon black grade",42,38,"90%","Closed"],["VP-104","Oil dosing accuracy",28,22,"79%","On track"],["VP-107","Bead wire utilisation",32,15,"47%","In progress"],["VP-109","Cure cycle time",18,8,"44%","Trial"],["VP-112","Calender reject",24,18,"75%","On track"]]
+    },
+    {id:"active",n:"Active VEPIP Projects",v:"11",u:"projects",tr:0,sp_:[10,10,11,11],sc_:C.bl,
+      drillType:"table",drillTitle:"Active VEPIP Projects",
+      drillCols:["Project","Initiative","Stage","Owner","Days Open","Status"],
+      drillRows:[["VP-104","Oil dosing accuracy","Implementation","Process Eng",48,"On track"],["VP-107","Bead wire utilisation","Implementation","TBM Eng",78,"In progress"],["VP-109","Cure cycle time","Trial","Curing Eng",24,"Trial"],["VP-112","Calender reject","Implementation","Stock Eng",36,"On track"]]
+    }
+  ];
+  return [];
+}
+
+/* Pareto chart \u2014 sorted bars + cumulative line */
+function TechParetoChart({data,color,title}){
+  if(!data||!data.length)return null;
+  const w=720,h=180,pl=12,pr=44,pt=20,pb=44;
+  const sorted=[...data].sort((a,b)=>b[1]-a[1]);
+  const tot=sorted.reduce((a,b)=>a+b[1],0);
+  const mx=sorted[0][1];
+  const bw=(w-pl-pr)/sorted.length;
+  let cum=0;
+  const cumPts=sorted.map((d,i)=>{cum+=d[1];const x=pl+i*bw+bw/2;const y=pt+(h-pt-pb)*(1-cum/tot);return[x,y,Math.round(cum/tot*100)];});
+  const cumPath="M "+cumPts.map(p=>p[0]+","+p[1]).join(" L ");
+  return(<div style={{background:C.c2,borderRadius:8,padding:"10px 12px",border:"1px solid "+C.bd,marginTop:10}}>
+    <div style={{fontSize:12,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".4px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span>{title||"Defect Pareto"}</span>
+      <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:10,height:10,background:color||C.bl,display:"inline-block",borderRadius:2}}/>Count</span>
+      <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:14,height:0,borderTop:"1.5px solid "+C.am,display:"inline-block"}}/>Cumulative %</span>
+    </div>
+    <svg viewBox={"0 0 "+w+" "+h} style={{width:"100%",height:"auto",maxHeight:220}}>
+      {[0,25,50,75,100].map(p=>{const y=pt+(h-pt-pb)*(1-p/100);return(<g key={p}><line x1={pl} y1={y} x2={w-pr} y2={y} stroke={C.bd} strokeWidth="0.5" strokeDasharray={p===0?"":"2,2"}/><text x={w-pr+4} y={y+3} fontSize="9" fill={C.mu}>{p}%</text></g>);})}
+      {sorted.map((d,i)=>{const bh=(d[1]/mx)*(h-pt-pb);const x=pl+i*bw+2;const y=h-pb-bh;return(<g key={i}><rect x={x} y={y} width={bw-4} height={bh} fill={color||C.bl} rx={2}/><text x={x+(bw-4)/2} y={y-3} fontSize="10" fill={C.tx} fontWeight="600" textAnchor="middle">{d[1]}</text><text x={x+(bw-4)/2} y={h-pb+12} fontSize="9" fill={C.mu} textAnchor="middle">{d[0].length>14?d[0].slice(0,12)+"\u2026":d[0]}</text></g>);})}
+      <path d={cumPath} fill="none" stroke={C.am} strokeWidth="1.5"/>
+      {cumPts.map((p,i)=>(<g key={i}><circle cx={p[0]} cy={p[1]} r="3" fill={C.am}/><text x={p[0]} y={p[1]-7} fontSize="9" fill={C.am} fontWeight="700" textAnchor="middle">{p[2]}%</text></g>))}
+    </svg>
+  </div>);
+}
+
+/* 3-pill health strip (Stock) / 2-pill action strip (B&C) */
+function TechStrip({pills}){
+  return(<div style={{display:"grid",gridTemplateColumns:"repeat("+pills.length+",1fr)",gap:8,marginBottom:12}}>
+    {pills.map((p,i)=>(<div key={i} style={{background:C.cd,border:"1px solid "+C.bd,borderLeft:"3px solid "+p.color,borderRadius:8,padding:"8px 12px"}}>
+      <div style={{fontSize:10,color:C.mu,fontWeight:700,textTransform:"uppercase",letterSpacing:".5px",marginBottom:3}}>{p.label}</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.tx,lineHeight:1.3}}>{p.v1}</div>
+      <div style={{fontSize:11,color:p.color,fontWeight:600,marginTop:2}}>{p.v2}</div>
+      {p.v3&&<div style={{fontSize:11,color:C.mu,marginTop:1}}>{p.v3}</div>}
+    </div>))}
+  </div>);
+}
+
+/* Technical drill panel \u2014 handles drill types that need specialized rendering */
+function TechDrillPanel({kpi,subTab}){
+  if(!kpi||!kpi.drillType)return null;
+
+  /* MIXING \u2014 Off-spec Batches (the deep flagship drill) */
+  if(kpi.drillType==="techMixingOffspec"){
+    const batches=[
+      {bid:"BT-MS-150521",cc:"MS66",compound:"Tread cap",ageHr:6,reason:"Mooney scorch",sg:1.142,sgSpec:"1.13-1.14",mLow:48,mLowSpec:"42-50",disp:"Hold",scada:{
+        "Drop Temp":162,"TCU":78,"Mixer Power":318,"Calories":17500,"Carbon Time":92,"Polymer Time":48,"Oil Time":32,"RAM Pressure":6.2,"Mixing RPM":35,"Repass":1,"Cycle Time":205}},
+      {bid:"BT-MS-150522",cc:"MS67",compound:"Tread base",ageHr:12,reason:"ML out of spec",sg:1.135,sgSpec:"1.13-1.14",mLow:52,mLowSpec:"42-50",disp:"Dilute",scada:{
+        "Drop Temp":156,"TCU":71,"Mixer Power":292,"Calories":15800,"Carbon Time":78,"Polymer Time":47,"Oil Time":29,"RAM Pressure":6.0,"Mixing RPM":34,"Repass":0,"Cycle Time":188}},
+      {bid:"BT-MS-150523",cc:"MS70",compound:"Apex",ageHr:18,reason:"SG drift",sg:1.158,sgSpec:"1.14-1.15",mLow:46,mLowSpec:"42-50",disp:"Dump",scada:{
+        "Drop Temp":154,"TCU":70,"Mixer Power":280,"Calories":15200,"Carbon Time":74,"Polymer Time":44,"Oil Time":27,"RAM Pressure":5.9,"Mixing RPM":32,"Repass":2,"Cycle Time":192}},
+      {bid:"BT-MS-150524",cc:"MS66",compound:"Tread cap",ageHr:22,reason:"Mooney scorch",sg:1.138,sgSpec:"1.13-1.14",mLow:51,mLowSpec:"42-50",disp:"Rework",scada:{
+        "Drop Temp":160,"TCU":76,"Mixer Power":305,"Calories":16800,"Carbon Time":88,"Polymer Time":46,"Oil Time":30,"RAM Pressure":6.1,"Mixing RPM":34,"Repass":0,"Cycle Time":198}}
+    ];
+    return(<Card title="Off-spec Batches \u2014 Compound \u203a Batch ID \u203a SCADA + Lab" accent={C.rd}>
+      <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:10,fontSize:12,color:C.mu,flexWrap:"wrap"}}>
+        <span><span style={{color:C.tx,fontWeight:700,fontSize:14}}>{batches.length}</span> batches off-spec today</span>
+        <span style={{color:C.bd}}>{"\u2022"}</span>
+        <span>Total compound at risk: <span style={{color:C.tx,fontWeight:700,fontSize:14}}>{batches.length*1.85}</span> MT</span>
+      </div>
+      {batches.map((b,i)=>{
+        const params=Object.entries(b.scada);
+        return(<div key={b.bid} style={{background:i%2===0?C.cd:C.c2,border:"1px solid "+C.bd,borderRadius:6,padding:"10px 12px",marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:8}}>
+            <span style={{fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:700,color:C.tx,background:C.bg,padding:"2px 8px",borderRadius:4}}>{b.bid}</span>
+            <span style={{fontSize:12,color:C.mu}}>Compound: <span style={{color:C.tx,fontWeight:600,fontFamily:"ui-monospace,Menlo,monospace"}}>{b.cc}</span> ({b.compound})</span>
+            <span style={{fontSize:12,color:b.ageHr>=18?C.rd:b.ageHr>=12?C.am:C.mu}}>Held: <span style={{fontWeight:700}}>{b.ageHr}h</span></span>
+            <span style={{fontSize:12,padding:"2px 8px",borderRadius:999,background:C.rd+"18",color:C.rd,fontWeight:700}}>{b.reason}</span>
+            <span style={{marginLeft:"auto",fontSize:12,padding:"3px 10px",borderRadius:6,background:b.disp==="Dump"?C.rd:b.disp==="Dilute"?C.am:b.disp==="Hold"?C.bl:C.gn,color:"#fff",fontWeight:700}}>{b.disp}</span>
+          </div>
+          {/* Lab card */}
+          <div style={{display:"flex",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+            <div style={{background:C.bg,padding:"5px 10px",borderRadius:4,fontSize:11,border:"1px solid "+C.bd}}>SG: <span style={{fontWeight:700,color:C.tx}}>{b.sg}</span> <span style={{color:C.mu}}>(spec {b.sgSpec})</span></div>
+            <div style={{background:C.bg,padding:"5px 10px",borderRadius:4,fontSize:11,border:"1px solid "+C.bd}}>Mooney ML: <span style={{fontWeight:700,color:C.tx}}>{b.mLow}</span> <span style={{color:C.mu}}>(spec {b.mLowSpec})</span></div>
+          </div>
+          {/* SCADA chips */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{params.map(([k,v])=>{const spec=TECH_MIX_SCADA_SPEC[k];const oor=spec&&(v<spec.lo||v>spec.hi);return(<span key={k} title={k+(spec?" (spec "+spec.lo+"-"+spec.hi+" "+spec.u+")":"")} style={{padding:"3px 8px",borderRadius:4,fontSize:11,background:oor?C.rd+"18":C.bg,border:"1px solid "+(oor?C.rd:C.bd),color:oor?C.rd:C.tx,fontFamily:"ui-monospace,Menlo,monospace"}}>{oor&&"\u26A0 "}<span style={{color:oor?C.rd:C.mu,fontWeight:600}}>{k}:</span> <span style={{fontWeight:700}}>{v}</span>{spec?spec.u:""}</span>);})}</div>
+        </div>);
+      })}
+    </Card>);
+  }
+
+  /* MIXING — Lab Pass Rate */
+  if(kpi.drillType==="techMixingLabPass"){
+    const tests=[
+      {test:"Mooney ML/MH",batches:312,pass:302,fail:10,passPct:96.8,topFailCC:"MS66",topFailParam:"ML > 50"},
+      {test:"Rheometer t10",batches:312,pass:298,fail:14,passPct:95.5,topFailCC:"MS67",topFailParam:"t10 fast"},
+      {test:"Rheometer t90",batches:312,pass:305,fail:7,passPct:97.8,topFailCC:"MS70",topFailParam:"t90 slow"},
+      {test:"Rheometer MH",batches:312,pass:300,fail:12,passPct:96.2,topFailCC:"MB614",topFailParam:"MH low"},
+      {test:"Specific Gravity",batches:312,pass:308,fail:4,passPct:98.7,topFailCC:"MS66",topFailParam:"SG drift"},
+      {test:"Hardness",batches:312,pass:310,fail:2,passPct:99.4,topFailCC:"MS68",topFailParam:"+3 Shore"}
+    ];
+    return(<Card title="Lab Pass Rate \u2014 By Test Method" accent={C.gn}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>Rheometer t10 is the bottleneck today. Click any row to see compound-wise fail pattern.</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead><tr style={{background:C.c2}}>{["Test Method","Batches","Pass","Fail","Pass %","Top Failing Compound","Top Failure Mode"].map((c,i)=>(<th key={i} style={{textAlign:i===0||i===5||i===6?"left":"right",padding:"7px 10px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:12,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{tests.map((t,i)=>{const c=t.passPct>=98?C.gn:t.passPct>=95?C.am:C.rd;return(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{t.test}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{t.batches}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.gn,fontWeight:600}}>{t.pass}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:t.fail>10?C.rd:C.am,fontWeight:700}}>{t.fail}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:c,fontSize:14}}>{t.passPct}%</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{t.topFailCC}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12}}>{t.topFailParam}</td>
+        </tr>);})}</tbody>
+      </table></div>
+      <div style={{marginTop:10,padding:"8px 11px",background:C.c2,borderRadius:6,fontSize:11,color:C.mu}}>{"\u25B8"} Click a test row to drill into compound-wise breakdown \u2192 batch list with lab values vs spec \u2192 individual batch detail (SCADA + Lab curves).</div>
+    </Card>);
+  }
+
+  /* MIXING — OK/NOK Inventory */
+  if(kpi.drillType==="techMixingHold"){
+    const ageing=[{band:"0\u20136 h",count:6,mt:11.1,risk:"Low"},{band:"6\u201312 h",count:8,mt:14.8,risk:"Low"},{band:"12\u201324 h",count:5,mt:9.3,risk:"Medium"},{band:"24\u201348 h",count:2,mt:3.7,risk:"High"},{band:">48 h",count:1,mt:1.85,risk:"Critical"}];
+    const held=[
+      {bid:"BT-MS-150487",cc:"MS66",ageHr:54,reason:"Lab confirm pending","owner":"Lab Lead",action:"Re-test scheduled",approval:"QC Head"},
+      {bid:"BT-MS-150502",cc:"MS67",ageHr:38,reason:"Mooney recheck","owner":"QC Tech",action:"Awaiting result",approval:"Lab Lead"},
+      {bid:"BT-MB-150511",cc:"MB614",ageHr:28,reason:"SG drift, dilution review",owner:"Compound Eng",action:"Approval pending",approval:"Tech Head"},
+      {bid:"BT-MS-150516",cc:"MS70",ageHr:20,reason:"FTC release pending",owner:"Process Eng",action:"Verify recipe match",approval:"Process Eng"},
+      {bid:"BT-MS-150522",cc:"MS67",ageHr:12,reason:"ML out of spec",owner:"Lab Lead",action:"Dilute decision",approval:"Compound Eng"}
+    ];
+    return(<Card title="OK/NOK Inventory \u2014 Ageing & Disposition" accent={C.am}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:12}}>{ageing.map((a,i)=>{const c=a.risk==="Critical"?C.rd:a.risk==="High"?C.rd:a.risk==="Medium"?C.am:C.gn;return(<div key={i} style={{padding:"8px 10px",background:C.c2,border:"1px solid "+C.bd,borderTop:"3px solid "+c,borderRadius:6}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.mu,textTransform:"uppercase"}}>{a.band}</div>
+        <div style={{fontSize:18,fontWeight:700,color:c,marginTop:2}}>{a.count}</div>
+        <div style={{fontSize:11,color:C.mu}}>{a.mt} MT \u2022 {a.risk}</div>
+      </div>);})}</div>
+      <div style={{fontSize:12,color:C.tx,fontWeight:700,marginBottom:6}}>Held batches needing action:</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead><tr style={{background:C.c2}}>{["Batch ID","Compound","Held","Reason","Owner","Next Action","Approval"].map((c,i)=>(<th key={i} style={{textAlign:"left",padding:"7px 10px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:12,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{held.map((h,i)=>(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:700,color:C.tx}}>{h.bid}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600}}>{h.cc}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:700,color:h.ageHr>=24?C.rd:h.ageHr>=12?C.am:C.mu}}>{h.ageHr}h</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12}}>{h.reason}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12,fontWeight:600}}>{h.owner}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12,color:C.ac,fontWeight:600}}>{h.action}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12,color:C.mu}}>{h.approval}</td>
+        </tr>))}</tbody>
+      </table></div>
+    </Card>);
+  }
+
+  /* MIXING — Compound Scrap */
+  if(kpi.drillType==="techMixingScrap"){
+    const reasons=[{r:"Lab fail",kg:412,pct:49,top:"MS66"},{r:"Process excursion",kg:198,pct:24,top:"MS67"},{r:"RM contamination",kg:128,pct:15,top:"MB614"},{r:"Procedural",kg:68,pct:8,top:"MS70"},{r:"Other",kg:34,pct:4,top:"\u2014"}];
+    const byCC=[{cc:"MS66",kg:285,pct:34,batches:6,topReason:"Mooney scorch",trend:"\u25B2 8%"},{cc:"MS67",kg:198,pct:24,batches:5,topReason:"Scorch t10",trend:"\u25BC 3%"},{cc:"MB614",kg:142,pct:17,batches:4,topReason:"SG drift",trend:"\u25B2 12%"},{cc:"MS70",kg:128,pct:15,batches:3,topReason:"Rheo MH",trend:"\u25BC 5%"},{cc:"MB76",kg:54,pct:6,batches:2,topReason:"Mooney Lo",trend:"\u25BC 18%"},{cc:"MS68",kg:33,pct:4,batches:2,topReason:"Carbon variance",trend:"\u25B2 4%"}];
+    return(<Card title="Compound Scrap \u2014 Reason & Compound Breakdown" accent={C.gn}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>840 kg scrapped today across 22 affected batches. Lab fail accounts for 49% \u2014 trace back to upstream RM lots.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:6}}>By Reason</div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{background:C.c2}}>{["Reason","Kg","% Loss","Top CC"].map((c,i)=>(<th key={i} style={{textAlign:i===1||i===2?"right":"left",padding:"6px 8px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:11}}>{c}</th>))}</tr></thead>
+            <tbody>{reasons.map((r,i)=>(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd}}>{r.r}</td>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:C.tx}}>{r.kg}</td>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.pct}%</td>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:11}}>{r.top}</td>
+            </tr>))}</tbody>
+          </table>
+        </div>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:6}}>By Compound</div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{background:C.c2}}>{["CC","Kg","Batches","Top Reason","Trend"].map((c,i)=>(<th key={i} style={{textAlign:i===1||i===2?"right":"left",padding:"6px 8px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:11}}>{c}</th>))}</tr></thead>
+            <tbody>{byCC.map((b,i)=>(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:11,fontWeight:600}}>{b.cc}</td>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:C.tx}}>{b.kg}</td>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{b.batches}</td>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,fontSize:11}}>{b.topReason}</td>
+              <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,fontSize:11,color:b.trend.indexOf("\u25B2")>=0?C.rd:C.gn,fontWeight:600}}>{b.trend}</td>
+            </tr>))}</tbody>
+          </table>
+        </div>
+      </div>
+    </Card>);
+  }
+
+  /* MIXING — RM Rejection */
+  if(kpi.drillType==="techMixingRM"){
+    const rmTypes=[{n:"Natural Rubber",rejected:1.2,total:48,pct:2.5,topReason:"Dirt contamination",worstSupp:"Supplier A"},{n:"Synthetic Rubber",rejected:0.4,total:32,pct:1.3,topReason:"Mooney variance",worstSupp:"Supplier C"},{n:"Carbon Black",rejected:0.8,total:62,pct:1.3,topReason:"Iodine number",worstSupp:"Supplier B"},{n:"Silica",rejected:0.2,total:18,pct:1.1,topReason:"BET surface area",worstSupp:"Supplier D"},{n:"Oils & Plasticisers",rejected:0.1,total:24,pct:0.4,topReason:"Viscosity drift",worstSupp:"Supplier E"},{n:"Chemicals",rejected:0.05,total:38,pct:0.1,topReason:"Purity",worstSupp:"\u2014"},{n:"Bead Wire",rejected:0.3,total:14,pct:2.1,topReason:"Tensile strength",worstSupp:"Supplier F"},{n:"Fabric",rejected:0.2,total:16,pct:1.3,topReason:"Adhesion",worstSupp:"Supplier G"}];
+    return(<Card title="RM Rejection \u2014 By Material Type & Supplier" accent={C.am}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>Natural Rubber and Bead Wire have the highest rejection rates this period. Drill into a supplier to see lot-level detail.</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead><tr style={{background:C.c2}}>{["Material","Rejected (MT)","Total (MT)","Reject %","Top Reject Reason","Worst Supplier"].map((c,i)=>(<th key={i} style={{textAlign:i===1||i===2||i===3?"right":"left",padding:"7px 10px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:12,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{rmTypes.map((r,i)=>{const c=r.pct>=2?C.rd:r.pct>=1?C.am:C.gn;return(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.n}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:C.tx}}>{r.rejected}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{r.total}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:c,fontSize:14}}>{r.pct}%</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12}}>{r.topReason}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12,fontWeight:600,color:r.worstSupp==="\u2014"?C.mu:C.tx}}>{r.worstSupp}</td>
+        </tr>);})}</tbody>
+      </table></div>
+    </Card>);
+  }
+
+  /* MIXING — Overage Material */
+  if(kpi.drillType==="techMixingOverage"){
+    const matrix=[
+      {rm:"Natural Rubber",b1:1,b2:2,b3:1,valLk:1.8},
+      {rm:"Synthetic Rubber",b1:0,b2:1,b3:0,valLk:0.6},
+      {rm:"Carbon Black",b1:1,b2:0,b3:0,valLk:0.4},
+      {rm:"Oils & Plasticisers",b1:2,b2:0,b3:0,valLk:0.9},
+      {rm:"Chemicals",b1:0,b2:1,b3:0,valLk:0.3},
+      {rm:"Bead Wire",b1:0,b2:0,b3:1,valLk:0.2}
+    ];
+    return(<Card title="Overage Material \u2014 RM Ageing Heatmap" accent={C.am}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>8 lots have crossed 60-day shelf threshold. \u20B94.2L total value at risk. Carbon Black and Natural Rubber lots over 90 days need immediate decision.</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead><tr style={{background:C.c2}}>{["RM Type","60\u201390 days","90\u2013120 days","120+ days","\u20B9 Value at Risk","Recommended Action"].map((c,i)=>(<th key={i} style={{textAlign:i>=1&&i<=4?"center":"left",padding:"7px 10px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:12,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{matrix.map((m,i)=>(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{m.rm}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"center",background:m.b1>0?C.am+"22":"transparent",fontWeight:m.b1>0?700:400,color:m.b1>0?C.am:C.mu}}>{m.b1||"\u2014"}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"center",background:m.b2>0?"#F97316"+"22":"transparent",fontWeight:m.b2>0?700:400,color:m.b2>0?"#F97316":C.mu}}>{m.b2||"\u2014"}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"center",background:m.b3>0?C.rd+"22":"transparent",fontWeight:m.b3>0?700:400,color:m.b3>0?C.rd:C.mu}}>{m.b3||"\u2014"}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:C.tx}}>{"\u20B9"}{m.valLk}L</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12,color:m.b3>0?C.rd:m.b2>0?C.am:C.mu,fontWeight:m.b3>0?700:500}}>{m.b3>0?"Decide today \u2014 scrap or requalify":m.b2>0?"Plan use within 7 days":"Monitor"}</td>
+        </tr>))}</tbody>
+      </table></div>
+    </Card>);
+  }
+
+  /* MIXING — Development Compound Trials */
+  if(kpi.drillType==="techMixingDev"){
+    const trials=[
+      {cc:"MB-DEV-407",intent:"Tread cap \u2014 wear life +8%",stage:"Pilot batch",sponsor:"R&D Eng",days:42,target:"15-Jun",status:"On track",batchesRun:3,batchesPlan:5,lastResult:"Pass spec"},
+      {cc:"MB-DEV-408",intent:"Sidewall \u2014 ageing resistance",stage:"Lab trial",sponsor:"Compound Eng",days:18,target:"30-Jun",status:"On track",batchesRun:1,batchesPlan:3,lastResult:"In test"},
+      {cc:"MB-DEV-411",intent:"Apex \u2014 stiffness reduction",stage:"Full batch trial",sponsor:"Tech Head",days:65,target:"20-May",status:"Delayed",batchesRun:6,batchesPlan:6,lastResult:"Awaiting field"}
+    ];
+    return(<Card title="Development Compound Trials \u2014 Active" accent={C.bl}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>3 active trials. MB-DEV-411 is delayed past its target close \u2014 awaiting field test feedback.</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>{trials.map(t=>(<div key={t.cc} style={{background:C.c2,border:"1px solid "+C.bd,borderLeft:"3px solid "+(t.status==="Delayed"?C.rd:t.status==="On track"?C.gn:C.am),borderRadius:6,padding:"10px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
+          <span style={{fontFamily:"ui-monospace,Menlo,monospace",fontSize:13,fontWeight:700,color:C.tx,background:C.bg,padding:"2px 8px",borderRadius:4}}>{t.cc}</span>
+          <span style={{fontSize:13,color:C.tx}}>{t.intent}</span>
+          <span style={{marginLeft:"auto",fontSize:11,padding:"2px 8px",borderRadius:999,background:t.status==="Delayed"?C.rd+"18":C.gn+"18",color:t.status==="Delayed"?C.rd:C.gn,fontWeight:700}}>{t.status}</span>
+        </div>
+        <div style={{display:"flex",gap:14,fontSize:12,color:C.mu,flexWrap:"wrap"}}>
+          <span>Stage: <span style={{color:C.tx,fontWeight:600}}>{t.stage}</span></span>
+          <span>Sponsor: <span style={{color:C.tx,fontWeight:600}}>{t.sponsor}</span></span>
+          <span>Open: <span style={{color:C.tx,fontWeight:600}}>{t.days}d</span></span>
+          <span>Target: <span style={{color:C.tx,fontWeight:600}}>{t.target}</span></span>
+          <span>Progress: <span style={{color:C.tx,fontWeight:600}}>{t.batchesRun}/{t.batchesPlan} batches</span></span>
+          <span>Last result: <span style={{color:C.tx,fontWeight:600}}>{t.lastResult}</span></span>
+        </div>
+      </div>))}</div>
+    </Card>);
+  }
+
+  /* CURING \u2014 Bladder Scrap (deep flagship drill) */
+  if(kpi.drillType==="techCureBladder"){
+    const bladders=[
+      {press:"Press 07",bladderId:"BLD-7-204",cures:487,thresh:450,sku:"P185/65R15",scrapTyres:12,leak:"Yes",status:"Replace urgent"},
+      {press:"Press 12",bladderId:"BLD-12-118",cures:402,thresh:450,sku:"P195/65R15",scrapTyres:9,leak:"No",status:"Monitor"},
+      {press:"Press 03",bladderId:"BLD-3-251",cures:521,thresh:450,sku:"P205/55R16",scrapTyres:8,leak:"Yes",status:"Replace"},
+      {press:"Press 19",bladderId:"BLD-19-89",cures:298,thresh:450,sku:"LT235/75R15",scrapTyres:5,leak:"No",status:"OK"}
+    ];
+    return(<Card title="Bladder-related Scrap \u2014 Press \u203a Bladder \u203a Affected Tyres" accent={C.rd}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>Bladders nearing or exceeding the 450-cure replacement threshold are the primary contributors.</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead><tr style={{background:C.c2}}>{["Press","Bladder ID","Cures Done","Threshold","Top SKU","Scrap Tyres","Leak","Status"].map((c,i)=>(<th key={i} style={{textAlign:i===0||i===1||i===4||i===6||i===7?"left":"right",padding:"7px 10px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:12,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{bladders.map((b,i)=>{const over=b.cures>=b.thresh;return(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{b.press}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:700}}>{b.bladderId}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:over?C.rd:C.tx}}>{b.cures}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{b.thresh}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12}}>{b.sku}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:C.rd,fontSize:14}}>{b.scrapTyres}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd}}><span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:b.leak==="Yes"?C.rd+"18":C.gn+"18",color:b.leak==="Yes"?C.rd:C.gn}}>{b.leak}</span></td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:12,fontWeight:600,color:b.status.indexOf("urgent")>=0?C.rd:b.status==="OK"?C.gn:C.am}}>{b.status}</td>
+        </tr>);})}</tbody>
+      </table></div>
+    </Card>);
+  }
+
+  /* UNIFORMITY \u2014 Yield with parameter distribution */
+  if(kpi.drillType==="techUniYield"){
+    const params=[
+      {n:"RFV",unit:"N",fail:34,mean:18.2,spec:25,worstSku:"P185/65R15"},
+      {n:"LFV",unit:"N",fail:26,mean:14.8,spec:20,worstSku:"P195/65R15"},
+      {n:"Conicity",unit:"N",fail:18,mean:6.4,spec:10,worstSku:"P205/55R16"},
+      {n:"Imbalance Static",unit:"g",fail:14,mean:8.2,spec:15,worstSku:"P185/65R15"},
+      {n:"Imbalance Upper",unit:"g",fail:11,mean:6.8,spec:12,worstSku:"P195/65R15"},
+      {n:"Imbalance Lower",unit:"g",fail:9,mean:5.4,spec:12,worstSku:"P205/55R16"},
+      {n:"Run-Out RO-OA",unit:"mm",fail:9,mean:0.42,spec:0.8,worstSku:"LT235/75R15"},
+      {n:"Lateral Run-Out",unit:"mm",fail:6,mean:0.38,spec:0.7,worstSku:"P185/65R15"}
+    ];
+    return(<Card title="Uniformity Yield \u2014 Parameter-wise Failures" accent={C.am}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>Failing tyres are concentrated in RFV / LFV / Conicity \u2014 typical signatures of Curing press / Mould issues. Click a parameter for distribution detail.</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <thead><tr style={{background:C.c2}}>{["Parameter","Failing Tyres","Mean","Spec Limit","Worst SKU","Trace Path"].map((c,i)=>(<th key={i} style={{textAlign:i===0||i===4||i===5?"left":"right",padding:"7px 10px",color:C.md,fontWeight:700,borderBottom:"1px solid "+C.bd,fontSize:12,textTransform:"uppercase",letterSpacing:".3px"}}>{c}</th>))}</tr></thead>
+        <tbody>{params.map((p,i)=>{const sevC=p.fail>=20?C.rd:p.fail>=10?C.am:C.gn;return(<tr key={i} style={{background:i%2===0?C.cd:C.c2}}>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontWeight:700,color:C.tx}}>{p.n}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:sevC,fontSize:14}}>{p.fail}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{p.mean} {p.unit}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.mu}}>{p.spec} {p.unit}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontFamily:"ui-monospace,Menlo,monospace",fontSize:12}}>{p.worstSku}</td>
+          <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.bd,fontSize:11,color:C.ac,fontWeight:600}}>Curing Press \u2192 Mould \u2192 TBM</td>
+        </tr>);})}</tbody>
+      </table></div>
+    </Card>);
+  }
+
+  /* TTC \u2014 Test machine view */
+  if(kpi.drillType==="techTtcTests"||kpi.drillType==="techTtcFail"){
+    const machines=[
+      {name:"Midland",pending:4,inProg:2,done:8,passPct:87.5,alerts:0},
+      {name:"ITW Akron",pending:6,inProg:1,done:5,passPct:80.0,alerts:1},
+      {name:"Plunger",pending:12,inProg:0,done:18,passPct:100.0,alerts:0},
+      {name:"Shearography",pending:8,inProg:1,done:24,passPct:95.8,alerts:0},
+      {name:"RRCA",pending:3,inProg:0,done:6,passPct:83.3,alerts:1}
+    ];
+    return(<Card title="Test Machines \u2014 Status & Throughput" accent={C.bl}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8}}>{machines.map(m=>(<div key={m.name} style={{background:C.c2,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px"}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.tx,marginBottom:6}}>{m.name}{m.alerts>0&&<span style={{marginLeft:6,fontSize:10,padding:"1px 6px",borderRadius:4,background:C.rd,color:"#fff",fontWeight:700}}>{m.alerts} ALERT</span>}</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.mu,marginBottom:3}}><span>Pending</span><span style={{fontWeight:700,color:C.am}}>{m.pending}</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.mu,marginBottom:3}}><span>In Progress</span><span style={{fontWeight:700,color:C.bl}}>{m.inProg}</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.mu,marginBottom:3}}><span>Completed</span><span style={{fontWeight:700,color:C.tx}}>{m.done}</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,paddingTop:4,marginTop:4,borderTop:"1px solid "+C.bd}}><span style={{color:C.mu,fontSize:11}}>Pass %</span><span style={{fontWeight:700,color:m.passPct>=90?C.gn:m.passPct>=80?C.am:C.rd,fontSize:14}}>{m.passPct.toFixed(1)}%</span></div>
+      </div>))}</div>
+    </Card>);
+  }
+
+  /* SRT \u2014 SKU \u00D7 Failure Reason heatmap */
+  if(kpi.drillType==="techSrtCases"||kpi.drillType==="techSrtMode"){
+    const skus=["P185/65R15","P195/65R15","P205/55R16","P215/55R17","LT235/75R15"];
+    const reasons=["Belt sep","Tread chunk","Sidewall crack","Bead break","Inner-liner"];
+    /* Each cell = case count, deterministic */
+    const cell=(s,r)=>(s+r).length*2+((s.charCodeAt(0)+r.charCodeAt(0))%9);
+    return(<Card title="SKU \u00D7 Failure Reason Heatmap" accent={C.rd}>
+      <div style={{fontSize:12,color:C.mu,marginBottom:10}}>Darker cells = more claims. Focus action where colour is deepest.</div>
+      <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",fontSize:12}}>
+        <thead><tr><th style={{padding:"6px 10px",fontSize:11,color:C.mu,fontWeight:700,textAlign:"left"}}>SKU \\ Reason</th>{reasons.map(r=>(<th key={r} style={{padding:"6px 10px",fontSize:11,color:C.mu,fontWeight:700,textAlign:"center",minWidth:80}}>{r}</th>))}</tr></thead>
+        <tbody>{skus.map(s=>(<tr key={s}><td style={{padding:"7px 10px",fontFamily:"ui-monospace,Menlo,monospace",fontSize:12,fontWeight:600,color:C.tx,whiteSpace:"nowrap"}}>{s}</td>
+          {reasons.map(r=>{const v=cell(s,r);const intensity=Math.min(v/25,1);const bg=`rgba(220,38,38,${intensity})`;const tc=intensity>0.5?"#fff":C.tx;return(<td key={r} style={{padding:"10px 12px",textAlign:"center",fontWeight:700,fontSize:13,background:bg,color:tc,border:"1px solid "+C.bd}}>{v}</td>);})}
+        </tr>))}</tbody>
+      </table></div>
+    </Card>);
+  }
+
+  /* Default — table renderer (matches Production/Quality/Engineering drillType:"table" pattern) */
+  if(kpi.drillCols&&kpi.drillRows){
+    return(<Card title={kpi.drillTitle||(kpi.n+" \u2014 Drill Down")} accent={kpi.sc_||C.bl}>
+      <DTable cols={kpi.drillCols} rows={kpi.drillRows}/>
+      <div style={{marginTop:10,padding:"7px 10px",background:C.c2,borderRadius:6,fontSize:11,color:C.mu}}>{"\u25B8"} Click any row in source system to drill deeper (Tyre ID, Batch ID, or Test ID) and download full traceability report.</div>
+    </Card>);
+  }
+
+  /* Fallback — no drill data defined */
+  return(<Card title={kpi.n+" \u2014 Drill Down"} accent={kpi.sc_||C.bl}>
+    <div style={{fontSize:13,color:C.mu,fontStyle:"italic",padding:"20px 10px",textAlign:"center"}}>
+      Drill data for <span style={{fontWeight:700,color:C.tx,fontStyle:"normal"}}>{kpi.n}</span> not yet defined.
+    </div>
+  </Card>);
+}
+
+/* Main Technical Dashboard component */
+function TechnicalDashboard({plant,onBack}){
+  const [vId,setVId]=useState("bc");
+  const [subTab,setSubTab]=useState("Curing");
+  const [tf,setTf]=useState("Today");
+  const [shift,setShift]=useState("All");
+  const _r0t=_rangeFromPreset("Today");
+  const [tfFrom,setTfFrom]=useState(_r0t.from);
+  const [tfTo,setTfTo]=useState(_r0t.to);
+  const [tyreType,setTyreType]=useState(isBanmorePlant(plant)?"PCR":"All");
+  const [openKpi,setOpenKpi]=useState(null);
+  const [trendKpi,setTrendKpi]=useState(null);
+
+  const v=TECH_VERTICALS.find(x=>x.id===vId);
+  useEffect(()=>{if(v&&v.subTabs&&v.subTabs.indexOf(subTab)<0){setSubTab(v.subTabs[0]);}else if(v&&!v.subTabs){setSubTab("");}},[vId]);
+  useEffect(()=>{setOpenKpi(null);},[vId,subTab]);
+
+  const coreVerts=TECH_VERTICALS.filter(x=>x.group==="core");
+  const supportVerts=TECH_VERTICALS.filter(x=>x.group==="support");
+
+  const kpis=buildTechKpis(vId,subTab);
+  const openKpiObj=openKpi?kpis.find(k=>k.id===openKpi):null;
+  const toggle=id=>setOpenKpi(openKpi===id?null:id);
+  const paretoData=subTab&&TECH_PARETO[subTab];
+
+  /* Sidebar item renderer */
+  const sidebarBtn=(x)=>(<button key={x.id} onClick={()=>setVId(x.id)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 12px",border:"none",background:vId===x.id?C.aL:"transparent",borderLeft:"3px solid "+(vId===x.id?C.ac:"transparent"),color:vId===x.id?C.ac:C.tx,fontSize:13,fontWeight:vId===x.id?700:500,cursor:"pointer",textAlign:"left"}}>
+    <span style={{fontSize:14,width:18,textAlign:"center"}}>{x.icon}</span>
+    <span style={{flex:1}}>{x.name}</span>
+  </button>);
+
+  return(<div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"'IBM Plex Sans',system-ui,sans-serif",fontSize:16}}>
+    {/* Header (matches Production / Quality / Engineering pattern) */}
+    <div style={{background:C.cd,borderBottom:"1px solid "+C.bd,padding:"0 20px",height:90,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <button onClick={onBack} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.bd,background:C.c2,color:C.mu,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} title="Back to Plant Map">{"\u2190"}</button>
+        <img src={LOGO} alt="JK Tyre" style={{height:80,objectFit:"contain"}}/>
+        <div style={{width:1,height:40,background:C.bd}}/>
+        <div>
+          <div style={{fontSize:18,fontWeight:700,letterSpacing:"-.2px"}}>One Factory</div>
+          <div style={{fontSize:11,color:C.mu,textTransform:"uppercase",letterSpacing:"1px",marginTop:1}}>Technical Head Dashboard</div>
+        </div>
+        <span style={{fontSize:13,color:C.bl,fontWeight:700,background:C.bl+"18",padding:"3px 10px",borderRadius:8,marginLeft:4}}>{plant?plant.name.split(" ")[0].toUpperCase():"BTP"}</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo} shift={shift} setShift={setShift}/>
+        <TyreTypeFilter value={tyreType} onChange={setTyreType} plant={plant}/>
+        <ExportButton/>
+        <UserMenu plant={plant} role="TH" onLogout={onBack}/>
+      </div>
+    </div>
+
+    {/* Tyre type honesty banner */}
+    <TyreTypeBanner tyreType={tyreType} plant={plant}/>
+
+    {/* Body: sidebar + main */}
+    <div style={{display:"flex",minHeight:"calc(100vh - 90px)"}}>
+      {/* Sidebar (matches Production sidebar pattern) */}
+      <div className="no-print" style={{width:180,minWidth:180,background:C.cd,borderRight:"1px solid "+C.bd,padding:"10px 0",display:"flex",flexDirection:"column",gap:2,position:"sticky",top:90,height:"calc(100vh - 90px)",overflowY:"auto",flexShrink:0}}>
+        <div style={{padding:"4px 14px 6px",fontSize:11,fontWeight:700,color:C.ac,textTransform:"uppercase",letterSpacing:"1.5px"}}>Core</div>
+        {coreVerts.map(sidebarBtn)}
+        <div style={{padding:"14px 14px 6px",fontSize:11,fontWeight:700,color:C.ac,textTransform:"uppercase",letterSpacing:"1.5px"}}>Support</div>
+        {supportVerts.map(sidebarBtn)}
+        {/* Plant-level technical KPIs */}
+        <div style={{marginTop:"auto",padding:"8px 10px",borderTop:"1px solid "+C.bd}}>
+          <div style={{fontSize:11,color:C.mu,textTransform:"uppercase",letterSpacing:".8px",marginBottom:2}}>Plant Technical</div>
+          <div style={{fontSize:18,fontWeight:700,color:C.gn}}>96.4<span style={{fontSize:11,color:C.mu,fontWeight:400,marginLeft:2}}>FTQ%</span></div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:3}}>
+            {[{l:"Scrap",v:"1.4%",c:C.am},{l:"Claim",v:"118 ppm",c:C.gn}].map(x=>(<span key={x.l} style={{fontSize:11,fontWeight:600,color:x.c,background:x.c+"18",padding:"1px 4px",borderRadius:3}}>{x.l}:{x.v}</span>))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{flex:1,padding:"14px 18px"}}>
+        {/* Section header */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{fontSize:18,fontWeight:700,color:C.tx}}>{v&&v.name}</div>
+          {subTab&&<><span style={{color:C.bd}}>{"\u203a"}</span><div style={{fontSize:15,fontWeight:600,color:C.mu}}>{subTab}</div></>}
+          <div style={{flex:1}}/>
+          <div style={{fontSize:11,color:C.am,fontWeight:600}}>{"\u25B8"} Click any KPI card to drill down</div>
+        </div>
+
+        {/* Sub-tab pill strip */}
+        {v&&v.subTabs&&<div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
+          {v.subTabs.map(s=>(<button key={s} onClick={()=>setSubTab(s)} style={{padding:"5px 14px",borderRadius:999,border:"1px solid "+(subTab===s?C.aB:C.bd),background:subTab===s?C.aL:C.c2,color:subTab===s?C.ac:C.tx,fontSize:13,fontWeight:600,cursor:"pointer"}}>{s}</button>))}
+        </div>}
+
+        {/* Health/Action strip (Stock + B&C only) */}
+        {vId==="stock"&&<TechStrip pills={[TECH_STOCK_HEALTH.upstream,TECH_STOCK_HEALTH.downstream,TECH_STOCK_HEALTH.material]}/>}
+        {vId==="bc"&&<TechStrip pills={[TECH_BC_ACTION.yield,TECH_BC_ACTION.actions]}/>}
+
+        {/* KPI grid */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,marginBottom:12}}>
+          {kpis.map(k=>(<QKpiCard key={k.id} kpi={k} active={openKpi===k.id} onClick={()=>toggle(k.id)} onTrend={()=>setTrendKpi(k)} tyreType={tyreType} plant={plant}/>))}
+        </div>
+
+        {/* Drill panel */}
+        {openKpiObj&&<div style={{marginBottom:12}}><TechDrillPanel kpi={openKpiObj} subTab={subTab}/></div>}
+
+        {/* Always-visible Pareto chart */}
+        {paretoData&&<TechParetoChart data={paretoData} color={vId==="bc"&&subTab==="Uniformity"?C.am:vId==="bc"?C.tl:C.bl} title={subTab+" \u2014 Top Reason Pareto"}/>}
+      </div>
+    </div>
+
+    {trendKpi&&<TrendPanel kpi={trendKpi} onClose={()=>setTrendKpi(null)} tyreType={tyreType} plant={plant}/>}
+  </div>);
+}
+
 /* ═══ MAIN APP ═══ */
 export default function App(){
   const [view,setView]=useState("landing");
   const [plant,setPlant]=useState(null);
   const wrap=el=>(<><PrintStyles/>{el}</>);
-  if(view==="landing") return wrap(<LandingPage onEnter={(p,fn)=>{setPlant(p);setView(fn==="qual"?"quality":fn==="eng"?"engineering":"dashboard");}}/>);
+  if(view==="landing") return wrap(<LandingPage onEnter={(p,fn)=>{setPlant(p);setView(fn==="qual"?"quality":fn==="eng"?"engineering":fn==="tech"?"technical":"dashboard");}}/>);
   if(view==="quality") return wrap(<QualityDashboard plant={plant} onBack={()=>{setView("landing");setPlant(null);}}/>);
   if(view==="engineering") return wrap(<EngineeringDashboard plant={plant} onBack={()=>{setView("landing");setPlant(null);}}/>);
+  if(view==="technical") return wrap(<TechnicalDashboard plant={plant} onBack={()=>{setView("landing");setPlant(null);}}/>);
   return wrap(<ProductionDashboard plant={plant} onBack={()=>{setView("landing");setPlant(null);}}/>);
 }

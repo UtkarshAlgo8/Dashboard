@@ -23,8 +23,12 @@
 
 ## Assumptions in play
 
-None. Q-TR-01 (four presets: Today / Week / Month / Year + custom)
-already resolved and informs the time range selector.
+None. Q-TR-01 (originally four presets Today / Week / Month / Year +
+custom) is now superseded by CR-05: the selector exposes three
+presets (Today / Month / Year + custom). The `week` mock trend
+series is retained but unused — leave for now, remove with a future
+cleanup. Trend modal uses the shared `TimeRangeSelect` so this
+change is automatic.
 
 ## Purpose
 

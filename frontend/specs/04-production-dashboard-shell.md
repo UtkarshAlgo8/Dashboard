@@ -67,11 +67,17 @@ Top header bar. Three regions per BRD `FR-P1`–`FR-P3`:
   (Banmore = "PCR ONLY" per `FR-X2`) + ExportButton (visual) + Avatar.
 
 Filter widget rules for spec 04:
-- **TimeRangeSelect**: renders 4 preset pills (Today / Week / Month /
-  Year, per Q-TR-01) + From/To date inputs. Local state tracks the
-  active preset; switching presets visually highlights but does NOT
-  fetch data (no consumer yet). Real wiring is spec 05+ via lifted
-  state from `BanmoreProduction`.
+- **TimeRangeSelect**: renders 3 preset pills (Today / Month / Year,
+  per Q-TR-01 as revised by CR-05 — "Week" dropped) + From/To date
+  inputs. When `preset === "today"` and `onShiftChange` is supplied,
+  a compact Shift `<select>` (All Shifts / A / B / C) appears nested
+  directly under the preset pills. The shift selector is hidden for
+  Month/Year/custom ranges. Local state tracks the active preset;
+  switching presets visually highlights but does NOT fetch data (no
+  consumer yet). Real wiring is spec 05+ via lifted state from
+  `BanmoreProduction`. Shift state is also lifted to the page
+  (default `"all"`); for Phase 1 it is pure UI and not threaded
+  into drill API calls (Q-SH-01 resolved "pure UI").
 - **TyreTypeBadge**: hardcoded "PCR ONLY" badge with tooltip "Banmore
   plant produces PCR only" (per `FR-X2`).
 - **ExportButton**: renders the down-arrow icon, calls a `onExport`

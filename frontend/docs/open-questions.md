@@ -63,7 +63,9 @@ the remainder.
 | Q-AUTH-01 | Which auth pattern does the dashboard use? (Pattern A localStorage+cookie, Pattern B memory+httpOnly, Pattern C public/VPN) | Actors | architecture, api-contract, app-shell spec | Pattern C (no auth) for Phase 1; pattern selection deferred to backend phase | HIGH | RESOLVED | 2026-05-20 | 2026-05-20 |
 | Q-BE-01 | What is the backend repo + base URL serving Banmore Production KPIs? | Integrations | api-contract, all data-flow specs | Phase 1 has no backend. Frontend ships against `src/lib/mockData.js` via dummy resource modules. Backend work starts after Phase 1 ships. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
 | Q-DATA-01 | Is the dashboard polling-refreshed or push-driven (WebSocket/SSE)? If polling, what interval? | Non-functional | api-contract, landing spec | Polling every 60s. No WebSocket/SSE in Phase 1. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
-| Q-TR-01 | Time-range presets — what is the exact list? | Entity lifecycle | time-range-filter spec | Per BRD FR-X7: four presets — Today / Week / Month / Year — plus custom From/To. | LOW | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-TR-01 | Time-range presets — what is the exact list? | Entity lifecycle | time-range-filter spec | Per BRD FR-X7 originally Today / Week / Month / Year + custom; revised by CR-05 to three presets: Today / Month / Year + custom (Week dropped). | LOW | RESOLVED | 2026-05-20 | 2026-05-26 |
+| Q-SH-01 | Does the new Shift selector (Today only) filter mock data, or is it pure UI for Phase 1? | Entity lifecycle | TimeRangeSelect, ProductionHeader, BanmoreProduction | Pure UI for Phase 1. State lives on the page and is wired through props so consumers can opt in later when shift-tagged mock data lands. No API filter wiring. | LOW | RESOLVED | 2026-05-26 | 2026-05-26 |
+| Q-PD-01 | How does the Production drill's "View by Machine" lens know which machine produced each TBM/Curing/Stock SKU row? | Entity lifecycle | mockData.js, ProductionDrillPanel | Add `machine` field to each row in `mockData.js`. Avoids two-source-of-truth between mock data and renderer code. Deterministic assignment from the artifact's machine pools (TBM: VMI Max/VMI Exium/BJ Modules/Stage 1/Stage 2; Curing: Tredge 1–6; Stock: per-sub-selector). | LOW | RESOLVED | 2026-05-26 | 2026-05-26 |
 | Q-KPI-01 | Is the KPI list in artifact.jsx the authoritative Phase-1 KPI set? | Entity lifecycle | landing spec | Yes — the prototype KPI list is the Phase-1 scope. Mock data backs it; KPI list may be revised when the BRD intake walk completes. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
 | Q-USR-01 | Are there role-based views in Phase 1? | Actors | landing spec | No. Phase 1 is single-role, read-only. Avatar may render an initial set but does not gate access. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
 | Q-NAV-01 | Are Quality / Engineering / Inventory tabs visible-but-disabled in Phase 1 navigation, or hidden entirely? | Non-goals | app-shell spec | Visible but disabled, with a "Phase 2" tooltip. Same for non-Banmore plants. | LOW | RESOLVED | 2026-05-20 | 2026-05-20 |
@@ -109,6 +111,20 @@ audit trail.
   pointing at localhost is needed; mock-data toggle handles offline dev).
 - **Q-MOBILE-01 resolved**: desktop + tablet supported in Phase 1; phone
   not supported. Tablet breakpoint to be defined in the app-shell spec.
+
+### 2026-05-26
+
+- **CR-05 — artifact refresh** (Today/Month/Year + Shift + View-by):
+  - **Q-TR-01 revised**: Week preset dropped. Affected specs patched:
+    `specs/04-production-dashboard-shell.md`, `specs/10-trend-modal.md`.
+    Trend mock series still includes `week` — leave for future cleanup.
+  - **Q-SH-01 raised + resolved**: pure UI. Patched `TimeRangeSelect`,
+    `ProductionHeader`, `BanmoreProduction`. CR document at
+    `specs/cr/CR-05-time-range-shift-and-view-by.md`.
+  - **Q-PD-01 raised + resolved**: machine field added to TBM/Cur/Stock
+    drill rows in `mockData.js`. ProductionDrillPanel rewritten with
+    `View by` (Machine/SKU/Machine+SKU) and `Unit` (Mixing MT/Batches,
+    Stock Units/Kg) lenses. Spec `07-production-drill.md` patched.
 
 ### Pending (broader BRD walk)
 

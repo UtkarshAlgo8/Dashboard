@@ -83,6 +83,23 @@ Specs 11 (other sections) and Phase 2 (other plants) extend.
   - Variance is computed `(actual - planned) / planned * 100` and
     coloured per `FR-P46`: green ≥ 0%, amber 0% to −5%, red < −5%.
   - Sticky header, 340 px max-height (`FR-P49`).
+  - **CR-05 — View by + Unit lenses (all sections):** below the
+    category toggle, render a `View by` pill group
+    (Machine / SKU / Machine + SKU) and, for Mixing and Stock, a
+    `Unit` pill group (Mixing: MT / Batches; Stock: Units / Kg).
+    Aggregation is client-side from the same row data:
+    - Machine view: group by `row.machine`, sum planned/actual,
+      column "SKUs" shows distinct SKU count.
+    - SKU view: group by `row[skuKey]`, sum planned/actual, column
+      "Machines" shows distinct machine count.
+    - Machine + SKU: render raw rows. Mixing in MT additionally
+      shows Batches Plan / Batches Actual columns.
+    Unit toggle converts values in place — Mixing batches read
+    `batchesPlan`/`batchesActual`; Stock Kg multiplies units by
+    `STOCK_KG_PER_UNIT` (3.87).
+    Defaults on section/category change: `view = "machine"`,
+    `unit = "mt"` (Mixing), `unit = "units"` (Stock), no unit
+    toggle for TBM/Curing.
 
 ### KpiGrid wiring
 

@@ -597,108 +597,401 @@ export const PRODUCTION_DRILL_BY_PLANT_SECTION = {
     ],
   },
   // TBM Production drill: keyed by tyre family per artifact (Passenger
-  // Radial / LT Radial / SCV Radial). Each row: { sku, planned, actual }.
+  // Radial / LT Radial / SCV Radial). Row shape (CR-05, Q-PD-01):
+  //   { sku, machine, planned, actual }
+  // `machine` is required so the View-by Machine / Machine+SKU lenses
+  // in ProductionDrillPanel can aggregate without synthesising. TBM
+  // machine pool comes from the artifact: VMI Max, VMI Exium, BJ
+  // Modules, Stage 1, Stage 2.
   "banmore/tbm": {
     "passenger-radial": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 400, actual: 328 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 450, actual: 383 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 500, actual: 440 },
-      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 550, actual: 495 },
-      { sku: "195/55R16 ULTIMA SPORT 87V TL", planned: 600, actual: 552 },
-      { sku: "175/70R13 ULTIMA NEO 82T EUEX TL", planned: 500, actual: 470 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "VMI Max",
+        planned: 400,
+        actual: 328,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "VMI Exium",
+        planned: 450,
+        actual: 383,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "BJ Modules",
+        planned: 500,
+        actual: 440,
+      },
+      {
+        sku: "185/65R15 ULTIMA SPORT 88H TL",
+        machine: "Stage 1",
+        planned: 550,
+        actual: 495,
+      },
+      {
+        sku: "195/55R16 ULTIMA SPORT 87V TL",
+        machine: "Stage 2",
+        planned: 600,
+        actual: 552,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T EUEX TL",
+        machine: "VMI Max",
+        planned: 500,
+        actual: 470,
+      },
     ],
     "lt-radial": [
-      { sku: "7.00R15 STEEL KING 10PR L TT", planned: 300, actual: 255 },
-      { sku: "7.00R15 STEEL KING 12PR L TT", planned: 340, actual: 296 },
-      { sku: "215/75R15 115/113S 10PR SK TL", planned: 380, actual: 335 },
-      { sku: "7.00R16 STEEL KING 12PR TT", planned: 420, actual: 378 },
-      { sku: "8.25R16 JETWAY JUH5 14PR TT", planned: 460, actual: 423 },
+      {
+        sku: "7.00R15 STEEL KING 10PR L TT",
+        machine: "VMI Max",
+        planned: 300,
+        actual: 255,
+      },
+      {
+        sku: "7.00R15 STEEL KING 12PR L TT",
+        machine: "VMI Exium",
+        planned: 340,
+        actual: 296,
+      },
+      {
+        sku: "215/75R15 115/113S 10PR SK TL",
+        machine: "BJ Modules",
+        planned: 380,
+        actual: 335,
+      },
+      {
+        sku: "7.00R16 STEEL KING 12PR TT",
+        machine: "Stage 1",
+        planned: 420,
+        actual: 378,
+      },
+      {
+        sku: "8.25R16 JETWAY JUH5 14PR TT",
+        machine: "Stage 2",
+        planned: 460,
+        actual: 423,
+      },
     ],
     "scv-radial": [
-      { sku: "235/65R16 STEELKING+ 121P TL", planned: 200, actual: 160 },
-      { sku: "195R15 ULTIMA NXT 106S TL", planned: 230, actual: 193 },
-      { sku: "215/75R15 STEEL KING+ TL", planned: 260, actual: 226 },
-      { sku: "205/65R16 ULTIMA NXT 107T TL", planned: 290, actual: 261 },
+      {
+        sku: "235/65R16 STEELKING+ 121P TL",
+        machine: "VMI Max",
+        planned: 200,
+        actual: 160,
+      },
+      {
+        sku: "195R15 ULTIMA NXT 106S TL",
+        machine: "VMI Exium",
+        planned: 230,
+        actual: 193,
+      },
+      {
+        sku: "215/75R15 STEEL KING+ TL",
+        machine: "BJ Modules",
+        planned: 260,
+        actual: 226,
+      },
+      {
+        sku: "205/65R16 ULTIMA NXT 107T TL",
+        machine: "Stage 1",
+        planned: 290,
+        actual: 261,
+      },
     ],
   },
-  // Curing Production drill: same shape as TBM. Higher volumes.
+  // Curing Production drill: same shape as TBM. Machine pool from
+  // the artifact: Tredge 1–6. Higher volumes.
   "banmore/cur": {
     "passenger-radial": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 1200, actual: 1062 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 1350, actual: 1228 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 1500, actual: 1400 },
-      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 1650, actual: 1551 },
-      { sku: "195/55R16 ULTIMA SPORT 87V TL", planned: 1800, actual: 1710 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "Tredge 1",
+        planned: 1200,
+        actual: 1062,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "Tredge 2",
+        planned: 1350,
+        actual: 1228,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "Tredge 3",
+        planned: 1500,
+        actual: 1400,
+      },
+      {
+        sku: "185/65R15 ULTIMA SPORT 88H TL",
+        machine: "Tredge 4",
+        planned: 1650,
+        actual: 1551,
+      },
+      {
+        sku: "195/55R16 ULTIMA SPORT 87V TL",
+        machine: "Tredge 5",
+        planned: 1800,
+        actual: 1710,
+      },
     ],
     "lt-radial": [
-      { sku: "7.00R15 STEEL KING 10PR L TT", planned: 900, actual: 783 },
-      { sku: "7.00R15 STEEL KING 12PR L TT", planned: 980, actual: 872 },
-      { sku: "215/75R15 115/113S 10PR SK TL", planned: 1050, actual: 945 },
-      { sku: "7.00R16 STEEL KING 12PR TT", planned: 1120, actual: 1030 },
+      {
+        sku: "7.00R15 STEEL KING 10PR L TT",
+        machine: "Tredge 1",
+        planned: 900,
+        actual: 783,
+      },
+      {
+        sku: "7.00R15 STEEL KING 12PR L TT",
+        machine: "Tredge 2",
+        planned: 980,
+        actual: 872,
+      },
+      {
+        sku: "215/75R15 115/113S 10PR SK TL",
+        machine: "Tredge 3",
+        planned: 1050,
+        actual: 945,
+      },
+      {
+        sku: "7.00R16 STEEL KING 12PR TT",
+        machine: "Tredge 4",
+        planned: 1120,
+        actual: 1030,
+      },
     ],
     "scv-radial": [
-      { sku: "235/65R16 STEELKING+ 121P TL", planned: 700, actual: 595 },
-      { sku: "195R15 ULTIMA NXT 106S TL", planned: 780, actual: 686 },
-      { sku: "215/75R15 STEEL KING+ TL", planned: 850, actual: 765 },
-      { sku: "205/65R16 ULTIMA NXT 107T TL", planned: 920, actual: 855 },
+      {
+        sku: "235/65R16 STEELKING+ 121P TL",
+        machine: "Tredge 1",
+        planned: 700,
+        actual: 595,
+      },
+      {
+        sku: "195R15 ULTIMA NXT 106S TL",
+        machine: "Tredge 2",
+        planned: 780,
+        actual: 686,
+      },
+      {
+        sku: "215/75R15 STEEL KING+ TL",
+        machine: "Tredge 3",
+        planned: 850,
+        actual: 765,
+      },
+      {
+        sku: "205/65R16 ULTIMA NXT 107T TL",
+        machine: "Tredge 4",
+        planned: 920,
+        actual: 855,
+      },
     ],
   },
   // Stock Production drill: keyed by `${stockSelector}/${category}`.
   // The categories per sub-selector come from the artifact's stkProd
-  // routing table (artifact.jsx:1221).
+  // routing table (artifact.jsx). Machine pools per sub-selector also
+  // come from the artifact: 4 Roll #1/#2, Duplex/Triplex/Quadraplex,
+  // 3 Roll #1/#2, LTBC/HTBC, Slitter-1/Slitter-2.
   "banmore/stk/4roll": {
     "4-roll-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 80, actual: 68 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 100, actual: 87 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 120, actual: 106 },
-      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 140, actual: 126 },
-      { sku: "195/55R16 ULTIMA SPORT 87V TL", planned: 160, actual: 148 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "4 Roll #1",
+        planned: 80,
+        actual: 68,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "4 Roll #2",
+        planned: 100,
+        actual: 87,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "4 Roll #1",
+        planned: 120,
+        actual: 106,
+      },
+      {
+        sku: "185/65R15 ULTIMA SPORT 88H TL",
+        machine: "4 Roll #2",
+        planned: 140,
+        actual: 126,
+      },
+      {
+        sku: "195/55R16 ULTIMA SPORT 87V TL",
+        machine: "4 Roll #1",
+        planned: 160,
+        actual: 148,
+      },
     ],
   },
   "banmore/stk/extruder": {
     "sidewall-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 90, actual: 78 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 110, actual: 98 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 130, actual: 117 },
-      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 150, actual: 138 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "Duplex",
+        planned: 90,
+        actual: 78,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "Triplex",
+        planned: 110,
+        actual: 98,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "Quadraplex",
+        planned: 130,
+        actual: 117,
+      },
+      {
+        sku: "185/65R15 ULTIMA SPORT 88H TL",
+        machine: "Duplex",
+        planned: 150,
+        actual: 138,
+      },
     ],
     "tread-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 70, actual: 61 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 85, actual: 76 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 100, actual: 91 },
-      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 115, actual: 108 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "Duplex",
+        planned: 70,
+        actual: 61,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "Triplex",
+        planned: 85,
+        actual: 76,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "Quadraplex",
+        planned: 100,
+        actual: 91,
+      },
+      {
+        sku: "185/65R15 ULTIMA SPORT 88H TL",
+        machine: "Triplex",
+        planned: 115,
+        actual: 108,
+      },
     ],
   },
   "banmore/stk/3roll": {
     "inner-liner-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 60, actual: 51 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 75, actual: 66 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 90, actual: 82 },
-      { sku: "185/65R15 ULTIMA SPORT 88H TL", planned: 105, actual: 98 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "3 Roll #1",
+        planned: 60,
+        actual: 51,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "3 Roll #2",
+        planned: 75,
+        actual: 66,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "3 Roll #1",
+        planned: 90,
+        actual: 82,
+      },
+      {
+        sku: "185/65R15 ULTIMA SPORT 88H TL",
+        machine: "3 Roll #2",
+        planned: 105,
+        actual: 98,
+      },
     ],
   },
   "banmore/stk/cutter": {
     "ply-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 50, actual: 43 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 65, actual: 58 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 80, actual: 72 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "LTBC",
+        planned: 50,
+        actual: 43,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "HTBC",
+        planned: 65,
+        actual: 58,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "LTBC",
+        planned: 80,
+        actual: 72,
+      },
     ],
     "belt-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 55, actual: 48 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 70, actual: 63 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 85, actual: 78 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "LTBC",
+        planned: 55,
+        actual: 48,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "HTBC",
+        planned: 70,
+        actual: 63,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "HTBC",
+        planned: 85,
+        actual: 78,
+      },
     ],
   },
   "banmore/stk/slitter": {
     "cap-strip-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 40, actual: 35 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 55, actual: 49 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 70, actual: 64 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "Slitter-1",
+        planned: 40,
+        actual: 35,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "Slitter-2",
+        planned: 55,
+        actual: 49,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "Slitter-1",
+        planned: 70,
+        actual: 64,
+      },
     ],
     "chaffer-production": [
-      { sku: "145/80R13 Ultima Neo 75S TL", planned: 45, actual: 39 },
-      { sku: "155R13 ULTIMAX PC1 90/89S TL", planned: 60, actual: 54 },
-      { sku: "175/70R13 ULTIMA NEO 82T TL", planned: 75, actual: 69 },
+      {
+        sku: "145/80R13 Ultima Neo 75S TL",
+        machine: "Slitter-1",
+        planned: 45,
+        actual: 39,
+      },
+      {
+        sku: "155R13 ULTIMAX PC1 90/89S TL",
+        machine: "Slitter-2",
+        planned: 60,
+        actual: 54,
+      },
+      {
+        sku: "175/70R13 ULTIMA NEO 82T TL",
+        machine: "Slitter-2",
+        planned: 75,
+        actual: 69,
+      },
     ],
   },
 };
