@@ -27,3 +27,6 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 5e7d802 — cr: mark Quality + Engineering as SOON in the plant-function modal _(Vishwajit Khanna)_
   - f1e9ed1 — cr: single date-range picker in TimeRangeSelect _(Vishwajit Khanna)_
   - 3550a17 — cr: replace TimeRangeSelect popover with custom Date Filter modal _(Vishwajit Khanna)_
+
+## 2026-05-26
+  - 4b65710 — cr: drop Week preset + Today-only Shift + Production View-by lens _(Vishwajit Khanna)_
