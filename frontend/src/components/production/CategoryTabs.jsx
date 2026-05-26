@@ -1,4 +1,11 @@
-import { Box, Button, Stack, Typography, useTheme } from "@mui/material";
+import {
+  Box,
+  Button,
+  Stack,
+  Tooltip,
+  Typography,
+  useTheme,
+} from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate } from "react-router-dom";
 
@@ -22,14 +29,28 @@ function CategoryTabs({ tabs, activeTabId, onSelect }) {
         alignItems: "stretch",
       }}
     >
-      {tabs.map((t) => (
-        <TabButton
-          key={t.id}
-          tab={t}
-          active={t.id === activeTabId}
-          onClick={() => onSelect(t.id)}
-        />
-      ))}
+      {tabs.map((t) => {
+        // `enabled === false` → disabled tab (CR-07: Inventory). Other
+        // values (true / undefined / null) → enabled.
+        const isDisabled = t.enabled === false;
+        const button = (
+          <TabButton
+            key={t.id}
+            tab={t}
+            active={t.id === activeTabId}
+            disabled={isDisabled}
+            onClick={isDisabled ? undefined : () => onSelect(t.id)}
+          />
+        );
+        return isDisabled ? (
+          <Tooltip key={t.id} title="Phase 2 — coming soon" arrow>
+            {/* span wrapper required for Tooltip on a disabled-looking element */}
+            <span style={{ display: "inline-flex" }}>{button}</span>
+          </Tooltip>
+        ) : (
+          button
+        );
+      })}
       <Box sx={{ flex: 1 }} />
       <Stack direction="row" alignItems="center" sx={{ pr: 0.5 }}>
         <Button
@@ -60,7 +81,7 @@ function CategoryTabs({ tabs, activeTabId, onSelect }) {
   );
 }
 
-function TabButton({ tab, active, onClick }) {
+function TabButton({ tab, active, disabled, onClick }) {
   const theme = useTheme();
   return (
     <Box
@@ -71,17 +92,22 @@ function TabButton({ tab, active, onClick }) {
         gap: 0.75,
         px: 1.5,
         py: 1,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.45 : 1,
         color: active ? "primary.main" : "text.secondary",
         fontWeight: active ? 600 : 500,
         borderBottom: 2,
         borderColor: active ? "primary.main" : "transparent",
         marginBottom: "-1px",
         transition: "color 0.15s, border-color 0.15s",
-        "&:hover": {
-          color: active ? "primary.main" : "text.primary",
-          backgroundColor: active ? "transparent" : theme.custom.surface.soft,
-        },
+        "&:hover": disabled
+          ? undefined
+          : {
+              color: active ? "primary.main" : "text.primary",
+              backgroundColor: active
+                ? "transparent"
+                : theme.custom.surface.soft,
+            },
       }}
     >
       <Box

@@ -30,3 +30,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
 
 ## 2026-05-26
   - 4b65710 — cr: drop Week preset + Today-only Shift + Production View-by lens _(Vishwajit Khanna)_
+  - 34eea39 — Revert "cr: scaffold backend (CR-06 Commit A)" _(Vishwajit Khanna)_

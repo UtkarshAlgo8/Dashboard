@@ -3,16 +3,13 @@
 This is the shape the frontend expects. The backend is authoritative on
 the real contract — this file documents what we rely on.
 
-**Status: DRAFT — DEFERRED.** Phase 1 has no backend
-(Q-BE-01 resolved 2026-05-20). The frontend ships against
-`src/lib/mockData.js` via dummy resource modules at `src/api/*.js`.
-The contract below describes the **target shape** the dummy resource
-modules will mimic so the backend swap is local when Phase 2 begins.
-
-When the backend phase begins, this file is revisited — the backend
-team is authoritative on the real contract. Treat the endpoint list,
-URL style, response shape, and pagination below as the frontend's
-**proposal** to the backend, not a signed contract.
+**Status: LIVE (Phase 1).** Backend at [`../../backend/`](../../backend/)
+implements this contract (CR-07, 2026-05-27 — Q-BE-01 re-resolved).
+The frontend talks to it via
+`VITE_API_BASE_URL=http://localhost:3001/api/v1` with
+`VITE_USE_MOCK_DATA=false`. Backend proxies a single upstream API
+(SELECT/WITH-only SQL against the `gold_dummy` parquet table); the
+upstream key never leaves `backend/.env.local`.
 
 Staging and Production rows in §"Base URL" are placeholders — Phase 1
 runs on `localhost` only (Q-ENV-01 resolved 2026-05-20).

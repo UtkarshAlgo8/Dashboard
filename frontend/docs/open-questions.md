@@ -61,7 +61,10 @@ the remainder.
 | ID | Question | Category | Affects | Default assumption | Cost to change | Status | Raised | Resolved |
 |----|----------|----------|---------|--------------------|----------------|--------|--------|----------|
 | Q-AUTH-01 | Which auth pattern does the dashboard use? (Pattern A localStorage+cookie, Pattern B memory+httpOnly, Pattern C public/VPN) | Actors | architecture, api-contract, app-shell spec | Pattern C (no auth) for Phase 1; pattern selection deferred to backend phase | HIGH | RESOLVED | 2026-05-20 | 2026-05-20 |
-| Q-BE-01 | What is the backend repo + base URL serving Banmore Production KPIs? | Integrations | api-contract, all data-flow specs | Phase 1 has no backend. Frontend ships against `src/lib/mockData.js` via dummy resource modules. Backend work starts after Phase 1 ships. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
+| Q-BE-01 | What is the backend repo + base URL serving Banmore Production KPIs? | Integrations | api-contract, all data-flow specs | Originally "no backend". Re-resolved by CR-07 (2026-05-27): backend at `backend/` in this monorepo. Node + Express, no DB. Proxies a single upstream `gold_dummy` API. Base URL `http://localhost:3001/api/v1` for dev. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-27 |
+| Q-GB-01 | What is the gold_dummy column vocabulary (sections, categories, granularity, dates)? | Integrations | backend/src/queries.js | Resolved by CR-07 Postman inspection (2026-05-27): section ∈ {Mixing, Stock, TBM, Curing}; category ∈ {Cost, Morale, Productivity, Quality, Safety}; granularity ∈ {Daily, Shift A, Shift B, Shift C}; date STRING DD-MM-YYYY (use year/month/day INT columns for range); product_type per section (Compound/Cured Tyre/Green Tyre/Stock Component). | LOW | RESOLVED | 2026-05-26 | 2026-05-27 |
+| Q-GB-02 | How are NULL string values stored in gold_dummy? | Integrations | backend/src/queries.js, transformers.js | Literal string "nan", not SQL NULL. queries.js uses `= 'nan'`/`!= 'nan'`; transformers.js converts "nan" to null at the API boundary. | LOW | RESOLVED | 2026-05-26 | 2026-05-27 |
+| Q-INV-01 | Is the Inventory category in gold_dummy? | Integrations | backend/src/routes/static.js, frontend CategoryTabs.jsx | No — PM 2026-05-27 confirmed "Inventory data I will tell later, not added yet". Backend static.js marks the tab `enabled: false`; frontend CategoryTabs renders disabled with a "Phase 2" tooltip. inventory.js route returns []. Revisit when data lands. | LOW | OPEN-DEFERRED | 2026-05-27 | |
 | Q-DATA-01 | Is the dashboard polling-refreshed or push-driven (WebSocket/SSE)? If polling, what interval? | Non-functional | api-contract, landing spec | Polling every 60s. No WebSocket/SSE in Phase 1. | MEDIUM | RESOLVED | 2026-05-20 | 2026-05-20 |
 | Q-TR-01 | Time-range presets — what is the exact list? | Entity lifecycle | time-range-filter spec | Per BRD FR-X7 originally Today / Week / Month / Year + custom; revised by CR-05 to three presets: Today / Month / Year + custom (Week dropped). | LOW | RESOLVED | 2026-05-20 | 2026-05-26 |
 | Q-SH-01 | Does the new Shift selector (Today only) filter mock data, or is it pure UI for Phase 1? | Entity lifecycle | TimeRangeSelect, ProductionHeader, BanmoreProduction | Pure UI for Phase 1. State lives on the page and is wired through props so consumers can opt in later when shift-tagged mock data lands. No API filter wiring. | LOW | RESOLVED | 2026-05-26 | 2026-05-26 |
@@ -125,6 +128,24 @@ audit trail.
     drill rows in `mockData.js`. ProductionDrillPanel rewritten with
     `View by` (Machine/SKU/Machine+SKU) and `Unit` (Mixing MT/Batches,
     Stock Units/Kg) lenses. Spec `07-production-drill.md` patched.
+
+### 2026-05-27
+
+- **CR-07 — backend rebuild** (after CR-06's revert):
+  - **Q-BE-01 re-resolved**: backend in. Node + Express. Confirmed
+    vocabulary baked into queries (no more guessing).
+  - **Q-GB-01 raised + resolved**: section / category / granularity /
+    product_type / date format all confirmed by Postman SELECT.
+  - **Q-GB-02 raised + resolved**: "nan" sentinel instead of SQL
+    NULL. Filters + transformers updated.
+  - **Q-SH-01 reversed**: was "pure UI". CR-07 wires Shift A/B/C →
+    `granularity = 'Shift A/B/C'` in the SQL builders. Today + no
+    shift → `granularity = 'Daily'`. The dropdown is no longer a
+    no-op.
+  - **Q-INV-01 raised, OPEN-DEFERRED**: Inventory data not loaded;
+    tab disabled in CategoryTabs with "Phase 2" tooltip.
+  - Frontend env flipped: `VITE_USE_MOCK_DATA=false`,
+    `VITE_API_BASE_URL=http://localhost:3001/api/v1`.
 
 ### Pending (broader BRD walk)
 
