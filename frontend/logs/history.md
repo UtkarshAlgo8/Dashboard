@@ -37,3 +37,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - a0828fe — cr: wire time-range + shift + gold_dummy values through; trend charts default to line _(Vishwajit Khanna)_
   - f76320d — fix: pickChartType matches artifact (name+unit, not id) _(Vishwajit Khanna)_
   - 5058f61 — fix: remove stray 'downtime' bar hint that diverged from artifact _(Vishwajit Khanna)_
+  - b4eb8f9 — fix: round every API numeric to 2 decimals _(Vishwajit Khanna)_
