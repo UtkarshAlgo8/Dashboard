@@ -46,7 +46,6 @@ const BAR_NAME_HINTS = [
   "complaint",
   "breakdown hour",
   "downtime hour",
-  "downtime",
   "manpower absent",
   "production loss",
   "milestones",

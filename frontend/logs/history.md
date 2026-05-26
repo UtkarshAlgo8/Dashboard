@@ -35,3 +35,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
 ## 2026-05-27
   - 6973fa6 — cr: re-scaffold backend on confirmed gold_dummy vocabulary (CR-07) _(Vishwajit Khanna)_
   - a0828fe — cr: wire time-range + shift + gold_dummy values through; trend charts default to line _(Vishwajit Khanna)_
+  - f76320d — fix: pickChartType matches artifact (name+unit, not id) _(Vishwajit Khanna)_
