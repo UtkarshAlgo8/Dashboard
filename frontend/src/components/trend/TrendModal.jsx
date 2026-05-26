@@ -77,7 +77,7 @@ function TrendModal({
 
   if (!kpi) return null;
 
-  const chartType = pickChartType(kpi.id, kpi.unit);
+  const chartType = pickChartType(kpi.id, kpi.unit, kpi.name);
   const labels = data?.labels ?? [];
   const values = data?.values ?? [];
 
