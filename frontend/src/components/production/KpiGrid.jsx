@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Box, Typography, useTheme } from "@mui/material";
 import KpiCard from "./KpiCard.jsx";
 import KpiCardSkeleton from "./KpiCardSkeleton.jsx";
 import StockSubSelector from "./StockSubSelector.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getKpis } from "@/api/kpis.js";
+import { presetToDateRange } from "@/lib/timeRange.js";
 import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
 import ProductionDrillPanel from "@/components/drills/production/ProductionDrillPanel.jsx";
 import DowntimeDrillPanel from "@/components/drills/downtime/DowntimeDrillPanel.jsx";
@@ -31,6 +32,8 @@ function KpiGrid({
   tab,
   stockSelector,
   onStockSelectorChange,
+  timeRange,
+  shift,
 }) {
   const theme = useTheme();
   const [openDrillId, setOpenDrillId] = useState(null);
@@ -38,11 +41,26 @@ function KpiGrid({
 
   const showStockSelector = section === "stk" && tab === "p";
 
+  // Convert preset (today/month/year/custom) → ISO yyyy-mm-dd dates
+  // that the backend understands on `?from=&to=`. Memoised so we
+  // don't recompute on every render — important because the result
+  // feeds usePolledQuery's deps.
+  const { from, to } = useMemo(() => presetToDateRange(timeRange), [timeRange]);
+
   const { data: kpis, isLoading } = usePolledQuery(
-    () => getKpis({ plantId, section, tab, stockSelector }),
+    () =>
+      getKpis({
+        plantId,
+        section,
+        tab,
+        stockSelector,
+        from,
+        to,
+        shift,
+      }),
     {
       interval: 60_000,
-      deps: [plantId, section, tab, stockSelector],
+      deps: [plantId, section, tab, stockSelector, from, to, shift],
     },
   );
 
@@ -129,7 +147,13 @@ function KpiGrid({
             p: 2,
           }}
         >
-          <OeeDrillPanel plantId={plantId} section={section} />
+          <OeeDrillPanel
+            plantId={plantId}
+            section={section}
+            from={from}
+            to={to}
+            shift={shift}
+          />
         </Box>
       )}
 
@@ -147,6 +171,9 @@ function KpiGrid({
             plantId={plantId}
             section={section}
             stockSelector={stockSelector}
+            from={from}
+            to={to}
+            shift={shift}
           />
         </Box>
       )}
@@ -161,7 +188,13 @@ function KpiGrid({
             p: 2,
           }}
         >
-          <DowntimeDrillPanel plantId={plantId} section={section} />
+          <DowntimeDrillPanel
+            plantId={plantId}
+            section={section}
+            from={from}
+            to={to}
+            shift={shift}
+          />
         </Box>
       )}
 
@@ -175,7 +208,13 @@ function KpiGrid({
             p: 2,
           }}
         >
-          <PlanComplianceDrillPanel plantId={plantId} section={section} />
+          <PlanComplianceDrillPanel
+            plantId={plantId}
+            section={section}
+            from={from}
+            to={to}
+            shift={shift}
+          />
         </Box>
       )}
 
@@ -220,6 +259,8 @@ function KpiGrid({
         onClose={() => setTrendKpiId(null)}
         plantId={plantId}
         kpi={trendKpi}
+        section={section}
+        category={tab}
       />
     </Box>
   );

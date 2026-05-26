@@ -22,13 +22,13 @@ import { getDowntimeDrill } from "@/api/drills.js";
  * with machine assignment, event count, duration, and production
  * loss in hours.
  */
-function DowntimeDrillPanel({ plantId, section }) {
+function DowntimeDrillPanel({ plantId, section, from, to, shift }) {
   const toast = useToast();
   const [search, setSearch] = useState("");
 
   const { data, isLoading, error } = usePolledQuery(
-    () => getDowntimeDrill({ plantId, section }),
-    { interval: 60_000, deps: [plantId, section] },
+    () => getDowntimeDrill({ plantId, section, from, to, shift }),
+    { interval: 60_000, deps: [plantId, section, from, to, shift] },
   );
 
   if (error) toast.error("Could not load Downtime drill.");

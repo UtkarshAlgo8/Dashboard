@@ -65,25 +65,38 @@ function whereClause(filters) {
 }
 
 /**
- * Build the date-range portion of a WHERE. Accepts ISO yyyy-mm-dd
- * inputs (the frontend sends ISO; we translate). Empty `from` and
- * `to` produce no constraint.
+ * Build the date-range portion of a WHERE.
+ *
+ * Upstream gotcha: although gold_dummy has a `year` column, the data
+ * is NOT physically partitioned by year. Putting `year = X` in the
+ * WHERE causes the upstream Lambda to look for a non-existent
+ * `gold_dummy/year=X/*.parquet` partition path. So we DO NOT emit
+ * any year/month/day column predicate — we filter only on the
+ * `date` STRING column by reformatting it to YYYYMMDD inline and
+ * doing a lexicographic compare.
+ *
+ * `date` is DD-MM-YYYY, e.g. `"27-05-2026"`. The expression
+ * `SUBSTRING(date,7,4) || SUBSTRING(date,4,2) || SUBSTRING(date,1,2)`
+ * yields `"20260527"` which orders correctly across years/months/days.
+ * Cheap, engine-agnostic (Athena / DuckDB / Trino).
  */
 function dateRangeFilter(from, to) {
+  if (!from && !to) return "";
+
+  const f = from ? parseIsoDate(from) : null;
+  const t = to ? parseIsoDate(to) : null;
+
+  const dateExpr =
+    "(SUBSTRING(date, 7, 4) || SUBSTRING(date, 4, 2) || SUBSTRING(date, 1, 2))";
+
   const parts = [];
-  if (from) {
-    const { year, monthNum } = parseIsoDate(from);
-    parts.push(
-      `AND ((year > ${year}) OR (year = ${year} AND CAST(month AS INTEGER) >= ${monthNum}))`,
-    );
-  }
-  if (to) {
-    const { year, monthNum } = parseIsoDate(to);
-    parts.push(
-      `AND ((year < ${year}) OR (year = ${year} AND CAST(month AS INTEGER) <= ${monthNum}))`,
-    );
-  }
+  if (f) parts.push(`AND ${dateExpr} >= '${yyyymmdd(f)}'`);
+  if (t) parts.push(`AND ${dateExpr} <= '${yyyymmdd(t)}'`);
   return parts.join(" ");
+}
+
+function yyyymmdd({ year, monthNum, dayNum }) {
+  return `${year}${String(monthNum).padStart(2, "0")}${String(dayNum).padStart(2, "0")}`;
 }
 
 function parseIsoDate(iso) {
@@ -93,6 +106,7 @@ function parseIsoDate(iso) {
     return {
       year: Number.parseInt(ymd[1], 10),
       monthNum: Number.parseInt(ymd[2], 10),
+      dayNum: Number.parseInt(ymd[3], 10),
     };
   }
   const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(iso);
@@ -100,59 +114,56 @@ function parseIsoDate(iso) {
     return {
       year: Number.parseInt(dmy[3], 10),
       monthNum: Number.parseInt(dmy[2], 10),
+      dayNum: Number.parseInt(dmy[1], 10),
     };
   }
   throw new Error(`Cannot parse date literal: ${iso}`);
 }
 
-const SECTION_LABEL = {
-  mix: "Mixing",
-  stk: "Stock",
-  tbm: "TBM",
-  cur: "Curing",
-};
-
-const CATEGORY_LABEL = {
-  p: "Productivity",
-  q: "Quality",
-  c: "Cost",
-  m: "Morale",
-  s: "Safety",
-  // No "i" — Inventory category doesn't exist in gold_dummy yet
-  // (PM, 2026-05-27). Frontend hides the Inventory tab.
-};
-
-const SHIFT_LABEL = {
-  all: null, // null → no granularity filter
-  daily: "Daily",
-  a: "Shift A",
-  b: "Shift B",
-  c: "Shift C",
-};
-
-export function sectionLabel(sectionId) {
-  const label = SECTION_LABEL[sectionId];
-  if (!label) throw new Error(`Unknown section id: ${sectionId}`);
-  return label;
-}
-
-export function categoryLabel(tabId) {
-  const label = CATEGORY_LABEL[tabId];
-  if (!label) throw new Error(`Unknown category/tab id: ${tabId}`);
-  return label;
-}
-
 /**
- * Map a frontend shift value to a gold_dummy.granularity value.
- * - `undefined` / `"all"` / `"All"` → no granularity filter (returns null)
- * - `"a"`/`"b"`/`"c"` → "Shift A"/"Shift B"/"Shift C"
- * - otherwise default to "Daily"
+ * Allow-lists for the gold_dummy column values the frontend can send
+ * directly on the wire. Backend reads URL params straight into the
+ * WHERE clause — no translation table — but rejects anything not in
+ * these sets to keep SQL injection surface zero and to surface
+ * vocabulary drift early.
+ *
+ * The actual gold_dummy → frontend internal-ID mapping lives in the
+ * frontend at `src/lib/labelMaps.js`. Keep these two in sync when a
+ * new section / category / granularity value lands in the data.
  */
-export function granularityForShift(shift) {
-  if (shift == null) return "Daily";
-  const v = String(shift).toLowerCase();
-  if (v === "all") return null;
-  return SHIFT_LABEL[v] ?? "Daily";
+export const ALLOWED_SECTIONS = new Set(["Mixing", "Stock", "TBM", "Curing"]);
+export const ALLOWED_CATEGORIES = new Set([
+  "Productivity",
+  "Quality",
+  "Cost",
+  "Morale",
+  "Safety",
+]);
+export const ALLOWED_GRANULARITIES = new Set([
+  "Daily",
+  "Shift A",
+  "Shift B",
+  "Shift C",
+]);
+
+function requireAllowed(value, allowed, label) {
+  if (!value) throw new Error(`Missing required field: ${label}`);
+  if (!allowed.has(value)) {
+    throw new Error(
+      `Unknown ${label}: ${value}. Expected one of ${[...allowed].join(", ")}.`,
+    );
+  }
+  return value;
+}
+
+function optionalAllowed(value, allowed, label) {
+  if (value === undefined || value === null || value === "") return null;
+  if (!allowed.has(value)) {
+    throw new Error(
+      `Unknown ${label}: ${value}. Expected one of ${[...allowed].join(", ")}.`,
+    );
+  }
+  return value;
 }
 
 /* ---------------------------------------------------------------- *
@@ -170,19 +181,18 @@ export function kpiGridQuery({
   plant,
   section,
   category,
-  shift,
+  granularity,
   from,
   to,
   tyreType,
 }) {
-  const granularity = granularityForShift(shift);
   const innerWhere = whereClause({
     plant,
     department: "Production",
-    section: sectionLabel(section),
-    category: categoryLabel(category),
+    section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
+    category: requireAllowed(category, ALLOWED_CATEGORIES, "category"),
     tyre_type: tyreType,
-    granularity,
+    granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
     machine: NAN, // KPI grid is section-level — machine column is 'nan'
   });
   return `
@@ -207,16 +217,15 @@ export function kpiGridQuery({
  * latest by date. Rows with `machine = 'nan'` are filtered out
  * (those are the top-level KPI rows, not drill rows).
  */
-export function oeeDrillQuery({ plant, section, shift, tyreType, from, to }) {
-  const granularity = granularityForShift(shift);
+export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to }) {
   const innerWhere = whereClause({
     plant,
     department: "Production",
-    section: sectionLabel(section),
+    section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
     category: "Productivity",
     kpi_name: "OEE",
     tyre_type: tyreType,
-    granularity,
+    granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
   });
   return `
     SELECT machine, drill_down_attribute, actual_value
@@ -243,20 +252,19 @@ export function oeeDrillQuery({ plant, section, shift, tyreType, from, to }) {
 export function productionDrillQuery({
   plant,
   section,
-  shift,
+  granularity,
   tyreType,
   from,
   to,
 }) {
-  const granularity = granularityForShift(shift);
   const innerWhere = whereClause({
     plant,
     department: "Production",
-    section: sectionLabel(section),
+    section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
     category: "Productivity",
     kpi_name: "Production",
     tyre_type: tyreType,
-    granularity,
+    granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
   });
   return `
     SELECT machine, itemcode, product_type, drill_down_attribute, actual_value
@@ -282,23 +290,22 @@ export function productionDrillQuery({
 export function downtimeDrillQuery({
   plant,
   section,
-  shift,
+  granularity,
   tyreType,
   from,
   to,
 }) {
-  const granularity = granularityForShift(shift);
   return `
     SELECT machine, drill_down_attribute, actual_value, date
     FROM ${TABLE()}
     ${whereClause({
       plant,
       department: "Production",
-      section: sectionLabel(section),
+      section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
       category: "Productivity",
       kpi_name: "Downtime",
       tyre_type: tyreType,
-      granularity,
+      granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
     })}
       AND machine != ${escapeLiteral(NAN)}
       ${dateRangeFilter(from, to)}
@@ -309,23 +316,22 @@ export function downtimeDrillQuery({
 export function planComplianceDrillQuery({
   plant,
   section,
-  shift,
+  granularity,
   tyreType,
   from,
   to,
 }) {
-  const granularity = granularityForShift(shift);
   return `
     SELECT machine, itemcode, drill_down_attribute, actual_value
     FROM ${TABLE()}
     ${whereClause({
       plant,
       department: "Production",
-      section: sectionLabel(section),
+      section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
       category: "Productivity",
       kpi_name: "Plan Compliance",
       tyre_type: tyreType,
-      granularity,
+      granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
     })}
       AND machine != ${escapeLiteral(NAN)}
       ${dateRangeFilter(from, to)}
@@ -353,7 +359,7 @@ export function scrapTraceQuery({
     ${whereClause({
       plant,
       department: "Production",
-      section: sectionLabel(section),
+      section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
       category: "Quality",
       kpi_name: "Scrap",
       machine,
@@ -370,31 +376,101 @@ export function scrapTraceQuery({
  * Trend series — one row per date for a single (plant, section,
  * category, kpi_name) top-level cell.
  */
+/**
+ * Trend query — three behaviours, switched by `range` (PM clarification
+ * 2026-05-27):
+ *
+ *   range = "today"  → daily resolution, last 30 days. Returns ~30
+ *                      rows aliased { date: "DD-MM-YYYY", actual_value }.
+ *   range = "month"  → monthly aggregates for the current calendar
+ *                      year. Returns up to 12 rows aliased
+ *                      { date: "YYYY-MM", actual_value: AVG(...) }.
+ *   range = "year"   → yearly aggregates across all data. One row
+ *                      per year aliased { date: "YYYY",
+ *                      actual_value: AVG(...) }.
+ *   range = "custom" → daily resolution, explicit from/to.
+ *
+ * Aggregation uses AVG. Switch to SUM for volume-type KPIs (e.g.
+ * Production) later by branching on `kpiName` if needed.
+ */
 export function trendQuery({
   plant,
   section,
   category,
   kpiName,
-  shift,
+  range,
+  granularity,
   from,
   to,
   tyreType,
 }) {
-  const granularity = granularityForShift(shift) ?? "Daily";
+  const baseFilters = whereClause({
+    plant,
+    department: "Production",
+    section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
+    category: requireAllowed(category, ALLOWED_CATEGORIES, "category"),
+    kpi_name: kpiName,
+    granularity:
+      optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity") ??
+      "Daily",
+    tyre_type: tyreType,
+    machine: NAN,
+  });
+
+  const dateExpr =
+    "(SUBSTRING(date, 7, 4) || SUBSTRING(date, 4, 2) || SUBSTRING(date, 1, 2))";
+
+  if (range === "month") {
+    const currentYear = new Date().getFullYear();
+    return `
+      SELECT (CAST(year AS VARCHAR) || '-' || month) AS date,
+             AVG(actual_value) AS actual_value
+      FROM ${TABLE()}
+      ${baseFilters}
+        AND ${dateExpr} >= '${currentYear}0101'
+        AND ${dateExpr} <= '${currentYear}1231'
+      GROUP BY year, month
+      ORDER BY year, CAST(month AS INTEGER)
+    `.trim();
+  }
+
+  if (range === "year") {
+    return `
+      SELECT CAST(year AS VARCHAR) AS date,
+             AVG(actual_value) AS actual_value
+      FROM ${TABLE()}
+      ${baseFilters}
+      GROUP BY year
+      ORDER BY year
+    `.trim();
+  }
+
+  // Default: daily resolution.
+  // `range === "today"` overrides the from/to with [today − 30d, today].
+  // `range === "custom"` uses caller-provided from/to.
+  // Anything else falls through to caller's from/to as well.
+  let effectiveFrom = from;
+  let effectiveTo = to;
+  if (range === "today") {
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(start.getDate() - 30);
+    effectiveFrom = isoLocal(start);
+    effectiveTo = isoLocal(now);
+  }
+
   return `
     SELECT date, actual_value, year, month, day
     FROM ${TABLE()}
-    ${whereClause({
-      plant,
-      department: "Production",
-      section: sectionLabel(section),
-      category: categoryLabel(category),
-      kpi_name: kpiName,
-      granularity,
-      tyre_type: tyreType,
-      machine: NAN,
-    })}
-      ${dateRangeFilter(from, to)}
+    ${baseFilters}
+      ${dateRangeFilter(effectiveFrom, effectiveTo)}
     ORDER BY year, CAST(month AS INTEGER), day
   `.trim();
+}
+
+function isoLocal(d) {
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }

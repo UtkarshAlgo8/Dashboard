@@ -44,7 +44,7 @@ router.get("/oee", async (req, res, next) => {
       const sql = oeeDrillQuery({
         plant: "Banmore",
         section: req.query.section,
-        shift: req.query.shift,
+        granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
         from: req.query.from,
         to: req.query.to,
@@ -69,7 +69,7 @@ router.get("/production", async (req, res, next) => {
       const sql = productionDrillQuery({
         plant: "Banmore",
         section: req.query.section,
-        shift: req.query.shift,
+        granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
         from: req.query.from,
         to: req.query.to,
@@ -107,7 +107,7 @@ router.get("/downtime", async (req, res, next) => {
       const sql = downtimeDrillQuery({
         plant: "Banmore",
         section: req.query.section,
-        shift: req.query.shift,
+        granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
         from: req.query.from,
         to: req.query.to,
@@ -132,7 +132,7 @@ router.get("/plan-compliance", async (req, res, next) => {
       const sql = planComplianceDrillQuery({
         plant: "Banmore",
         section: req.query.section,
-        shift: req.query.shift,
+        granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
         from: req.query.from,
         to: req.query.to,

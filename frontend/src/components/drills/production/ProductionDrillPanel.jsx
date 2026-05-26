@@ -118,7 +118,14 @@ const STOCK_OPTION_LABELS = {
   "chaffer-production": "Chaffer Production",
 };
 
-function ProductionDrillPanel({ plantId, section, stockSelector }) {
+function ProductionDrillPanel({
+  plantId,
+  section,
+  stockSelector,
+  from,
+  to,
+  shift,
+}) {
   const toast = useToast();
   const config = SECTION_CONFIG[section] ?? { title: "Production Drill-down" };
 
@@ -142,10 +149,11 @@ function ProductionDrillPanel({ plantId, section, stockSelector }) {
   }
 
   const { data, isLoading, error } = usePolledQuery(
-    () => getProductionDrill({ plantId, section, stockSelector }),
+    () =>
+      getProductionDrill({ plantId, section, stockSelector, from, to, shift }),
     {
       interval: 60_000,
-      deps: [plantId, section, stockSelector],
+      deps: [plantId, section, stockSelector, from, to, shift],
     },
   );
 

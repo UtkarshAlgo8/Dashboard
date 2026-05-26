@@ -8,12 +8,11 @@ export const router = Router({ mergeParams: true });
 
 /**
  * GET /plants/:plantId/production/trends
- *   ?kpiId=&section=&category=&shift=&from=&to=&tyreType=
+ *   ?kpiId=&section=&category=&granularity=&from=&to=&tyreType=
  *
- * Frontend's getTrend() (src/api/trends.js) hits this URL.
- *
- * `kpiId` is the frontend's slug ("oee" / "production" / etc).
- * Map slug → human kpi_name for the gold_dummy query.
+ * URL params carry gold_dummy values directly. `kpiId` is still a
+ * frontend slug (oee / production / downtime / plan-compliance);
+ * we map it to the matching kpi_name.
  */
 const KPI_NAME_BY_ID = {
   oee: "OEE",
@@ -24,7 +23,16 @@ const KPI_NAME_BY_ID = {
 
 router.get("/", async (req, res, next) => {
   try {
-    const { kpiId, section, category, shift, from, to, tyreType } = req.query;
+    const {
+      kpiId,
+      section,
+      category,
+      range,
+      granularity,
+      from,
+      to,
+      tyreType,
+    } = req.query;
     if (!kpiId || !section || !category) {
       res.status(400).json({
         error: {
@@ -46,7 +54,8 @@ router.get("/", async (req, res, next) => {
         section,
         category,
         kpiName,
-        shift,
+        range,
+        granularity,
         tyreType: tyreType ?? null,
         from,
         to,

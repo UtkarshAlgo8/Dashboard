@@ -18,7 +18,7 @@ import { getOeeDrill } from "@/api/drills.js";
  * Phase 1 ships Banmore + Mixing data. Spec 11 widens to TBM /
  * Curing / Stock.
  */
-function OeeDrillPanel({ plantId, section }) {
+function OeeDrillPanel({ plantId, section, from, to, shift }) {
   const toast = useToast();
   const [search, setSearch] = useState("");
   const [selectedCell, setSelectedCell] = useState(null); // { machineId, component } | null
@@ -26,8 +26,8 @@ function OeeDrillPanel({ plantId, section }) {
   const [traceItemCode, setTraceItemCode] = useState(null);
 
   const { data, isLoading, error } = usePolledQuery(
-    () => getOeeDrill({ plantId, section }),
-    { interval: 60_000, deps: [plantId, section] },
+    () => getOeeDrill({ plantId, section, from, to, shift }),
+    { interval: 60_000, deps: [plantId, section, from, to, shift] },
   );
 
   if (error) {

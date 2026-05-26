@@ -29,7 +29,15 @@ import { getTrend } from "@/api/trends.js";
  * state). Closes via Escape, backdrop click, or the X button (MUI
  * Dialog defaults).
  */
-function TrendModal({ open, onClose, plantId, kpi, compound }) {
+function TrendModal({
+  open,
+  onClose,
+  plantId,
+  kpi,
+  section,
+  category,
+  compound,
+}) {
   const theme = useTheme();
   const toast = useToast();
   const [range, setRange] = useState("month");
@@ -41,6 +49,8 @@ function TrendModal({ open, onClose, plantId, kpi, compound }) {
       getTrend({
         plantId,
         kpiId: kpi?.id,
+        section,
+        category,
         range,
         from,
         to,
@@ -49,7 +59,17 @@ function TrendModal({ open, onClose, plantId, kpi, compound }) {
     {
       enabled: open && Boolean(kpi),
       interval: 0,
-      deps: [open, plantId, kpi?.id, range, from, to, compound],
+      deps: [
+        open,
+        plantId,
+        kpi?.id,
+        section,
+        category,
+        range,
+        from,
+        to,
+        compound,
+      ],
     },
   );
 

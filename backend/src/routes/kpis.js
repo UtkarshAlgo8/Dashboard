@@ -8,31 +8,35 @@ export const router = Router({ mergeParams: true });
 
 /**
  * GET /plants/:plantId/production/kpis
- *   ?section=&tab=&shift=&compound=&stockSelector=&from=&to=&tyreType=
+ *   ?section=&category=&granularity=&compound=&stockSelector=&from=&to=&tyreType=
  *
- * - section: mix | tbm | cur | stk
- * - tab:     p | q | c | m | s   (i = Inventory disabled in Phase 1)
- * - shift:   all | daily | a | b | c    (maps to gold_dummy.granularity)
+ * URL params carry gold_dummy column values directly (no translation):
+ *   - section:     "Mixing" | "TBM" | "Curing" | "Stock"
+ *   - category:    "Productivity" | "Quality" | "Cost" | "Morale" | "Safety"
+ *   - granularity: "Daily" | "Shift A" | "Shift B" | "Shift C" (optional;
+ *                  omit for "All Shifts" → no granularity predicate)
  *
- * compound / stockSelector are accepted on the URL so the frontend
- * polled refetches don't break, but are not forwarded to the SQL —
- * gold_dummy doesn't (yet) carry compound or sub-selector columns.
+ * compound / stockSelector are accepted on the URL for client-side
+ * polling stability but are not forwarded to the SQL — gold_dummy
+ * has no compound / sub-selector columns.
+ *
+ * Inventory (no `category=Inventory` row in gold_dummy yet) is
+ * special-cased to `{data: []}` so the empty Inventory tab tooltip
+ * keeps rendering even with the live backend.
  */
 router.get("/", async (req, res, next) => {
   try {
-    const { section, tab, shift, from, to, tyreType } = req.query;
-    if (!section || !tab) {
+    const { section, category, granularity, from, to, tyreType } = req.query;
+    if (!section || !category) {
       res.status(400).json({
         error: {
           code: "VALIDATION_ERROR",
-          message: "Both `section` and `tab` query params are required.",
+          message: "Both `section` and `category` query params are required.",
         },
       });
       return;
     }
-    if (tab === "i") {
-      // Inventory has no rows in gold_dummy yet. Return [] instead of
-      // erroring so the frontend renders its empty state cleanly.
+    if (category === "Inventory") {
       res.json({ data: [] });
       return;
     }
@@ -44,8 +48,8 @@ router.get("/", async (req, res, next) => {
       const sql = kpiGridQuery({
         plant: "Banmore",
         section,
-        category: tab,
-        shift,
+        category,
+        granularity,
         from,
         to,
         tyreType: tyreType ?? null,

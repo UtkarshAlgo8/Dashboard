@@ -37,7 +37,7 @@ function BanmoreProduction() {
   const [category, setCategory] = useState("p");
   const [stockSelector, setStockSelector] = useState("4roll"); // Stock default per FR-P18
   const [timeRange, setTimeRange] = useState({
-    preset: "today",
+    preset: "month",
     from: "",
     to: "",
   });
@@ -132,6 +132,8 @@ function BanmoreProduction() {
                 tab={category}
                 stockSelector={stockSelector}
                 onStockSelectorChange={setStockSelector}
+                timeRange={timeRange}
+                shift={shift}
               />
             )}
           </Box>

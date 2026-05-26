@@ -7,32 +7,44 @@ import {
   DOWNTIME_DRILL_BY_PLANT_SECTION,
   PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION,
 } from "@/lib/mockData.js";
+import { toSectionValue, toGranularityValue } from "@/lib/labelMaps.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
 const EMPTY_OEE = { overall: null, machines: [], subDrill: {} };
 
 /**
+ * Append optional `from`, `to`, `granularity` params. Translates the
+ * internal shift id (e.g. "a") into the gold_dummy value
+ * ("Shift A") before writing the URL. Skips empty/null values so
+ * the URL stays compact when no filter is active.
+ */
+function appendTimeShift(query, { from, to, shift } = {}) {
+  if (from) query.set("from", from);
+  if (to) query.set("to", to);
+  const granularity = toGranularityValue(shift);
+  if (granularity) query.set("granularity", granularity);
+}
+
+/**
  * Fetch the OEE drill for a given (plant, section) slice.
- * Phase 1 mock returns Banmore + Mixing only; other slices return
- * an empty payload until spec 11.
  *
  * @param {object} params
  * @param {string} params.plantId
  * @param {string} params.section - "mix" | "tbm" | "cur" | "stk"
- * @returns {Promise<{
- *   overall: { availability: number, performance: number, quality: number } | null,
- *   machines: Array,
- *   subDrill: Record<string, Array>
- * }>}
+ * @param {string} [params.from]    ISO yyyy-mm-dd
+ * @param {string} [params.to]      ISO yyyy-mm-dd
+ * @param {string} [params.shift]   "all" | "daily" | "a" | "b" | "c"
  */
-export function getOeeDrill({ plantId, section }) {
+export function getOeeDrill({ plantId, section, from, to, shift }) {
   if (USE_MOCK) {
     const key = `${plantId}/${section}`;
     return mockDelay(OEE_DRILL_BY_PLANT_SECTION[key] ?? EMPTY_OEE);
   }
+  const query = new URLSearchParams({ section: toSectionValue(section) });
+  appendTimeShift(query, { from, to, shift });
   return client.get(
-    `/plants/${plantId}/production/drills/oee?section=${section}`,
+    `/plants/${plantId}/production/drills/oee?${query.toString()}`,
   );
 }
 
@@ -42,16 +54,22 @@ export function getOeeDrill({ plantId, section }) {
  * the right sub-array based on the section's UX (compound for Mixing,
  * tyre family for TBM/Curing, category for Stock).
  *
- * For Stock the lookup key includes the stockSelector segment because
- * each sub-selector exposes its own category list.
- *
  * @param {object} params
  * @param {string} params.plantId
- * @param {string} params.section - "mix" | "tbm" | "cur" | "stk"
- * @param {string} [params.stockSelector] - required for section "stk"
- * @returns {Promise<Record<string, Array>>}
+ * @param {string} params.section
+ * @param {string} [params.stockSelector]
+ * @param {string} [params.from]
+ * @param {string} [params.to]
+ * @param {string} [params.shift]
  */
-export function getProductionDrill({ plantId, section, stockSelector }) {
+export function getProductionDrill({
+  plantId,
+  section,
+  stockSelector,
+  from,
+  to,
+  shift,
+}) {
   if (USE_MOCK) {
     const key =
       section === "stk"
@@ -59,77 +77,79 @@ export function getProductionDrill({ plantId, section, stockSelector }) {
         : `${plantId}/${section}`;
     return mockDelay(PRODUCTION_DRILL_BY_PLANT_SECTION[key] ?? {});
   }
-  const query =
-    section === "stk" && stockSelector ? `&stockSelector=${stockSelector}` : "";
+  const query = new URLSearchParams({ section: toSectionValue(section) });
+  if (section === "stk" && stockSelector)
+    query.set("stockSelector", stockSelector);
+  appendTimeShift(query, { from, to, shift });
   return client.get(
-    `/plants/${plantId}/production/drills/production?section=${section}${query}`,
+    `/plants/${plantId}/production/drills/production?${query.toString()}`,
   );
 }
 
 /**
  * Fetch Production ID-level traceability for a scrap entry (spec 08).
- * Returns [] when the (machine, itemCode) pair has no traceability
- * data configured.
  *
  * @param {object} params
  * @param {string} params.plantId
  * @param {string} params.section
  * @param {string} params.machineId
  * @param {string} params.itemCode
- * @returns {Promise<Array>}
+ * @param {string} [params.from]
+ * @param {string} [params.to]
  */
 export function getScrapTraceability({
   plantId,
   section,
   machineId,
   itemCode,
+  from,
+  to,
 }) {
   if (USE_MOCK) {
     const key = `${plantId}/${section}/${machineId}/${itemCode}`;
     return mockDelay(SCRAP_TRACEABILITY[key] ?? []);
   }
+  const query = new URLSearchParams({
+    section: toSectionValue(section),
+    machine: machineId,
+    itemCode,
+  });
+  appendTimeShift(query, { from, to });
   return client.get(
-    `/plants/${plantId}/production/drills/scrap-traceability?section=${section}&machine=${machineId}&itemCode=${encodeURIComponent(itemCode)}`,
+    `/plants/${plantId}/production/drills/scrap-traceability?${query.toString()}`,
   );
 }
 
 /**
  * Fetch the Downtime drill (spec 09) per BRD FR-P60.
- *
- * @param {object} params
- * @param {string} params.plantId
- * @param {string} params.section
- * @returns {Promise<Array>}
  */
-export function getDowntimeDrill({ plantId, section }) {
+export function getDowntimeDrill({ plantId, section, from, to, shift }) {
   if (USE_MOCK) {
     const key = `${plantId}/${section}`;
     return mockDelay(DOWNTIME_DRILL_BY_PLANT_SECTION[key] ?? []);
   }
+  const query = new URLSearchParams({ section: toSectionValue(section) });
+  appendTimeShift(query, { from, to, shift });
   return client.get(
-    `/plants/${plantId}/production/drills/downtime?section=${section}`,
+    `/plants/${plantId}/production/drills/downtime?${query.toString()}`,
   );
 }
 
 const EMPTY_PLAN_COMPLIANCE = { skuWise: [], machineWise: [] };
 
 /**
- * Fetch the Plan Compliance drill (spec 09) per BRD FR-P61. Returns
- * both views; consumer toggles client-side.
- *
- * @param {object} params
- * @param {string} params.plantId
- * @param {string} params.section
- * @returns {Promise<{ skuWise: Array, machineWise: Array }>}
+ * Fetch the Plan Compliance drill (spec 09) per BRD FR-P61.
  */
-export function getPlanComplianceDrill({ plantId, section }) {
+export function getPlanComplianceDrill({ plantId, section, from, to, shift }) {
   if (USE_MOCK) {
     const key = `${plantId}/${section}`;
     return mockDelay(
       PLAN_COMPLIANCE_DRILL_BY_PLANT_SECTION[key] ?? EMPTY_PLAN_COMPLIANCE,
     );
   }
+  const query = new URLSearchParams({ section: toSectionValue(section) });
+  appendTimeShift(query, { from, to, shift });
   return client.get(
-    `/plants/${plantId}/production/drills/plan-compliance?section=${section}`,
+    `/plants/${plantId}/production/drills/plan-compliance?${query.toString()}`,
   );
 }

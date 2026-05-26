@@ -20,13 +20,13 @@ import { getPlanComplianceDrill } from "@/api/drills.js";
  * side-by-side per docs/artifact.jsx:1235–1239. Compliance threshold:
  * green ≥ 95%, amber ≥ 90%, red < 90%.
  */
-function PlanComplianceDrillPanel({ plantId, section }) {
+function PlanComplianceDrillPanel({ plantId, section, from, to, shift }) {
   const toast = useToast();
   const theme = useTheme();
 
   const { data, isLoading, error } = usePolledQuery(
-    () => getPlanComplianceDrill({ plantId, section }),
-    { interval: 60_000, deps: [plantId, section] },
+    () => getPlanComplianceDrill({ plantId, section, from, to, shift }),
+    { interval: 60_000, deps: [plantId, section, from, to, shift] },
   );
 
   if (error) toast.error("Could not load Plan Compliance drill.");
