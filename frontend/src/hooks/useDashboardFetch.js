@@ -29,6 +29,11 @@ const initialState = {
   productType: null,
   category: "p",
   granularity: null, // null = no granularity filter (Lambda ignores category when granularity is set)
+  // "snapshot" → transformer takes latest row's actual_value as the
+  // headline (used for Today/Month/Year presets via the pre-aggregated
+  // Daily/MTD/YTD rows). "aggregate" → transformer rolls Daily rows per
+  // spec §9 (used for custom from/to ranges).
+  mode: "snapshot",
   date: null, // single-day equality (Today)
   from: null, // range start (Month / Year / custom)
   to: null, // range end
@@ -97,6 +102,15 @@ function buildContext(state) {
   return ctx;
 }
 
+// Landing fetch wants ALL granularities; the shift filter (state.granularity)
+// only narrows the SHIFT-comparison consumption in the transformer, not
+// the backend query. This helper drops it from the outgoing context.
+function stripGranularity(ctx) {
+  // eslint-disable-next-line no-unused-vars
+  const { granularity, ...rest } = ctx;
+  return rest;
+}
+
 function sectionIdToName(id) {
   // Artifact section IDs → gold_dummy section values.
   return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
@@ -113,12 +127,19 @@ export function useDashboardFetch() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // Landing payload — always fetched. Carries the 4 KPI cards for every
-  // (section, category) combo. drillKpis is intentionally null here so
-  // the upstream Lambda's 5000-row cap is spent only on landing rows
-  // (drill_down_level = 1), guaranteeing every section's 4 cards have
-  // data even when a drill is open.
+  // (section, category) combo plus the Shift Comparison rows.
+  //
+  // No granularity filter: we want all 6 granularities (Daily / Shift A/B/C
+  // / MTD / YTD) for the chosen window so a single fetch feeds the
+  // headline value, the sparkline, AND the shift comparison. The
+  // transformer picks the right granularity per consumer:
+  //   - MTD/YTD presets → latest pre-aggregated row's actual_value
+  //   - Today preset    → latest Daily row's actual_value
+  //   - Shift selector  → aggregated Shift A/B/C rows
+  // The trailing 7–14 day window keeps row count safely under the
+  // upstream Lambda's 5000-row cap.
   const landingPayload = {
-    context: buildContext(state),
+    context: stripGranularity(buildContext(state)),
     date: state.date,
     from: state.from,
     to: state.to,
@@ -130,9 +151,17 @@ export function useDashboardFetch() {
   // Drill payload — only fetched when a card is drilled. Returns drill
   // children for the active card. Lambda's 5000-row cap applies only to
   // drill-level rows here, not the landing band.
+  //
+  // Drill panels show per-machine / per-area breakdowns over the period,
+  // which needs Daily granularity. The landing payload may use MTD/YTD
+  // (for pre-aggregated headline values), but the drill fetch overrides
+  // back to Daily so drill panels never get a single MTD/YTD row.
   const drillPayload = state.drillKpis
     ? {
-        context: buildContext(state),
+        context: {
+          ...buildContext(state),
+          granularity: "Daily",
+        },
         date: state.date,
         from: state.from,
         to: state.to,
@@ -178,6 +207,8 @@ export function useDashboardFetch() {
     ? toKpiGrid(data, {
         section: sectionIdToName(state.section),
         category: state.category.toUpperCase(),
+        granularity: state.granularity ?? "Daily",
+        mode: state.mode ?? "snapshot",
       })
     : [];
   const drillRows = data && state.drillKpis !== null ? toDrillRows(data) : null;
