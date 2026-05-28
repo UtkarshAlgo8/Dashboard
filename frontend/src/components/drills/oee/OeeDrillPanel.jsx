@@ -3,6 +3,7 @@ import { Box, Stack, Typography } from "@mui/material";
 import OverallTiles from "./OverallTiles.jsx";
 import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
+import SubDrill from "./SubDrill.jsx";
 
 /**
  * OEE drill panel — derives its data straight from the gold_dummy rows
@@ -20,9 +21,35 @@ import MachineTable from "./MachineTable.jsx";
  * this commit — once the section-level table works the drill-deeper
  * panels can be re-added against the same data path.
  */
+// Sub-category leaf kpi_names per spec §3 — for each (machine, A/P/Q
+// component), the row click drills into one of these gold_dummy kpis.
+const SUB_KPI_NAMES = {
+  availability: {
+    breakdown: "Breakdown",
+    setupAdjustment: "Setup",
+    startup: "Startup",
+    toolChange: "ToolChange",
+  },
+  performance: {
+    minorStoppage: "MinorStoppage",
+    reducedSpeed: "ReducedSpeed",
+  },
+  quality: {
+    defect: "Defect",
+    scrap: "Scrap",
+  },
+};
+
+const FIRST_SUB = {
+  availability: "breakdown",
+  performance: "minorStoppage",
+  quality: "defect",
+};
+
 function OeeDrillPanel({ section, rawRows }) {
   const [search, setSearch] = useState("");
   const [selectedCell, setSelectedCell] = useState(null);
+  const [subCategory, setSubCategory] = useState(null);
 
   // Section name in gold_dummy values ("Mixing", "TBM", etc.) — the
   // panel may receive the UI id ("mix", "tbm") or the full name.
@@ -98,12 +125,79 @@ function OeeDrillPanel({ section, rawRows }) {
   }, [machines, search]);
 
   const handleSelectCell = (machineId, component) => {
-    setSelectedCell((current) =>
-      current?.machineId === machineId && current?.component === component
-        ? null
-        : { machineId, component },
-    );
+    setSelectedCell((current) => {
+      if (current?.machineId === machineId && current?.component === component) {
+        setSubCategory(null);
+        return null;
+      }
+      setSubCategory(FIRST_SUB[component]);
+      return { machineId, component };
+    });
   };
+
+  // Build SubDrill rows for the currently-selected (machine, component,
+  // subCategory) tuple. Group Daily rows by `remarks` (the reason text),
+  // count events, sum minutes per spec §11.
+  const subRows = useMemo(() => {
+    if (!selectedCell || !subCategory || !Array.isArray(rawRows)) return [];
+    const leafKpi = SUB_KPI_NAMES[selectedCell.component]?.[subCategory];
+    if (!leafKpi) return [];
+    const matching = rawRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === leafKpi &&
+        r.granularity === "Daily" &&
+        r.machine === selectedCell.machineId,
+    );
+    if (matching.length === 0) return [];
+    // Quality / defect & scrap use itemcode rather than remarks.
+    if (selectedCell.component === "quality") {
+      const byItem = new Map();
+      for (const r of matching) {
+        const key = r.itemcode && r.itemcode !== "nan" ? r.itemcode : "—";
+        const cur = byItem.get(key) ?? {
+          itemCode: key,
+          defectType: r.remarks && r.remarks !== "nan" ? r.remarks : "—",
+          qty: 0,
+          totalProduced: 0,
+          traceable: subCategory === "scrap",
+        };
+        if (typeof r.actual_value === "number") cur.qty += r.actual_value;
+        if (typeof r.threshold_value === "number") cur.totalProduced += r.threshold_value;
+        byItem.set(key, cur);
+      }
+      return [...byItem.values()]
+        .filter((r) => r.qty > 0)
+        .sort((a, b) => b.qty - a.qty)
+        .map((r) => ({
+          ...r,
+          qty: Math.round(r.qty),
+          totalProduced: Math.round(r.totalProduced) || 1,
+        }));
+    }
+    // Availability / Performance leaves — group by reason text.
+    const byReason = new Map();
+    for (const r of matching) {
+      const reason = r.remarks && r.remarks !== "nan" ? r.remarks : "Other";
+      const cur = byReason.get(reason) ?? {
+        reason,
+        reasonCategory: deriveCategory(reason),
+        events: 0,
+        durationMin: 0,
+      };
+      cur.events += 1;
+      if (typeof r.actual_value === "number") cur.durationMin += r.actual_value;
+      byReason.set(reason, cur);
+    }
+    return [...byReason.values()]
+      .filter((r) => r.durationMin > 0)
+      .sort((a, b) => b.durationMin - a.durationMin)
+      .map((r) => ({ ...r, durationMin: Math.round(r.durationMin) }));
+  }, [selectedCell, subCategory, rawRows, sectionName]);
+
+  const selectedMachine = selectedCell
+    ? { id: selectedCell.machineId, name: selectedCell.machineId }
+    : null;
 
   if (!overall) {
     return (
@@ -165,21 +259,50 @@ function OeeDrillPanel({ section, rawRows }) {
             </Typography>
           </Box>
         ) : (
-          <MachineTable
-            machines={filteredMachines.map((m) => ({
-              id: m.id,
-              name: m.name,
-              availability: m.availability ?? 0,
-              performance: m.performance ?? 0,
-              quality: m.quality ?? 0,
-            }))}
-            selectedCell={selectedCell}
-            onSelectCell={handleSelectCell}
-          />
+          <>
+            <MachineTable
+              machines={filteredMachines.map((m) => ({
+                id: m.id,
+                name: m.name,
+                availability: m.availability ?? 0,
+                performance: m.performance ?? 0,
+                quality: m.quality ?? 0,
+              }))}
+              selectedCell={selectedCell}
+              onSelectCell={handleSelectCell}
+            />
+            {selectedMachine && selectedCell && subCategory && (
+              <SubDrill
+                machine={selectedMachine}
+                component={selectedCell.component}
+                subCategory={subCategory}
+                onSelectSubCategory={setSubCategory}
+                rows={subRows}
+              />
+            )}
+          </>
         )}
       </Stack>
     </Stack>
   );
+}
+
+// Best-effort grouping of an availability reason into a high-level
+// category for the spec §11 "Category | Reason | Events | Duration"
+// breakdown panel. The dataset doesn't store a category column, so we
+// infer from common keywords.
+function deriveCategory(reason) {
+  const r = (reason ?? "").toLowerCase();
+  if (/elec|motor|drive|sensor|plc|circuit|wir|relay|trip/.test(r)) {
+    return "Electrical";
+  }
+  if (/mech|bear|shaft|seal|leak|cyl|valve|pump|coupling/.test(r)) {
+    return "Mechanical";
+  }
+  if (/hyd/.test(r)) return "Hydraulic";
+  if (/pneum/.test(r)) return "Pneumatic";
+  if (/process|recipe|spec|qa/.test(r)) return "Process";
+  return "Other";
 }
 
 export default OeeDrillPanel;

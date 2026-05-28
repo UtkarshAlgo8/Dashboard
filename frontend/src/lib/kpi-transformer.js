@@ -57,7 +57,7 @@ const ALLOWED_KPIS = {
   //   S: ri, fa, nm, sa
   Mixing: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
@@ -90,7 +90,7 @@ const ALLOWED_KPIS = {
   },
   TBM: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
@@ -123,7 +123,7 @@ const ALLOWED_KPIS = {
   },
   Curing: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
@@ -156,7 +156,7 @@ const ALLOWED_KPIS = {
   },
   Stock: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
