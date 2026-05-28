@@ -12,7 +12,8 @@
     "check": "bash scripts/check.sh",
     "sync:common": "bash scripts/sync-common.sh",
     "log-history": "bash scripts/log-history.sh",
-    "snapshot": "bash scripts/snapshot.sh"
+    "snapshot": "bash scripts/snapshot.sh",
+    "deploy": "git pull origin main && cd frontend && (sudo docker ps -q --filter name=jk-dashboard-frontend | grep -q . && sudo docker stop jk-dashboard-frontend || true) && (sudo docker ps -a -q --filter name=jk-dashboard-frontend | grep -q . && sudo docker rm jk-dashboard-frontend || true) && (sudo docker images -q jk-dashboard-frontend | grep -q . && sudo docker rmi jk-dashboard-frontend || true) && sudo docker build -t jk-dashboard-frontend . && sudo docker run --restart always -p 3014:3014 --name jk-dashboard-frontend -d jk-dashboard-frontend"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

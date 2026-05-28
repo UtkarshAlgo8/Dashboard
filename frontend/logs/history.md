@@ -64,3 +64,6 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 64ecbce — fix(layout): grid columns use minmax(0,1fr) so the 4th card stays on row 1 _(Vishwajit Khanna)_
   - 4a45d86 — fix(drill-fetch): split landing + drill into two queries so all 4 KPI cards survive _(Vishwajit Khanna)_
   - bf758f4 — fix(drills): map drill children correctly + aggregate per spec §9/§10/§11 _(Vishwajit Khanna)_
+  - 2d23797 — fix(drills): Stock Production + Defect/Scrap dimension link + Scrap Rate panel _(Vishwajit Khanna)_
+  - dc78e5f — fix(landing): restore plant sx/sy + sub + oe/otif/yield so India map renders dots _(Vishwajit Khanna)_
+  - 88e999d — feat(oee-drill): wire sub-category panel when a machine A/P/Q cell is clicked _(Vishwajit Khanna)_
