@@ -69,9 +69,9 @@ const ALLOWED_KPIS = {
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", drillType: "budget", drillTargets: null },
+      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
+      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
+      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
       { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
@@ -100,9 +100,9 @@ const ALLOWED_KPIS = {
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", drillType: "budget", drillTargets: null },
+      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
+      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
+      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
       { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
@@ -131,9 +131,9 @@ const ALLOWED_KPIS = {
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", drillType: "budget", drillTargets: null },
+      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
+      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
+      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
       { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
@@ -162,9 +162,9 @@ const ALLOWED_KPIS = {
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", drillType: "budget", drillTargets: null },
+      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
+      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
+      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
       { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
