@@ -77,3 +77,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 9b949fa — fix(docker): backend runs Node directly, not nginx _(Vishwajit Khanna)_
   - cffee32 — chore(deploy): align backend on port 8814 end-to-end _(Vishwajit Khanna)_
   - 0be7ed3 — feat(drills): show skeleton during drill fetch instead of empty-state message _(Vishwajit Khanna)_
+  - 6d46570 — fix(values): use gold_dummy MTD/YTD pre-aggregated rows so cards aren't 3× under _(Vishwajit Khanna)_
