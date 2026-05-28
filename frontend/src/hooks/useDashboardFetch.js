@@ -112,26 +112,64 @@ async function fetchDashboard(payload) {
 export function useDashboardFetch() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  const fetchPayload = {
+  // Landing payload — always fetched. Carries the 4 KPI cards for every
+  // (section, category) combo. drillKpis is intentionally null here so
+  // the upstream Lambda's 5000-row cap is spent only on landing rows
+  // (drill_down_level = 1), guaranteeing every section's 4 cards have
+  // data even when a drill is open.
+  const landingPayload = {
     context: buildContext(state),
     date: state.date,
     from: state.from,
     to: state.to,
-    drillKpis: state.drillKpis,
-    parentFilters: state.parentFilters,
-    // Backend caps at 10000. We pull the max because we now fetch across
-    // all 4 sections × 5 categories in one shot and filter client-side.
+    drillKpis: null,
+    parentFilters: {},
     limit: 10000,
   };
 
-  const { data, isLoading, error } = usePolledQuery(
-    () => fetchDashboard(fetchPayload),
-    {
+  // Drill payload — only fetched when a card is drilled. Returns drill
+  // children for the active card. Lambda's 5000-row cap applies only to
+  // drill-level rows here, not the landing band.
+  const drillPayload = state.drillKpis
+    ? {
+        context: buildContext(state),
+        date: state.date,
+        from: state.from,
+        to: state.to,
+        drillKpis: state.drillKpis,
+        parentFilters: state.parentFilters,
+        limit: 10000,
+      }
+    : null;
+
+  const { data: landingData, isLoading: landingLoading, error: landingError } =
+    usePolledQuery(() => fetchDashboard(landingPayload), {
       enabled: true,
       interval: 0,
-      deps: [JSON.stringify(fetchPayload)],
-    },
-  );
+      deps: [JSON.stringify(landingPayload)],
+    });
+
+  const { data: drillData, isLoading: drillLoading, error: drillError } =
+    usePolledQuery(
+      () => (drillPayload ? fetchDashboard(drillPayload) : Promise.resolve([])),
+      {
+        enabled: Boolean(drillPayload),
+        interval: 0,
+        deps: [JSON.stringify(drillPayload)],
+      },
+    );
+
+  // Merge: landing always present; drill children appended when a card
+  // is drilled. The transformer and panels both read from this combined
+  // list — landing rows feed the 4 KPI cards, drill rows feed the panel.
+  const data =
+    landingData && Array.isArray(landingData)
+      ? state.drillKpis && Array.isArray(drillData)
+        ? [...landingData, ...drillData]
+        : landingData
+      : null;
+  const isLoading = landingLoading || (Boolean(drillPayload) && drillLoading);
+  const error = landingError || drillError || null;
 
   const kpis = data
     ? toKpiGrid(data, {

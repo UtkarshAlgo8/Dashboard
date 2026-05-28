@@ -40,3 +40,25 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - b4eb8f9 — fix: round every API numeric to 2 decimals _(Vishwajit Khanna)_
   - 9469bb9 — feat(trend): swap custom SVG charts for Highcharts (line / column) _(Vishwajit Khanna)_
   - 889194b — fix(trend): normalise highcharts-react-official UMD default import _(Vishwajit Khanna)_
+
+## 2026-05-28
+  - 4cf71dd — fix(dashboard): cards render correctly across all category tabs _(Vishwajit Khanna)_
+  - 70e23cf — fix(date-filter): wire Today/Month/Year presets through to backend _(Vishwajit Khanna)_
+  - 574981a — fix(date-filter): support from/to ranges; move date out of context _(Vishwajit Khanna)_
+  - 7ca314a — fix(shift-comparison): derive values from fetched rows + date range _(Vishwajit Khanna)_
+  - a8ee26c — fix(dashboard): preserve date filter across section/category navigation _(Vishwajit Khanna)_
+  - acf02d9 — fix(trend-modal): date filter actually narrows the chart _(Vishwajit Khanna)_
+  - 46c8e62 — feat(drill): single open card at a time _(Vishwajit Khanna)_
+  - 1b06581 — feat(dashboard): section title bar + product-type pills (per artifact) _(Vishwajit Khanna)_
+  - a9ef63d — fix(productivity): apply spec aggregations to card values _(Vishwajit Khanna)_
+  - 4b9551a — fix(quality): apply spec — drop Rework, add Scrap_Rate, set agg _(Vishwajit Khanna)_
+  - 247c336 — fix(cost): apply spec — agg + units for all 3 cards _(Vishwajit Khanna)_
+  - 0a52cf1 — fix(morale): apply spec — agg + drill children + plant-level Absenteeism _(Vishwajit Khanna)_
+  - 45c40b7 — fix(safety): apply spec — agg + drill children for all 4 cards _(Vishwajit Khanna)_
+  - 1d5658e — fix(dashboard): section-header OEE uses Daily-only rows to match card _(Vishwajit Khanna)_
+  - d43cf39 — feat(oee-drill): wire to real backend data for all 4 sections _(Vishwajit Khanna)_
+  - 5bdfe46 — feat(productivity-drills): wire all 4 drill panels to real backend rows _(Vishwajit Khanna)_
+  - 00b7ae1 — fix(productivity): pin Shift Comparison at bottom; Plan Compliance is leaf _(Vishwajit Khanna)_
+  - d878a51 — fix(oee-drill): A/P/Q as a proper KPI-card row + separate machine section _(Vishwajit Khanna)_
+  - a52395e — fix(layout): force 4 KPI columns + A/P/Q sub-cards visually distinct _(Vishwajit Khanna)_
+  - 64ecbce — fix(layout): grid columns use minmax(0,1fr) so the 4th card stays on row 1 _(Vishwajit Khanna)_
