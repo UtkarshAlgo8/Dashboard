@@ -20,6 +20,7 @@ import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getTrend } from "@/api/trends.js";
 import client from "@/api/client.js";
+import { presetToDateRange } from "@/lib/timeRange.js";
 
 /**
  * KPI Trend Analysis modal per BRD §9.3 (FR-X10 through FR-X17).
@@ -46,23 +47,33 @@ function TrendModal({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
+  // Resolve the active date range (preset OR custom) to ISO from/to.
+  // For "today" we send the single date; otherwise we send the range.
+  const resolved = presetToDateRange({ preset: range, from, to });
+
   /**
    * v2 fetch: use kpi.name (actual gold_dummy kpi_name like "OEE_o")
    * so we bypass the stale KPI_NAME_BY_ID map in getTrend.
-   * Returns { labels: string[], values: number[] }.
+   *
+   * Lambda ignores section/category/granularity filters, so we omit
+   * them from the payload and filter client-side. We also drop the
+   * drillKpis flag — it OR-joins with drill_down_level=1 and returns
+   * every landing KPI, polluting the time series with mixed data.
+   * Date filter (date OR from+to) is the only server-side narrowing.
    */
   const useV2 = Boolean(kpi?.rawName);
   const v2Payload = useV2
     ? {
-        context: {
-          section: sectionIdToName(section),
-          category: categoryIdToName(category),
-          granularity: "Daily",
-        },
-        drillKpis: [kpi.rawName],
-        limit: 500,
+        context: {},
+        date: range === "today" ? resolved.from : null,
+        from: range === "today" ? null : resolved.from,
+        to: range === "today" ? null : resolved.to,
+        drillKpis: null,
+        limit: 10000,
       }
     : null;
+
+  const sectionName = sectionIdToName(section);
 
   const { data: v2Rows, isLoading: v2Loading } = usePolledQuery(
     v2Payload
@@ -109,10 +120,19 @@ function TrendModal({
   const isLoading = useV2 ? v2Loading : legacyLoading;
 
   // Resolve trend data — prefer v2 rows, fall back to legacy.
+  // Filter client-side: the Lambda ignores section/granularity/kpi_name,
+  // so the response contains every KPI for every section. We narrow
+  // to one section + one KPI + Daily granularity for the line chart.
   let labels = [];
   let values = [];
   if (useV2 && Array.isArray(v2Rows)) {
-    const sorted = [...v2Rows].sort((a, b) => (a.date > b.date ? 1 : -1));
+    const matched = v2Rows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === kpi.rawName &&
+        r.granularity === "Daily",
+    );
+    const sorted = matched.sort((a, b) => (a.date > b.date ? 1 : -1));
     labels = sorted.map((r) => r.date ?? "");
     values = sorted.map((r) => {
       const v = r.actual_value;
@@ -239,13 +259,6 @@ function TrendModal({
 
 function sectionIdToName(id) {
   return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
-}
-function categoryIdToName(id) {
-  return (
-    { p: "Productivity", q: "Quality", c: "Cost", m: "Morale", s: "Safety" }[
-      id
-    ] ?? id
-  );
 }
 
 function ChartSkeleton() {
