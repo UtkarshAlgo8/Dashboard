@@ -64,6 +64,25 @@ function BanmoreProduction() {
     dashboard.section
   ] ?? dashboard.section;
 
+  // Section metadata per artifact (full title shown in section header).
+  const SECTION_TITLE = {
+    mix: "Mixing / Banbury",
+    tbm: "Tyre Building Machine",
+    cur: "Curing / Vulcanization",
+    stk: "Stock / Component Prep",
+  };
+
+  // Product-type / sub-category pills per artifact buildKpis().
+  // Banmore is PCR-only (FR-X2) so for TBM/Curing the radial-type pills
+  // are UI selectors only — the data scope doesn't change.
+  const PROD_SUB_OPTIONS = {
+    mix: ["Master Compound", "Final Compound"],
+    tbm: ["Passenger Radial", "LT Radial", "SCV Radial"],
+    cur: ["Passenger Radial", "LT Radial", "SCV Radial"],
+    stk: [], // Stock uses sub-section selector (4 Roll / Extruder / ...)
+  };
+  const prodSubOptions = PROD_SUB_OPTIONS[dashboard.section] ?? [];
+
   const ready =
     !plantLoading &&
     plant &&
@@ -115,6 +134,26 @@ function BanmoreProduction() {
 
   const onSectionSelect = (id) => setFilter({ section: id }, true);
   const onCategorySelect = (id) => setFilter({ category: id }, true);
+
+  // Selected product-type pill, keyed by section so it auto-resets when
+  // the user switches sections (no useEffect needed).
+  const [prodSubBySection, setProdSubBySection] = useState({});
+  const prodSub =
+    prodSubBySection[dashboard.section] ?? prodSubOptions[0] ?? "";
+  const setProdSub = (val) =>
+    setProdSubBySection((prev) => ({ ...prev, [dashboard.section]: val }));
+
+  // Section OEE: average of OEE_o actual_value for the active section in
+  // the current date range. Shown next to the section title.
+  const sectionOee = (() => {
+    if (!rawRows) return null;
+    const oee = rawRows
+      .filter((r) => r.section === sectionName && r.kpi_name === "OEE_o")
+      .map((r) => r.actual_value)
+      .filter((v) => typeof v === "number" && Number.isFinite(v));
+    if (oee.length === 0) return null;
+    return oee.reduce((s, v) => s + v, 0) / oee.length;
+  })();
 
   // Only one drill open at a time. Clicking a different card closes the
   // previous one; clicking the same card again closes it.
@@ -222,6 +261,114 @@ function BanmoreProduction() {
               <InventoryPage plantId="banmore" />
             ) : (
               <>
+                {/* Section header — section full name + OEE + category badge */}
+                <Box
+                  sx={{
+                    px: 2,
+                    pt: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Typography sx={{ fontSize: 17, fontWeight: 700 }}>
+                    {SECTION_TITLE[dashboard.section] ?? sectionName}
+                  </Typography>
+                  {sectionOee != null && (
+                    <>
+                      <Box
+                        sx={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          backgroundColor:
+                            sectionOee >= 90
+                              ? "success.main"
+                              : sectionOee >= 80
+                                ? "warning.main"
+                                : "error.main",
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color:
+                            sectionOee >= 90
+                              ? "success.main"
+                              : sectionOee >= 80
+                                ? "warning.main"
+                                : "error.main",
+                        }}
+                      >
+                        {sectionOee.toFixed(1)}% OEE
+                      </Typography>
+                    </>
+                  )}
+                  {tabs?.find((t) => t.id === dashboard.category) && (
+                    <Box
+                      sx={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        px: 1,
+                        py: 0.25,
+                        borderRadius: 1,
+                        backgroundColor: "primary.main",
+                        color: "primary.contrastText",
+                        opacity: 0.9,
+                      }}
+                    >
+                      {tabs.find((t) => t.id === dashboard.category)?.name ??
+                        ""}
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Product-type sub-pills — Productivity & Quality tabs only */}
+                {(dashboard.category === "p" ||
+                  dashboard.category === "q") &&
+                  prodSubOptions.length > 0 && (
+                    <Box
+                      sx={{
+                        px: 2,
+                        pt: 1,
+                        display: "flex",
+                        gap: 1,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {prodSubOptions.map((opt) => {
+                        const active = prodSub === opt;
+                        return (
+                          <Box
+                            key={opt}
+                            onClick={() => setProdSub(opt)}
+                            sx={{
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: 999,
+                              border: 1,
+                              borderColor: active
+                                ? "primary.main"
+                                : "divider",
+                              backgroundColor: active
+                                ? "primary.50"
+                                : "background.paper",
+                              color: active ? "primary.main" : "text.primary",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              userSelect: "none",
+                            }}
+                          >
+                            {opt}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
+
                 {/* Drill hint — matches artifact "▶ Click any KPI card to expand drill-down" */}
                 <Box sx={{ px: 2, pt: 2 }}>
                   <Typography
