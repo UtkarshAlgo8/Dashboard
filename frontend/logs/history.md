@@ -72,3 +72,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - dac8ae5 — cwdcd _(Vishwajit Khanna)_
   - 36d2e2d — cdw _(Vishwajit Khanna)_
   - b0b4adc — cdwc _(Vishwajit Khanna)_
+  - 0b1a3b8 — chore(deploy): run git pull from repo root + drop stale image before rebuild _(Vishwajit Khanna)_
