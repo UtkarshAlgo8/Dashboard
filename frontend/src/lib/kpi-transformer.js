@@ -82,10 +82,10 @@ const ALLOWED_KPIS = {
       { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "fa", name: "First_Aid", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "nm", name: "Near_Miss", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "sa", name: "Safety_Audit", unit: "%", drillType: "table", drillTargets: null },
+      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
+      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
+      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
+      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
     ],
   },
   TBM: {
@@ -115,10 +115,10 @@ const ALLOWED_KPIS = {
       { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "fa", name: "First_Aid", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "nm", name: "Near_Miss", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "sa", name: "Safety_Audit", unit: "%", drillType: "table", drillTargets: null },
+      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
+      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
+      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
+      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
     ],
   },
   Curing: {
@@ -148,10 +148,10 @@ const ALLOWED_KPIS = {
       { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "fa", name: "First_Aid", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "nm", name: "Near_Miss", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "sa", name: "Safety_Audit", unit: "%", drillType: "table", drillTargets: null },
+      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
+      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
+      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
+      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
     ],
   },
   Stock: {
@@ -181,10 +181,10 @@ const ALLOWED_KPIS = {
       { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "fa", name: "First_Aid", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "nm", name: "Near_Miss", unit: "nos", drillType: "table", drillTargets: null },
-      { id: "sa", name: "Safety_Audit", unit: "%", drillType: "table", drillTargets: null },
+      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
+      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
+      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
+      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
     ],
   },
 };
