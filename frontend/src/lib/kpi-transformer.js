@@ -232,9 +232,28 @@ const DISPLAY_NAME = {
  */
 export function toKpiGrid(
   rows,
-  { section = "MIX", category = "P", sparkLength = 8 } = {},
+  {
+    section = "MIX",
+    category = "P",
+    sparkLength = 8,
+    granularity = "Daily",
+    mode = "snapshot",
+  } = {},
 ) {
   if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  // Two execution modes:
+  //   "snapshot"  — use the LATEST row at `granularity` and take
+  //                 actual_value verbatim. The right choice for the
+  //                 Today/Month/Year presets which back onto the
+  //                 pre-aggregated Daily/MTD/YTD rows the spec calls
+  //                 out in §9. Authoritative; safe under the upstream
+  //                 5000-row cap; correctly handles MULT (OEE) and
+  //                 SNAP (NCM_Hold) which aren't re-derivable from Daily.
+  //   "aggregate" — sum / avg / etc over the date range per the spec
+  //                 §9 rule for that KPI. Used for custom from/to
+  //                 ranges where no single pre-agg row matches.
+  const isSnapshot = mode === "snapshot";
 
   // Get allowed KPI names for this (section, category) combo only.
   const allowedKpis = ALLOWED_KPIS[section]?.[category] ?? [];
@@ -269,9 +288,62 @@ export function toKpiGrid(
     // gold_dummy stores pre-aggregated rows for every granularity (Daily,
     // Shift A/B/C, MTD, YTD). The per-KPI agg rule in dashboard_kpi_map_
     // reference is defined ONLY for Daily rows; the others would double-
-    // count. Filter to Daily, sort newest-first.
+    // Snapshot path: pick the LATEST row at the active granularity
+    // and read actual_value verbatim. Works for Today (Daily), Month
+    // (MTD), Year (YTD) — gold_dummy already stored the right
+    // pre-aggregated value, no client roll-up needed.
+    if (isSnapshot) {
+      const preRows = groupDesc
+        .filter((r) => r.granularity === granularity)
+        .sort((a, b) => (b.date > a.date ? 1 : -1));
+      if (preRows.length === 0) continue;
+
+      const kpi = kpiByName.get(name);
+      const numericVals = preRows
+        .map((r) => numberOrNull(r.actual_value))
+        .filter((v) => v !== null);
+      if (numericVals.length === 0) continue;
+
+      const value = Math.round(numericVals[0] * 100) / 100; // newest
+      const sparkVals = numericVals.slice(0, sparkLength).reverse();
+
+      // Within-window trend: compare newest snapshot vs the oldest
+      // one in the trailing window. For MTD/YTD this shows whether the
+      // month-/year-to-date moved over the last few days of snapshots;
+      // for Daily it shows the actual day-over-day movement.
+      let trend = null;
+      if (numericVals.length >= 2) {
+        const newer = numericVals[0];
+        const older = numericVals[numericVals.length - 1];
+        if (older !== 0) {
+          trend = Math.round(((newer - older) / Math.abs(older)) * 1000) / 10;
+        }
+      }
+
+      const latest = preRows[0];
+      result.push({
+        id: kpi.id,
+        name: DISPLAY_NAME[name] ?? name,
+        rawName: name,
+        value,
+        unit: kpi.unit ?? denan(latest.unit_of_measurement) ?? null,
+        spark: sparkVals,
+        trend,
+        trendFavourable: trendFavourable(DISPLAY_NAME[name] ?? name, trend),
+        drillable: kpi.drillType != null,
+        drillType: kpi.drillType,
+        drillTargets: kpi.drillTargets ?? null,
+        status: mapStatus(denan(latest.status)),
+        target: numberOrNull(latest.threshold_value),
+      });
+      continue;
+    }
+
+    // Aggregate path — sum / avg per spec §9 over the active range.
+    // Use the active granularity (Daily by default; Shift A/B/C when
+    // the user picked a specific shift), sort newest-first.
     const dailyRows = groupDesc
-      .filter((r) => r.granularity === "Daily")
+      .filter((r) => r.granularity === granularity)
       .sort((a, b) => (b.date > a.date ? 1 : -1));
 
     if (dailyRows.length === 0) continue;

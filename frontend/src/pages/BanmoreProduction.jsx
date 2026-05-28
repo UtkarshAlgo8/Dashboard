@@ -99,21 +99,34 @@ function BanmoreProduction() {
     to: "",
   });
 
+  // Shift selector state — independent of the preset granularity.
+  // When the user picks a specific shift (A/B/C) that wins over the
+  // preset; "all" lets the preset decide (Daily/MTD/YTD).
+  const [shiftKey, setShiftKey] = useState("all");
+
+  // Resolve the effective granularity from preset + shift selector.
+  const effectiveGranularity = (preset, shift) => {
+    const map = { all: null, a: "Shift A", b: "Shift B", c: "Shift C" };
+    const shiftGran = map[shift];
+    if (shiftGran) return shiftGran;
+    return presetToDateRange({ preset }).granularity;
+  };
+
   const onTimeRangeChange = (updater) => {
     setTimeRange((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       const resolved = presetToDateRange(next);
-      if (next.preset === "today") {
-        setFilter(
-          { date: resolved.from, from: null, to: null },
-          false,
-        );
-      } else {
-        setFilter(
-          { date: null, from: resolved.from, to: resolved.to },
-          false,
-        );
-      }
+      const gran = effectiveGranularity(next.preset, shiftKey);
+      setFilter(
+        {
+          date: null,
+          from: resolved.from,
+          to: resolved.to,
+          granularity: gran,
+          mode: resolved.mode,
+        },
+        false,
+      );
       return next;
     });
   };
@@ -121,15 +134,27 @@ function BanmoreProduction() {
   // Initial fetch: push the default "month" range into the hook on mount.
   useEffect(() => {
     const resolved = presetToDateRange(timeRange);
-    setFilter({ date: null, from: resolved.from, to: resolved.to }, false);
+    setFilter(
+      {
+        date: null,
+        from: resolved.from,
+        to: resolved.to,
+        granularity: resolved.granularity,
+        mode: resolved.mode,
+      },
+      false,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { from, to } = presetToDateRange(timeRange);
 
-  const onShiftChange = (shift) => {
-    const map = { all: null, a: "Shift A", b: "Shift B", c: "Shift C" };
-    setFilter({ granularity: map[shift] ?? null }, false);
+  const onShiftChange = (next) => {
+    setShiftKey(next);
+    setFilter(
+      { granularity: effectiveGranularity(timeRange.preset, next) },
+      false,
+    );
   };
 
   const onSectionSelect = (id) => setFilter({ section: id }, true);
@@ -143,22 +168,33 @@ function BanmoreProduction() {
   const setProdSub = (val) =>
     setProdSubBySection((prev) => ({ ...prev, [dashboard.section]: val }));
 
-  // Section OEE shown in the header. Mirrors the transformer's logic
-  // (Daily granularity only, mean of actual_value) so it stays in step
-  // with the OEE card value on the Productivity tab.
+  // Section OEE shown in the header — mirrors the OEE card so the
+  // user sees consistent numbers. For snapshot mode (Today/Month/Year)
+  // pick the latest row at the active granularity; for aggregate mode
+  // (custom range) average Daily rows like the card does.
   const sectionOee = (() => {
     if (!rawRows) return null;
-    const oee = rawRows
-      .filter(
-        (r) =>
-          r.section === sectionName &&
-          r.kpi_name === "OEE_o" &&
-          r.granularity === "Daily",
-      )
+    const gran = dashboard.granularity ?? "Daily";
+    const filtered = rawRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === "OEE_o" &&
+        r.granularity === gran,
+    );
+    if (filtered.length === 0) return null;
+    if (dashboard.mode === "snapshot") {
+      // Latest row's actual_value.
+      const sorted = [...filtered].sort((a, b) =>
+        (b.date ?? "").localeCompare(a.date ?? ""),
+      );
+      const v = sorted[0]?.actual_value;
+      return typeof v === "number" && Number.isFinite(v) ? v : null;
+    }
+    const vals = filtered
       .map((r) => r.actual_value)
       .filter((v) => typeof v === "number" && Number.isFinite(v));
-    if (oee.length === 0) return null;
-    return oee.reduce((s, v) => s + v, 0) / oee.length;
+    if (vals.length === 0) return null;
+    return vals.reduce((s, v) => s + v, 0) / vals.length;
   })();
 
   // Only one drill open at a time. Clicking a different card closes the
@@ -202,11 +238,7 @@ function BanmoreProduction() {
         plant={plant}
         timeRange={timeRange}
         onTimeRangeChange={onTimeRangeChange}
-        shift={
-          dashboard.granularity?.startsWith("Shift")
-            ? dashboard.granularity.slice(-1).toLowerCase()
-            : "all"
-        }
+        shift={shiftKey}
         onShiftChange={onShiftChange}
       />
 
