@@ -67,3 +67,8 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 2d23797 — fix(drills): Stock Production + Defect/Scrap dimension link + Scrap Rate panel _(Vishwajit Khanna)_
   - dc78e5f — fix(landing): restore plant sx/sy + sub + oe/otif/yield so India map renders dots _(Vishwajit Khanna)_
   - 88e999d — feat(oee-drill): wire sub-category panel when a machine A/P/Q cell is clicked _(Vishwajit Khanna)_
+  - 8b2d550 — chore(deploy): add Docker images, nginx configs, and deploy scripts _(Vishwajit Khanna)_
+  - 6ffaf87 — r3fvgte4rg _(Vishwajit Khanna)_
+  - dac8ae5 — cwdcd _(Vishwajit Khanna)_
+  - 36d2e2d — cdw _(Vishwajit Khanna)_
+  - b0b4adc — cdwc _(Vishwajit Khanna)_
