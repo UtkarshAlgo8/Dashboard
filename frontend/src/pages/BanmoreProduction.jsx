@@ -143,12 +143,18 @@ function BanmoreProduction() {
   const setProdSub = (val) =>
     setProdSubBySection((prev) => ({ ...prev, [dashboard.section]: val }));
 
-  // Section OEE: average of OEE_o actual_value for the active section in
-  // the current date range. Shown next to the section title.
+  // Section OEE shown in the header. Mirrors the transformer's logic
+  // (Daily granularity only, mean of actual_value) so it stays in step
+  // with the OEE card value on the Productivity tab.
   const sectionOee = (() => {
     if (!rawRows) return null;
     const oee = rawRows
-      .filter((r) => r.section === sectionName && r.kpi_name === "OEE_o")
+      .filter(
+        (r) =>
+          r.section === sectionName &&
+          r.kpi_name === "OEE_o" &&
+          r.granularity === "Daily",
+      )
       .map((r) => r.actual_value)
       .filter((v) => typeof v === "number" && Number.isFinite(v));
     if (oee.length === 0) return null;
