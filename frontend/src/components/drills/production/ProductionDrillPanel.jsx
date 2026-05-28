@@ -102,14 +102,18 @@ function ProductionDrillPanel({ section, prodSub, rawRows }) {
   const scopedRows = useMemo(() => {
     if (!Array.isArray(rawRows)) return [];
 
-    if (viewBy === "machine" && prodSub) {
+    // Empty-string prodSub (sections without product-type pills, e.g.
+    // Stock) means "no product-type filter" — same as null.
+    const ptFilter = prodSub ? prodSub : null;
+
+    if (viewBy === "machine" && ptFilter) {
       // Aggregate from Production_m_sku so we can filter by prodSub.
       return rawRows.filter(
         (r) =>
           r.section === sectionName &&
           r.kpi_name === "Production_m_sku" &&
           r.granularity === "Daily" &&
-          r.product_type === prodSub,
+          r.product_type === ptFilter,
       );
     }
 
@@ -118,7 +122,7 @@ function ProductionDrillPanel({ section, prodSub, rawRows }) {
         r.section === sectionName &&
         r.kpi_name === kpiName &&
         r.granularity === "Daily" &&
-        (prodSub == null || r.product_type === prodSub),
+        (ptFilter == null || r.product_type === ptFilter),
     );
   }, [rawRows, sectionName, kpiName, prodSub, viewBy]);
 

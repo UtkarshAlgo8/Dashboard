@@ -63,3 +63,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - a52395e — fix(layout): force 4 KPI columns + A/P/Q sub-cards visually distinct _(Vishwajit Khanna)_
   - 64ecbce — fix(layout): grid columns use minmax(0,1fr) so the 4th card stays on row 1 _(Vishwajit Khanna)_
   - 4a45d86 — fix(drill-fetch): split landing + drill into two queries so all 4 KPI cards survive _(Vishwajit Khanna)_
+  - bf758f4 — fix(drills): map drill children correctly + aggregate per spec §9/§10/§11 _(Vishwajit Khanna)_

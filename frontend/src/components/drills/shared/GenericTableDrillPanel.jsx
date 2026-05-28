@@ -1,6 +1,7 @@
 import { Stack } from "@mui/material";
 import FtdDrillPanel from "@/components/drills/quality/FtdDrillPanel.jsx";
 import ScrapDrillPanel from "@/components/drills/quality/ScrapDrillPanel.jsx";
+import ScrapRateDrillPanel from "@/components/drills/quality/ScrapRateDrillPanel.jsx";
 import NcmDrillPanel from "@/components/drills/quality/NcmDrillPanel.jsx";
 import ReworkDrillPanel from "@/components/drills/quality/ReworkDrillPanel.jsx";
 import SpecificPowerDrillPanel from "@/components/drills/cost/SpecificPowerDrillPanel.jsx";
@@ -35,6 +36,8 @@ export default function GenericTableDrillPanel({
       return <FtdDrillPanel drillRows={sectionFiltered} />;
     case "ds":
       return <ScrapDrillPanel drillRows={sectionFiltered} />;
+    case "sr":
+      return <ScrapRateDrillPanel drillRows={sectionFiltered} />;
     case "rw":
       return <ReworkDrillPanel drillRows={sectionFiltered} />;
     case "ncm":
