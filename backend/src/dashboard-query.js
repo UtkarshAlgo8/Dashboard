@@ -130,30 +130,25 @@ function safeStringValue(value, key) {
 
 /* ---------- Date handling ----------
  *
- * date column is DD-MM-YYYY string. v2 spec uses `AND date = <user's date>`
- * for exact-day filtering. We accept ISO yyyy-mm-dd from the frontend
- * (matches HTML <input type="date">) and convert to DD-MM-YYYY for
- * the equality predicate.
+ * gold_dummy `date` column is ISO yyyy-mm-dd (confirmed 2026-05-28 via
+ * sample rows). We accept ISO yyyy-mm-dd from the frontend and pass it
+ * through unchanged. DD-MM-YYYY input from older callers is converted
+ * back to ISO for the equality predicate.
  *
  * Per existing queries.js, putting `year = X` triggers an upstream
  * Lambda partition-path lookup that often fails. We avoid year/month/
- * day predicates entirely. The DD-MM-YYYY equality lives only on the
- * string `date` column.
+ * day predicates entirely.
  */
 
-function toDdmmyyyy(iso) {
-  if (typeof iso !== "string") {
+function toIsoDate(input) {
+  if (typeof input !== "string") {
     throw new QueryValidationError("date must be a string");
   }
-  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (ymd) {
-    return `${ymd[3]}-${ymd[2]}-${ymd[1]}`;
-  }
-  const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(iso);
-  if (dmy) {
-    return iso;
-  }
-  throw new QueryValidationError(`Bad date format: ${iso}`);
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if (ymd) return input;
+  const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(input);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  throw new QueryValidationError(`Bad date format: ${input}`);
 }
 
 /* ---------- Public builder ---------- */
@@ -207,14 +202,14 @@ export function buildFetchQuery({
     where.push(`${key} = ${escapeLiteral(value)}`);
   }
 
-  // 2. Date predicate. Always equality on DD-MM-YYYY string column.
+  // 2. Date predicate. Always equality on ISO yyyy-mm-dd string column.
   //    v2 spec: every granularity is its own pre-stored row, so a
   //    Daily / Shift A / MTD / YTD filter pinpoints exactly one row
   //    per (kpi_name, machine, …). Caller controls which by setting
   //    context.granularity.
   if (date != null && date !== "") {
-    const dmy = toDdmmyyyy(date);
-    where.push(`date = ${escapeLiteral(dmy)}`);
+    const iso = toIsoDate(date);
+    where.push(`date = ${escapeLiteral(iso)}`);
   }
 
   // 3. Parent filters carried forward from clicked rows.

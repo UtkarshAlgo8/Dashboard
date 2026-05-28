@@ -66,23 +66,32 @@ function BanmoreProduction() {
     Array.isArray(tabs) &&
     summary;
 
-  // Build timeRange from the v2 hook state for ProductionHeader.
-  const timeRange = {
-    preset: dashboard.date ? "custom" : "month",
-    from: dashboard.date ?? "",
+  // Time-range UI state lives here. The hook stores a single `date`
+  // for the backend equality filter; presets like Month / Year resolve
+  // to "no date filter" since the backend can't do BETWEEN ranges.
+  const [timeRange, setTimeRange] = useState({
+    preset: null,
+    from: "",
     to: "",
-  };
-  const { from, to } = presetToDateRange(timeRange);
+  });
 
-  const onTimeRangeChange = (range) => {
-    setFilter(
-      {
-        granularity: range.preset === "today" ? "Daily" : null,
-        date: range.from || null,
-      },
-      false,
-    );
+  const onTimeRangeChange = (updater) => {
+    setTimeRange((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      const { from: resolvedFrom } = presetToDateRange(next);
+      // "today" → set date for equality filter. Month/Year/custom → no
+      // date filter (backend only supports single-date equality).
+      setFilter(
+        {
+          date: next.preset === "today" ? resolvedFrom : null,
+        },
+        false,
+      );
+      return next;
+    });
   };
+
+  const { from, to } = presetToDateRange(timeRange);
 
   const onShiftChange = (shift) => {
     const map = { all: null, a: "Shift A", b: "Shift B", c: "Shift C" };
