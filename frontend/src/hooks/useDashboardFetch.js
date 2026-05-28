@@ -86,12 +86,11 @@ function buildContext(state) {
   if (state.subSection) ctx.sub_section = state.subSection;
   if (state.productType) ctx.product_type = state.productType;
   // section and category are NOT sent — the Lambda ignores both filters
-  // (returns Mixing/Productivity data regardless of what you ask for).
-  // We fetch ALL sections + categories in one request and filter
-  // client-side via `row.section ===` + ALLOWED_KPIS[section][category]
-  // in toKpiGrid. This also means switching section/category does NOT
-  // refetch — the payload is unchanged — so UI navigation stays instant
-  // and the user's date filter is naturally preserved.
+  // when combined with multi-kpi drill targets (returns Mixing rows
+  // even when asked for Curing). We fetch ALL sections + categories
+  // in one request and filter client-side via row.section + ALLOWED_KPIS
+  // in toKpiGrid. Switching section/category becomes instant since the
+  // payload is unchanged.
   if (state.granularity) ctx.granularity = state.granularity;
   // date / from / to are NOT in context — they are top-level payload
   // fields. The backend rejects them inside the context object.

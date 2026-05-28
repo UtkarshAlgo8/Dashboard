@@ -419,6 +419,7 @@ function BanmoreProduction() {
                           to={to}
                           shift={dashboard.granularity}
                           allDrillRows={drillRows}
+                          rawRows={rawRows}
                         />
                       </Box>
                     );
@@ -467,6 +468,7 @@ function DrillPanelRouter({
   to,
   shift,
   allDrillRows,
+  rawRows,
 }) {
   if (!kpi) return null;
 
@@ -478,15 +480,7 @@ function DrillPanelRouter({
   switch (kpi.drillType) {
     // Productivity
     case "mixOEE":
-      return (
-        <OeeDrillPanel
-          plantId={plantId}
-          section={section}
-          from={from}
-          to={to}
-          shift={shift}
-        />
-      );
+      return <OeeDrillPanel section={section} rawRows={rawRows} />;
     case "mixProd":
     case "tbmProd":
     case "stkProd":

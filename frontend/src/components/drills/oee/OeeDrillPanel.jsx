@@ -3,38 +3,93 @@ import { Box, Stack, Typography } from "@mui/material";
 import OverallTiles from "./OverallTiles.jsx";
 import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
-import SubDrill from "./SubDrill.jsx";
-import ScrapTraceabilityPanel from "./ScrapTraceabilityPanel.jsx";
-import { useToast } from "@/components/common";
-import { OeeDrillSkeleton } from "@/components/drills/DrillSkeletons.jsx";
-import { usePolledQuery } from "@/hooks/usePolledQuery.js";
-import { getOeeDrill } from "@/api/drills.js";
 
 /**
- * Composes the OEE drill: overall tiles → machine search → machine
- * table → sub-drill panel (when a cell is selected) → scrap
- * traceability panel (when a traceable scrap row is clicked).
+ * OEE drill panel — derives its data straight from the gold_dummy rows
+ * the dashboard fetch already returned (`rawRows`). No second API call.
  *
- * Phase 1 ships Banmore + Mixing data. Spec 11 widens to TBM /
- * Curing / Stock.
+ * Per dashboard_kpi_map_reference §3 and §11:
+ *   - Top tiles (overall A/P/Q) come from `Availability_o`,
+ *     `Performance_o`, `Quality_o` rows for the active section,
+ *     averaged over the selected date range (AVG of Daily rows).
+ *   - Machine table comes from `Availability_m`, `Performance_m`,
+ *     `Quality_m` rows for the section, grouped by machine and
+ *     averaged. OEE_m = A_m × P_m × Q_m display-side per §9.2.
+ *
+ * Sub-cell click and scrap traceability are intentionally not wired in
+ * this commit — once the section-level table works the drill-deeper
+ * panels can be re-added against the same data path.
  */
-function OeeDrillPanel({ plantId, section, from, to, shift }) {
-  const toast = useToast();
+function OeeDrillPanel({ section, rawRows }) {
   const [search, setSearch] = useState("");
-  const [selectedCell, setSelectedCell] = useState(null); // { machineId, component } | null
-  const [subCategory, setSubCategory] = useState(null);
-  const [traceItemCode, setTraceItemCode] = useState(null);
+  const [selectedCell, setSelectedCell] = useState(null);
 
-  const { data, isLoading, error } = usePolledQuery(
-    () => getOeeDrill({ plantId, section, from, to, shift }),
-    { interval: 60_000, deps: [plantId, section, from, to, shift] },
+  // Section name in gold_dummy values ("Mixing", "TBM", etc.) — the
+  // panel may receive the UI id ("mix", "tbm") or the full name.
+  const sectionName = useMemo(
+    () =>
+      ({ mix: "Mixing", tbm: "TBM", cur: "Curing", stk: "Stock" })[section] ??
+      section,
+    [section],
   );
 
-  if (error) {
-    toast.error("Could not load OEE drill.");
-  }
+  // Average Daily rows for one kpi_name (optionally machine-scoped).
+  const avgDaily = (kpiName, machine) => {
+    if (!Array.isArray(rawRows)) return null;
+    const vals = rawRows
+      .filter(
+        (r) =>
+          r.section === sectionName &&
+          r.kpi_name === kpiName &&
+          r.granularity === "Daily" &&
+          (machine == null || r.machine === machine),
+      )
+      .map((r) => r.actual_value)
+      .filter((v) => typeof v === "number" && Number.isFinite(v));
+    if (vals.length === 0) return null;
+    return vals.reduce((s, v) => s + v, 0) / vals.length;
+  };
 
-  const machines = data?.machines ?? [];
+  const overall = useMemo(() => {
+    const a = avgDaily("Availability_o");
+    const p = avgDaily("Performance_o");
+    const q = avgDaily("Quality_o");
+    if (a == null && p == null && q == null) return null;
+    return { availability: a ?? 0, performance: p ?? 0, quality: q ?? 0 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawRows, sectionName]);
+
+  const machines = useMemo(() => {
+    if (!Array.isArray(rawRows)) return [];
+    const names = new Set(
+      rawRows
+        .filter(
+          (r) =>
+            r.section === sectionName &&
+            r.kpi_name === "OEE_m" &&
+            r.granularity === "Daily" &&
+            r.machine &&
+            r.machine !== "nan",
+        )
+        .map((r) => r.machine),
+    );
+    return [...names]
+      .sort()
+      .map((name) => ({
+        id: name,
+        name,
+        availability: avgDaily("Availability_m", name),
+        performance: avgDaily("Performance_m", name),
+        quality: avgDaily("Quality_m", name),
+      }))
+      .filter(
+        (m) =>
+          m.availability != null ||
+          m.performance != null ||
+          m.quality != null,
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawRows, sectionName]);
 
   const filteredMachines = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -43,51 +98,18 @@ function OeeDrillPanel({ plantId, section, from, to, shift }) {
   }, [machines, search]);
 
   const handleSelectCell = (machineId, component) => {
-    setSelectedCell((current) => {
-      if (
-        current?.machineId === machineId &&
-        current?.component === component
-      ) {
-        // Same cell → deselect (FR-P36)
-        setSubCategory(null);
-        setTraceItemCode(null);
-        return null;
-      }
-      // Switching → reset sub-category + traceability
-      setSubCategory(null);
-      setTraceItemCode(null);
-      return { machineId, component };
-    });
+    setSelectedCell((current) =>
+      current?.machineId === machineId && current?.component === component
+        ? null
+        : { machineId, component },
+    );
   };
 
-  const handleSelectSubCategory = (next) => {
-    setSubCategory(next);
-    setTraceItemCode(null); // changing sub-category resets traceability
-  };
-
-  const handleTraceRowClick = (itemCode) => {
-    setTraceItemCode((current) => (current === itemCode ? null : itemCode));
-  };
-
-  const selectedMachine = selectedCell
-    ? (machines.find((m) => m.id === selectedCell.machineId) ?? null)
-    : null;
-
-  const rowsKey =
-    selectedCell && subCategory
-      ? `${selectedCell.machineId}/${selectedCell.component}/${subCategory}`
-      : null;
-  const rows = rowsKey ? (data?.subDrill?.[rowsKey] ?? []) : null;
-
-  if (isLoading && !data) {
-    return <OeeDrillSkeleton />;
-  }
-
-  if (!data || !data.overall || machines.length === 0) {
+  if (!overall) {
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>
-          OEE drill not yet wired for this section — see spec 11.
+          No OEE drill data for {sectionName} in this date range.
         </Typography>
       </Box>
     );
@@ -95,7 +117,7 @@ function OeeDrillPanel({ plantId, section, from, to, shift }) {
 
   return (
     <Stack spacing={2}>
-      <OverallTiles overall={data.overall} />
+      <OverallTiles overall={overall} />
 
       <Stack
         direction="row"
@@ -109,33 +131,34 @@ function OeeDrillPanel({ plantId, section, from, to, shift }) {
         <MachineSearch value={search} onChange={setSearch} />
       </Stack>
 
-      <MachineTable
-        machines={filteredMachines}
-        selectedCell={selectedCell}
-        onSelectCell={handleSelectCell}
-      />
-
-      {selectedMachine && selectedCell && (
-        <>
-          <SubDrill
-            machine={selectedMachine}
-            component={selectedCell.component}
-            subCategory={subCategory}
-            onSelectSubCategory={handleSelectSubCategory}
-            rows={rows}
-            activeTraceItemCode={traceItemCode}
-            onTraceRowClick={handleTraceRowClick}
-          />
-
-          {traceItemCode && (
-            <ScrapTraceabilityPanel
-              plantId={plantId}
-              section={section}
-              machine={selectedMachine}
-              itemCode={traceItemCode}
-            />
-          )}
-        </>
+      {machines.length === 0 ? (
+        <Box
+          sx={{
+            p: 2,
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1.25,
+            textAlign: "center",
+            color: "text.disabled",
+          }}
+        >
+          <Typography sx={{ fontSize: 13 }}>
+            Machine-level rows for {sectionName} weren&rsquo;t in this fetch
+            (Lambda 5000-row cap). Pick a narrower date range to see them.
+          </Typography>
+        </Box>
+      ) : (
+        <MachineTable
+          machines={filteredMachines.map((m) => ({
+            id: m.id,
+            name: m.name,
+            availability: m.availability ?? 0,
+            performance: m.performance ?? 0,
+            quality: m.quality ?? 0,
+          }))}
+          selectedCell={selectedCell}
+          onSelectCell={handleSelectCell}
+        />
       )}
     </Stack>
   );
