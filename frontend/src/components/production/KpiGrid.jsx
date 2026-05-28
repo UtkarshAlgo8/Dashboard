@@ -82,13 +82,15 @@ function KpiGrid({
           sx={{
             display: "grid",
             gap: 2,
-            // Always show every card on one row on md+ — Productivity has
-            // 4 cards, Q/S have 4, M has 4, C has 3. Smaller breakpoints
-            // wrap to 2 then 1.
+            // minmax(0, 1fr) — not just 1fr — so cards can shrink below
+            // their content's intrinsic width without forcing one off
+            // the row. Without this, a card with a wide sparkline or
+            // long label can push the 4th card onto a new line on
+            // narrower viewports.
             gridTemplateColumns: {
               xs: "1fr",
-              sm: "repeat(2, 1fr)",
-              md: `repeat(${kpis.length}, 1fr)`,
+              sm: "repeat(2, minmax(0, 1fr))",
+              md: `repeat(${kpis.length}, minmax(0, 1fr))`,
             },
           }}
         >

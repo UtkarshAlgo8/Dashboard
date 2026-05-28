@@ -43,6 +43,11 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
         cursor: kpi.drillable ? "pointer" : "default",
         transition: "border-color 0.15s, box-shadow 0.15s",
         boxShadow: isDrilling ? theme.custom.shadow : "none",
+        // Allow the card to shrink past its content's intrinsic width
+        // when in a grid track — otherwise a sparkline or long label
+        // can keep the column wider than the grid's 1fr share, pushing
+        // the 4th card to the next row.
+        minWidth: 0,
         "&:hover": kpi.drillable
           ? { boxShadow: theme.custom.shadow }
           : undefined,
