@@ -173,6 +173,7 @@ export function useDashboardFetch() {
     state,
     kpis,
     drillRows,
+    rawRows: data ?? null,
     isLoading,
     error,
     setFilter,

@@ -3,43 +3,37 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
  * Shift Comparison card — appears below KPI grid, Productivity tab only.
- * Matches artifact exactly: Shift | Plan | Actual | FTQ% | OEE%
+ * Columns: Shift | Plan | Actual | FTQ% | OEE%
  *
- * @param {string} section - MIX | TBM | CUR | STK (maps to unit)
- * @param {number} oee  - section OEE value
- * @param {number} scrap - section scrap %
+ * Derives values from the same rows the KPI grid uses. Filters by
+ * `row.granularity === "Shift A/B/C"` then averages across whatever
+ * date range is currently selected. If a shift has no rows for the
+ * range, that row reads "—".
+ *
+ * @param {string} section - gold_dummy section ("Mixing"/"TBM"/"Curing"/"Stock")
+ * @param {object[]} rows  - raw dashboard rows for the active section + range
  */
-export default function ShiftComparisonCard({
-  section,
-  oee = 91.5,
-  scrap = 0.5,
-}) {
-  // Unit by section: MIX=MT, STK=units, else=nos
-  const unit = section === "MIX" ? "MT" : section === "STK" ? "units" : "nos";
+export default function ShiftComparisonCard({ section, rows = [] }) {
+  const unit =
+    section === "Mixing" ? "MT" : section === "Stock" ? "units" : "nos";
 
-  const rows = [
-    [
-      "Shift A",
-      String(Math.round(oee * 4.2)),
-      String(Math.round(oee * 3.9)),
-      `${(100 - scrap - 0.3).toFixed(1)}%`,
-      `${(oee + 1.5).toFixed(1)}%`,
-    ],
-    [
-      "Shift B",
-      String(Math.round(oee * 3.8)),
-      String(Math.round(oee * 3.2)),
-      `${(100 - scrap - 1.5).toFixed(1)}%`,
-      `${(oee - 3).toFixed(1)}%`,
-    ],
-    [
-      "Shift C",
-      String(Math.round(oee * 3.5)),
-      String(Math.round(oee * 3.3)),
-      `${(100 - scrap).toFixed(1)}%`,
-      `${(oee - 0.5).toFixed(1)}%`,
-    ],
-  ];
+  const shifts = ["Shift A", "Shift B", "Shift C"];
+  const tableRows = shifts.map((g) => {
+    const shiftRows = rows.filter(
+      (r) => r.section === section && r.granularity === g,
+    );
+    const plan = avgField(shiftRows, "Production", "threshold_value");
+    const actual = avgField(shiftRows, "Production", "actual_value");
+    const ftq = avgField(shiftRows, "FTQ", "actual_value");
+    const oee = avgField(shiftRows, "OEE_o", "actual_value");
+    return [
+      g,
+      fmtInt(plan),
+      fmtInt(actual),
+      fmtPct(ftq),
+      fmtPct(oee),
+    ];
+  });
 
   return (
     <Box
@@ -62,8 +56,25 @@ export default function ShiftComparisonCard({
       </Typography>
       <DrillTable
         cols={["Shift", `Plan (${unit})`, `Actual (${unit})`, "FTQ%", "OEE%"]}
-        rows={rows}
+        rows={tableRows}
       />
     </Box>
   );
+}
+
+function avgField(rows, kpiName, field) {
+  const vals = rows
+    .filter((r) => r.kpi_name === kpiName)
+    .map((r) => r[field])
+    .filter((v) => typeof v === "number" && Number.isFinite(v));
+  if (vals.length === 0) return null;
+  return vals.reduce((s, v) => s + v, 0) / vals.length;
+}
+
+function fmtInt(v) {
+  return v == null ? "—" : String(Math.round(v));
+}
+
+function fmtPct(v) {
+  return v == null ? "—" : `${v.toFixed(1)}%`;
 }

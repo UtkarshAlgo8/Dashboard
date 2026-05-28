@@ -52,12 +52,17 @@ function BanmoreProduction() {
     state: dashboard,
     kpis,
     drillRows,
+    rawRows,
     isLoading: kpiLoading,
     error: kpiError,
     setFilter,
     drillInto,
     resetDrill,
   } = useDashboardFetch();
+
+  const sectionName = { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[
+    dashboard.section
+  ] ?? dashboard.section;
 
   const ready =
     !plantLoading &&
@@ -279,7 +284,10 @@ function BanmoreProduction() {
                 {/* Shift Comparison — Productivity tab only, below drill panels. */}
                 {dashboard.category === "p" && (
                   <Box sx={{ px: 2, pb: 2 }}>
-                    <ShiftComparisonCard section={dashboard.section} />
+                    <ShiftComparisonCard
+                      section={sectionName}
+                      rows={rawRows ?? []}
+                    />
                   </Box>
                 )}
               </>
