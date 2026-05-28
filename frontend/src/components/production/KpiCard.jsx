@@ -13,16 +13,15 @@ import ShowChartIcon from "@mui/icons-material/ShowChart";
 import Sparkline from "./Sparkline.jsx";
 
 /**
- * KPI card per BRD FR-P19 through FR-P24.
+ * KPI card — CR-08 update.
  *
- * - Header: name (uppercase) + Trend Icon + chevron (if drillable).
- * - Body: value (large) + unit (subdued) + sparkline (right edge).
- * - Footer: trend % with up/down arrow, coloured by trendFavourable.
- *
- * Clicking the card body toggles the drill (calls `onDrillToggle`).
- * Clicking the Trend Icon stops propagation and calls `onTrendOpen`.
+ * New interface (replaces FR-P19/FR-P20 toggle-based drill):
+ *   onClick(kpi)  — fires on card body click; parent decides whether
+ *                   to trigger drill based on kpi.drillable + drillDown.
+ *   isDrilling     — styled open state for the drill root card.
+ *   onCloseDrill   — called when the close icon is clicked; resets drill.
  */
-function KpiCard({ kpi, isOpen, onDrillToggle, onTrendOpen }) {
+function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
   const theme = useTheme();
   const sparkColor = kpi.trendFavourable
     ? theme.custom.brand.green
@@ -34,16 +33,16 @@ function KpiCard({ kpi, isOpen, onDrillToggle, onTrendOpen }) {
 
   return (
     <Box
-      onClick={kpi.drillable ? () => onDrillToggle(kpi.id) : undefined}
+      onClick={() => onClick(kpi)}
       sx={{
         backgroundColor: "background.paper",
         border: 1,
-        borderColor: isOpen ? "primary.main" : "divider",
+        borderColor: isDrilling ? "primary.main" : "divider",
         borderRadius: 1.25,
         p: 1.5,
         cursor: kpi.drillable ? "pointer" : "default",
         transition: "border-color 0.15s, box-shadow 0.15s",
-        boxShadow: isOpen ? theme.custom.shadow : "none",
+        boxShadow: isDrilling ? theme.custom.shadow : "none",
         "&:hover": kpi.drillable
           ? { boxShadow: theme.custom.shadow }
           : undefined,
@@ -74,8 +73,22 @@ function KpiCard({ kpi, isOpen, onDrillToggle, onTrendOpen }) {
               <ShowChartIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
-          {kpi.drillable && (
-            <Tooltip title={isOpen ? "Collapse" : "Click to drill down"} arrow>
+          {isDrilling ? (
+            <Tooltip title="Close drill" arrow>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCloseDrill();
+                }}
+              >
+                <KeyboardArrowUpIcon
+                  sx={{ fontSize: 18, transform: "rotate(180deg)" }}
+                />
+              </IconButton>
+            </Tooltip>
+          ) : kpi.drillable ? (
+            <Tooltip title="Drill down" arrow>
               <Box
                 sx={{
                   width: 22,
@@ -84,18 +97,14 @@ function KpiCard({ kpi, isOpen, onDrillToggle, onTrendOpen }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: isOpen
-                    ? "primary.main"
-                    : `${theme.custom.brand.orange}1f`,
-                  color: isOpen ? "primary.contrastText" : "primary.main",
-                  transition: "transform 0.2s, background-color 0.15s",
-                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  backgroundColor: `${theme.custom.brand.orange}1f`,
+                  color: "primary.main",
                 }}
               >
                 <KeyboardArrowUpIcon sx={{ fontSize: 18 }} />
               </Box>
             </Tooltip>
-          )}
+          ) : null}
         </Stack>
       </Stack>
 

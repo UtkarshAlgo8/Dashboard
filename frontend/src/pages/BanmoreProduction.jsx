@@ -1,12 +1,20 @@
 import { useState } from "react";
-import { Box, Stack, useTheme } from "@mui/material";
+import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
 import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
 import ProductionBodySkeleton from "@/components/production/ProductionBodySkeleton.jsx";
+import ShiftComparisonCard from "@/components/production/ShiftComparisonCard.jsx";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
+import TrendModal from "@/components/trend/TrendModal.jsx";
+import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
+import ProductionDrillPanel from "@/components/drills/production/ProductionDrillPanel.jsx";
+import DowntimeDrillPanel from "@/components/drills/downtime/DowntimeDrillPanel.jsx";
+import PlanComplianceDrillPanel from "@/components/drills/plan-compliance/PlanComplianceDrillPanel.jsx";
+import GenericTableDrillPanel from "@/components/drills/shared/GenericTableDrillPanel.jsx";
+import BudgetDrillPanel from "@/components/drills/shared/BudgetDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import {
   getPlant,
@@ -14,14 +22,20 @@ import {
   getCategoryTabs,
   getPlantSummary,
 } from "@/api/plants.js";
+import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
+import { presetToDateRange } from "@/lib/timeRange.js";
 
 /**
- * Banmore Production dashboard — spec 04 ships the chrome only.
- * KPI grid (spec 05+), drills (specs 06–09), trend modal (spec 10),
- * and print (spec 13) fill in over subsequent specs.
+ * Banmore Production dashboard — Phase 1 ships Banmore plant + Production.
+ *
+ * CR-08 change: uses useDashboardFetch (v2 universal hook) for KPI + drill data.
+ * Drill panels:
+ *   - OEE / Production / Downtime / Plan Compliance → dedicated panels (own API)
+ *   - All others → GenericDrillPanel driven by v2 drillRows
  */
 function BanmoreProduction() {
   const theme = useTheme();
+  const [trendKpi, setTrendKpi] = useState(null);
 
   const { data: plant, isLoading: plantLoading } = usePolledQuery(
     () => getPlant("banmore"),
@@ -33,19 +47,17 @@ function BanmoreProduction() {
     interval: 0,
   });
 
-  const [section, setSection] = useState("mix");
-  const [category, setCategory] = useState("p");
-  const [stockSelector, setStockSelector] = useState("4roll"); // Stock default per FR-P18
-  const [timeRange, setTimeRange] = useState({
-    preset: "month",
-    from: "",
-    to: "",
-  });
-  // CR-05: shift filter is UI-only for Phase 1 (Q-SH-01 resolved
-  // "pure UI"). Visible only while the Today preset is active.
-  // Wired through to the dashboard so consumers can opt in later
-  // when shift-tagged mock data lands.
-  const [shift, setShift] = useState("all");
+  // CR-08: v2 dashboard fetch — owns section/category/granularity/date/drill state.
+  const {
+    state: dashboard,
+    kpis,
+    drillRows,
+    isLoading: kpiLoading,
+    error: kpiError,
+    setFilter,
+    drillInto,
+    resetDrill,
+  } = useDashboardFetch();
 
   const ready =
     !plantLoading &&
@@ -53,6 +65,64 @@ function BanmoreProduction() {
     Array.isArray(sections) &&
     Array.isArray(tabs) &&
     summary;
+
+  // Build timeRange from the v2 hook state for ProductionHeader.
+  const timeRange = {
+    preset: dashboard.date ? "custom" : "month",
+    from: dashboard.date ?? "",
+    to: "",
+  };
+  const { from, to } = presetToDateRange(timeRange);
+
+  const onTimeRangeChange = (range) => {
+    setFilter(
+      {
+        granularity: range.preset === "today" ? "Daily" : null,
+        date: range.from || null,
+      },
+      false,
+    );
+  };
+
+  const onShiftChange = (shift) => {
+    const map = { all: null, a: "Shift A", b: "Shift B", c: "Shift C" };
+    setFilter({ granularity: map[shift] ?? null }, false);
+  };
+
+  const onSectionSelect = (id) => setFilter({ section: id }, true);
+  const onCategorySelect = (id) => setFilter({ category: id }, true);
+
+  // Multiple drills can be open simultaneously (one per clicked card).
+  const [openDrillKpis, setOpenDrillKpis] = useState(new Set());
+
+  const handleDrillKpi = (kpi) => {
+    if (!kpi.drillable) return;
+
+    // Toggle open state locally.
+    setOpenDrillKpis((prev) => {
+      const next = new Set(prev);
+      if (next.has(kpi.id)) {
+        next.delete(kpi.id);
+      } else {
+        next.add(kpi.id);
+      }
+      return next;
+    });
+
+    // Trigger drill data fetch via useDashboardFetch.
+    if (kpi.drillTargets) {
+      drillInto(kpi.drillTargets, kpi.id);
+    }
+  };
+
+  const handleCloseDrill = (kpiId) => {
+    setOpenDrillKpis((prev) => {
+      const next = new Set(prev);
+      next.delete(kpiId);
+      if (next.size === 0) resetDrill();
+      return next;
+    });
+  };
 
   return (
     <Box
@@ -66,9 +136,13 @@ function BanmoreProduction() {
       <ProductionHeader
         plant={plant}
         timeRange={timeRange}
-        onTimeRangeChange={setTimeRange}
-        shift={shift}
-        onShiftChange={setShift}
+        onTimeRangeChange={onTimeRangeChange}
+        shift={
+          dashboard.granularity?.startsWith("Shift")
+            ? dashboard.granularity.slice(-1).toLowerCase()
+            : "all"
+        }
+        onShiftChange={onShiftChange}
       />
 
       {!ready ? (
@@ -79,13 +153,14 @@ function BanmoreProduction() {
             flex: 1,
             display: "grid",
             gridTemplateColumns:
-              category === "i" ? "1fr" : { xs: "1fr", md: "220px 1fr" },
+              dashboard.category === "i"
+                ? "1fr"
+                : { xs: "1fr", md: "220px 1fr" },
             gap: 2,
             p: 2,
           }}
         >
-          {/* Sections sidebar hidden when Inventory is active (full-width view per artifact). */}
-          {category !== "i" && (
+          {dashboard.category !== "i" && (
             <Stack spacing={2} sx={{ height: "100%" }}>
               <Box
                 sx={{
@@ -99,8 +174,8 @@ function BanmoreProduction() {
               >
                 <SectionSidebar
                   sections={sections}
-                  activeSectionId={section}
-                  onSelect={setSection}
+                  activeSectionId={dashboard.section}
+                  onSelect={onSectionSelect}
                 />
               </Box>
               <PlantSummaryCard plant={plant} summary={summary} />
@@ -120,27 +195,185 @@ function BanmoreProduction() {
           >
             <CategoryTabs
               tabs={tabs}
-              activeTabId={category}
-              onSelect={setCategory}
+              activeTabId={dashboard.category}
+              onSelect={onCategorySelect}
             />
-            {category === "i" ? (
+            {dashboard.category === "i" ? (
               <InventoryPage plantId="banmore" />
             ) : (
-              <KpiGrid
-                plantId="banmore"
-                section={section}
-                tab={category}
-                stockSelector={stockSelector}
-                onStockSelectorChange={setStockSelector}
-                timeRange={timeRange}
-                shift={shift}
-              />
+              <>
+                {/* Drill hint — matches artifact "▶ Click any KPI card to expand drill-down" */}
+                <Box sx={{ px: 2, pt: 2 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "warning.main",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                    }}
+                  >
+                    Click any KPI card to expand drill-down
+                  </Typography>
+                </Box>
+
+                <KpiGrid
+                  kpis={kpis}
+                  isLoading={kpiLoading}
+                  error={kpiError}
+                  openDrillKpis={openDrillKpis}
+                  onDrillKpi={handleDrillKpi}
+                  onCloseDrill={handleCloseDrill}
+                  onTrendOpen={(kpi) => setTrendKpi(kpi)}
+                />
+
+                {/* All open drill panels — one per clicked card. Matches artifact. */}
+                {openDrillKpis.size > 0 && (
+                  <Box
+                    sx={{
+                      px: 2,
+                      pb: 2,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    {kpis
+                      .filter((k) => openDrillKpis.has(k.id) && k.drillable)
+                      .map((kpi) => (
+                        <DrillPanelRouter
+                          key={kpi.id}
+                          kpi={kpi}
+                          plantId="banmore"
+                          section={dashboard.section}
+                          stockSelector={null}
+                          from={from}
+                          to={to}
+                          shift={dashboard.granularity}
+                          allDrillRows={drillRows}
+                        />
+                      ))}
+                  </Box>
+                )}
+
+                {/* Shift Comparison — Productivity tab only, below drill panels. */}
+                {dashboard.category === "p" && (
+                  <Box sx={{ px: 2, pb: 2 }}>
+                    <ShiftComparisonCard section={dashboard.section} />
+                  </Box>
+                )}
+              </>
             )}
           </Box>
         </Box>
       )}
+
+      <TrendModal
+        open={Boolean(trendKpi)}
+        onClose={() => setTrendKpi(null)}
+        plantId="banmore"
+        kpi={trendKpi}
+        section={dashboard.section}
+        category={dashboard.category}
+      />
     </Box>
   );
+}
+
+/**
+ * Routes to the appropriate drill panel based on `kpi.drillType`.
+ * Matches artifact DrillPanel routing exactly.
+ *
+ * Dedicated panels (mixOEE, mixProd, tbmProd, stkProd, downtime, compliance, budget)
+ * own their API calls. "table" type uses the specific table panel per kpi.id.
+ */
+function DrillPanelRouter({
+  kpi,
+  plantId,
+  section,
+  stockSelector,
+  from,
+  to,
+  shift,
+  allDrillRows,
+}) {
+  if (!kpi) return null;
+
+  // Filter drill rows to this KPI's gold_dummy kpi_name.
+  const drillRows = (allDrillRows ?? []).filter(
+    (r) => r.kpiName === kpi.rawName,
+  );
+
+  switch (kpi.drillType) {
+    // Productivity
+    case "mixOEE":
+      return (
+        <OeeDrillPanel
+          plantId={plantId}
+          section={section}
+          from={from}
+          to={to}
+          shift={shift}
+        />
+      );
+    case "mixProd":
+    case "tbmProd":
+    case "stkProd":
+      return (
+        <ProductionDrillPanel
+          plantId={plantId}
+          section={section}
+          stockSelector={stockSelector}
+          from={from}
+          to={to}
+          shift={shift}
+        />
+      );
+    case "downtime":
+      return (
+        <DowntimeDrillPanel
+          plantId={plantId}
+          section={section}
+          from={from}
+          to={to}
+          shift={shift}
+        />
+      );
+    case "compliance":
+      return (
+        <PlanComplianceDrillPanel
+          plantId={plantId}
+          section={section}
+          from={from}
+          to={to}
+          shift={shift}
+        />
+      );
+    case "budget":
+      return (
+        <BudgetDrillPanel
+          plantId={plantId}
+          section={section}
+          from={from}
+          to={to}
+          shift={shift}
+        />
+      );
+    // "table" type — route by kpi.id
+    case "table":
+      return (
+        <GenericTableDrillPanel
+          kpi={kpi}
+          drillRows={drillRows}
+          section={section}
+        />
+      );
+    // null drillType — no drill panel
+    case null:
+    default:
+      return null;
+  }
 }
 
 export default BanmoreProduction;

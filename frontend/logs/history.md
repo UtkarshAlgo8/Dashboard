@@ -39,3 +39,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 5058f61 — fix: remove stray 'downtime' bar hint that diverged from artifact _(Vishwajit Khanna)_
   - b4eb8f9 — fix: round every API numeric to 2 decimals _(Vishwajit Khanna)_
   - 9469bb9 — feat(trend): swap custom SVG charts for Highcharts (line / column) _(Vishwajit Khanna)_
+  - 889194b — fix(trend): normalise highcharts-react-official UMD default import _(Vishwajit Khanna)_

@@ -14,11 +14,15 @@ export const router = Router({ mergeParams: true });
  * frontend slug (oee / production / downtime / plan-compliance);
  * we map it to the matching kpi_name.
  */
+/**
+ * Map frontend KPI id slugs to actual gold_dummy kpi_name values.
+ * Updated to match live gold_dummy (confirmed 2026-05-27).
+ */
 const KPI_NAME_BY_ID = {
-  oee: "OEE",
-  production: "Production",
-  downtime: "Downtime",
-  "plan-compliance": "Plan Compliance",
+  "oee": "OEE_o",
+  "production": "Production",
+  "downtime": "Downtime",
+  "plan-compliance": "Plan_Compliance",
 };
 
 router.get("/", async (req, res, next) => {

@@ -19,15 +19,17 @@ import { pickChartType } from "./pickChartType.js";
 import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getTrend } from "@/api/trends.js";
+import client from "@/api/client.js";
 
 /**
  * KPI Trend Analysis modal per BRD §9.3 (FR-X10 through FR-X17).
  *
+ * Uses v2 POST /dashboard/fetch when kpi.name is available (live data),
+ * falling back to the legacy GET /plants/:id/production/trends endpoint
+ * (mock / older integration).
+ *
  * Opens via the Trend Icon on a KpiCard. Owns its own time-range
- * state (the dashboard's TimeRange is independent — FR-X6 says the
- * component is available in both surfaces, not that they share
- * state). Closes via Escape, backdrop click, or the X button (MUI
- * Dialog defaults).
+ * state. Closes via Escape, backdrop click, or the X button.
  */
 function TrendModal({
   open,
@@ -44,7 +46,44 @@ function TrendModal({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const { data, isLoading, error } = usePolledQuery(
+  /**
+   * v2 fetch: use kpi.name (actual gold_dummy kpi_name like "OEE_o")
+   * so we bypass the stale KPI_NAME_BY_ID map in getTrend.
+   * Returns { labels: string[], values: number[] }.
+   */
+  const useV2 = Boolean(kpi?.rawName);
+  const v2Payload = useV2
+    ? {
+        context: {
+          section: sectionIdToName(section),
+          category: categoryIdToName(category),
+          granularity: "Daily",
+        },
+        drillKpis: [kpi.rawName],
+        limit: 500,
+      }
+    : null;
+
+  const { data: v2Rows, isLoading: v2Loading } = usePolledQuery(
+    v2Payload
+      ? () =>
+          client.post("/dashboard/fetch", v2Payload).then((r) => r.data ?? r)
+      : () => null,
+    {
+      enabled: Boolean(v2Payload),
+      interval: 0,
+      deps: [JSON.stringify(v2Payload)],
+    },
+  );
+
+  /**
+   * Legacy fetch (mock / older API).
+   */
+  const {
+    data: legacyData,
+    isLoading: legacyLoading,
+    error: legacyError,
+  } = usePolledQuery(
     () =>
       getTrend({
         plantId,
@@ -57,29 +96,36 @@ function TrendModal({
         compound,
       }),
     {
-      enabled: open && Boolean(kpi),
+      enabled: open && Boolean(kpi) && !useV2,
       interval: 0,
-      deps: [
-        open,
-        plantId,
-        kpi?.id,
-        section,
-        category,
-        range,
-        from,
-        to,
-        compound,
-      ],
+      deps: [open, kpi?.id, section, category, range, from, to],
     },
   );
 
-  if (error) toast.error("Could not load trend data.");
+  if (legacyError) toast.error("Could not load trend data.");
 
   if (!kpi) return null;
 
+  const isLoading = useV2 ? v2Loading : legacyLoading;
+
+  // Resolve trend data — prefer v2 rows, fall back to legacy.
+  let labels = [];
+  let values = [];
+  if (useV2 && Array.isArray(v2Rows)) {
+    const sorted = [...v2Rows].sort((a, b) => (a.date > b.date ? 1 : -1));
+    labels = sorted.map((r) => r.date ?? "");
+    values = sorted.map((r) => {
+      const v = r.actual_value;
+      if (v == null) return null;
+      const n = typeof v === "number" ? v : Number.parseFloat(v);
+      return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+    });
+  } else if (legacyData) {
+    labels = legacyData.labels ?? [];
+    values = legacyData.values ?? [];
+  }
+
   const chartType = pickChartType(kpi.id, kpi.unit, kpi.name);
-  const labels = data?.labels ?? [];
-  const values = data?.values ?? [];
 
   return (
     <Dialog
@@ -188,6 +234,17 @@ function TrendModal({
         </Box>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function sectionIdToName(id) {
+  return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
+}
+function categoryIdToName(id) {
+  return (
+    { p: "Productivity", q: "Quality", c: "Cost", m: "Morale", s: "Safety" }[
+      id
+    ] ?? id
   );
 }
 

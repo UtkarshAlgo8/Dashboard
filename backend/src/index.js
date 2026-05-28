@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { config } from "./config.js";
 import { UpstreamError } from "./upstream.js";
+import { QueryValidationError } from "./dashboard-query.js";
 import { router as staticRouter } from "./routes/static.js";
 import { router as plantsRouter } from "./routes/plants.js";
 import { router as kpisRouter } from "./routes/kpis.js";
@@ -9,6 +10,7 @@ import { router as drillsRouter } from "./routes/drills.js";
 import { router as trendsRouter } from "./routes/trends.js";
 import { router as inventoryRouter } from "./routes/inventory.js";
 import { router as anomaliesRouter } from "./routes/anomalies.js";
+import { router as dashboardRouter } from "./routes/dashboard.js";
 
 const app = express();
 
@@ -51,6 +53,7 @@ app.use("/api/v1/plants/:plantId/production/trends", trendsRouter);
 app.use("/api/v1/plants/:plantId/production/drills", drillsRouter);
 app.use("/api/v1/plants/:plantId/inventory", inventoryRouter);
 app.use("/api/v1/plants/:plantId/anomalies", anomaliesRouter);
+app.use("/api/v1/dashboard", dashboardRouter);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -67,6 +70,10 @@ app.use((err, _req, res, _next) => {
     res
       .status(err.status)
       .json({ error: { code: err.type, message: err.message } });
+    return;
+  }
+  if (err instanceof QueryValidationError) {
+    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: err.message } });
     return;
   }
   // eslint-disable-next-line no-console
