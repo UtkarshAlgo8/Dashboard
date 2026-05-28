@@ -73,3 +73,4 @@ Entries below this line are appended by `.githooks/post-commit` → `scripts/log
   - 36d2e2d — cdw _(Vishwajit Khanna)_
   - b0b4adc — cdwc _(Vishwajit Khanna)_
   - 0b1a3b8 — chore(deploy): run git pull from repo root + drop stale image before rebuild _(Vishwajit Khanna)_
+  - 4b9a1cd — chore(docker): bump base to node:20-slim and tighten Dockerfile _(Vishwajit Khanna)_
