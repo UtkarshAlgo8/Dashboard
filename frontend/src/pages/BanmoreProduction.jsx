@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
@@ -66,11 +66,11 @@ function BanmoreProduction() {
     Array.isArray(tabs) &&
     summary;
 
-  // Time-range UI state lives here. The hook stores a single `date`
-  // for the backend equality filter; presets like Month / Year resolve
-  // to "no date filter" since the backend can't do BETWEEN ranges.
+  // Time-range UI state. Default preset is "month".
+  // Today → single-date equality (state.date). Month/Year/custom →
+  // BETWEEN range (state.from + state.to).
   const [timeRange, setTimeRange] = useState({
-    preset: null,
+    preset: "month",
     from: "",
     to: "",
   });
@@ -78,18 +78,28 @@ function BanmoreProduction() {
   const onTimeRangeChange = (updater) => {
     setTimeRange((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      const { from: resolvedFrom } = presetToDateRange(next);
-      // "today" → set date for equality filter. Month/Year/custom → no
-      // date filter (backend only supports single-date equality).
-      setFilter(
-        {
-          date: next.preset === "today" ? resolvedFrom : null,
-        },
-        false,
-      );
+      const resolved = presetToDateRange(next);
+      if (next.preset === "today") {
+        setFilter(
+          { date: resolved.from, from: null, to: null },
+          false,
+        );
+      } else {
+        setFilter(
+          { date: null, from: resolved.from, to: resolved.to },
+          false,
+        );
+      }
       return next;
     });
   };
+
+  // Initial fetch: push the default "month" range into the hook on mount.
+  useEffect(() => {
+    const resolved = presetToDateRange(timeRange);
+    setFilter({ date: null, from: resolved.from, to: resolved.to }, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { from, to } = presetToDateRange(timeRange);
 

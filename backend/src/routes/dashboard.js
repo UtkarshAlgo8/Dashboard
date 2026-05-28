@@ -27,6 +27,8 @@ router.post("/fetch", async (req, res, next) => {
     const {
       context = {},
       date,
+      from,
+      to,
       drillKpis = null,
       parentFilters = {},
       limit,
@@ -39,7 +41,7 @@ router.post("/fetch", async (req, res, next) => {
 
     let sql;
     try {
-      sql = buildFetchQuery({ context, date, drillKpis, parentFilters, limit });
+      sql = buildFetchQuery({ context, date, from, to, drillKpis, parentFilters, limit });
     } catch (err) {
       const status = err instanceof QueryValidationError ? 400 : 500;
       res.status(status).json({
@@ -48,7 +50,7 @@ router.post("/fetch", async (req, res, next) => {
       return;
     }
 
-    const cacheKey = buildCacheKey("/dashboard/fetch", { context, date, drillKpis, parentFilters, limit });
+    const cacheKey = buildCacheKey("/dashboard/fetch", { context, date, from, to, drillKpis, parentFilters, limit });
     const rows = await cached(cacheKey, () => runQuery(sql));
     res.json({ data: rows });
   } catch (err) {

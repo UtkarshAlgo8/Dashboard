@@ -29,7 +29,9 @@ const initialState = {
   productType: null,
   category: "p",
   granularity: null, // null = no granularity filter (Lambda ignores category when granularity is set)
-  date: null,
+  date: null, // single-day equality (Today)
+  from: null, // range start (Month / Year / custom)
+  to: null, // range end
   drillKpis: null, // string[] — drill target kpi_names
   drillSourceKpiId: null, // string — the KPI that was originally clicked
   parentFilters: {},
@@ -46,7 +48,9 @@ function reducer(state, action) {
               drillKpis: null,
               drillSourceKpiId: null,
               parentFilters: {},
-              date: null, // date filter doesn't persist across section/category changes
+              date: null,
+              from: null,
+              to: null,
             }
           : {}),
       };
@@ -94,7 +98,8 @@ function buildContext(state) {
   // filter is broken (returns wrong KPIs). The frontend filters via
   // ALLOWED_KPIS[section][category.toUpperCase()] in toKpiGrid.
   if (state.granularity) ctx.granularity = state.granularity;
-  if (state.date) ctx.date = state.date;
+  // date / from / to are NOT in context — they are top-level payload
+  // fields. The backend rejects them inside the context object.
   return ctx;
 }
 
@@ -115,6 +120,9 @@ export function useDashboardFetch() {
 
   const fetchPayload = {
     context: buildContext(state),
+    date: state.date,
+    from: state.from,
+    to: state.to,
     drillKpis: state.drillKpis,
     parentFilters: state.parentFilters,
     limit: 5000,

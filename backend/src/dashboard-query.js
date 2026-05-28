@@ -170,6 +170,8 @@ function toIsoDate(input) {
 export function buildFetchQuery({
   context = {},
   date,
+  from,
+  to,
   drillKpis = null,
   parentFilters = {},
   limit = 5000,
@@ -202,14 +204,20 @@ export function buildFetchQuery({
     where.push(`${key} = ${escapeLiteral(value)}`);
   }
 
-  // 2. Date predicate. Always equality on ISO yyyy-mm-dd string column.
-  //    v2 spec: every granularity is its own pre-stored row, so a
-  //    Daily / Shift A / MTD / YTD filter pinpoints exactly one row
-  //    per (kpi_name, machine, …). Caller controls which by setting
-  //    context.granularity.
+  // 2. Date predicate. ISO yyyy-mm-dd string column.
+  //    - `date` (single value) → equality. Used for Today / single-day.
+  //    - `from` + `to` → BETWEEN range. Used for Month / Year / custom.
+  //    Either form, not both.
   if (date != null && date !== "") {
     const iso = toIsoDate(date);
     where.push(`date = ${escapeLiteral(iso)}`);
+  } else {
+    if (from != null && from !== "") {
+      where.push(`date >= ${escapeLiteral(toIsoDate(from))}`);
+    }
+    if (to != null && to !== "") {
+      where.push(`date <= ${escapeLiteral(toIsoDate(to))}`);
+    }
   }
 
   // 3. Parent filters carried forward from clicked rows.
