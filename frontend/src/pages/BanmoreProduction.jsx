@@ -116,36 +116,32 @@ function BanmoreProduction() {
   const onSectionSelect = (id) => setFilter({ section: id }, true);
   const onCategorySelect = (id) => setFilter({ category: id }, true);
 
-  // Multiple drills can be open simultaneously (one per clicked card).
-  const [openDrillKpis, setOpenDrillKpis] = useState(new Set());
+  // Only one drill open at a time. Clicking a different card closes the
+  // previous one; clicking the same card again closes it.
+  const [openDrillKpiId, setOpenDrillKpiId] = useState(null);
 
   const handleDrillKpi = (kpi) => {
     if (!kpi.drillable) return;
 
-    // Toggle open state locally.
-    setOpenDrillKpis((prev) => {
-      const next = new Set(prev);
-      if (next.has(kpi.id)) {
-        next.delete(kpi.id);
-      } else {
-        next.add(kpi.id);
-      }
-      return next;
-    });
+    if (openDrillKpiId === kpi.id) {
+      // Clicked the same card — close it.
+      setOpenDrillKpiId(null);
+      resetDrill();
+      return;
+    }
 
-    // Trigger drill data fetch via useDashboardFetch.
+    // Different card (or first open) — switch.
+    setOpenDrillKpiId(kpi.id);
     if (kpi.drillTargets) {
       drillInto(kpi.drillTargets, kpi.id);
+    } else {
+      resetDrill();
     }
   };
 
-  const handleCloseDrill = (kpiId) => {
-    setOpenDrillKpis((prev) => {
-      const next = new Set(prev);
-      next.delete(kpiId);
-      if (next.size === 0) resetDrill();
-      return next;
-    });
+  const handleCloseDrill = () => {
+    setOpenDrillKpiId(null);
+    resetDrill();
   };
 
   return (
@@ -246,28 +242,22 @@ function BanmoreProduction() {
                   kpis={kpis}
                   isLoading={kpiLoading}
                   error={kpiError}
-                  openDrillKpis={openDrillKpis}
+                  openDrillKpiId={openDrillKpiId}
                   onDrillKpi={handleDrillKpi}
                   onCloseDrill={handleCloseDrill}
                   onTrendOpen={(kpi) => setTrendKpi(kpi)}
                 />
 
-                {/* All open drill panels — one per clicked card. Matches artifact. */}
-                {openDrillKpis.size > 0 && (
-                  <Box
-                    sx={{
-                      px: 2,
-                      pb: 2,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 2,
-                    }}
-                  >
-                    {kpis
-                      .filter((k) => openDrillKpis.has(k.id) && k.drillable)
-                      .map((kpi) => (
+                {/* Single drill panel for the currently selected card. */}
+                {openDrillKpiId &&
+                  (() => {
+                    const kpi = kpis.find(
+                      (k) => k.id === openDrillKpiId && k.drillable,
+                    );
+                    if (!kpi) return null;
+                    return (
+                      <Box sx={{ px: 2, pb: 2 }}>
                         <DrillPanelRouter
-                          key={kpi.id}
                           kpi={kpi}
                           plantId="banmore"
                           section={dashboard.section}
@@ -277,9 +267,9 @@ function BanmoreProduction() {
                           shift={dashboard.granularity}
                           allDrillRows={drillRows}
                         />
-                      ))}
-                  </Box>
-                )}
+                      </Box>
+                    );
+                  })()}
 
                 {/* Shift Comparison — Productivity tab only, below drill panels. */}
                 {dashboard.category === "p" && (

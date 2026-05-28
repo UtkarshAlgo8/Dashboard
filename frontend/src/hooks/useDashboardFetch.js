@@ -55,21 +55,14 @@ function reducer(state, action) {
           : {}),
       };
     case "SET_DRILL": {
-      // Merge new drill targets with existing ones so multiple drills
-      // (one per clicked card) all get their children fetched together.
-      const existing = state.drillKpis ?? [];
+      // Single-drill UX: replace previous drill targets with the new
+      // card's targets. Date filter is preserved across drill changes.
       const incoming = action.payload.kpiNames ?? [];
-      const merged = [...new Set([...existing, ...incoming])];
       return {
         ...state,
-        drillKpis: merged.length > 0 ? merged : null,
-        // Store source kpi id separately (multi-drill: last-wins is fine for UI state).
+        drillKpis: incoming.length > 0 ? incoming : null,
         drillSourceKpiId: action.payload.sourceKpiId,
-        parentFilters: {
-          ...state.parentFilters,
-          ...action.payload.parentFilters,
-        },
-        date: null,
+        parentFilters: action.payload.parentFilters ?? {},
       };
     }
     case "RESET_DRILL":
@@ -78,7 +71,6 @@ function reducer(state, action) {
         drillKpis: null,
         drillSourceKpiId: null,
         parentFilters: {},
-        date: state.date ?? null,
       };
     case "RESET_ALL":
       return initialState;

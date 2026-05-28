@@ -14,9 +14,9 @@ import StockSubSelector from "./StockSubSelector.jsx";
  * @param {object[]} [props.kpis]
  * @param {boolean}  props.isLoading
  * @param {Error|null} props.error
- * @param {Set}      props.openDrillKpis   — Set of kpi.id that have drill open
+ * @param {string|null} props.openDrillKpiId — id of the currently open drill card, or null
  * @param {Function} props.onDrillKpi     — (kpi) => void — toggle drill
- * @param {Function} props.onCloseDrill    — (kpiId) => void — close specific drill
+ * @param {Function} props.onCloseDrill    — () => void — close the open drill
  * @param {Function} props.onTrendOpen    - (kpi) => void
  * @param {boolean}  [props.showStockSubSelector]
  * @param {string}   [props.stockSelector]
@@ -26,7 +26,7 @@ function KpiGrid({
   kpis,
   isLoading,
   error,
-  openDrillKpis,
+  openDrillKpiId,
   onDrillKpi,
   onCloseDrill,
   onTrendOpen,
@@ -93,10 +93,10 @@ function KpiGrid({
             <KpiCard
               key={kpi.id}
               kpi={kpi}
-              isDrilling={Boolean(openDrillKpis?.has(kpi.id))}
+              isDrilling={openDrillKpiId === kpi.id}
               onClick={() => handleCardClick(kpi)}
               onTrendOpen={() => onTrendOpen(kpi)}
-              onCloseDrill={() => onCloseDrill(kpi.id)}
+              onCloseDrill={() => onCloseDrill()}
             />
           ))}
         </Box>
