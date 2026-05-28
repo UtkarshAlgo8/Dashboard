@@ -74,10 +74,12 @@ const ALLOWED_KPIS = {
       { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
-      { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
-      { id: "tq", name: "TQM_Score", unit: "/5", drillType: "table", drillTargets: null },
-      { id: "sg", name: "Suggestions", unit: "/person", drillType: "table", drillTargets: null },
-      { id: "tr", name: "Training", unit: "hrs/m", drillType: "table", drillTargets: null },
+      // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
+      // section's Morale tab. plantLevel flag tells the section filter to skip it.
+      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
+      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
+      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
+      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
       { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
@@ -105,10 +107,12 @@ const ALLOWED_KPIS = {
       { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
-      { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
-      { id: "tq", name: "TQM_Score", unit: "/5", drillType: "table", drillTargets: null },
-      { id: "sg", name: "Suggestions", unit: "/person", drillType: "table", drillTargets: null },
-      { id: "tr", name: "Training", unit: "hrs/m", drillType: "table", drillTargets: null },
+      // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
+      // section's Morale tab. plantLevel flag tells the section filter to skip it.
+      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
+      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
+      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
+      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
       { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
@@ -136,10 +140,12 @@ const ALLOWED_KPIS = {
       { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
-      { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
-      { id: "tq", name: "TQM_Score", unit: "/5", drillType: "table", drillTargets: null },
-      { id: "sg", name: "Suggestions", unit: "/person", drillType: "table", drillTargets: null },
-      { id: "tr", name: "Training", unit: "hrs/m", drillType: "table", drillTargets: null },
+      // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
+      // section's Morale tab. plantLevel flag tells the section filter to skip it.
+      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
+      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
+      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
+      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
       { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
@@ -167,10 +173,12 @@ const ALLOWED_KPIS = {
       { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
     ],
     M: [
-      { id: "ab", name: "Absenteeism", unit: "%", drillType: "table", drillTargets: null },
-      { id: "tq", name: "TQM_Score", unit: "/5", drillType: "table", drillTargets: null },
-      { id: "sg", name: "Suggestions", unit: "/person", drillType: "table", drillTargets: null },
-      { id: "tr", name: "Training", unit: "hrs/m", drillType: "table", drillTargets: null },
+      // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
+      // section's Morale tab. plantLevel flag tells the section filter to skip it.
+      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
+      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
+      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
+      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
     ],
     S: [
       { id: "ri", name: "Reportable", unit: "nos", drillType: "table", drillTargets: null },
@@ -231,11 +239,18 @@ export function toKpiGrid(
   // Get allowed KPI names for this (section, category) combo only.
   const allowedKpis = ALLOWED_KPIS[section]?.[category] ?? [];
   const allowedNames = new Set(allowedKpis.map((k) => k.name));
-
-  // Filter rows to this section/category AND only artifact KPI names.
-  const filtered = rows.filter(
-    (r) => r.section === section && allowedNames.has(r.kpi_name),
+  const plantLevelNames = new Set(
+    allowedKpis.filter((k) => k.plantLevel).map((k) => k.name),
   );
+
+  // Filter rows to this section/category AND only spec KPI names.
+  // Plant-level KPIs (e.g. Absenteeism, per spec §6) come back from the
+  // backend with section="nan"; skip the section equality check for them.
+  const filtered = rows.filter((r) => {
+    if (!allowedNames.has(r.kpi_name)) return false;
+    if (plantLevelNames.has(r.kpi_name)) return true;
+    return r.section === section;
+  });
   if (filtered.length === 0) return [];
 
   // Build lookup for this section/category only.
