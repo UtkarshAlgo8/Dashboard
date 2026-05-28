@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "deploy": "cd .. && git pull origin main && cd backend && (sudo docker ps -q --filter name=jk-dashboard-backend | grep -q . && sudo docker stop jk-dashboard-backend || true) && (sudo docker ps -a -q --filter name=jk-dashboard-backend | grep -q . && sudo docker rm jk-dashboard-backend || true) && (sudo docker images -q jk-dashboard-backend | grep -q . && sudo docker rmi jk-dashboard-backend || true) && sudo docker build -t jk-dashboard-backend . && sudo docker run --restart always -p 5000:5000 --name jk-dashboard-backend -d jk-dashboard-backend"
+    "deploy": "cd .. && git pull origin main && cd backend && (sudo docker ps -q --filter name=jk-dashboard-backend | grep -q . && sudo docker stop jk-dashboard-backend || true) && (sudo docker ps -a -q --filter name=jk-dashboard-backend | grep -q . && sudo docker rm jk-dashboard-backend || true) && (sudo docker images -q jk-dashboard-backend | grep -q . && sudo docker rmi jk-dashboard-backend || true) && sudo docker build -t jk-dashboard-backend . && sudo docker run --restart always -p 8814:8814 --name jk-dashboard-backend -d jk-dashboard-backend"
   },
   "dependencies": {
     "cors": "^2.8.5",
