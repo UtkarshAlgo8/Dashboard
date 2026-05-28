@@ -2,39 +2,44 @@ import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
- * Reportable drill panel — Incident log (90 days).
- * Columns: Date | Type | Area | Description | Status
+ * Reportable Incident log drill — kpi_name = Reportable_log.
  *
- * Static artifact data for Phase 1.
+ * Per spec §11 columns: Date | Type | Area | Description | Status.
+ * gold_dummy stores one row per incident with the area + description
+ * combined in `remarks` (e.g. "Banbury Hall: Minor injury - investigation closed"),
+ * date in `date`. Type is fixed = "Reportable" for this log.
+ *
+ * Aggregation: COUNT (§9) — one row per incident, no roll-up.
  */
-const REPORTABLE_DATA = [
-  ["05-Apr", "First Aid", "Banbury", "Minor burn from hot surface", "Closed"],
-  ["18-Mar", "Near Miss", "Banbury", "Material splash near operator", "Closed"],
-  [
-    "02-Mar",
-    "Near Miss",
-    "Banbury",
-    "Guard found missing on conveyor",
-    "Fixed",
-  ],
-];
+function splitRemarks(remarks) {
+  if (!remarks) return { area: "—", desc: "—" };
+  const idx = remarks.indexOf(":");
+  if (idx < 0) return { area: "—", desc: remarks.trim() };
+  return {
+    area: remarks.slice(0, idx).trim(),
+    desc: remarks.slice(idx + 1).trim(),
+  };
+}
 
-export default function ReportableDrillPanel({ drillRows, area = "Banbury" }) {
-  const rows =
-    drillRows && drillRows.length > 0
-      ? drillRows.map((r) => [
-          r.date ?? "—",
-          r.itemCode ?? r.productType ?? "—",
-          r.machine ?? area,
-          r.threshold_value ?? r.drillDown?.[0] ?? "—",
-          r.status ?? "Open",
-        ])
-      : REPORTABLE_DATA;
+export default function ReportableDrillPanel({ drillRows }) {
+  const rows = (drillRows ?? [])
+    .filter(
+      (r) =>
+        r.kpiName === "Reportable_log" &&
+        r.granularity === "Daily" &&
+        typeof r.actual === "number" &&
+        r.actual > 0,
+    )
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+    .map((r) => {
+      const { area, desc } = splitRemarks(r.remarks);
+      return [r.date ?? "—", "Reportable", area, desc, r.status ?? "—"];
+    });
 
   return (
     <Stack spacing={2}>
       <DrillTable
-        title="Incident Log (90 Days)"
+        title="Reportable Incidents"
         cols={["Date", "Type", "Area", "Description", "Status"]}
         rows={rows}
       />

@@ -2,26 +2,41 @@ import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
- * Absenteeism drill panel — Area-wise absenteeism.
- * Columns: Area | Total | Present | Absent | Rate
+ * Absenteeism drill — kpi_name = Absenteeism_section.
  *
- * drillRows have machine=area name, actual=absent count.
- * We estimate total/present from a base of 40 + i*10 per area.
+ * Per spec §6/§10 Absenteeism is plant-level (parent has section=NULL).
+ * The drill child `Absenteeism_section` is stored per section with the
+ * absenteeism rate in `actual_value`. gold_dummy has no sub-area /
+ * headcount breakdown — Total / Present / Absent columns from §11 can't
+ * be filled, so we surface what's available: Area (section) and Rate
+ * (AVG over the active date range).
  */
+function avg(arr) {
+  if (!arr.length) return null;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
+
 export default function AbsenteeismDrillPanel({ drillRows }) {
-  const rows = (drillRows ?? []).map((r, i) => {
-    const area = r.machine ?? r.itemCode ?? "—";
-    const absent = r.actual ?? 0;
-    const total = r.drillDown?.[0] ? Number(r.drillDown[0]) : 40 + i * 10;
-    const present = total - absent;
-    const rate = total > 0 ? ((absent / total) * 100).toFixed(1) + "%" : "—";
-    return [area, String(total), String(present), String(absent), rate];
-  });
+  const bySection = new Map();
+  for (const r of drillRows ?? []) {
+    if (r.kpiName !== "Absenteeism_section") continue;
+    if (r.granularity !== "Daily") continue;
+    const sec = r.section ?? "—";
+    if (!bySection.has(sec)) bySection.set(sec, []);
+    if (typeof r.actual === "number") bySection.get(sec).push(r.actual);
+  }
+
+  const rows = [...bySection.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([sec, vals]) => {
+      const rate = avg(vals);
+      return [sec, "—", "—", "—", rate != null ? `${rate.toFixed(1)}%` : "—"];
+    });
 
   return (
     <Stack spacing={2}>
       <DrillTable
-        title="Area-wise Absenteeism"
+        title="Section-wise Absenteeism (plant-level)"
         cols={["Area", "Total", "Present", "Absent", "Rate"]}
         rows={rows}
       />

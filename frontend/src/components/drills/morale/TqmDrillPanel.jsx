@@ -2,37 +2,48 @@ import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
- * TQM Score drill panel — TQM by Pillar.
- * Columns: Pillar | Score | Target | Gap
+ * TQM Score drill — kpi_name = TQM_pillar.
  *
- * Static artifact data for now since gold_dummy doesn't have
- * pillar-level TQM rows. Rows come with machine=pillar name.
+ * Per spec §11 columns: Pillar | Score | Target | Gap.
+ * gold_dummy stores the pillar label inside `remarks` (e.g. "5S",
+ * "Kaizen", "QC Circle", "Suggestion Scheme", "PM Pillar"), score in
+ * `actual_value`, target in `threshold_value`.
+ *
+ * Aggregation: AVG (§9) per pillar over the active date range.
  */
-const TQM_PILLARS = [
-  ["5S / Housekeeping", 4.2, 5],
-  ["Kaizen / CI", 3.5, 5],
-  ["QC Circle", 3.8, 5],
-  ["Suggestion Scheme", 3.6, 5],
-  ["PM Pillar", 4.0, 5],
-];
+function avg(arr) {
+  if (!arr.length) return null;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
 
 export default function TqmDrillPanel({ drillRows }) {
-  // If live rows exist, use them; otherwise fall back to static pillars.
-  const rows =
-    drillRows && drillRows.length > 0
-      ? drillRows.map((r) => {
-          const pillar = r.machine ?? r.itemCode ?? "—";
-          const score = r.actual ?? 0;
-          const target = r.threshold_value ?? 5;
-          const gap = (score - target).toFixed(1);
-          return [pillar, score.toFixed(1), target.toFixed(0), gap];
-        })
-      : TQM_PILLARS.map(([pillar, score, target]) => [
-          pillar,
-          score.toFixed(1),
-          target.toString(),
-          (score - target).toFixed(1),
-        ]);
+  const byPillar = new Map();
+  for (const r of drillRows ?? []) {
+    if (r.kpiName !== "TQM_pillar") continue;
+    if (r.granularity !== "Daily") continue;
+    const pillar = r.remarks ?? "—";
+    if (pillar === "—") continue;
+    if (!byPillar.has(pillar)) {
+      byPillar.set(pillar, { scores: [], targets: [] });
+    }
+    const b = byPillar.get(pillar);
+    if (typeof r.actual === "number") b.scores.push(r.actual);
+    if (typeof r.threshold === "number") b.targets.push(r.threshold);
+  }
+
+  const rows = [...byPillar.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([pillar, { scores, targets }]) => {
+      const score = avg(scores);
+      const target = avg(targets);
+      const gap = score != null && target != null ? score - target : null;
+      return [
+        pillar,
+        score != null ? score.toFixed(1) : "—",
+        target != null ? target.toFixed(1) : "—",
+        gap != null ? gap.toFixed(1) : "—",
+      ];
+    });
 
   return (
     <Stack spacing={2}>

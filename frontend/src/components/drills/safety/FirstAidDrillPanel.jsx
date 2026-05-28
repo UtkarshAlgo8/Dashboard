@@ -2,32 +2,45 @@ import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
- * First Aid drill panel — First Aid details.
- * Columns: Date | Area | Injury | Root Cause
+ * First Aid log drill — kpi_name = First_Aid_log.
  *
- * Static artifact data for Phase 1.
+ * Per spec §11 columns: Date | Area | Injury | Root Cause.
+ * gold_dummy stores one row per case with area + injury combined in
+ * `remarks` (e.g. "Banbury Hall: First aid case"). Injury detail / root
+ * cause aren't separately stored — Injury falls back to the description
+ * and Root Cause stays blank.
+ *
+ * Aggregation: COUNT (§9) — one row per case.
  */
-const FIRSTAID_DATA = [
-  ["05-Apr", "Banbury", "Minor burn", "Hot surface contact"],
-  ["18-Mar", "Banbury", "Cut finger", "Sharp edge on tool"],
-  ["02-Mar", "Banbury", "Eye irritation", "Chemical splash"],
-];
+function splitRemarks(remarks) {
+  if (!remarks) return { area: "—", desc: "—" };
+  const idx = remarks.indexOf(":");
+  if (idx < 0) return { area: "—", desc: remarks.trim() };
+  return {
+    area: remarks.slice(0, idx).trim(),
+    desc: remarks.slice(idx + 1).trim(),
+  };
+}
 
-export default function FirstAidDrillPanel({ drillRows, area = "Banbury" }) {
-  const rows =
-    drillRows && drillRows.length > 0
-      ? drillRows.map((r) => [
-          r.date ?? "—",
-          r.machine ?? area,
-          r.itemCode ?? r.productType ?? "—",
-          r.threshold_value ?? r.drillDown?.[0] ?? "—",
-        ])
-      : FIRSTAID_DATA;
+export default function FirstAidDrillPanel({ drillRows }) {
+  const rows = (drillRows ?? [])
+    .filter(
+      (r) =>
+        r.kpiName === "First_Aid_log" &&
+        r.granularity === "Daily" &&
+        typeof r.actual === "number" &&
+        r.actual > 0,
+    )
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+    .map((r) => {
+      const { area, desc } = splitRemarks(r.remarks);
+      return [r.date ?? "—", area, desc, "—"];
+    });
 
   return (
     <Stack spacing={2}>
       <DrillTable
-        title="First Aid Details"
+        title="First Aid Cases"
         cols={["Date", "Area", "Injury", "Root Cause"]}
         rows={rows}
       />

@@ -413,6 +413,7 @@ function BanmoreProduction() {
                           kpi={kpi}
                           plantId="banmore"
                           section={dashboard.section}
+                          sectionName={sectionName}
                           from={from}
                           to={to}
                           shift={dashboard.granularity}
@@ -463,6 +464,7 @@ function DrillPanelRouter({
   kpi,
   plantId,
   section,
+  sectionName,
   from,
   to,
   shift,
@@ -472,9 +474,12 @@ function DrillPanelRouter({
 }) {
   if (!kpi) return null;
 
-  // Filter drill rows to this KPI's gold_dummy kpi_name.
-  const drillRows = (allDrillRows ?? []).filter(
-    (r) => r.kpiName === kpi.rawName,
+  // Filter drill rows to this KPI's drill TARGET kpi_names (children),
+  // not the landing kpi_name itself. drillTargets is the list of child
+  // kpi_names the panel needs to render (e.g. FTQ → ["FTQ_m"]).
+  const drillTargets = kpi.drillTargets ?? [];
+  const drillRows = (allDrillRows ?? []).filter((r) =>
+    drillTargets.includes(r.kpiName),
   );
 
   switch (kpi.drillType) {
@@ -510,6 +515,7 @@ function DrillPanelRouter({
           kpi={kpi}
           drillRows={drillRows}
           section={section}
+          sectionName={sectionName}
         />
       );
     // null drillType — no drill panel

@@ -2,34 +2,43 @@ import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
- * Safety Audit drill panel — Audit by area.
- * Columns: Area | Score | NC Major | NC Minor | Observations
+ * Safety Audit drill — kpi_name = Audit_area.
  *
- * Static artifact data for Phase 1 (Mixing section areas).
+ * Per spec §11 columns: Area | Score | NC Major | NC Minor | Observations.
+ * gold_dummy stores the area in `remarks` and the audit score in
+ * `actual_value`. NC counts and observations aren't stored, so those
+ * columns stay blank ("—").
+ *
+ * Aggregation: AVG of Daily score per area over the active date range.
  */
-const SAFETY_AUDIT_DATA = [
-  ["Banbury Hall", "96.0%", 0, 1, 3],
-  ["Mill Area", "93.5%", 0, 2, 5],
-  ["Batch-off", "94.0%", 0, 1, 4],
-  ["Chemical Store", "91.5%", 0, 3, 7],
-];
+function avg(arr) {
+  if (!arr.length) return null;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
 
 export default function SafetyAuditDrillPanel({ drillRows }) {
-  // Use static data for Phase 1.
-  const rows =
-    drillRows && drillRows.length > 0
-      ? drillRows.map((r, i) => {
-          const area = r.machine ?? r.itemCode ?? `Area ${i + 1}`;
-          const score =
-            r.actual != null ? `${Number(r.actual).toFixed(1)}%` : "—";
-          const ncMajor = r.threshold_value
-            ? Math.floor(1 - r.threshold_value / 100)
-            : 0;
-          const ncMinor = r.drillDown?.[0] ?? i + 1;
-          const obs = r.drillDown?.[1] ?? 3 + i * 2;
-          return [area, score, String(ncMajor), String(ncMinor), String(obs)];
-        })
-      : SAFETY_AUDIT_DATA;
+  const byArea = new Map();
+  for (const r of drillRows ?? []) {
+    if (r.kpiName !== "Audit_area") continue;
+    if (r.granularity !== "Daily") continue;
+    const area = r.remarks ?? "—";
+    if (area === "—") continue;
+    if (!byArea.has(area)) byArea.set(area, []);
+    if (typeof r.actual === "number") byArea.get(area).push(r.actual);
+  }
+
+  const rows = [...byArea.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([area, vals]) => {
+      const score = avg(vals);
+      return [
+        area,
+        score != null ? `${score.toFixed(1)}%` : "—",
+        "—",
+        "—",
+        "—",
+      ];
+    });
 
   return (
     <Stack spacing={2}>

@@ -354,12 +354,17 @@ export function toKpiGrid(
 export function toDrillRows(rows) {
   return (rows ?? []).map((r) => ({
     kpiName: r.kpi_name,
+    section: r.section,
     machine: denan(r.machine),
     itemCode: denan(r.itemcode),
     productType: denan(r.product_type),
     actual: numberOrNull(r.actual_value),
+    threshold: numberOrNull(r.threshold_value),
+    unit: denan(r.unit_of_measurement),
     date: r.date,
+    granularity: r.granularity,
     status: mapStatus(denan(r.status)),
+    remarks: denan(r.remarks),
     drillDown: parseDrillAttribute(r.drill_down_attribute),
     drillLevel: r.drill_down_level,
   }));

@@ -17,38 +17,57 @@ import SafetyAuditDrillPanel from "@/components/drills/safety/SafetyAuditDrillPa
  * Routes "table" drillType to the correct table panel based on kpi.id.
  * Matches artifact buildKpis() table KPI list exactly.
  */
-export default function GenericTableDrillPanel({ kpi, drillRows, section }) {
+export default function GenericTableDrillPanel({
+  kpi,
+  drillRows,
+  section,
+  sectionName,
+}) {
+  // Per spec §10, drill rows must be filtered to the active section
+  // before aggregation. Absenteeism is plant-level (section=NULL/"nan")
+  // — it bypasses this filter inside its own panel.
+  const sectionFiltered = (drillRows ?? []).filter(
+    (r) => r.section === sectionName,
+  );
   switch (kpi?.id) {
     // Quality
     case "ftq":
-      return <FtdDrillPanel drillRows={drillRows} />;
+      return <FtdDrillPanel drillRows={sectionFiltered} />;
     case "ds":
-      return <ScrapDrillPanel drillRows={drillRows} />;
+      return <ScrapDrillPanel drillRows={sectionFiltered} />;
     case "rw":
-      return <ReworkDrillPanel drillRows={drillRows} />;
+      return <ReworkDrillPanel drillRows={sectionFiltered} />;
     case "ncm":
-      return <NcmDrillPanel drillRows={drillRows} />;
+      return <NcmDrillPanel drillRows={sectionFiltered} />;
     // Cost
     case "spc":
-      return <SpecificPowerDrillPanel drillRows={drillRows} />;
+      return <SpecificPowerDrillPanel drillRows={sectionFiltered} />;
     // Morale
     case "ab":
+      // Plant-level — pass raw (already filtered to Absenteeism_section
+      // children regardless of section by the router).
       return <AbsenteeismDrillPanel drillRows={drillRows} />;
     case "tq":
-      return <TqmDrillPanel drillRows={drillRows} />;
+      return <TqmDrillPanel drillRows={sectionFiltered} />;
     case "sg":
-      return <SuggestionsDrillPanel drillRows={drillRows} />;
+      return <SuggestionsDrillPanel drillRows={sectionFiltered} />;
     case "tr":
-      return <TrainingDrillPanel drillRows={drillRows} />;
+      return <TrainingDrillPanel drillRows={sectionFiltered} />;
     // Safety
     case "ri":
-      return <ReportableDrillPanel drillRows={drillRows} section={section} />;
+      return (
+        <ReportableDrillPanel drillRows={sectionFiltered} section={section} />
+      );
     case "fa":
-      return <FirstAidDrillPanel drillRows={drillRows} section={section} />;
+      return (
+        <FirstAidDrillPanel drillRows={sectionFiltered} section={section} />
+      );
     case "nm":
-      return <NearMissDrillPanel drillRows={drillRows} />;
+      return <NearMissDrillPanel drillRows={sectionFiltered} />;
     case "sa":
-      return <SafetyAuditDrillPanel drillRows={drillRows} section={section} />;
+      return (
+        <SafetyAuditDrillPanel drillRows={sectionFiltered} section={section} />
+      );
     default:
       return (
         <Stack sx={{ py: 3, textAlign: "center", color: "text.disabled" }}>

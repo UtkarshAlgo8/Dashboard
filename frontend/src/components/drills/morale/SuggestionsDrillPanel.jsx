@@ -2,36 +2,36 @@ import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
- * Suggestions drill panel — Suggestion status by category.
- * Columns: Category | Submitted | Implemented | Pending | Savings (₹K)
+ * Suggestions drill — kpi_name = Suggestions_category.
  *
- * Static artifact data for Phase 1.
+ * Per spec §11 columns: Category | Submitted | Implemented | Pending | Savings ₹K.
+ * gold_dummy stores category label in `remarks` and submitted count in
+ * `actual_value`. Implemented / Pending / Savings are not stored, so
+ * Implemented is derived as 60% (rounded) and Savings stay blank.
+ *
+ * Aggregation: SUM submitted per category over the active date range.
  */
-const SUGGESTIONS_DATA = [
-  ["Quality", 18, 12, 6, 85],
-  ["Safety", 12, 10, 2, 42],
-  ["Productivity", 15, 8, 7, 120],
-  ["Cost Reduction", 8, 5, 3, 95],
-];
-
 export default function SuggestionsDrillPanel({ drillRows }) {
-  const rows =
-    drillRows && drillRows.length > 0
-      ? drillRows.map((r) => {
-          const cat = r.machine ?? r.itemCode ?? "—";
-          const submitted = r.actual ?? 0;
-          const implemented = r.drillDown?.[0] ?? Math.floor(submitted * 0.6);
-          const pending = submitted - implemented;
-          const savings = r.threshold_value ?? 0;
-          return [
-            cat,
-            String(submitted),
-            String(implemented),
-            String(pending),
-            `${savings}`,
-          ];
-        })
-      : SUGGESTIONS_DATA;
+  const byCat = new Map();
+  for (const r of drillRows ?? []) {
+    if (r.kpiName !== "Suggestions_category") continue;
+    if (r.granularity !== "Daily") continue;
+    const cat = r.remarks ?? "—";
+    if (cat === "—") continue;
+    if (!byCat.has(cat)) byCat.set(cat, 0);
+    if (typeof r.actual === "number") {
+      byCat.set(cat, byCat.get(cat) + r.actual);
+    }
+  }
+
+  const rows = [...byCat.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([cat, submitted]) => {
+      const sub = Math.round(submitted);
+      const impl = Math.round(submitted * 0.6);
+      const pending = sub - impl;
+      return [cat, String(sub), String(impl), String(pending), "—"];
+    });
 
   return (
     <Stack spacing={2}>
