@@ -1,4 +1,5 @@
 import { Stack } from "@mui/material";
+import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import FtdDrillPanel from "@/components/drills/quality/FtdDrillPanel.jsx";
 import ScrapDrillPanel from "@/components/drills/quality/ScrapDrillPanel.jsx";
 import ScrapRateDrillPanel from "@/components/drills/quality/ScrapRateDrillPanel.jsx";
@@ -23,7 +24,14 @@ export default function GenericTableDrillPanel({
   drillRows,
   section,
   sectionName,
+  isLoading = false,
 }) {
+  // While the drill fetch is still in flight and we don't yet have any
+  // child rows, render a skeleton. Otherwise the user sees an empty
+  // table for the 2–5s of upstream latency.
+  if (isLoading && (!drillRows || drillRows.length === 0)) {
+    return <DrillSkeleton title rows={5} cols={4} />;
+  }
   // Per spec §10, drill rows must be filtered to the active section
   // before aggregation. Absenteeism is plant-level (section=NULL/"nan")
   // — it bypasses this filter inside its own panel.

@@ -10,6 +10,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 
 /**
  * Downtime drill — leaf table per dashboard_kpi_map_reference §11:
@@ -30,7 +31,7 @@ const SECTION_NAME = {
   stk: "Stock",
 };
 
-function DowntimeDrillPanel({ section, rawRows }) {
+function DowntimeDrillPanel({ section, rawRows, isLoading = false }) {
   const sectionName = SECTION_NAME[section] ?? section;
 
   const grouped = useMemo(() => {
@@ -73,6 +74,9 @@ function DowntimeDrillPanel({ section, rawRows }) {
   }, [rawRows, sectionName]);
 
   if (grouped.length === 0) {
+    if (isLoading) {
+      return <DrillSkeleton title rows={6} cols={6} />;
+    }
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>

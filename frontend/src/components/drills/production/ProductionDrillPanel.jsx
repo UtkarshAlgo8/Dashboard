@@ -14,6 +14,7 @@ import {
   useTheme,
 } from "@mui/material";
 import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
+import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 
 /**
  * Production drill — derives from raw gold_dummy rows already in hand
@@ -71,7 +72,7 @@ const VIEW_BY_OPTIONS = [
   { value: "both", label: "Machine + SKU" },
 ];
 
-function ProductionDrillPanel({ section, prodSub, rawRows }) {
+function ProductionDrillPanel({ section, prodSub, rawRows, isLoading = false }) {
   const [search, setSearch] = useState("");
   const [viewBy, setViewBy] = useState("machine");
 
@@ -190,6 +191,9 @@ function ProductionDrillPanel({ section, prodSub, rawRows }) {
     : `${sectionTitle} Production`;
 
   if (filtered.length === 0) {
+    if (isLoading) {
+      return <DrillSkeleton title rows={5} cols={5} />;
+    }
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>

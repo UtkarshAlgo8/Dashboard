@@ -4,6 +4,7 @@ import OverallTiles from "./OverallTiles.jsx";
 import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
+import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 
 /**
  * OEE drill panel — derives its data straight from the gold_dummy rows
@@ -46,7 +47,7 @@ const FIRST_SUB = {
   quality: "defect",
 };
 
-function OeeDrillPanel({ section, rawRows }) {
+function OeeDrillPanel({ section, rawRows, isLoading = false }) {
   const [search, setSearch] = useState("");
   const [selectedCell, setSelectedCell] = useState(null);
   const [subCategory, setSubCategory] = useState(null);
@@ -200,6 +201,17 @@ function OeeDrillPanel({ section, rawRows }) {
     : null;
 
   if (!overall) {
+    // While the drill fetch is in flight, show a skeleton instead of the
+    // empty-state message — otherwise the user reads "no data" for the
+    // 2–5s it takes the upstream Lambda to respond.
+    if (isLoading) {
+      return (
+        <Stack spacing={3}>
+          <DrillSkeleton title rows={1} cols={3} />
+          <DrillSkeleton title rows={5} cols={5} />
+        </Stack>
+      );
+    }
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>
@@ -243,21 +255,25 @@ function OeeDrillPanel({ section, rawRows }) {
         </Stack>
 
         {machines.length === 0 ? (
-          <Box
-            sx={{
-              p: 2,
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 1.25,
-              textAlign: "center",
-              color: "text.disabled",
-            }}
-          >
-            <Typography sx={{ fontSize: 13 }}>
-              Machine-level rows for {sectionName} weren&rsquo;t in this fetch
-              (Lambda 5000-row cap). Pick a narrower date range to see them.
-            </Typography>
-          </Box>
+          isLoading ? (
+            <DrillSkeleton title={false} rows={5} cols={5} />
+          ) : (
+            <Box
+              sx={{
+                p: 2,
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 1.25,
+                textAlign: "center",
+                color: "text.disabled",
+              }}
+            >
+              <Typography sx={{ fontSize: 13 }}>
+                Machine-level rows for {sectionName} weren&rsquo;t in this fetch
+                (Lambda 5000-row cap). Pick a narrower date range to see them.
+              </Typography>
+            </Box>
+          )
         ) : (
           <>
             <MachineTable

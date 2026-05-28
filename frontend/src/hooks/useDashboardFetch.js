@@ -169,6 +169,9 @@ export function useDashboardFetch() {
         : landingData
       : null;
   const isLoading = landingLoading || (Boolean(drillPayload) && drillLoading);
+  // Drill-only loading flag so drill panels can render a skeleton while
+  // their fetch is in flight, without confusing it with landing reload.
+  const isDrillLoading = Boolean(drillPayload) && drillLoading;
   const error = landingError || drillError || null;
 
   const kpis = data
@@ -209,6 +212,7 @@ export function useDashboardFetch() {
     drillRows,
     rawRows: data ?? null,
     isLoading,
+    isDrillLoading,
     error,
     setFilter,
     drillInto,

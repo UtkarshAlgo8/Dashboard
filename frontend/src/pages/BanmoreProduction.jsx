@@ -53,6 +53,7 @@ function BanmoreProduction() {
     drillRows,
     rawRows,
     isLoading: kpiLoading,
+    isDrillLoading,
     error: kpiError,
     setFilter,
     drillInto,
@@ -420,6 +421,7 @@ function BanmoreProduction() {
                           allDrillRows={drillRows}
                           rawRows={rawRows}
                           prodSub={prodSub}
+                          isLoading={isDrillLoading}
                         />
                       </Box>
                     );
@@ -471,6 +473,7 @@ function DrillPanelRouter({
   allDrillRows,
   rawRows,
   prodSub,
+  isLoading,
 }) {
   if (!kpi) return null;
 
@@ -485,7 +488,13 @@ function DrillPanelRouter({
   switch (kpi.drillType) {
     // Productivity
     case "mixOEE":
-      return <OeeDrillPanel section={section} rawRows={rawRows} />;
+      return (
+        <OeeDrillPanel
+          section={section}
+          rawRows={rawRows}
+          isLoading={isLoading}
+        />
+      );
     case "mixProd":
     case "tbmProd":
     case "stkProd":
@@ -494,10 +503,17 @@ function DrillPanelRouter({
           section={section}
           prodSub={prodSub}
           rawRows={rawRows}
+          isLoading={isLoading}
         />
       );
     case "downtime":
-      return <DowntimeDrillPanel section={section} rawRows={rawRows} />;
+      return (
+        <DowntimeDrillPanel
+          section={section}
+          rawRows={rawRows}
+          isLoading={isLoading}
+        />
+      );
     case "budget":
       return (
         <BudgetDrillPanel
@@ -516,6 +532,7 @@ function DrillPanelRouter({
           drillRows={drillRows}
           section={section}
           sectionName={sectionName}
+          isLoading={isLoading}
         />
       );
     // null drillType — no drill panel
