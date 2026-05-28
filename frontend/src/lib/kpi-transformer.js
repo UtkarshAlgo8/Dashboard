@@ -57,10 +57,10 @@ const ALLOWED_KPIS = {
   //   S: ri, fa, nm, sa
   Mixing: {
     P: [
-      { id: "oee", name: "OEE_o", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
-      { id: "prod", name: "Production", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "dt", name: "Downtime", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", drillType: "compliance", drillTargets: null },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
+      { id: "prod", name: "Production", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", drillType: "table", drillTargets: ["FTQ_m"] },
@@ -88,10 +88,10 @@ const ALLOWED_KPIS = {
   },
   TBM: {
     P: [
-      { id: "oee", name: "OEE_o", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
-      { id: "prod", name: "Production", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "dt", name: "Downtime", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", drillType: "compliance", drillTargets: null },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
+      { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", drillType: "table", drillTargets: ["FTQ_m"] },
@@ -119,10 +119,10 @@ const ALLOWED_KPIS = {
   },
   Curing: {
     P: [
-      { id: "oee", name: "OEE_o", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
-      { id: "prod", name: "Production", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "dt", name: "Downtime", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", drillType: "compliance", drillTargets: null },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
+      { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", drillType: "table", drillTargets: ["FTQ_m"] },
@@ -150,10 +150,10 @@ const ALLOWED_KPIS = {
   },
   Stock: {
     P: [
-      { id: "oee", name: "OEE_o", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
-      { id: "prod", name: "Production", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "dt", name: "Downtime", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", drillType: "compliance", drillTargets: null },
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m"] },
+      { id: "prod", name: "Production", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", drillType: "table", drillTargets: ["FTQ_m"] },
@@ -251,26 +251,68 @@ export function toKpiGrid(
 
   const result = [];
   for (const [name, groupDesc] of groups) {
-    // Sort newest-first by date (ISO string — lexicographic works for yyyy-mm-dd).
-    const desc = [...groupDesc].sort((a, b) => (b.date > a.date ? 1 : -1));
+    // gold_dummy stores pre-aggregated rows for every granularity (Daily,
+    // Shift A/B/C, MTD, YTD). The per-KPI agg rule in dashboard_kpi_map_
+    // reference is defined ONLY for Daily rows; the others would double-
+    // count. Filter to Daily, sort newest-first.
+    const dailyRows = groupDesc
+      .filter((r) => r.granularity === "Daily")
+      .sort((a, b) => (b.date > a.date ? 1 : -1));
 
-    const sparkVals = desc
-      .slice(0, sparkLength)
+    if (dailyRows.length === 0) continue;
+
+    const numericVals = dailyRows
       .map((r) => numberOrNull(r.actual_value))
       .filter((v) => v !== null);
 
-    if (sparkVals.length === 0) continue;
-
-    const latest = desc[0];
-    const value = numberOrNull(latest.actual_value);
-    const previous =
-      desc.length >= 2 ? numberOrNull(desc[1].actual_value) : null;
-    const trend =
-      value !== null && previous !== null && previous !== 0
-        ? Math.round(((value - previous) / Math.abs(previous)) * 1000) / 10
-        : null;
+    if (numericVals.length === 0) continue;
 
     const kpi = kpiByName.get(name);
+    const agg = kpi.agg ?? "AVG";
+
+    // Per spec section 9: SUM = totals over the period, AVG = mean,
+    // COUNT = entry count, SNAP = latest, MULT = OEE multiplicative
+    // (approximated as AVG of pre-stored OEE rows — the spec explicitly
+    // allows this small gap).
+    let value;
+    if (agg === "SUM") {
+      value = numericVals.reduce((s, v) => s + v, 0);
+    } else if (agg === "COUNT") {
+      value = numericVals.length;
+    } else if (agg === "SNAP") {
+      value = numericVals[0];
+    } else {
+      // AVG and MULT
+      value = numericVals.reduce((s, v) => s + v, 0) / numericVals.length;
+    }
+    value = Math.round(value * 100) / 100;
+
+    // Sparkline: up to N most-recent Daily values, oldest→newest so the
+    // chart reads left-to-right.
+    const sparkVals = numericVals.slice(0, sparkLength).reverse();
+
+    // Within-period trend: agg(recent half) vs agg(older half).
+    // More meaningful than day-over-day when the value itself is a
+    // multi-day aggregate.
+    let trend = null;
+    if (numericVals.length >= 2) {
+      const half = Math.floor(numericVals.length / 2);
+      const recent = numericVals.slice(0, half); // newest half
+      const older = numericVals.slice(half, half * 2);
+      const aggSlice = (arr) =>
+        agg === "SUM"
+          ? arr.reduce((s, v) => s + v, 0)
+          : arr.reduce((s, v) => s + v, 0) / arr.length;
+      const recentAgg = aggSlice(recent);
+      const olderAgg = aggSlice(older);
+      if (olderAgg !== 0) {
+        trend =
+          Math.round(((recentAgg - olderAgg) / Math.abs(olderAgg)) * 1000) /
+          10;
+      }
+    }
+
+    const latest = dailyRows[0];
     result.push({
       id: kpi.id,
       name: DISPLAY_NAME[name] ?? name,
