@@ -116,54 +116,68 @@ function OeeDrillPanel({ section, rawRows }) {
   }
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={3}>
+      {/* A/P/Q card row — sits as a secondary KPI band under the main grid. */}
       <OverallTiles
         overall={overall}
         sectionName={sectionName}
         machineCount={machines.length}
       />
 
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        spacing={1}
-      >
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-          Machine-wise breakdown
-        </Typography>
-        <MachineSearch value={search} onChange={setSearch} />
-      </Stack>
-
-      {machines.length === 0 ? (
-        <Box
-          sx={{
-            p: 2,
-            border: 1,
-            borderColor: "divider",
-            borderRadius: 1.25,
-            textAlign: "center",
-            color: "text.disabled",
-          }}
+      {/* Machine-wise breakdown — its own labelled section. */}
+      <Stack spacing={1.5}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={1}
         >
-          <Typography sx={{ fontSize: 13 }}>
-            Machine-level rows for {sectionName} weren&rsquo;t in this fetch
-            (Lambda 5000-row cap). Pick a narrower date range to see them.
+          <Typography
+            sx={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "primary.main",
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+            }}
+          >
+            Machine-wise breakdown
           </Typography>
-        </Box>
-      ) : (
-        <MachineTable
-          machines={filteredMachines.map((m) => ({
-            id: m.id,
-            name: m.name,
-            availability: m.availability ?? 0,
-            performance: m.performance ?? 0,
-            quality: m.quality ?? 0,
-          }))}
-          selectedCell={selectedCell}
-          onSelectCell={handleSelectCell}
-        />
-      )}
+          {machines.length > 0 && (
+            <MachineSearch value={search} onChange={setSearch} />
+          )}
+        </Stack>
+
+        {machines.length === 0 ? (
+          <Box
+            sx={{
+              p: 2,
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 1.25,
+              textAlign: "center",
+              color: "text.disabled",
+            }}
+          >
+            <Typography sx={{ fontSize: 13 }}>
+              Machine-level rows for {sectionName} weren&rsquo;t in this fetch
+              (Lambda 5000-row cap). Pick a narrower date range to see them.
+            </Typography>
+          </Box>
+        ) : (
+          <MachineTable
+            machines={filteredMachines.map((m) => ({
+              id: m.id,
+              name: m.name,
+              availability: m.availability ?? 0,
+              performance: m.performance ?? 0,
+              quality: m.quality ?? 0,
+            }))}
+            selectedCell={selectedCell}
+            onSelectCell={handleSelectCell}
+          />
+        )}
+      </Stack>
     </Stack>
   );
 }

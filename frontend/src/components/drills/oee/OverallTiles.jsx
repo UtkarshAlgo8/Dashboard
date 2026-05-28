@@ -2,13 +2,18 @@ import { Box, Stack, Typography, useTheme } from "@mui/material";
 import { thresholdColor } from "./thresholds.js";
 
 /**
- * Three A/P/Q tiles at the top of the OEE drill (BRD FR-P25, FR-P26).
- * Overall OEE is intentionally NOT shown as a fourth tile (FR-P27).
+ * The three Availability / Performance / Quality cards rendered as a
+ * secondary KPI row directly under the main 4 Productivity cards
+ * whenever the OEE drill is open.
  *
- * Each tile carries a short context caption underneath the value:
+ * Each card is sized to match a KpiCard from the main grid so the
+ * two rows read as a single connected band. Captions per the
+ * artifact:
  *   Availability  — "Across N <section> machines"
  *   Performance   — "Plant average for <section> section"
  *   Quality       — "FTQ · <section> section"
+ *
+ * Overall OEE is intentionally NOT shown as a fourth tile (BRD FR-P27).
  */
 const COMPONENTS = [
   { id: "availability", name: "Availability" },
@@ -26,7 +31,7 @@ const MACHINE_LABEL = {
 function OverallTiles({ overall, sectionName, machineCount }) {
   if (!overall) return null;
   return (
-    <Stack direction="row" spacing={1.5}>
+    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
       {COMPONENTS.map((c) => (
         <Tile
           key={c.id}
@@ -60,11 +65,14 @@ function Tile({ component, value, sectionName, machineCount }) {
     <Box
       sx={{
         flex: 1,
+        backgroundColor: "background.paper",
         border: 1,
-        borderColor: color,
+        borderColor: "divider",
+        borderTop: `3px solid ${color}`,
         borderRadius: 1.25,
-        backgroundColor: theme.custom.surface.soft,
-        p: 1.5,
+        boxShadow: theme.custom.shadow,
+        p: 2,
+        minWidth: 0,
       }}
     >
       <Typography
@@ -82,16 +90,16 @@ function Tile({ component, value, sectionName, machineCount }) {
         direction="row"
         alignItems="baseline"
         spacing={0.5}
-        sx={{ mt: 0.25 }}
+        sx={{ mt: 0.5 }}
       >
         <Typography
-          sx={{ fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}
+          sx={{ fontSize: 32, fontWeight: 700, color, lineHeight: 1 }}
         >
           {value.toFixed(1)}
         </Typography>
-        <Typography sx={{ fontSize: 12, color: "text.disabled" }}>%</Typography>
+        <Typography sx={{ fontSize: 14, color: "text.disabled" }}>%</Typography>
       </Stack>
-      <Typography sx={{ fontSize: 11, color: "text.disabled", mt: 0.5 }}>
+      <Typography sx={{ fontSize: 12, color: "text.disabled", mt: 1 }}>
         {captionFor(component.id, sectionName, machineCount)}
       </Typography>
     </Box>
