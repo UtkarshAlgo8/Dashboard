@@ -1,28 +1,58 @@
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import { thresholdColor } from "./thresholds.js";
 
+/**
+ * Three A/P/Q tiles at the top of the OEE drill (BRD FR-P25, FR-P26).
+ * Overall OEE is intentionally NOT shown as a fourth tile (FR-P27).
+ *
+ * Each tile carries a short context caption underneath the value:
+ *   Availability  — "Across N <section> machines"
+ *   Performance   — "Plant average for <section> section"
+ *   Quality       — "FTQ · <section> section"
+ */
 const COMPONENTS = [
   { id: "availability", name: "Availability" },
   { id: "performance", name: "Performance" },
   { id: "quality", name: "Quality" },
 ];
 
-/**
- * Three A/P/Q tiles at the top of the OEE drill (BRD FR-P25, FR-P26).
- * Overall OEE is intentionally NOT shown as a fourth tile (FR-P27).
- */
-function OverallTiles({ overall }) {
+const MACHINE_LABEL = {
+  Mixing: "Banbury",
+  TBM: "TBM",
+  Curing: "press",
+  Stock: "Stock",
+};
+
+function OverallTiles({ overall, sectionName, machineCount }) {
   if (!overall) return null;
   return (
     <Stack direction="row" spacing={1.5}>
       {COMPONENTS.map((c) => (
-        <Tile key={c.id} component={c} value={overall[c.id]} />
+        <Tile
+          key={c.id}
+          component={c}
+          value={overall[c.id]}
+          sectionName={sectionName}
+          machineCount={machineCount}
+        />
       ))}
     </Stack>
   );
 }
 
-function Tile({ component, value }) {
+function captionFor(componentId, sectionName, machineCount) {
+  const sec = sectionName ?? "section";
+  if (componentId === "availability") {
+    if (machineCount != null && machineCount > 0) {
+      return `Across ${machineCount} ${MACHINE_LABEL[sec] ?? sec} machines`;
+    }
+    return `${sec} section`;
+  }
+  if (componentId === "performance") return `Plant average for ${sec} section`;
+  return `FTQ · ${sec} section`;
+}
+
+function Tile({ component, value, sectionName, machineCount }) {
   const theme = useTheme();
   const color = thresholdColor(theme, component.id, value);
 
@@ -62,7 +92,7 @@ function Tile({ component, value }) {
         <Typography sx={{ fontSize: 12, color: "text.disabled" }}>%</Typography>
       </Stack>
       <Typography sx={{ fontSize: 11, color: "text.disabled", mt: 0.5 }}>
-        Plant average across machines
+        {captionFor(component.id, sectionName, machineCount)}
       </Typography>
     </Box>
   );

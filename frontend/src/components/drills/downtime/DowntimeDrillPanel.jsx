@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Box,
   Stack,
@@ -9,117 +9,152 @@ import {
   TableHead,
   TableRow,
   Typography,
-  useTheme,
 } from "@mui/material";
-import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
-import { useToast } from "@/components/common";
-import { TableSkeleton } from "@/components/drills/DrillSkeletons.jsx";
-import { usePolledQuery } from "@/hooks/usePolledQuery.js";
-import { getDowntimeDrill } from "@/api/drills.js";
 
 /**
- * Downtime drill panel per BRD §6.12 (FR-P60). Categorised reasons
- * with machine assignment, event count, duration, and production
- * loss in hours.
+ * Downtime drill — leaf table per dashboard_kpi_map_reference §11:
+ *
+ *   Downtime_category | Code · Machine · Reason · Frequency
+ *                     · Total Min · Hrs/Day
+ *
+ * Source: gold_dummy `Downtime_category` rows already in hand via
+ * `rawRows`. The remarks column stores both Code and Reason as
+ * "BD-ELEC: Motor overload trip" — split on the first ":" to fill
+ * the two columns. unit_of_measurement is hrs; Total DT (Min) is
+ * Total Hrs × 60.
  */
-function DowntimeDrillPanel({ plantId, section, from, to, shift }) {
-  const toast = useToast();
-  const [search, setSearch] = useState("");
+const SECTION_NAME = {
+  mix: "Mixing",
+  tbm: "TBM",
+  cur: "Curing",
+  stk: "Stock",
+};
 
-  const { data, isLoading, error } = usePolledQuery(
-    () => getDowntimeDrill({ plantId, section, from, to, shift }),
-    { interval: 60_000, deps: [plantId, section, from, to, shift] },
-  );
+function DowntimeDrillPanel({ section, rawRows }) {
+  const sectionName = SECTION_NAME[section] ?? section;
 
-  if (error) toast.error("Could not load Downtime drill.");
+  const grouped = useMemo(() => {
+    if (!Array.isArray(rawRows)) return [];
+    const rows = rawRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === "Downtime_category" &&
+        r.granularity === "Daily",
+    );
+    const groups = new Map();
+    for (const r of rows) {
+      const { code, reason } = parseRemarks(r.remarks);
+      const machine =
+        r.machine && r.machine !== "nan" ? r.machine : "—";
+      const key = `${code}||${machine}||${reason}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          code,
+          machine,
+          reason,
+          events: 0,
+          totalHrs: 0,
+        });
+      }
+      const acc = groups.get(key);
+      acc.events += 1;
+      if (typeof r.actual_value === "number") acc.totalHrs += r.actual_value;
+    }
+    return [...groups.values()]
+      .map((g) => ({
+        code: g.code,
+        machine: g.machine,
+        reason: g.reason,
+        events: g.events,
+        totalMin: g.totalHrs * 60,
+        totalHrs: g.totalHrs,
+      }))
+      .sort((a, b) => b.totalHrs - a.totalHrs);
+  }, [rawRows, sectionName]);
 
-  const rows = Array.isArray(data) ? data : [];
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => r.machine.toLowerCase().includes(q));
-  }, [rows, search]);
+  if (grouped.length === 0) {
+    return (
+      <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
+        <Typography sx={{ fontSize: 13 }}>
+          No Downtime breakdown for {sectionName} in this date range.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
-    <Stack spacing={2}>
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        spacing={1}
+    <Stack spacing={1.5}>
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: "primary.main",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
       >
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-          Downtime by reason
-        </Typography>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <MachineSearch value={search} onChange={setSearch} />
-          <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-            {filtered.length} of {rows.length}
-          </Typography>
-        </Stack>
-      </Stack>
+        Detailed Downtime Log
+      </Typography>
 
-      {isLoading && rows.length === 0 ? (
-        <TableSkeleton rows={6} cols={6} />
-      ) : rows.length === 0 ? (
-        <Box sx={{ py: 4, textAlign: "center", color: "text.disabled" }}>
-          <Typography sx={{ fontSize: 13 }}>
-            No downtime events recorded for this period.
-          </Typography>
-        </Box>
-      ) : (
-        <DowntimeTable rows={filtered} />
-      )}
+      <TableContainer
+        sx={{
+          maxHeight: 440,
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1.25,
+        }}
+      >
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <Th align="left">Code Category</Th>
+              <Th align="left">Equipment</Th>
+              <Th align="left">Delay Reason</Th>
+              <Th>Events</Th>
+              <Th>Total DT (Min)</Th>
+              <Th>Total DT (Hr)</Th>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {grouped.map((r, i) => (
+              <TableRow key={i} hover>
+                <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
+                  {r.code}
+                </TableCell>
+                <TableCell sx={{ fontSize: 13 }}>{r.machine}</TableCell>
+                <TableCell sx={{ fontSize: 13 }}>{r.reason}</TableCell>
+                <TableCell align="right" sx={{ fontSize: 13 }}>
+                  {r.events}
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{ fontSize: 13, fontWeight: 600 }}
+                >
+                  {Math.round(r.totalMin)}
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{ fontSize: 13, fontWeight: 600 }}
+                >
+                  {r.totalHrs.toFixed(2)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Stack>
   );
 }
 
-function DowntimeTable({ rows }) {
-  return (
-    <TableContainer
-      sx={{
-        maxHeight: 340,
-        border: 1,
-        borderColor: "divider",
-        borderRadius: 1.25,
-      }}
-    >
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <Th align="left">Category</Th>
-            <Th align="left">Machine</Th>
-            <Th align="left">Reason</Th>
-            <Th>Events</Th>
-            <Th>Duration (min)</Th>
-            <Th>Loss (hrs)</Th>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((r, i) => (
-            <TableRow key={i} hover>
-              <TableCell>
-                <CategoryPill category={r.reasonCategory} />
-              </TableCell>
-              <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
-                {r.machine}
-              </TableCell>
-              <TableCell sx={{ fontSize: 13 }}>{r.reason}</TableCell>
-              <TableCell align="right" sx={{ fontSize: 13 }}>
-                {r.events}
-              </TableCell>
-              <TableCell align="right" sx={{ fontSize: 13 }}>
-                {r.durationMin}
-              </TableCell>
-              <TableCell align="right" sx={{ fontSize: 13, fontWeight: 600 }}>
-                {r.lossHrs.toFixed(2)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
+function parseRemarks(raw) {
+  if (!raw || raw === "nan") return { code: "—", reason: "—" };
+  const colonIdx = raw.indexOf(":");
+  if (colonIdx < 0) return { code: raw, reason: "—" };
+  return {
+    code: raw.slice(0, colonIdx).trim(),
+    reason: raw.slice(colonIdx + 1).trim(),
+  };
 }
 
 function Th({ children, align = "right" }) {
@@ -141,48 +176,6 @@ function Th({ children, align = "right" }) {
       {children}
     </TableCell>
   );
-}
-
-/**
- * Pill colour per category family:
- *   Breakdown — red
- *   Setup     — amber
- *   PM        — blue
- *   Process   — teal
- *   Utility   — purple
- *   Other     — muted
- */
-function CategoryPill({ category }) {
-  const theme = useTheme();
-  const color = categoryColor(theme, category);
-  return (
-    <Box
-      sx={{
-        display: "inline-block",
-        fontSize: 11,
-        fontWeight: 700,
-        color,
-        border: 1,
-        borderColor: color,
-        backgroundColor: `${color}14`,
-        borderRadius: 999,
-        px: 0.75,
-        py: 0.125,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {category}
-    </Box>
-  );
-}
-
-function categoryColor(theme, category) {
-  if (category.startsWith("Breakdown")) return theme.custom.brand.red;
-  if (category.startsWith("Setup")) return theme.custom.brand.amber;
-  if (category === "PM") return theme.custom.brand.blue;
-  if (category === "Process") return theme.custom.brand.teal;
-  if (category === "Utility") return theme.custom.brand.purple;
-  return theme.custom.text.muted;
 }
 
 export default DowntimeDrillPanel;

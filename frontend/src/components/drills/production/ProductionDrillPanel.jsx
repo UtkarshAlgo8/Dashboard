@@ -14,91 +14,55 @@ import {
   useTheme,
 } from "@mui/material";
 import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
-import { useToast } from "@/components/common";
-import { ProductionDrillSkeleton } from "@/components/drills/DrillSkeletons.jsx";
-import { usePolledQuery } from "@/hooks/usePolledQuery.js";
-import { getProductionDrill } from "@/api/drills.js";
 
 /**
- * Production drill — section-aware. Per docs/artifact.jsx + CR-05:
+ * Production drill — derives from raw gold_dummy rows already in hand
+ * via `rawRows`. No second API call.
  *
- *   Mixing  → Master / Final compound toggle →
- *             View by (Machine / SKU / Machine + SKU) +
- *             Unit (MT / Batches)
- *   TBM     → Passenger Radial / LT Radial / SCV Radial toggle →
- *             View by (Machine / SKU / Machine + SKU)
- *   Curing  → Same as TBM
- *   Stock   → Categories depend on stockSelector (4 Roll, Extruder, …) →
- *             View by (Machine / SKU / Machine + SKU) + Unit (Units / Kg)
+ * Per dashboard_kpi_map_reference §3 and §11:
+ *   Production drills into Production_m / Production_sku /
+ *   Production_m_sku — same row data, three lenses. The active
+ *   product-type pill (Master/Final Compound for Mixing, Passenger/LT
+ *   /SCV Radial for TBM+Curing) maps to the `product_type` column on
+ *   the _sku and _m_sku rows. The aggregated value per row is SUM of
+ *   actual_value; Planned is SUM of threshold_value; achievement is
+ *   Actual ÷ Planned.
  *
- * "View by" aggregates the same row data client-side: Machine groups
- * by row.machine, SKU groups by row.sku/row.itemCode, Machine + SKU
- * shows the raw rows. Unit toggle converts displayed numbers in place
- * (Mixing: MT row → batches via batchesPlan/batchesActual; Stock:
- * Units → Kg via STOCK_KG_PER_UNIT).
+ * View By toggle (Machine | SKU | Machine + SKU) picks which kpi_name
+ * to read and which key to group by.
  */
 
-// Stock "Units → Kg" conversion factor. Mirrors the artifact's
-// implicit ~3.87 kg / unit (4820 kg ÷ 1245 units in artifact.jsx).
+// Mixing "Batches" conversion — artifact's implicit ~1.85 MT/batch.
+const MT_PER_BATCH = 1.85;
+// Stock "Units → Kg" — 3.87 kg per unit per artifact.
 const STOCK_KG_PER_UNIT = 3.87;
 
-const SECTION_CONFIG = {
-  mix: {
-    title: "Production Drill-down",
-    options: [
-      { value: "master", label: "Master Compound" },
-      { value: "final", label: "Final Compound" },
-    ],
-    default: "final",
-    units: [
-      { value: "mt", label: "MT" },
-      { value: "batches", label: "Batches" },
-    ],
-    defaultUnit: "mt",
-    skuKey: "itemCode",
-    skuHeader: "Item Code",
-    showMachineSearch: true,
-    valueLabel: "MT",
-  },
-  tbm: {
-    title: "Production Drill-down",
-    options: [
-      { value: "passenger-radial", label: "Passenger Radial" },
-      { value: "lt-radial", label: "LT Radial" },
-      { value: "scv-radial", label: "SCV Radial" },
-    ],
-    default: "passenger-radial",
-    units: null,
-    skuKey: "sku",
-    skuHeader: "SKU",
-    valueLabel: "nos",
-  },
-  cur: {
-    title: "Production Drill-down",
-    options: [
-      { value: "passenger-radial", label: "Passenger Radial" },
-      { value: "lt-radial", label: "LT Radial" },
-      { value: "scv-radial", label: "SCV Radial" },
-    ],
-    default: "passenger-radial",
-    units: null,
-    skuKey: "sku",
-    skuHeader: "SKU",
-    valueLabel: "nos",
-  },
-  // Stock options/default get derived from the response bucket since
-  // the category list changes with the stockSelector sub-selector.
-  stk: {
-    title: "Production Drill-down",
-    units: [
-      { value: "units", label: "Units" },
-      { value: "kg", label: "Kg" },
-    ],
-    defaultUnit: "units",
-    skuKey: "sku",
-    skuHeader: "SKU",
-    valueLabel: "units",
-  },
+const SECTION_TITLE = {
+  mix: "Mixing",
+  tbm: "Tyre Building",
+  cur: "Curing",
+  stk: "Stock",
+};
+
+const SECTION_NAME = {
+  mix: "Mixing",
+  tbm: "TBM",
+  cur: "Curing",
+  stk: "Stock",
+};
+
+// Default unit per section (matches what the parent KPI card shows).
+const UNIT_OPTIONS = {
+  mix: [
+    { value: "MT", label: "MT" },
+    { value: "Batches", label: "Batches" },
+  ],
+  tbm: null, // single unit "nos"
+  cur: null,
+  stk: [
+    { value: "Units", label: "Units" },
+    { value: "Kg", label: "Kg" },
+  ],
 };
 
 const VIEW_BY_OPTIONS = [
@@ -107,268 +71,182 @@ const VIEW_BY_OPTIONS = [
   { value: "both", label: "Machine + SKU" },
 ];
 
-const STOCK_OPTION_LABELS = {
-  "4-roll-production": "4 Roll Production",
-  "sidewall-production": "Sidewall Production",
-  "tread-production": "Tread Production",
-  "inner-liner-production": "Inner Liner Production",
-  "ply-production": "Ply Production",
-  "belt-production": "Belt Production",
-  "cap-strip-production": "Cap Strip Production",
-  "chaffer-production": "Chaffer Production",
-};
-
-function ProductionDrillPanel({
-  plantId,
-  section,
-  stockSelector,
-  from,
-  to,
-  shift,
-}) {
-  const toast = useToast();
-  const config = SECTION_CONFIG[section] ?? { title: "Production Drill-down" };
-
+function ProductionDrillPanel({ section, prodSub, rawRows }) {
   const [search, setSearch] = useState("");
   const [viewBy, setViewBy] = useState("machine");
-  const [unit, setUnit] = useState(config.defaultUnit ?? null);
-  // Explicit pick within this session; null means "follow default".
-  const [picked, setPicked] = useState(null);
 
-  // Reset state in-render when section/stockSelector changes (React 18+
-  // canonical pattern for "reset state when a prop changes" — avoids
-  // the cascading-renders lint that useEffect+setState triggers).
-  const [prevKey, setPrevKey] = useState(`${section}/${stockSelector}`);
-  const currentKey = `${section}/${stockSelector}`;
-  if (prevKey !== currentKey) {
-    setPrevKey(currentKey);
-    setSearch("");
-    setViewBy("machine");
-    setUnit(config.defaultUnit ?? null);
-    setPicked(null);
-  }
+  const unitOptions = UNIT_OPTIONS[section];
+  const defaultUnit = unitOptions
+    ? unitOptions[0].value
+    : section === "tbm" || section === "cur"
+      ? "nos"
+      : "MT";
+  const [unit, setUnit] = useState(defaultUnit);
 
-  const { data, isLoading, error } = usePolledQuery(
-    () =>
-      getProductionDrill({ plantId, section, stockSelector, from, to, shift }),
-    {
-      interval: 60_000,
-      deps: [plantId, section, stockSelector, from, to, shift],
-    },
-  );
+  const sectionName = SECTION_NAME[section] ?? section;
+  const sectionTitle = SECTION_TITLE[section] ?? section;
 
-  if (error) toast.error("Could not load Production drill.");
+  // Pick which kpi_name backs the table based on viewBy.
+  const kpiName =
+    viewBy === "machine"
+      ? "Production_m"
+      : viewBy === "sku"
+        ? "Production_sku"
+        : "Production_m_sku";
 
-  const bucket = useMemo(
-    () => (data && typeof data === "object" ? data : {}),
-    [data],
-  );
+  // Subset rows: this section + this kpi_name + the active product-type
+  // pill. Daily granularity only. For the "machine" lens we read
+  // Production_m which doesn't carry the sub product_type — fall back
+  // to Production_m_sku and re-aggregate so the pill still scopes the
+  // numbers.
+  const scopedRows = useMemo(() => {
+    if (!Array.isArray(rawRows)) return [];
 
-  // Build the category option list. Static for mix/tbm/cur; derived
-  // from the bucket keys for stk (one category per key).
-  const options = useMemo(() => {
-    if (section === "stk") {
-      return Object.keys(bucket).map((key) => ({
-        value: key,
-        label: STOCK_OPTION_LABELS[key] ?? key,
-      }));
+    if (viewBy === "machine" && prodSub) {
+      // Aggregate from Production_m_sku so we can filter by prodSub.
+      return rawRows.filter(
+        (r) =>
+          r.section === sectionName &&
+          r.kpi_name === "Production_m_sku" &&
+          r.granularity === "Daily" &&
+          r.product_type === prodSub,
+      );
     }
-    return config.options ?? [];
-  }, [section, bucket, config.options]);
 
-  const selected = useMemo(() => {
-    if (options.length === 0) return null;
-    if (picked && options.some((o) => o.value === picked)) return picked;
-    return config.default ?? options[0].value;
-  }, [options, picked, config.default]);
+    return rawRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === kpiName &&
+        r.granularity === "Daily" &&
+        (prodSub == null || r.product_type === prodSub),
+    );
+  }, [rawRows, sectionName, kpiName, prodSub, viewBy]);
 
-  const rows = useMemo(
-    () => (selected ? (bucket[selected] ?? []) : []),
-    [bucket, selected],
-  );
+  // Aggregate per the active lens.
+  const aggregated = useMemo(() => {
+    const groups = new Map();
+    const keyOf = (r) => {
+      if (viewBy === "machine") return r.machine ?? "—";
+      if (viewBy === "sku") return r.itemcode ?? "—";
+      return `${r.machine ?? "—"}||${r.itemcode ?? "—"}`;
+    };
+    for (const r of scopedRows) {
+      const k = keyOf(r);
+      if (!groups.has(k)) {
+        groups.set(k, {
+          machine: r.machine !== "nan" ? r.machine : "—",
+          itemcode: r.itemcode !== "nan" ? r.itemcode : "—",
+          planned: 0,
+          actual: 0,
+          itemSet: new Set(),
+          machineSet: new Set(),
+        });
+      }
+      const acc = groups.get(k);
+      if (typeof r.threshold_value === "number") acc.planned += r.threshold_value;
+      if (typeof r.actual_value === "number") acc.actual += r.actual_value;
+      if (r.itemcode && r.itemcode !== "nan") acc.itemSet.add(r.itemcode);
+      if (r.machine && r.machine !== "nan") acc.machineSet.add(r.machine);
+    }
+    return [...groups.values()].map((g) => ({
+      ...g,
+      itemCount: g.itemSet.size,
+      machineCount: g.machineSet.size,
+    }));
+  }, [scopedRows, viewBy]);
 
-  // Filter by machine search (when applicable). Search hits the
-  // machine field directly; for SKU view we keep all rows because
-  // search is machine-scoped.
-  const filteredRows = useMemo(() => {
+  // Filter by machine search where applicable.
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => r.machine?.toLowerCase().includes(q));
-  }, [rows, search]);
+    if (!q) return aggregated;
+    return aggregated.filter((r) =>
+      viewBy === "sku"
+        ? false // search is machine-scoped; sku view ignores it
+        : (r.machine ?? "").toLowerCase().includes(q),
+    );
+  }, [aggregated, search, viewBy]);
 
-  // Build the displayed rows based on the active View-by.
-  const displayRows = useMemo(
-    () => aggregate(filteredRows, viewBy, config.skuKey),
-    [filteredRows, viewBy, config.skuKey],
-  );
+  // Convert value based on selected unit.
+  const convert = (val) => {
+    if (section === "mix" && unit === "Batches") return val / MT_PER_BATCH;
+    if (section === "stk" && unit === "Kg") return val * STOCK_KG_PER_UNIT;
+    return val;
+  };
 
-  const selectedLabel =
-    options.find((o) => o.value === selected)?.label ?? config.title;
+  const fmt = (v) => {
+    if (v == null) return "—";
+    if (unit === "Batches" || unit === "Kg")
+      return Math.round(convert(v)).toLocaleString();
+    if (v < 1000) return convert(v).toFixed(1);
+    return Math.round(convert(v)).toLocaleString();
+  };
+
+  const title = prodSub
+    ? `${sectionTitle} — ${prodSub} Production`
+    : `${sectionTitle} Production`;
+
+  if (filtered.length === 0) {
+    return (
+      <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
+        <Typography sx={{ fontSize: 13 }}>
+          No Production data for {sectionName}
+          {prodSub ? ` · ${prodSub}` : ""} in this date range.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Stack spacing={2}>
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        spacing={1}
-        flexWrap="wrap"
-        useFlexGap
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: "primary.main",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
       >
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-          {config.title}
-        </Typography>
-        {rows.length > 0 && (
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <MachineSearch value={search} onChange={setSearch} />
-            <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-              {filteredRows.length} of {rows.length} rows
-            </Typography>
-          </Stack>
+        {title}
+      </Typography>
+
+      <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
+        <ToggleGroup
+          label="View by"
+          value={viewBy}
+          onChange={setViewBy}
+          options={VIEW_BY_OPTIONS}
+        />
+        {unitOptions && (
+          <ToggleGroup
+            label="Unit"
+            value={unit}
+            onChange={setUnit}
+            options={unitOptions}
+          />
         )}
       </Stack>
 
-      {options.length > 0 && (
-        <ToggleButtonGroup
-          size="small"
-          value={selected}
-          exclusive
-          onChange={(_, next) => {
-            if (next) setPicked(next);
-          }}
-          sx={{
-            flexWrap: "wrap",
-            "& .MuiToggleButton-root": {
-              px: 2,
-              py: 0.5,
-              fontSize: 12,
-              textTransform: "none",
-              fontWeight: 600,
-            },
-          }}
-        >
-          {options.map((opt) => (
-            <ToggleButton key={opt.value} value={opt.value}>
-              {opt.label}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      )}
+      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
+        <MachineSearch value={search} onChange={setSearch} />
+        <Box sx={{ flex: 1 }} />
+        <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+          {filtered.length} of {aggregated.length} rows
+          {prodSub ? ` in ${prodSub}` : ""}
+        </Typography>
+      </Stack>
 
-      {/* View-by + Unit selectors. Unit hidden when section has no
-          unit toggle (TBM, Curing). */}
-      {rows.length > 0 && (
-        <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
-          <ViewByToggle value={viewBy} onChange={setViewBy} />
-          {config.units && (
-            <UnitToggle
-              value={unit ?? config.defaultUnit}
-              onChange={setUnit}
-              options={config.units}
-            />
-          )}
-        </Stack>
-      )}
-
-      {isLoading && rows.length === 0 ? (
-        <ProductionDrillSkeleton
-          tableType={section === "mix" ? "compound" : "sku"}
-        />
-      ) : !selected ? (
-        <Box sx={{ py: 4, textAlign: "center", color: "text.disabled" }}>
-          <Typography sx={{ fontSize: 13 }}>
-            No production categories configured for this view.
-          </Typography>
-        </Box>
-      ) : displayRows.length === 0 ? (
-        <Box sx={{ py: 4, textAlign: "center", color: "text.disabled" }}>
-          <Typography sx={{ fontSize: 13 }}>
-            No production entries for this period.
-          </Typography>
-        </Box>
-      ) : (
-        <DrillTable
-          rows={displayRows}
-          viewBy={viewBy}
-          unit={unit ?? config.defaultUnit}
-          section={section}
-          config={config}
-          title={selectedLabel}
-        />
-      )}
+      <ResultTable
+        rows={filtered}
+        viewBy={viewBy}
+        unit={unit}
+        fmt={fmt}
+      />
     </Stack>
   );
 }
 
-/**
- * Aggregate raw rows by the selected lens. Each aggregated row has
- * a stable shape consumed by DrillTable:
- *
- *   { machine?, sku?, itemCode?, planned, actual,
- *     batchesPlan?, batchesActual?, count, machines?, skus? }
- */
-function aggregate(rows, viewBy, skuKey) {
-  if (viewBy === "both") {
-    return rows.map((r) => ({ ...r, count: 1 }));
-  }
-  if (viewBy === "machine") {
-    const map = new Map();
-    rows.forEach((r) => {
-      const key = r.machine ?? "—";
-      if (!map.has(key)) {
-        map.set(key, {
-          machine: key,
-          planned: 0,
-          actual: 0,
-          batchesPlan: 0,
-          batchesActual: 0,
-          count: 0,
-          skus: new Set(),
-        });
-      }
-      const acc = map.get(key);
-      acc.planned += r.planned ?? 0;
-      acc.actual += r.actual ?? 0;
-      acc.batchesPlan += r.batchesPlan ?? 0;
-      acc.batchesActual += r.batchesActual ?? 0;
-      acc.count += 1;
-      if (r[skuKey]) acc.skus.add(r[skuKey]);
-    });
-    return Array.from(map.values()).map((r) => ({
-      ...r,
-      skuCount: r.skus.size,
-    }));
-  }
-  // viewBy === "sku"
-  const map = new Map();
-  rows.forEach((r) => {
-    const key = r[skuKey] ?? "—";
-    if (!map.has(key)) {
-      map.set(key, {
-        [skuKey]: key,
-        planned: 0,
-        actual: 0,
-        batchesPlan: 0,
-        batchesActual: 0,
-        count: 0,
-        machines: new Set(),
-      });
-    }
-    const acc = map.get(key);
-    acc.planned += r.planned ?? 0;
-    acc.actual += r.actual ?? 0;
-    acc.batchesPlan += r.batchesPlan ?? 0;
-    acc.batchesActual += r.batchesActual ?? 0;
-    acc.count += 1;
-    if (r.machine) acc.machines.add(r.machine);
-  });
-  return Array.from(map.values()).map((r) => ({
-    ...r,
-    machineCount: r.machines.size,
-  }));
-}
-
-function ViewByToggle({ value, onChange }) {
+function ToggleGroup({ label, value, onChange, options }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1}>
       <Typography
@@ -380,48 +258,7 @@ function ViewByToggle({ value, onChange }) {
           letterSpacing: 0.4,
         }}
       >
-        View by
-      </Typography>
-      <ToggleButtonGroup
-        size="small"
-        value={value}
-        exclusive
-        onChange={(_, next) => {
-          if (next) onChange(next);
-        }}
-        sx={{
-          "& .MuiToggleButton-root": {
-            px: 1.5,
-            py: 0.25,
-            fontSize: 12,
-            textTransform: "none",
-            fontWeight: 500,
-          },
-        }}
-      >
-        {VIEW_BY_OPTIONS.map((opt) => (
-          <ToggleButton key={opt.value} value={opt.value}>
-            {opt.label}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
-    </Stack>
-  );
-}
-
-function UnitToggle({ value, onChange, options }) {
-  return (
-    <Stack direction="row" alignItems="center" spacing={1}>
-      <Typography
-        sx={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: "text.disabled",
-          textTransform: "uppercase",
-          letterSpacing: 0.4,
-        }}
-      >
-        Unit
+        {label}
       </Typography>
       <ToggleButtonGroup
         size="small"
@@ -450,172 +287,111 @@ function UnitToggle({ value, onChange, options }) {
   );
 }
 
-/**
- * Single table renderer driven by viewBy + unit. Column layout:
- *
- *   viewBy="machine"  → Machine | SKUs (count) | Planned | Actual | Variance
- *   viewBy="sku"      → SKU | Machines (count) | Planned | Actual | Variance
- *   viewBy="both"     → Machine | SKU | Planned | Actual | Variance
- *                        (+ Batches Plan / Actual for Mixing)
- */
-function DrillTable({ rows, viewBy, unit, section, config, title }) {
+function ResultTable({ rows, viewBy, unit, fmt }) {
   const theme = useTheme();
-  const showBatches = section === "mix" && viewBy === "both" && unit === "mt";
-  const unitLabel = unitLabelOf(section, unit, config);
 
   return (
-    <Stack spacing={1}>
-      <Typography
-        sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}
-      >
-        {title} — {viewByLabel(viewBy)} ({unitLabel})
-      </Typography>
-      <TableContainer
-        sx={{
-          maxHeight: 340,
-          border: 1,
-          borderColor: "divider",
-          borderRadius: 1.25,
-        }}
-      >
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              {viewBy === "machine" && (
-                <>
-                  <Th align="left">Machine</Th>
-                  <Th>SKUs</Th>
-                </>
-              )}
-              {viewBy === "sku" && (
-                <>
-                  <Th align="left">{config.skuHeader}</Th>
-                  <Th>Machines</Th>
-                </>
-              )}
-              {viewBy === "both" && (
-                <>
-                  <Th align="left">Machine</Th>
-                  <Th align="left">{config.skuHeader}</Th>
-                </>
-              )}
-              <Th>{`Planned (${unitLabel})`}</Th>
-              <Th>{`Actual (${unitLabel})`}</Th>
-              {showBatches && <Th>Batches Plan</Th>}
-              {showBatches && <Th>Batches Actual</Th>}
-              <Th>Variance</Th>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((r, i) => {
-              const planned = convertValue(r, "planned", section, unit);
-              const actual = convertValue(r, "actual", section, unit);
-              const variance =
-                planned > 0 ? ((actual - planned) / planned) * 100 : 0;
-              const color = varianceColor(theme, variance);
-              return (
-                <TableRow key={rowKey(r, viewBy, config.skuKey, i)} hover>
-                  {viewBy === "machine" && (
-                    <>
-                      <TableCell sx={cellSx({ bold: true })}>
-                        {r.machine}
-                      </TableCell>
-                      <TableCell align="right" sx={cellSx()}>
-                        {r.skuCount}
-                      </TableCell>
-                    </>
-                  )}
-                  {viewBy === "sku" && (
-                    <>
-                      <TableCell
-                        sx={cellSx({ mono: config.skuKey === "itemCode" })}
-                      >
-                        {r[config.skuKey]}
-                      </TableCell>
-                      <TableCell align="right" sx={cellSx()}>
-                        {r.machineCount}
-                      </TableCell>
-                    </>
-                  )}
-                  {viewBy === "both" && (
-                    <>
-                      <TableCell sx={cellSx({ bold: true })}>
-                        {r.machine}
-                      </TableCell>
-                      <TableCell
-                        sx={cellSx({ mono: config.skuKey === "itemCode" })}
-                      >
-                        {r[config.skuKey]}
-                      </TableCell>
-                    </>
-                  )}
-                  <TableCell align="right" sx={cellSx()}>
-                    {formatValue(planned, unit)}
-                  </TableCell>
-                  <TableCell align="right" sx={cellSx()}>
-                    {formatValue(actual, unit)}
-                  </TableCell>
-                  {showBatches && (
-                    <TableCell align="right" sx={cellSx()}>
-                      {r.batchesPlan}
+    <TableContainer
+      sx={{
+        maxHeight: 380,
+        border: 1,
+        borderColor: "divider",
+        borderRadius: 1.25,
+      }}
+    >
+      <Table size="small" stickyHeader>
+        <TableHead>
+          <TableRow>
+            {viewBy === "machine" && (
+              <>
+                <Th align="left">Machine</Th>
+                <Th>Compounds</Th>
+              </>
+            )}
+            {viewBy === "sku" && (
+              <>
+                <Th align="left">Item Code</Th>
+                <Th>Machines</Th>
+              </>
+            )}
+            {viewBy === "both" && (
+              <>
+                <Th align="left">Machine</Th>
+                <Th align="left">Item Code</Th>
+              </>
+            )}
+            <Th>{`Planned (${unit})`}</Th>
+            <Th>{`Actual (${unit})`}</Th>
+            <Th>Achievement</Th>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((r, i) => {
+            const planned = r.planned;
+            const actual = r.actual;
+            const achievement =
+              planned > 0 ? (actual / planned) * 100 : null;
+            const achColor =
+              achievement == null
+                ? theme.palette.text.disabled
+                : achievement >= 100
+                  ? theme.custom.brand.green
+                  : achievement >= 95
+                    ? theme.custom.brand.amber
+                    : theme.custom.brand.red;
+            return (
+              <TableRow key={i} hover>
+                {viewBy === "machine" && (
+                  <>
+                    <TableCell
+                      sx={{ fontSize: 13, fontWeight: 600 }}
+                    >
+                      {r.machine}
                     </TableCell>
-                  )}
-                  {showBatches && (
-                    <TableCell align="right" sx={cellSx()}>
-                      {r.batchesActual}
+                    <TableCell align="right" sx={{ fontSize: 13 }}>
+                      {r.itemCount}
                     </TableCell>
-                  )}
-                  <TableCell
-                    align="right"
-                    sx={{ ...cellSx(), fontWeight: 600, color }}
-                  >
-                    {variance >= 0 ? "+" : ""}
-                    {variance.toFixed(1)}%
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Stack>
+                  </>
+                )}
+                {viewBy === "sku" && (
+                  <>
+                    <TableCell sx={{ fontSize: 13, fontFamily: "monospace" }}>
+                      {r.itemcode}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 13 }}>
+                      {r.machineCount}
+                    </TableCell>
+                  </>
+                )}
+                {viewBy === "both" && (
+                  <>
+                    <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
+                      {r.machine}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: 13, fontFamily: "monospace" }}>
+                      {r.itemcode}
+                    </TableCell>
+                  </>
+                )}
+                <TableCell align="right" sx={{ fontSize: 13 }}>
+                  {fmt(planned)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontSize: 13, fontWeight: 600 }}>
+                  {fmt(actual)}
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{ fontSize: 13, fontWeight: 700, color: achColor }}
+                >
+                  {achievement == null ? "—" : `${achievement.toFixed(1)}%`}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
-}
-
-function convertValue(row, field, section, unit) {
-  const base = row[field] ?? 0;
-  if (section === "mix" && unit === "batches") {
-    return row[field === "planned" ? "batchesPlan" : "batchesActual"] ?? 0;
-  }
-  if (section === "stk" && unit === "kg") {
-    return base * STOCK_KG_PER_UNIT;
-  }
-  return base;
-}
-
-function formatValue(v, unit) {
-  if (unit === "batches") return Math.round(v).toLocaleString();
-  if (unit === "kg") return v.toFixed(0);
-  // MT or nos or Units — keep one decimal for MT, integers elsewhere
-  return v < 1000 ? v.toFixed(1) : Math.round(v).toLocaleString();
-}
-
-function unitLabelOf(section, unit, config) {
-  if (section === "mix") return unit === "batches" ? "Batches" : "MT";
-  if (section === "stk") return unit === "kg" ? "Kg" : "Units";
-  return config.valueLabel ?? "";
-}
-
-function viewByLabel(viewBy) {
-  if (viewBy === "machine") return "Machine view";
-  if (viewBy === "sku") return "SKU view";
-  return "Machine + SKU";
-}
-
-function rowKey(r, viewBy, skuKey, i) {
-  if (viewBy === "machine") return `${r.machine}-${i}`;
-  if (viewBy === "sku") return `${r[skuKey]}-${i}`;
-  return `${r.machine}-${r[skuKey]}-${i}`;
 }
 
 function Th({ children, align = "right" }) {
@@ -637,20 +413,6 @@ function Th({ children, align = "right" }) {
       {children}
     </TableCell>
   );
-}
-
-function cellSx({ bold = false, mono = false } = {}) {
-  return {
-    fontSize: 13,
-    fontWeight: bold ? 600 : 400,
-    fontFamily: mono ? "monospace" : undefined,
-  };
-}
-
-function varianceColor(theme, variance) {
-  if (variance >= 0) return theme.custom.brand.green;
-  if (variance >= -5) return theme.custom.brand.amber;
-  return theme.custom.brand.red;
 }
 
 export default ProductionDrillPanel;

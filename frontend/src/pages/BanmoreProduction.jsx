@@ -6,7 +6,6 @@ import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
 import ProductionBodySkeleton from "@/components/production/ProductionBodySkeleton.jsx";
-import ShiftComparisonCard from "@/components/production/ShiftComparisonCard.jsx";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
 import TrendModal from "@/components/trend/TrendModal.jsx";
 import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
@@ -414,26 +413,19 @@ function BanmoreProduction() {
                           kpi={kpi}
                           plantId="banmore"
                           section={dashboard.section}
-                          stockSelector={null}
                           from={from}
                           to={to}
                           shift={dashboard.granularity}
                           allDrillRows={drillRows}
                           rawRows={rawRows}
+                          prodSub={prodSub}
                         />
                       </Box>
                     );
                   })()}
 
-                {/* Shift Comparison — Productivity tab only, below drill panels. */}
-                {dashboard.category === "p" && (
-                  <Box sx={{ px: 2, pb: 2 }}>
-                    <ShiftComparisonCard
-                      section={sectionName}
-                      rows={rawRows ?? []}
-                    />
-                  </Box>
-                )}
+                {/* Shift Comparison moved into the Plan Compliance drill panel
+                    per the artifact — see PlanComplianceDrillPanel. */}
               </>
             )}
           </Box>
@@ -463,12 +455,12 @@ function DrillPanelRouter({
   kpi,
   plantId,
   section,
-  stockSelector,
   from,
   to,
   shift,
   allDrillRows,
   rawRows,
+  prodSub,
 }) {
   if (!kpi) return null;
 
@@ -486,33 +478,16 @@ function DrillPanelRouter({
     case "stkProd":
       return (
         <ProductionDrillPanel
-          plantId={plantId}
           section={section}
-          stockSelector={stockSelector}
-          from={from}
-          to={to}
-          shift={shift}
+          prodSub={prodSub}
+          rawRows={rawRows}
         />
       );
     case "downtime":
-      return (
-        <DowntimeDrillPanel
-          plantId={plantId}
-          section={section}
-          from={from}
-          to={to}
-          shift={shift}
-        />
-      );
+      return <DowntimeDrillPanel section={section} rawRows={rawRows} />;
     case "compliance":
       return (
-        <PlanComplianceDrillPanel
-          plantId={plantId}
-          section={section}
-          from={from}
-          to={to}
-          shift={shift}
-        />
+        <PlanComplianceDrillPanel section={section} rawRows={rawRows} />
       );
     case "budget":
       return (

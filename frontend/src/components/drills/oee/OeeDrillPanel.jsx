@@ -117,7 +117,11 @@ function OeeDrillPanel({ section, rawRows }) {
 
   return (
     <Stack spacing={2}>
-      <OverallTiles overall={overall} />
+      <OverallTiles
+        overall={overall}
+        sectionName={sectionName}
+        machineCount={machines.length}
+      />
 
       <Stack
         direction="row"
