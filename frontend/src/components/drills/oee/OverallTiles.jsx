@@ -2,13 +2,18 @@ import { Box, Stack, Typography, useTheme } from "@mui/material";
 import { thresholdColor } from "./thresholds.js";
 
 /**
- * The three Availability / Performance / Quality cards rendered as a
- * secondary KPI row directly under the main 4 Productivity cards
+ * Availability / Performance / Quality sub-cards rendered as a
+ * secondary band directly under the main 4 Productivity KPI cards
  * whenever the OEE drill is open.
  *
- * Each card is sized to match a KpiCard from the main grid so the
- * two rows read as a single connected band. Captions per the
- * artifact:
+ * Visually distinct from the main KPI row:
+ *   - softer (surface.soft) background so they don't compete for
+ *     attention with the primary cards
+ *   - 3-px coloured top stripe (per-component threshold colour)
+ *   - smaller number than the main cards (28-px vs 32-px), to read
+ *     as a sub-tier inside the OEE breakdown
+ *
+ * Captions per the artifact:
  *   Availability  — "Across N <section> machines"
  *   Performance   — "Plant average for <section> section"
  *   Quality       — "FTQ · <section> section"
@@ -31,17 +36,37 @@ const MACHINE_LABEL = {
 function OverallTiles({ overall, sectionName, machineCount }) {
   if (!overall) return null;
   return (
-    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-      {COMPONENTS.map((c) => (
-        <Tile
-          key={c.id}
-          component={c}
-          value={overall[c.id]}
-          sectionName={sectionName}
-          machineCount={machineCount}
-        />
-      ))}
-    </Stack>
+    <Box>
+      <Typography
+        sx={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          mb: 1,
+        }}
+      >
+        OEE components
+      </Typography>
+      <Box
+        sx={{
+          display: "grid",
+          gap: 2,
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+        }}
+      >
+        {COMPONENTS.map((c) => (
+          <Tile
+            key={c.id}
+            component={c}
+            value={overall[c.id]}
+            sectionName={sectionName}
+            machineCount={machineCount}
+          />
+        ))}
+      </Box>
+    </Box>
   );
 }
 
@@ -64,14 +89,12 @@ function Tile({ component, value, sectionName, machineCount }) {
   return (
     <Box
       sx={{
-        flex: 1,
-        backgroundColor: "background.paper",
+        backgroundColor: theme.custom.surface.soft,
         border: 1,
         borderColor: "divider",
         borderTop: `3px solid ${color}`,
         borderRadius: 1.25,
-        boxShadow: theme.custom.shadow,
-        p: 2,
+        p: 1.75,
         minWidth: 0,
       }}
     >
@@ -93,13 +116,13 @@ function Tile({ component, value, sectionName, machineCount }) {
         sx={{ mt: 0.5 }}
       >
         <Typography
-          sx={{ fontSize: 32, fontWeight: 700, color, lineHeight: 1 }}
+          sx={{ fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}
         >
           {value.toFixed(1)}
         </Typography>
-        <Typography sx={{ fontSize: 14, color: "text.disabled" }}>%</Typography>
+        <Typography sx={{ fontSize: 13, color: "text.disabled" }}>%</Typography>
       </Stack>
-      <Typography sx={{ fontSize: 12, color: "text.disabled", mt: 1 }}>
+      <Typography sx={{ fontSize: 12, color: "text.disabled", mt: 0.75 }}>
         {captionFor(component.id, sectionName, machineCount)}
       </Typography>
     </Box>

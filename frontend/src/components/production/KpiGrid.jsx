@@ -82,10 +82,13 @@ function KpiGrid({
           sx={{
             display: "grid",
             gap: 2,
+            // Always show every card on one row on md+ — Productivity has
+            // 4 cards, Q/S have 4, M has 4, C has 3. Smaller breakpoints
+            // wrap to 2 then 1.
             gridTemplateColumns: {
               xs: "1fr",
               sm: "repeat(2, 1fr)",
-              md: "repeat(auto-fit, minmax(220px, 1fr))",
+              md: `repeat(${kpis.length}, 1fr)`,
             },
           }}
         >
