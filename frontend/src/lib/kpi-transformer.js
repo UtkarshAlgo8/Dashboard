@@ -60,7 +60,7 @@ const ALLOWED_KPIS = {
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
@@ -93,7 +93,7 @@ const ALLOWED_KPIS = {
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
@@ -126,7 +126,7 @@ const ALLOWED_KPIS = {
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
@@ -159,7 +159,7 @@ const ALLOWED_KPIS = {
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m"] },
       { id: "prod", name: "Production", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: "compliance", drillTargets: null },
+      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },

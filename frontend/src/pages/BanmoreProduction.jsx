@@ -6,12 +6,12 @@ import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
 import ProductionBodySkeleton from "@/components/production/ProductionBodySkeleton.jsx";
+import ShiftComparisonCard from "@/components/production/ShiftComparisonCard.jsx";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
 import TrendModal from "@/components/trend/TrendModal.jsx";
 import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
 import ProductionDrillPanel from "@/components/drills/production/ProductionDrillPanel.jsx";
 import DowntimeDrillPanel from "@/components/drills/downtime/DowntimeDrillPanel.jsx";
-import PlanComplianceDrillPanel from "@/components/drills/plan-compliance/PlanComplianceDrillPanel.jsx";
 import GenericTableDrillPanel from "@/components/drills/shared/GenericTableDrillPanel.jsx";
 import BudgetDrillPanel from "@/components/drills/shared/BudgetDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
@@ -424,8 +424,16 @@ function BanmoreProduction() {
                     );
                   })()}
 
-                {/* Shift Comparison moved into the Plan Compliance drill panel
-                    per the artifact — see PlanComplianceDrillPanel. */}
+                {/* Shift Comparison — Productivity tab only, always pinned
+                    at the bottom regardless of which card is drilled. */}
+                {dashboard.category === "p" && (
+                  <Box sx={{ px: 2, pb: 2 }}>
+                    <ShiftComparisonCard
+                      section={sectionName}
+                      rows={rawRows ?? []}
+                    />
+                  </Box>
+                )}
               </>
             )}
           </Box>
@@ -485,10 +493,6 @@ function DrillPanelRouter({
       );
     case "downtime":
       return <DowntimeDrillPanel section={section} rawRows={rawRows} />;
-    case "compliance":
-      return (
-        <PlanComplianceDrillPanel section={section} rawRows={rawRows} />
-      );
     case "budget":
       return (
         <BudgetDrillPanel
