@@ -40,6 +40,9 @@ function TrendModal({
   section,
   category,
   compound,
+  subSection = null,
+  productType = null,
+  asOf = null,
 }) {
   const theme = useTheme();
   const toast = useToast();
@@ -47,33 +50,51 @@ function TrendModal({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  // Resolve the active date range (preset OR custom) to ISO from/to.
-  // For "today" we send the single date; otherwise we send the range.
-  const resolved = presetToDateRange({ preset: range, from, to });
+  // Resolve the active date range (preset OR custom) to ISO from/to,
+  // anchored to the as-of date (BRD §13.5).
+  const resolved = presetToDateRange({ preset: range, from, to }, asOf);
+
+  // Monthly trend (BRD §13.6): one point per month = the latest MTD
+  // record within that month. To collect every month we must fetch a
+  // window wider than the snapshot's trailing few days — back to the
+  // start of the as-of year through the as-of date.
+  const isMonthly = range === "month" && !from && !to;
+  const anchorIso = asOf ?? resolved.to ?? null;
+  const monthlyFrom = anchorIso ? `${anchorIso.slice(0, 4)}-01-01` : resolved.from;
+  const monthlyTo = anchorIso ?? resolved.to;
+
+  const sectionName = sectionIdToName(section);
 
   /**
-   * v2 fetch: use kpi.name (actual gold_dummy kpi_name like "OEE_o")
-   * so we bypass the stale KPI_NAME_BY_ID map in getTrend.
-   *
-   * Lambda ignores section/category/granularity filters, so we omit
-   * them from the payload and filter client-side. We also drop the
-   * drillKpis flag — it OR-joins with drill_down_level=1 and returns
-   * every landing KPI, polluting the time series with mixed data.
-   * Date filter (date OR from+to) is the only server-side narrowing.
+   * v2 fetch: use kpi.rawName (actual gold_dummy kpi_name like "OEE_o")
+   * so we bypass the stale KPI_NAME_BY_ID map in getTrend. We drop the
+   * drillKpis flag — it OR-joins with drill_down_level=1 and pollutes the
+   * series with mixed KPIs.
    */
+  // Narrow the fetch with section/category/granularity — the v24 table is
+  // far too large to fetch unfiltered (the row cap would truncate the
+  // series). granularity is MTD for the monthly trend, YTD for yearly,
+  // Daily otherwise — matching what the series builder reads below.
+  const v2Granularity = isMonthly
+    ? "MTD"
+    : range === "year"
+      ? "YTD"
+      : "Daily";
   const useV2 = Boolean(kpi?.rawName);
   const v2Payload = useV2
     ? {
-        context: {},
+        context: {
+          section: sectionName,
+          category: categoryIdToName(category),
+          granularity: v2Granularity,
+        },
         date: range === "today" ? resolved.from : null,
-        from: range === "today" ? null : resolved.from,
-        to: range === "today" ? null : resolved.to,
+        from: range === "today" ? null : isMonthly ? monthlyFrom : resolved.from,
+        to: range === "today" ? null : isMonthly ? monthlyTo : resolved.to,
         drillKpis: null,
         limit: 10000,
       }
     : null;
-
-  const sectionName = sectionIdToName(section);
 
   const { data: v2Rows, isLoading: v2Loading } = usePolledQuery(
     v2Payload
@@ -126,20 +147,56 @@ function TrendModal({
   let labels = [];
   let values = [];
   if (useV2 && Array.isArray(v2Rows)) {
-    const matched = v2Rows.filter(
-      (r) =>
-        r.section === sectionName &&
-        r.kpi_name === kpi.rawName &&
-        r.granularity === "Daily",
-    );
-    const sorted = matched.sort((a, b) => (a.date > b.date ? 1 : -1));
-    labels = sorted.map((r) => r.date ?? "");
-    values = sorted.map((r) => {
-      const v = r.actual_value;
-      if (v == null) return null;
-      const n = typeof v === "number" ? v : Number.parseFloat(v);
-      return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+    // Pin the series to one product type + sub-section so the line is a
+    // single consistent series, not a blend (BRD §13.6). product_type is
+    // empty for section-level KPIs (OEE) — those rows always pass.
+    const pinned = v2Rows.filter((r) => {
+      if (r.section !== sectionName || r.kpi_name !== kpi.rawName) return false;
+      if (subSection && r.sub_section !== subSection) return false;
+      if (productType) {
+        const pt = r.product_type;
+        if (pt != null && pt !== "" && pt !== "nan" && pt !== productType) {
+          return false;
+        }
+      }
+      return true;
     });
+
+    if (isMonthly) {
+      // One point per month = the latest available MTD record in that
+      // month (last day of a completed month; latest day of the running
+      // month). Group MTD rows by YYYY-MM, keep the max-date row each.
+      const byMonth = new Map();
+      for (const r of pinned) {
+        if (r.granularity !== "MTD") continue;
+        const mk = monthKey(r.date);
+        if (!mk) continue;
+        const prev = byMonth.get(mk);
+        if (!prev || dateKey(r.date) > dateKey(prev.date)) byMonth.set(mk, r);
+      }
+      const months = [...byMonth.keys()].sort();
+      labels = months;
+      values = months.map((m) => numOrNull(byMonth.get(m).actual_value));
+    } else if (range === "year") {
+      // One point per year = the latest available YTD record that year.
+      const byYear = new Map();
+      for (const r of pinned) {
+        if (r.granularity !== "YTD") continue;
+        const yk = dateKey(r.date).slice(0, 4);
+        if (!yk) continue;
+        const prev = byYear.get(yk);
+        if (!prev || dateKey(r.date) > dateKey(prev.date)) byYear.set(yk, r);
+      }
+      const years = [...byYear.keys()].sort();
+      labels = years;
+      values = years.map((y) => numOrNull(byYear.get(y).actual_value));
+    } else {
+      const sorted = pinned
+        .filter((r) => r.granularity === "Daily")
+        .sort((a, b) => (dateKey(a.date) > dateKey(b.date) ? 1 : -1));
+      labels = sorted.map((r) => r.date ?? "");
+      values = sorted.map((r) => numOrNull(r.actual_value));
+    }
   } else if (legacyData) {
     labels = legacyData.labels ?? [];
     values = legacyData.values ?? [];
@@ -259,6 +316,37 @@ function TrendModal({
 
 function sectionIdToName(id) {
   return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
+}
+
+function categoryIdToName(id) {
+  return {
+    p: "Productivity",
+    q: "Quality",
+    c: "Cost",
+    m: "Morale",
+    s: "Safety",
+    i: "Inventory",
+  }[id] ?? id;
+}
+
+function numOrNull(v) {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number.parseFloat(v);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+/** Normalize a date (ISO yyyy-mm-dd or DD-MM-YYYY) to sortable YYYYMMDD. */
+function dateKey(d) {
+  if (typeof d !== "string") return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.replaceAll("-", "");
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(d);
+  return m ? `${m[3]}${m[2]}${m[1]}` : "";
+}
+
+/** Month bucket "YYYY-MM" from either date format. */
+function monthKey(d) {
+  const k = dateKey(d);
+  return k ? `${k.slice(0, 4)}-${k.slice(4, 6)}` : "";
 }
 
 function ChartSkeleton() {

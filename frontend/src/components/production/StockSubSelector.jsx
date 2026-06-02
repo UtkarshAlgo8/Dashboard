@@ -1,17 +1,18 @@
 import { ToggleButton, ToggleButtonGroup } from "@mui/material";
 
 /**
- * Stock-section sub-selector (BRD FR-P17, FR-P18). Five pills:
- * 4 Roll / Extruder / 3 Roll / Cutter / Slitter. Default "4roll".
- * Phase 1 only fills 4 Roll with real KPI data; others show the
- * empty state.
+ * Stock-section sub-selector (BRD §13.2). Five pills:
+ * 4 Roll / Extruder / 3 Roll / Cutter / Slitter. Selecting one filters
+ * every KPI tab to that sub-section. The `value`/`onChange` use the gold
+ * `sub_section` values verbatim so they pass straight into the query
+ * context with no id↔value mapping.
  */
 const SUB_SELECTORS = [
-  { id: "4roll", label: "4 Roll" },
-  { id: "extruder", label: "Extruder" },
-  { id: "3roll", label: "3 Roll" },
-  { id: "cutter", label: "Cutter" },
-  { id: "slitter", label: "Slitter" },
+  { id: "4 Roll", label: "4 Roll" },
+  { id: "Extruder", label: "Extruder" },
+  { id: "3 Roll", label: "3 Roll" },
+  { id: "Cutter", label: "Cutter" },
+  { id: "Slitter", label: "Slitter" },
 ];
 
 function StockSubSelector({ value, onChange }) {

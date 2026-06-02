@@ -66,7 +66,7 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
         >
           {kpi.name}
         </Typography>
-        <Stack direction="row" spacing={0.25} alignItems="center">
+        <Stack direction="row" spacing={0.75} alignItems="center">
           <Tooltip title="Trend" arrow>
             <IconButton
               size="small"
@@ -74,23 +74,48 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
                 e.stopPropagation();
                 onTrendOpen(kpi.id);
               }}
+              sx={{
+                width: 22,
+                height: 22,
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 1,
+                color: "text.secondary",
+                "&:hover": {
+                  borderColor: "primary.main",
+                  color: "primary.main",
+                  backgroundColor: theme.custom.surface.soft,
+                },
+              }}
             >
-              <ShowChartIcon sx={{ fontSize: 16 }} />
+              <ShowChartIcon sx={{ fontSize: 14 }} />
             </IconButton>
           </Tooltip>
           {isDrilling ? (
             <Tooltip title="Close drill" arrow>
-              <IconButton
-                size="small"
+              {/* Same 22×22 footprint as the expand button so toggling the
+                  drill never resizes the header (no UI jump). */}
+              <Box
                 onClick={(e) => {
                   e.stopPropagation();
                   onCloseDrill();
+                }}
+                sx={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  backgroundColor: `${theme.custom.brand.orange}1f`,
+                  color: "primary.main",
                 }}
               >
                 <KeyboardArrowUpIcon
                   sx={{ fontSize: 18, transform: "rotate(180deg)" }}
                 />
-              </IconButton>
+              </Box>
             </Tooltip>
           ) : kpi.drillable ? (
             <Tooltip title="Drill down" arrow>
@@ -102,6 +127,7 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  cursor: "pointer",
                   backgroundColor: `${theme.custom.brand.orange}1f`,
                   color: "primary.main",
                 }}

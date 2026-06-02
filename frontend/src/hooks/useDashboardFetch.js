@@ -88,14 +88,18 @@ function reducer(state, action) {
 
 function buildContext(state) {
   const ctx = {};
-  if (state.subSection) ctx.sub_section = state.subSection;
-  if (state.productType) ctx.product_type = state.productType;
-  // section and category are NOT sent — the Lambda ignores both filters
-  // when combined with multi-kpi drill targets (returns Mixing rows
-  // even when asked for Curing). We fetch ALL sections + categories
-  // in one request and filter client-side via row.section + ALLOWED_KPIS
-  // in toKpiGrid. Switching section/category becomes instant since the
-  // payload is unchanged.
+  // section + category ARE sent to the backend. The v24 gold table is
+  // large (tens of thousands of drill_down_level=1 rows per week), so a
+  // "fetch everything, filter client-side" approach blows the upstream
+  // 5000–10000 row cap and silently drops KPI rows. The backend honours
+  // these filters on a landing query (no drillKpis), and the section
+  // predicate OR-includes plant-level NULL-section rows so Absenteeism
+  // still shows. Result: ~a few thousand rows per section/category.
+  ctx.section = sectionIdToName(state.section);
+  ctx.category = categoryIdToName(state.category);
+  // sub_section / product_type are filtered CLIENT-SIDE in toKpiGrid
+  // (BRD §13.2/§13.3) so plant-level KPIs (no sub_section) survive and
+  // OEE-style rows (empty product_type) aren't dropped.
   if (state.granularity) ctx.granularity = state.granularity;
   // date / from / to are NOT in context — they are top-level payload
   // fields. The backend rejects them inside the context object.
@@ -114,6 +118,18 @@ function stripGranularity(ctx) {
 function sectionIdToName(id) {
   // Artifact section IDs → gold_dummy section values.
   return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
+}
+
+function categoryIdToName(id) {
+  // Tab IDs → gold_dummy category values.
+  return {
+    p: "Productivity",
+    q: "Quality",
+    c: "Cost",
+    m: "Morale",
+    s: "Safety",
+    i: "Inventory",
+  }[id] ?? id;
 }
 // ---------- API call ----------
 
@@ -209,6 +225,8 @@ export function useDashboardFetch() {
         category: state.category.toUpperCase(),
         granularity: state.granularity ?? "Daily",
         mode: state.mode ?? "snapshot",
+        subSection: state.subSection ?? null,
+        productType: state.productType ?? null,
       })
     : [];
   const drillRows = data && state.drillKpis !== null ? toDrillRows(data) : null;

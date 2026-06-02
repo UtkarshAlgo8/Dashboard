@@ -33,7 +33,17 @@ export async function cached(key, loader, ttlMs) {
 export function buildCacheKey(route, query = {}) {
   const sorted = Object.keys(query)
     .sort()
-    .map((k) => `${k}=${query[k]}`)
+    .map((k) => {
+      const v = query[k];
+      // Object/array values (e.g. the dashboard `context`, `drillKpis`,
+      // `parentFilters`) MUST be serialized — `${obj}` stringifies to
+      // "[object Object]", which collapsed every section/category into one
+      // cache key and served the wrong section's data (intermittent data
+      // loss). JSON.stringify keeps each distinct request on its own key.
+      const s =
+        v !== null && typeof v === "object" ? JSON.stringify(v) : String(v);
+      return `${k}=${s}`;
+    })
     .join("&");
   return sorted ? `${route}?${sorted}` : route;
 }

@@ -36,6 +36,8 @@ router.get("/", async (req, res, next) => {
       from,
       to,
       tyreType,
+      productType,
+      subSection,
     } = req.query;
     if (!kpiId || !section || !category) {
       res.status(400).json({
@@ -61,6 +63,8 @@ router.get("/", async (req, res, next) => {
         range,
         granularity,
         tyreType: tyreType ?? null,
+        productType: productType ?? null,
+        subSection: subSection ?? null,
         from,
         to,
       });

@@ -12,15 +12,32 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
  *
  * @param {string} section - gold_dummy section ("Mixing"/"TBM"/"Curing"/"Stock")
  * @param {object[]} rows  - raw dashboard rows for the active section + range
+ * @param {string|null} [subSection] - Stock sub-section to scope to (BRD §13.2)
+ * @param {string|null} [productType] - product type / "Overall" (BRD §13.3)
  */
-export default function ShiftComparisonCard({ section, rows = [] }) {
+export default function ShiftComparisonCard({
+  section,
+  rows = [],
+  subSection = null,
+  productType = null,
+}) {
   const unit =
     section === "Mixing" ? "MT" : section === "Stock" ? "units" : "nos";
 
   const shifts = ["Shift A", "Shift B", "Shift C"];
   const tableRows = shifts.map((g) => {
     const shiftRows = rows.filter(
-      (r) => r.section === section && r.granularity === g,
+      (r) =>
+        r.section === section &&
+        r.granularity === g &&
+        (!subSection || r.sub_section === subSection) &&
+        // product_type scoping: keep rows with no product_type (OEE/FTQ)
+        // or matching the selected one (Production with "Overall"/specific).
+        (!productType ||
+          r.product_type == null ||
+          r.product_type === "" ||
+          r.product_type === "nan" ||
+          r.product_type === productType),
     );
     const plan = avgField(shiftRows, "Production", "threshold_value");
     const actual = avgField(shiftRows, "Production", "actual_value");

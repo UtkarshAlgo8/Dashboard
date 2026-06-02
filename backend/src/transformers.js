@@ -25,6 +25,140 @@ function denan(v) {
   return v;
 }
 
+/** Normalize a date (ISO yyyy-mm-dd or DD-MM-YYYY) to sortable YYYYMMDD. */
+function dateKey(d) {
+  if (typeof d !== "string") return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.replaceAll("-", "");
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(d);
+  return m ? `${m[3]}${m[2]}${m[1]}` : "";
+}
+
+/** Date (either format) → ISO yyyy-mm-dd for stable frontend display. */
+function toIsoDate(d) {
+  const k = dateKey(d);
+  return k ? `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}` : d;
+}
+
+function numOrNull(v) {
+  if (v == null || v === "" || v === NAN) return null;
+  const n = typeof v === "number" ? v : Number.parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Inventory page payload (BRD §13.4). Maps gold_dummy rows
+ * (category = Inventory) to the InventoryPage contract:
+ *   { groups: { production, stock, compound }, history: [...] }
+ *
+ *   kpi_name = "Inventory"       → one bar per product_type (today =
+ *                                  latest day, yesterday = prior day).
+ *   kpi_name = "Inventory_item"  → item-level live stock per bar.
+ *
+ * Each product_type is routed to a chart group + stable bar id + the
+ * history column key the frontend table expects.
+ */
+const INVENTORY_BARS = {
+  FG: { group: "production", id: "fg", label: "FG", histKey: "fg" },
+  Cured: { group: "production", id: "cured", label: "Cured", histKey: "cured" },
+  Green: { group: "production", id: "green", label: "Green", histKey: "green" },
+  Tread: { group: "stock", id: "tread", label: "Tread", histKey: "tread" },
+  Belt: { group: "stock", id: "belt", label: "Belt", histKey: "belt" },
+  Ply: { group: "stock", id: "ply", label: "Ply", histKey: "ply" },
+  "Cap Strip": { group: "stock", id: "capstrip", label: "Capstrip", histKey: "capstrip" },
+  Sidewall: { group: "stock", id: "sidewall", label: "Sidewall", histKey: "sidewall" },
+  "Inner Liner": { group: "stock", id: "iliner", label: "I.Liner", histKey: "iLiner" },
+  Bead: { group: "stock", id: "bead", label: "Bead", histKey: "bead" },
+  "Final Compound": { group: "compound", id: "final", label: "Final", histKey: "final" },
+  "Master Compound": { group: "compound", id: "master", label: "Master", histKey: "master" },
+};
+
+const INVENTORY_GROUP_ORDER = ["production", "stock", "compound"];
+const INVENTORY_GROUP_TITLES = {
+  production: "Production",
+  stock: "Stock Inventory",
+  compound: "Compound Inventory",
+};
+
+export function toInventory(rows) {
+  const all = Array.isArray(rows) ? rows : [];
+  const barRows = all.filter((r) => r.kpi_name === "Inventory");
+  const itemRows = all.filter((r) => r.kpi_name === "Inventory_item");
+
+  // Item-level live stock per product_type: latest date wins per itemcode.
+  const itemsByType = new Map();
+  for (const r of itemRows) {
+    const pt = denan(r.product_type);
+    const code = denan(r.itemcode);
+    if (!pt || !code) continue;
+    if (!itemsByType.has(pt)) itemsByType.set(pt, new Map());
+    const byCode = itemsByType.get(pt);
+    const prev = byCode.get(code);
+    if (!prev || dateKey(r.date) > dateKey(prev.date)) byCode.set(code, r);
+  }
+  const itemsFor = (pt) => {
+    const byCode = itemsByType.get(pt);
+    if (!byCode) return [];
+    return [...byCode.values()]
+      .map((r) => ({
+        itemCode: denan(r.itemcode),
+        description: denan(r.itemcode),
+        liveStock: numOrNull(r.actual_value) ?? 0,
+        unit: denan(r.unit_of_measurement) ?? "",
+      }))
+      .sort((a, b) => a.itemCode.localeCompare(b.itemCode));
+  };
+
+  // Bar today/yesterday: the two most recent dates for each product_type.
+  const barsByType = new Map();
+  for (const r of barRows) {
+    const pt = denan(r.product_type);
+    if (!pt) continue;
+    if (!barsByType.has(pt)) barsByType.set(pt, []);
+    barsByType.get(pt).push(r);
+  }
+
+  const groups = {};
+  for (const groupId of INVENTORY_GROUP_ORDER) {
+    groups[groupId] = { title: INVENTORY_GROUP_TITLES[groupId], bars: [] };
+  }
+
+  for (const [pt, meta] of Object.entries(INVENTORY_BARS)) {
+    const rs = (barsByType.get(pt) ?? []).sort(
+      (a, b) => (dateKey(b.date) > dateKey(a.date) ? 1 : -1),
+    );
+    if (rs.length === 0) continue;
+    const today = numOrNull(rs[0].actual_value) ?? 0;
+    const yesterday = rs[1] ? (numOrNull(rs[1].actual_value) ?? 0) : today;
+    groups[meta.group].bars.push({
+      id: meta.id,
+      label: meta.label,
+      today,
+      yesterday,
+      unit: denan(rs[0].unit_of_measurement) ?? "",
+      items: itemsFor(pt),
+    });
+  }
+
+  // History — last 7 dates across all bars, one row per date with every
+  // product_type's value under its history column key.
+  const byDate = new Map();
+  for (const r of barRows) {
+    const pt = denan(r.product_type);
+    const meta = INVENTORY_BARS[pt];
+    if (!meta) continue;
+    const k = dateKey(r.date);
+    if (!k) continue;
+    if (!byDate.has(k)) byDate.set(k, { date: toIsoDate(r.date) });
+    byDate.get(k)[meta.histKey] = numOrNull(r.actual_value) ?? 0;
+  }
+  const history = [...byDate.entries()]
+    .sort((a, b) => (a[0] > b[0] ? 1 : -1)) // oldest → newest
+    .slice(-7)
+    .map(([, v]) => v);
+
+  return { groups, history };
+}
+
 /**
  * Parse the gold_dummy `drill_down_attribute` column. Documented as
  * a JSON-encoded string (e.g. `"[\"Absenteeism_area\"]"`). Tolerant:

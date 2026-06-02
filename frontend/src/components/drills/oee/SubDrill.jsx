@@ -59,9 +59,15 @@ function SubDrill({
   rows,
   activeTraceItemCode,
   onTraceRowClick,
+  accentTier,
 }) {
   const theme = useTheme();
-  const accent = theme.custom.brand[ACCENT_COLOR_KEY[component]];
+  // Accent follows the selected cell's status tier (green/amber/red) so
+  // the drill box highlight matches the highlighted cell. Falls back to
+  // the per-component colour if no tier is supplied.
+  const accent = accentTier
+    ? theme.custom.brand[accentTier]
+    : theme.custom.brand[ACCENT_COLOR_KEY[component]];
   const subCats = SUB_CATEGORIES[component] ?? [];
   const activeSub = subCats.find((s) => s.id === subCategory) ?? null;
 
@@ -175,13 +181,25 @@ function DetailTable({
         borderRadius: 1.25,
       }}
     >
-      <Table size="small" stickyHeader>
+      <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            border: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom.surface.soft,
+          },
+        })}
+      >
         <TableHead>
           <TableRow>
             {columns.map((c) => (
               <TableCell
                 key={c.key}
-                align={c.align ?? "right"}
+                align={c.align ?? "center"}
                 sx={{
                   fontSize: 11,
                   fontWeight: 700,
@@ -220,7 +238,7 @@ function DetailTable({
                 {columns.map((c) => (
                   <TableCell
                     key={c.key}
-                    align={c.align ?? "right"}
+                    align={c.align ?? "center"}
                     sx={{ fontSize: 13 }}
                   >
                     {c.render ? c.render(row) : row[c.key]}
@@ -237,39 +255,39 @@ function DetailTable({
 
 const COLUMNS = {
   "availability/breakdown": [
-    { key: "reasonCategory", label: "Category", align: "left" },
-    { key: "reason", label: "Reason", align: "left" },
+    { key: "reasonCategory", label: "Category", align: "center" },
+    { key: "reason", label: "Reason", align: "center" },
     { key: "events", label: "Events" },
     { key: "durationMin", label: "Duration (min)" },
   ],
   "availability/setupAdjustment": [
-    { key: "reason", label: "Reason", align: "left" },
+    { key: "reason", label: "Reason", align: "center" },
     { key: "events", label: "Events" },
     { key: "durationMin", label: "Duration (min)" },
   ],
   "availability/startup": [
-    { key: "reason", label: "Reason", align: "left" },
+    { key: "reason", label: "Reason", align: "center" },
     { key: "events", label: "Events" },
     { key: "durationMin", label: "Duration (min)" },
   ],
   "availability/toolChange": [
-    { key: "reason", label: "Reason", align: "left" },
+    { key: "reason", label: "Reason", align: "center" },
     { key: "events", label: "Events" },
     { key: "durationMin", label: "Duration (min)" },
   ],
   "performance/minorStoppage": [
-    { key: "reason", label: "Reason", align: "left" },
+    { key: "reason", label: "Reason", align: "center" },
     { key: "events", label: "Events" },
     { key: "durationMin", label: "Duration (min)" },
   ],
   "performance/reducedSpeed": [
-    { key: "reason", label: "Reason", align: "left" },
+    { key: "reason", label: "Reason", align: "center" },
     { key: "events", label: "Events" },
     { key: "durationMin", label: "Duration (min)" },
   ],
   "quality/defect": [
-    { key: "itemCode", label: "Item Code", align: "left" },
-    { key: "defectType", label: "Defect Type", align: "left" },
+    { key: "itemCode", label: "Item Code", align: "center" },
+    { key: "defectType", label: "Defect Type", align: "center" },
     { key: "qty", label: "Defect Qty" },
     { key: "totalProduced", label: "Total Produced" },
     {
@@ -279,7 +297,7 @@ const COLUMNS = {
     },
   ],
   "quality/scrap": [
-    { key: "itemCode", label: "Item Code", align: "left" },
+    { key: "itemCode", label: "Item Code", align: "center" },
     { key: "qty", label: "Scrap Qty (kg)" },
     {
       key: "traceable",
@@ -304,7 +322,7 @@ const COLUMNS = {
     },
   ],
   default: [
-    { key: "reason", label: "Reason", align: "left" },
+    { key: "reason", label: "Reason", align: "center" },
     { key: "events", label: "Events" },
     { key: "durationMin", label: "Duration (min)" },
   ],

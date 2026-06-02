@@ -47,10 +47,22 @@ function DailyInventoryTable({ history }) {
       <TableContainer
         sx={{ border: 1, borderColor: "divider", borderRadius: 1 }}
       >
-        <Table size="small" stickyHeader>
+        <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            border: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom.surface.soft,
+          },
+        })}
+      >
           <TableHead>
             <TableRow>
-              <Th align="left">Date</Th>
+              <Th align="center">Date</Th>
               {COLS.map((c) => (
                 <Th key={c.key}>{c.label}</Th>
               ))}
@@ -69,7 +81,7 @@ function DailyInventoryTable({ history }) {
                   {row.date}
                 </TableCell>
                 {COLS.map((c) => (
-                  <TableCell key={c.key} align="right" sx={{ fontSize: 12 }}>
+                  <TableCell key={c.key} align="center" sx={{ fontSize: 12 }}>
                     {row[c.key]}
                   </TableCell>
                 ))}
@@ -82,7 +94,7 @@ function DailyInventoryTable({ history }) {
   );
 }
 
-function Th({ children, align = "right" }) {
+function Th({ children, align = "center" }) {
   return (
     <TableCell
       align={align}

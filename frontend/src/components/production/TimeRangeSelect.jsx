@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Box,
   Button,
   MenuItem,
   Select,
@@ -17,9 +18,10 @@ import { DateRangeFilterDialog } from "@/components/common";
  * plus a single "Filter Date" pill that opens DateRangeFilterDialog.
  *
  * When the active preset is "today" and `onShiftChange` is provided,
- * a compact Shift select renders nested directly under the preset
- * pills. This matches the new artifact: shift only makes sense
- * within a single day, so it disappears for Month / Year / custom.
+ * a compact Shift select renders inline to the LEFT of the preset
+ * pills (same row), so toggling Today never changes the header height
+ * — no vertical UI jump. Shift only makes sense within a single day,
+ * so it disappears for Month / Year / custom.
  *
  * Parent owns `preset`, `from`, `to` (ISO yyyy-MM-dd strings) and
  * optionally `shift` ("all" | "a" | "b" | "c").
@@ -55,32 +57,11 @@ function TimeRangeSelect({
   const showShift = preset === "today" && typeof onShiftChange === "function";
 
   return (
-    <Stack direction="row" spacing={1} alignItems="flex-start">
-      <Stack spacing={0.5} alignItems="flex-start">
-        <ToggleButtonGroup
-          size="small"
-          value={preset ?? ""}
-          exclusive
-          onChange={(_, value) => {
-            if (value) onPresetChange(value);
-          }}
-          sx={{
-            "& .MuiToggleButton-root": {
-              px: 1.5,
-              py: 0.25,
-              fontSize: 12,
-              textTransform: "none",
-              fontWeight: 500,
-            },
-          }}
-        >
-          {PRESETS.map((p) => (
-            <ToggleButton key={p.id} value={p.id}>
-              {p.label}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-
+    <Stack direction="row" spacing={1} alignItems="center">
+      {/* Fixed-width slot: always reserved so showing/hiding the shift
+          selector (Today only) never changes the cluster width — the
+          centred plant pill stays put, no UI jump. */}
+      <Box sx={{ width: 96, flexShrink: 0, display: "flex" }}>
         {showShift && (
           <Select
             size="small"
@@ -88,9 +69,9 @@ function TimeRangeSelect({
             onChange={(e) => onShiftChange(e.target.value)}
             aria-label="Filter by shift"
             sx={{
-              ml: 0.5,
+              width: "100%",
               fontSize: 11,
-              height: 24,
+              height: 30,
               "& .MuiSelect-select": {
                 py: 0.25,
                 pl: 1,
@@ -102,17 +83,45 @@ function TimeRangeSelect({
             }}
           >
             {SHIFT_OPTIONS.map((opt) => (
-              <MenuItem
-                key={opt.id}
-                value={opt.id}
-                sx={{ fontSize: 12, py: 0.5 }}
-              >
+              <MenuItem key={opt.id} value={opt.id} sx={{ fontSize: 12, py: 0.5 }}>
                 {opt.label}
               </MenuItem>
             ))}
           </Select>
         )}
-      </Stack>
+      </Box>
+
+      <ToggleButtonGroup
+        size="small"
+        value={preset ?? ""}
+        exclusive
+        onChange={(_, value) => {
+          if (value) onPresetChange(value);
+        }}
+        sx={{
+          "& .MuiToggleButton-root": {
+            px: 1.5,
+            py: 0.25,
+            fontSize: 12,
+            textTransform: "none",
+            fontWeight: 500,
+          },
+          // Highlighted preset gets the primary tint (matches the rest of
+          // the nav controls) instead of MUI's default grey.
+          "& .MuiToggleButton-root.Mui-selected": {
+            backgroundColor: "primary.light",
+            color: "primary.main",
+            fontWeight: 700,
+            "&:hover": { backgroundColor: "primary.light" },
+          },
+        }}
+      >
+        {PRESETS.map((p) => (
+          <ToggleButton key={p.id} value={p.id}>
+            {p.label}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
 
       <Button
         size="small"

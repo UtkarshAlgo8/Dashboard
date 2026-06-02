@@ -86,8 +86,14 @@ function dateRangeFilter(from, to) {
   const f = from ? parseIsoDate(from) : null;
   const t = to ? parseIsoDate(to) : null;
 
+  // Format-robust YYYYMMDD. CAST to VARCHAR (date is a DATE type in the
+  // live gold_dummy; SUBSTRING needs VARCHAR). Detect ISO vs DD-MM-YYYY
+  // by dash position so this works across envs.
+  const ds = "CAST(date AS VARCHAR)";
   const dateExpr =
-    "(SUBSTRING(date, 7, 4) || SUBSTRING(date, 4, 2) || SUBSTRING(date, 1, 2))";
+    `(CASE WHEN SUBSTRING(${ds}, 5, 1) = '-' ` +
+    `THEN SUBSTRING(${ds}, 1, 4) || SUBSTRING(${ds}, 6, 2) || SUBSTRING(${ds}, 9, 2) ` +
+    `ELSE SUBSTRING(${ds}, 7, 4) || SUBSTRING(${ds}, 4, 2) || SUBSTRING(${ds}, 1, 2) END)`;
 
   const parts = [];
   if (f) parts.push(`AND ${dateExpr} >= '${yyyymmdd(f)}'`);
@@ -296,7 +302,7 @@ export function downtimeDrillQuery({
   to,
 }) {
   return `
-    SELECT machine, drill_down_attribute, actual_value, date
+    SELECT machine, drill_down_attribute, actual_value, CAST(date AS VARCHAR) AS date
     FROM ${TABLE()}
     ${whereClause({
       plant,
@@ -354,7 +360,7 @@ export function scrapTraceQuery({
 }) {
   return `
     SELECT production_ids, machine, itemcode, drill_down_attribute,
-           actual_value, date
+           actual_value, CAST(date AS VARCHAR) AS date
     FROM ${TABLE()}
     ${whereClause({
       plant,
@@ -377,21 +383,21 @@ export function scrapTraceQuery({
  * category, kpi_name) top-level cell.
  */
 /**
- * Trend query — three behaviours, switched by `range` (PM clarification
- * 2026-05-27):
+ * Trend query — switched by `range`:
  *
  *   range = "today"  → daily resolution, last 30 days. Returns ~30
  *                      rows aliased { date: "DD-MM-YYYY", actual_value }.
- *   range = "month"  → monthly aggregates for the current calendar
- *                      year. Returns up to 12 rows aliased
- *                      { date: "YYYY-MM", actual_value: AVG(...) }.
- *   range = "year"   → yearly aggregates across all data. One row
- *                      per year aliased { date: "YYYY",
- *                      actual_value: AVG(...) }.
+ *   range = "month"  → ONE point per month = the latest available MTD
+ *                      record within that month (BRD §13.6). NOT an AVG
+ *                      of daily values. Returns up to 12 rows aliased
+ *                      { date: "YYYY-MM", actual_value }.
+ *   range = "year"   → one point per year = the latest YTD record in
+ *                      that year. Returns { date: "YYYY", actual_value }.
  *   range = "custom" → daily resolution, explicit from/to.
  *
- * Aggregation uses AVG. Switch to SUM for volume-type KPIs (e.g.
- * Production) later by branching on `kpiName` if needed.
+ * Series pinning (BRD §13.6): pass `productType` / `subSection` so the
+ * line stays a single consistent series rather than a blend across
+ * products / sub-sections.
  */
 export function trendQuery({
   plant,
@@ -403,6 +409,8 @@ export function trendQuery({
   from,
   to,
   tyreType,
+  productType,
+  subSection,
 }) {
   const baseFilters = whereClause({
     plant,
@@ -414,34 +422,70 @@ export function trendQuery({
       optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity") ??
       "Daily",
     tyre_type: tyreType,
+    product_type: productType,
+    sub_section: subSection,
     machine: NAN,
   });
 
+  // Format-robust YYYYMMDD: CAST to VARCHAR (date is a DATE type in the
+  // live gold_dummy; a string in CSV-backed envs) then handle ISO or
+  // DD-MM-YYYY by dash position.
   const dateExpr =
-    "(SUBSTRING(date, 7, 4) || SUBSTRING(date, 4, 2) || SUBSTRING(date, 1, 2))";
+    "(CASE WHEN SUBSTRING(CAST(date AS VARCHAR), 5, 1) = '-' " +
+    "THEN SUBSTRING(CAST(date AS VARCHAR), 1, 4) || SUBSTRING(CAST(date AS VARCHAR), 6, 2) || SUBSTRING(CAST(date AS VARCHAR), 9, 2) " +
+    "ELSE SUBSTRING(CAST(date AS VARCHAR), 7, 4) || SUBSTRING(CAST(date AS VARCHAR), 4, 2) || SUBSTRING(CAST(date AS VARCHAR), 1, 2) END)";
 
+  // Pinned filters at the requested pre-aggregated granularity (MTD for
+  // monthly, YTD for yearly). machine='nan' = top-level rows only.
+  const pinnedFilters = (gran) =>
+    whereClause({
+      plant,
+      department: "Production",
+      section,
+      category,
+      kpi_name: kpiName,
+      granularity: gran,
+      tyre_type: tyreType,
+      product_type: productType,
+      sub_section: subSection,
+      machine: NAN,
+    });
+
+  // The upstream Lambda 500s on a raw DATE column — always cast to VARCHAR.
   if (range === "month") {
-    const currentYear = new Date().getFullYear();
+    // Latest MTD row per calendar month. Partition by the YYYYMM prefix,
+    // order by full date desc, keep rank 1.
     return `
-      SELECT (CAST(year AS VARCHAR) || '-' || month) AS date,
-             AVG(actual_value) AS actual_value
-      FROM ${TABLE()}
-      ${baseFilters}
-        AND ${dateExpr} >= '${currentYear}0101'
-        AND ${dateExpr} <= '${currentYear}1231'
-      GROUP BY year, month
-      ORDER BY year, CAST(month AS INTEGER)
+      SELECT date, actual_value
+      FROM (
+        SELECT CAST(date AS VARCHAR) AS date, actual_value, ${dateExpr} AS dk,
+               ROW_NUMBER() OVER (
+                 PARTITION BY SUBSTRING(${dateExpr}, 1, 6)
+                 ORDER BY ${dateExpr} DESC
+               ) AS rn
+        FROM ${TABLE()}
+        ${pinnedFilters("MTD")}
+      ) ranked
+      WHERE rn = 1
+      ORDER BY dk
     `.trim();
   }
 
   if (range === "year") {
+    // Latest YTD row per calendar year.
     return `
-      SELECT CAST(year AS VARCHAR) AS date,
-             AVG(actual_value) AS actual_value
-      FROM ${TABLE()}
-      ${baseFilters}
-      GROUP BY year
-      ORDER BY year
+      SELECT date, actual_value
+      FROM (
+        SELECT CAST(date AS VARCHAR) AS date, actual_value, ${dateExpr} AS dk,
+               ROW_NUMBER() OVER (
+                 PARTITION BY SUBSTRING(${dateExpr}, 1, 4)
+                 ORDER BY ${dateExpr} DESC
+               ) AS rn
+        FROM ${TABLE()}
+        ${pinnedFilters("YTD")}
+      ) ranked
+      WHERE rn = 1
+      ORDER BY dk
     `.trim();
   }
 
@@ -460,7 +504,7 @@ export function trendQuery({
   }
 
   return `
-    SELECT date, actual_value, year, month, day
+    SELECT CAST(date AS VARCHAR) AS date, actual_value, year, month, day
     FROM ${TABLE()}
     ${baseFilters}
       ${dateRangeFilter(effectiveFrom, effectiveTo)}

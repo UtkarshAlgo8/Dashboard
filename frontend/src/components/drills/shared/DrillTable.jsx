@@ -42,13 +42,25 @@ export function DrillTable({ title, cols, rows, rowMapper, accent }) {
           borderRadius: 1.25,
         }}
       >
-        <Table size="small" stickyHeader>
+        <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            border: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom.surface.soft,
+          },
+        })}
+      >
           <TableHead>
             <TableRow>
-              {cols.map((c, i) => (
+              {cols.map((c) => (
                 <TableCell
                   key={c}
-                  align={i === 0 ? "left" : "right"}
+                  align="center"
                   sx={{
                     fontSize: 11,
                     fontWeight: 700,
@@ -95,7 +107,7 @@ export function DrillTable({ title, cols, rows, rowMapper, accent }) {
                     {cells.map((cell, ci) => (
                       <TableCell
                         key={ci}
-                        align={ci === 0 ? "left" : "right"}
+                        align="center"
                         sx={{
                           fontSize: 13,
                           fontWeight: ci === 0 ? 600 : 400,

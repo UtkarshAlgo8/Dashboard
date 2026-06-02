@@ -24,9 +24,14 @@
  *   The trailing 7-day from/to window keeps the fetch under the 5000-row
  *   cap while reliably catching the most recent snapshot.
  *
- * `now()` is injectable for tests.
+ * As-of anchoring (BRD §13.5): the window is anchored to the latest
+ * AVAILABLE data date (`asOf`, ISO yyyy-mm-dd), NOT the system clock.
+ * When the calendar runs ahead of the data (e.g. today is June but the
+ * data ends mid-May), a system-clock window would slide past every row
+ * and the dashboard would go blank. Callers pass the backend-provided
+ * as-of date; we fall back to `new Date()` only when it is unknown.
  */
-export function presetToDateRange(timeRange, now = new Date()) {
+export function presetToDateRange(timeRange, asOf = null) {
   if (!timeRange) {
     return { granularity: null, from: null, to: null, mode: "snapshot" };
   }
@@ -37,36 +42,59 @@ export function presetToDateRange(timeRange, now = new Date()) {
     return { granularity: "Daily", from, to, mode: "aggregate" };
   }
 
-  const today = toIso(now);
+  // Anchor to the as-of date when known; otherwise the system clock.
+  const anchor = parseIso(asOf) ?? new Date();
+  const today = toIso(anchor);
 
   if (preset === "today") {
+    // A short trailing window so the sparkline still has a few points;
+    // the headline reads the latest Daily row (the as-of day).
     return {
       granularity: "Daily",
-      from: shift(now, -7),
+      from: shift(anchor, -7),
       to: today,
       mode: "snapshot",
     };
   }
 
   if (preset === "month") {
+    // The window IS the month-to-date period: 1st of the as-of month → as-of.
     return {
       granularity: "MTD",
-      from: shift(now, -7),
+      from: toIso(startOfMonth(anchor)),
       to: today,
       mode: "snapshot",
     };
   }
 
   if (preset === "year") {
+    // The window IS the year-to-date period: Jan 1 of the as-of year → as-of.
     return {
       granularity: "YTD",
-      from: shift(now, -7),
+      from: toIso(startOfYear(anchor)),
       to: today,
       mode: "snapshot",
     };
   }
 
   return { granularity: null, from: null, to: null, mode: "snapshot" };
+}
+
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0);
+}
+
+function startOfYear(d) {
+  return new Date(d.getFullYear(), 0, 1, 12, 0, 0);
+}
+
+function parseIso(iso) {
+  if (typeof iso !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return null;
+  // Construct at local noon so the -7 day shift never crosses a DST/UTC
+  // boundary back into the previous calendar day.
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
 }
 
 function toIso(d) {
