@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box } from "@mui/material";
+import { Box, useTheme } from "@mui/material";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
 import LandingSkeleton from "@/components/landing/LandingSkeleton.jsx";
 import PlantCardList from "@/components/landing/PlantCardList.jsx";
@@ -21,6 +21,7 @@ const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod"]);
 
 function LandingPage() {
   const navigate = useNavigate();
+  const theme = useTheme();
 
   const { data: plants, isLoading: plantsLoading } = usePolledQuery(getPlants, {
     interval: 0,
@@ -91,7 +92,21 @@ function LandingPage() {
               onSelect={openModalFor}
             />
 
-            <Box>
+            <Box
+              sx={{
+                backgroundColor: "background.paper",
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 2,
+                p: 2,
+                boxShadow: theme.custom.shadow,
+                // Clip the enlarged (zoomed) map to THIS panel so it fills
+                // the panel but never spills out onto the page. The
+                // zoomed-out 540 map fits inside, so this is invisible until
+                // you zoom.
+                overflow: "hidden",
+              }}
+            >
               <IndiaMap
                 plants={plants}
                 activePlantIds={PHASE_1_ACTIVE_PLANTS}
