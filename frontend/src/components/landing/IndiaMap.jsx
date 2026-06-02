@@ -33,24 +33,26 @@ function IndiaMap({
   const focusActive = focusPlant ? activePlantIds.has(focusPlant.id) : false;
   const zoomed = Boolean(focusPlant && focusActive);
 
-  // Enlarge the WHOLE map centred on the focused city. The enlarged content
-  // extends beyond the fixed box (SVG doesn't clip) up to the parent panel,
-  // which clips it — so it fills the panel without spilling onto the page.
+  // Enlarge the map AROUND the focused city, keeping that point FIXED in
+  // place (it does not move to the centre). Keeping the hovered marker
+  // under the cursor avoids the hover→move→unhover flicker loop. The
+  // enlarged content extends beyond the fixed box (SVG doesn't clip) up to
+  // the parent panel, which clips it so it never spills onto the page.
   const ZOOM = 2.8;
   const zoomTransform = zoomed
-    ? `translate(${MAP_W / 2 - ZOOM * focusPlant.sx} ${
-        MAP_H / 2 - ZOOM * focusPlant.sy
+    ? `translate(${focusPlant.sx * (1 - ZOOM)} ${
+        focusPlant.sy * (1 - ZOOM)
       }) scale(${ZOOM})`
     : undefined;
 
-  // Project a map point to its on-screen position under the current zoom.
-  // Markers are rendered OUTSIDE the zoomed group at these positions and
-  // at a CONSTANT size — so the dot/label don't balloon when zoomed in.
+  // Project a map point to its on-screen position under the current zoom
+  // (scaling about the focused city, which stays put). Markers are rendered
+  // OUTSIDE the zoomed group at a CONSTANT size so they don't balloon.
   const project = (px, py) =>
     zoomed
       ? {
-          x: MAP_W / 2 + ZOOM * (px - focusPlant.sx),
-          y: MAP_H / 2 + ZOOM * (py - focusPlant.sy),
+          x: focusPlant.sx + ZOOM * (px - focusPlant.sx),
+          y: focusPlant.sy + ZOOM * (py - focusPlant.sy),
         }
       : { x: px, y: py };
 
@@ -145,6 +147,12 @@ function IndiaMap({
                   : undefined
               }
             >
+              {/* Fixed transparent hit target — keeps the hover area a
+                  CONSTANT size. The pulse rings animate and the dot grows on
+                  hover, which would otherwise make the active radius
+                  fluctuate. All visuals below ignore pointer events. */}
+              <circle cx={0} cy={0} r={16} fill="transparent" />
+              <g style={{ pointerEvents: "none" }}>
               {/* Animated pulse rings — only for active plants */}
               {active && (
                 <>
@@ -222,6 +230,7 @@ function IndiaMap({
               >
                 {p.name.replace(" Plant", "")}
               </text>
+              </g>
             </g>
           );
         })}
@@ -231,10 +240,10 @@ function IndiaMap({
         <Box
           sx={{
             position: "absolute",
-            // The focused city is zoomed to the map centre, so anchor the
-            // card to the centre and float it just above the marker.
-            left: "50%",
-            top: "50%",
+            // The focused city stays fixed at its own position, so anchor
+            // the card there and float it just above the marker.
+            left: `${(focusPlant.sx / MAP_W) * 100}%`,
+            top: `${(focusPlant.sy / MAP_H) * 100}%`,
             transform: "translate(-50%, calc(-100% - 30px))",
             backgroundColor: "background.paper",
             border: 1,
