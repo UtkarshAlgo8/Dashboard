@@ -25,11 +25,34 @@ function IndiaMap({
   const outline = theme.palette.common.black;
   const fill = theme.custom.surface.soft;
 
-  const hoveredPlant =
-    hov && plants ? (plants.find((p) => p.id === hov) ?? null) : null;
-  const hoveredActive = hoveredPlant
-    ? activePlantIds.has(hoveredPlant.id)
-    : false;
+  // The focused plant drives the zoom + info card: the HOVERED plant
+  // takes priority, otherwise the SELECTED one — so the map stays zoomed
+  // into a city while its card is selected, even after the mouse leaves.
+  const find = (id) => (id && plants ? (plants.find((p) => p.id === id) ?? null) : null);
+  const focusPlant = find(hov) ?? find(sel);
+  const focusActive = focusPlant ? activePlantIds.has(focusPlant.id) : false;
+  const zoomed = Boolean(focusPlant && focusActive);
+
+  // Enlarge the WHOLE map centred on the focused city. The enlarged content
+  // extends beyond the fixed box (SVG doesn't clip) up to the parent panel,
+  // which clips it — so it fills the panel without spilling onto the page.
+  const ZOOM = 2.8;
+  const zoomTransform = zoomed
+    ? `translate(${MAP_W / 2 - ZOOM * focusPlant.sx} ${
+        MAP_H / 2 - ZOOM * focusPlant.sy
+      }) scale(${ZOOM})`
+    : undefined;
+
+  // Project a map point to its on-screen position under the current zoom.
+  // Markers are rendered OUTSIDE the zoomed group at these positions and
+  // at a CONSTANT size — so the dot/label don't balloon when zoomed in.
+  const project = (px, py) =>
+    zoomed
+      ? {
+          x: MAP_W / 2 + ZOOM * (px - focusPlant.sx),
+          y: MAP_H / 2 + ZOOM * (py - focusPlant.sy),
+        }
+      : { x: px, y: py };
 
   return (
     <Box
@@ -38,13 +61,15 @@ function IndiaMap({
         maxWidth: 540,
         mx: "auto",
         position: "relative",
-        // backgroundColor: background,
         borderRadius: 1.25,
       }}
     >
       <svg
         viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-        style={{ width: "100%", height: "auto", display: "block" }}
+        preserveAspectRatio="xMidYMid meet"
+        // overflow visible: the enlarged (zoomed) map isn't cropped at the
+        // box edges — it extends outward instead of being cut.
+        style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
       >
         <defs>
           <filter id="india-outline" x="-5%" y="-5%" width="110%" height="110%">
@@ -65,9 +90,11 @@ function IndiaMap({
           </filter>
         </defs>
 
-        {/* White background behind the map */}
-        {/* <rect x="0" y="0" width={MAP_W} height={MAP_H} fill={background} /> */}
-
+        {/* Zoomable content — zooms into the hovered city, resets on leave. */}
+        <g
+          transform={zoomTransform}
+          style={{ transition: "transform 0.45s ease" }}
+        >
         {/* Fill layer (light surface fill inside the country) */}
         <g>
           {SP.map((s, i) => (
@@ -87,19 +114,26 @@ function IndiaMap({
             <path key={`o-${i}`} d={s.d} fill={outline} stroke="none" />
           ))}
         </g>
+        </g>
 
-        {/* Plant markers */}
+        {/* Plant markers — OUTSIDE the zoom group, positioned at projected
+            coordinates and at a constant size (no scaling when zoomed). */}
         {plants.map((p) => {
           const active = activePlantIds.has(p.id);
           const isH = hov === p.id;
           const isS = sel === p.id;
           const highlight = isH || isS;
           const markerColor = active ? accent : muted;
+          const { x, y } = project(p.sx, p.sy);
 
           return (
             <g
               key={p.id}
-              style={{ cursor: active ? "pointer" : "default" }}
+              transform={`translate(${x} ${y})`}
+              style={{
+                cursor: active ? "pointer" : "default",
+                transition: "transform 0.45s ease",
+              }}
               onMouseEnter={active ? () => onHover(p.id) : undefined}
               onMouseLeave={active ? () => onLeave(p.id) : undefined}
               onClick={
@@ -115,8 +149,8 @@ function IndiaMap({
               {active && (
                 <>
                   <circle
-                    cx={p.sx}
-                    cy={p.sy}
+                    cx={0}
+                    cy={0}
                     r="14"
                     fill="none"
                     stroke={accent}
@@ -137,8 +171,8 @@ function IndiaMap({
                     />
                   </circle>
                   <circle
-                    cx={p.sx}
-                    cy={p.sy}
+                    cx={0}
+                    cy={0}
                     r="10"
                     fill="none"
                     stroke={accent}
@@ -165,8 +199,8 @@ function IndiaMap({
 
               {/* Core dot */}
               <circle
-                cx={p.sx}
-                cy={p.sy}
+                cx={0}
+                cy={0}
                 r={highlight ? 7 : 5}
                 fill={markerColor}
                 stroke="white"
@@ -176,8 +210,8 @@ function IndiaMap({
 
               {/* Label */}
               <text
-                x={p.sx + 10}
-                y={p.sy + 4}
+                x={10}
+                y={4}
                 fill={active ? theme.palette.text.primary : muted}
                 fontSize="11"
                 fontWeight={highlight ? 700 : 500}
@@ -193,14 +227,15 @@ function IndiaMap({
         })}
       </svg>
 
-      {hoveredPlant && hoveredActive && (
+      {zoomed && (
         <Box
           sx={{
             position: "absolute",
-            // sx/sy are in viewBox units; convert to % of map dimensions.
-            left: `${(hoveredPlant.sx / MAP_W) * 100}%`,
-            top: `${(hoveredPlant.sy / MAP_H) * 100}%`,
-            transform: "translate(-50%, calc(-100% - 20px))",
+            // The focused city is zoomed to the map centre, so anchor the
+            // card to the centre and float it just above the marker.
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, calc(-100% - 30px))",
             backgroundColor: "background.paper",
             border: 1,
             borderColor: "divider",
@@ -221,15 +256,15 @@ function IndiaMap({
               mb: 0.25,
             }}
           >
-            {hoveredPlant.name}
+            {focusPlant.name}
           </Typography>
           <Typography sx={{ fontSize: 12, color: "text.disabled", mb: 1 }}>
-            {hoveredPlant.sub}
+            {focusPlant.sub}
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="space-between">
-            <KpiMini label="OE" value={hoveredPlant.oe} />
-            <KpiMini label="OTIF" value={hoveredPlant.otif} />
-            <KpiMini label="YIELD" value={hoveredPlant.yield} />
+            <KpiMini label="OE" value={focusPlant.oe} />
+            <KpiMini label="OTIF" value={focusPlant.otif} />
+            <KpiMini label="YIELD" value={focusPlant.yield} />
           </Stack>
         </Box>
       )}

@@ -4,10 +4,9 @@ import { MOCK_USER } from "@/lib/mockData.js";
 import jkLogo from "@/assets/jk-logo.png";
 
 /**
- * Landing-page top header.
- * Brand block (One Factory / One Dashboard) + FY pill + user avatar
- * per BRD FR-L1, FR-L2, FR-L3. Avatar click is a no-op until spec 14
- * (user-menu).
+ * Landing-page top header — matches the dashboard header chrome:
+ * small logo + bold divider + single "All Dashboards" heading on the
+ * left, FY pill + user avatar on the right. Sticky to the viewport top.
  */
 function LandingHeader() {
   const theme = useTheme();
@@ -15,74 +14,68 @@ function LandingHeader() {
     <Box
       component="header"
       sx={{
+        position: "sticky",
+        top: 0,
+        zIndex: theme.zIndex.appBar,
         backgroundColor: "background.paper",
         borderBottom: 1,
         borderColor: "divider",
-        px: 3,
-        py: 1.5,
+        boxShadow: theme.custom.shadow,
+        px: 2,
+        py: 1,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        gap: 2,
       }}
     >
       {/* Brand block */}
-      <Stack direction="row" alignItems="center" spacing={2}>
+      <Stack direction="row" alignItems="center" spacing={1.25}>
         <Box
           component="img"
           src={jkLogo}
           alt="JK Tyre & Industries Ltd."
-          sx={{
-            height: 36,
-            width: "auto",
-            objectFit: "contain",
-            display: "block",
-          }}
+          sx={{ height: 22, width: "auto", objectFit: "contain", display: "block" }}
         />
         <Box
           sx={{
-            width: "1px",
+            width: "2px",
             height: 24,
-            backgroundColor: "divider",
+            borderRadius: 1,
+            backgroundColor: "text.disabled",
           }}
         />
-        <Box>
-          <Typography
-            sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.3px" }}
-          >
-            One Factory
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: 12,
-              color: "text.disabled",
-              textTransform: "uppercase",
-              letterSpacing: "0.8px",
-              fontWeight: 600,
-              mt: "1px",
-            }}
-          >
-            One Dashboard
-          </Typography>
-        </Box>
+        <Typography
+          sx={{
+            fontSize: 15,
+            fontWeight: 700,
+            letterSpacing: "-0.2px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          All Dashboards
+        </Typography>
       </Stack>
 
-      {/* Right side: FY pill + avatar */}
+      {/* Right: FY pill + avatar */}
       <Stack direction="row" alignItems="center" spacing={1.5}>
         <Box
           sx={{
-            fontSize: 13,
-            color: "text.disabled",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "text.secondary",
             px: 1.25,
             py: 0.5,
             border: 1,
             borderColor: "divider",
-            borderRadius: 0.75,
+            borderRadius: 1,
             backgroundColor: theme.custom.surface.soft,
+            whiteSpace: "nowrap",
           }}
         >
           FY 2025-26
         </Box>
-        <UserMenu user={MOCK_USER} />
+        <UserMenu user={MOCK_USER} size={32} />
       </Stack>
     </Box>
   );
