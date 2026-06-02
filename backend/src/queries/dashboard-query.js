@@ -26,7 +26,7 @@
  * treat empty + "nan" as "no filter" rather than "filter for nan".
  * Pass `null` for any context key the caller does not set.
  */
-import { config } from "./config.js";
+import { config } from "../config.js";
 
 export const ALLOWED_CONTEXT_KEYS = new Set([
   "plant",
@@ -67,6 +67,51 @@ export const ALLOWED_GRANULARITIES = new Set([
   "YTD",
 ]);
 export const ALLOWED_TYRE_TYPES = new Set(["PCR", "TBR", "LTR", "All"]);
+
+/**
+ * Equipment-level KPIs are recorded against the MACHINE/LINE, not a
+ * product type. Across sections they are stored inconsistently:
+ *   - Mixing: per-compound (Master / Final) — genuinely product-scoped.
+ *   - TBM:    ONLY under the line's primary product ("Green Tyre").
+ *   - Curing: under "Cured Tyre" + a section-level NULL row.
+ *   - Stock:  section-level NULL only.
+ * So when a user picks a secondary product type (e.g. TBM "Passenger
+ * Radial"), a plain product_type filter drops OEE/Downtime entirely and
+ * the card vanishes. We exempt these KPIs from the product_type predicate
+ * so the line-level value always survives; the frontend transformer then
+ * PREFERS the product-matching row when one exists (Mixing) and falls
+ * back to the line-level row otherwise (TBM/Curing/Stock).
+ */
+export const PRODUCT_AGNOSTIC_KPIS = new Set([
+  "OEE_o",
+  "Availability_o",
+  "Performance_o",
+  "Quality_o",
+  "OEE_m",
+  "Availability_m",
+  "Performance_m",
+  "Quality_m",
+  // Plan_Compliance is a line/section metric, stored like OEE/Downtime:
+  // TBM/Curing record it ONLY under the primary product ("Green Tyre" /
+  // "Cured Tyre") with no NULL fallback, so picking a secondary product
+  // type drops the card unless it's exempt here.
+  "Plan_Compliance",
+  "Downtime",
+  "Downtime_category",
+  "Breakdown",
+  "Setup",
+  "Startup",
+  "ToolChange",
+  "MinorStoppage",
+  "ReducedSpeed",
+  "Defect",
+  "Scrap",
+]);
+
+/** Pre-built SQL fragment: kpi_name IN ('OEE_o', ...) for the exemption. */
+const PRODUCT_AGNOSTIC_KPIS_SQL = `kpi_name IN (${[...PRODUCT_AGNOSTIC_KPIS]
+  .map((k) => `'${k}'`)
+  .join(", ")})`;
 
 // Stock sub-sections (BRD §13.2) + Curing tredges — the only sub_section
 // values the frontend may filter by. Keeps the WHERE surface tight.
@@ -244,13 +289,27 @@ export function buildFetchQuery({
         `Invalid ${key}: ${value}. Allowed: ${[...allow].join(", ")}`,
       );
     }
-    if (key === "section") {
-      // Plant-level KPIs (e.g. Absenteeism, spec §6) carry a NULL/'nan'
-      // section but must still appear under each section's tab. Include
-      // them alongside the requested section so the backend can narrow
-      // the (large) result set without dropping plant-level rows.
+    if (key === "section" || key === "sub_section" || key === "product_type") {
+      // Filter to the requested value BUT also keep rows that carry no
+      // value for this column (NULL / 'nan' / ''):
+      //   - section: plant-level KPIs (Absenteeism) have no section.
+      //   - sub_section: section-level + plant-level rows have none.
+      //   - product_type: section-level KPIs (e.g. OEE in Stock/Curing)
+      //     have none, so they survive when a specific product is picked.
+      // This lets the selection be a real server-side filter without
+      // dropping the non-product-scoped rows the grid still needs.
+      //
+      // product_type additionally exempts the equipment-level KPIs
+      // (PRODUCT_AGNOSTIC_KPIS): these are line metrics that some sections
+      // record ONLY under a primary product (TBM "Green Tyre") with no
+      // NULL fallback, so the NULL clause above can't save them. Without
+      // this exemption, selecting a secondary product type makes OEE /
+      // Downtime cards disappear. The frontend prefers the product-matching
+      // row when present and falls back to the line-level row otherwise.
+      const extra =
+        key === "product_type" ? ` OR ${PRODUCT_AGNOSTIC_KPIS_SQL}` : "";
       where.push(
-        `(section = ${escapeLiteral(value)} OR section IS NULL OR section = 'nan')`,
+        `(${key} = ${escapeLiteral(value)} OR ${key} IS NULL OR ${key} = 'nan' OR ${key} = ''${extra})`,
       );
     } else {
       where.push(`${key} = ${escapeLiteral(value)}`);

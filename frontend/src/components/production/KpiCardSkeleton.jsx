@@ -16,14 +16,17 @@ function KpiCardSkeleton() {
         borderColor: "divider",
         borderRadius: 1.25,
         p: 1.5,
+        // Must match KpiCard.minHeight so the skeleton ↔ card swap (and
+        // cards with/without a trend footer) don't shift the grid.
+        minHeight: 104,
       }}
     >
       {/* Header row */}
       <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Skeleton variant="text" width={68} sx={{ fontSize: 11 }} />
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <Skeleton variant="circular" width={20} height={20} />
-          <Skeleton variant="circular" width={18} height={18} />
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Skeleton variant="rounded" width={22} height={22} />
+          <Skeleton variant="circular" width={22} height={22} />
         </Stack>
       </Stack>
 

@@ -40,6 +40,10 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
         borderColor: isDrilling ? "primary.main" : "divider",
         borderRadius: 1.25,
         p: 1.5,
+        // Fixed height so cards don't change size based on whether the
+        // trend footer is present, and so the skeleton ↔ card swap doesn't
+        // jump. Must match KpiCardSkeleton's minHeight.
+        minHeight: 104,
         cursor: kpi.drillable ? "pointer" : "default",
         transition: "border-color 0.15s, box-shadow 0.15s",
         boxShadow: isDrilling ? theme.custom.shadow : "none",

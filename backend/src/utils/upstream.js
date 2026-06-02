@@ -1,4 +1,4 @@
-import { config } from "./config.js";
+import { config } from "../config.js";
 
 /**
  * The ONE place that talks to the upstream gold_dummy data API.

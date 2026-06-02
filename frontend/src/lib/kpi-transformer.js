@@ -58,7 +58,7 @@ const ALLOWED_KPIS = {
   Mixing: {
     P: [
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "prod", name: "Production", unit: "MT", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
@@ -91,7 +91,7 @@ const ALLOWED_KPIS = {
   TBM: {
     P: [
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "prod", name: "Production", unit: "nos", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
@@ -124,7 +124,7 @@ const ALLOWED_KPIS = {
   Curing: {
     P: [
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "prod", name: "Production", unit: "nos", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
@@ -157,7 +157,7 @@ const ALLOWED_KPIS = {
   Stock: {
     P: [
       { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      { id: "prod", name: "Production", unit: "units", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
@@ -261,7 +261,6 @@ export function toKpiGrid(
     sparkLength = 8,
     granularity = "Daily",
     mode = "snapshot",
-    subSection = null,
     productType = null,
   } = {},
 ) {
@@ -288,27 +287,14 @@ export function toKpiGrid(
   );
 
   // Filter rows to this section/category AND only spec KPI names.
-  // Plant-level KPIs (e.g. Absenteeism, per spec §6) come back from the
-  // backend with section="nan"; skip the section equality check for them.
-  //
-  // Stock sub-section + product-type scoping (BRD §13.2/§13.3):
-  //   - subSection: keep only rows for the active sub-section. Plant-level
-  //     KPIs bypass this (they have no sub_section).
-  //   - productType: production KPIs carry a product_type (incl. the
-  //     "Overall" sub-section total); section-level KPIs like OEE carry an
-  //     EMPTY product_type. So a row passes when its product_type is empty
-  //     (not product-scoped) OR equals the selected one. Selecting nothing
-  //     resolves to "Overall" upstream, which keeps the sub-section total.
+  // sub_section + product_type are already filtered SERVER-SIDE (the
+  // selection is sent in the fetch context), so we only need the
+  // section/KPI-name narrowing here. Plant-level KPIs (e.g. Absenteeism,
+  // spec §6) come back with section="nan"; they bypass the section check.
   const filtered = rows.filter((r) => {
     if (!allowedNames.has(r.kpi_name)) return false;
     if (plantLevelNames.has(r.kpi_name)) return true;
-    if (r.section !== section) return false;
-    if (subSection && denan(r.sub_section) !== subSection) return false;
-    if (productType) {
-      const pt = denan(r.product_type);
-      if (pt != null && pt !== "" && pt !== productType) return false;
-    }
-    return true;
+    return r.section === section;
   });
   if (filtered.length === 0) return [];
 
@@ -330,7 +316,38 @@ export function toKpiGrid(
   // current view gets a placeholder card, so the grid never reflows.
   for (const kpiDef of allowedKpis) {
     const name = kpiDef.name;
-    const groupDesc = groups.get(name) ?? [];
+    let groupDesc = groups.get(name) ?? [];
+
+    // Equipment-level KPIs (OEE, Downtime, …) are exempted from the
+    // server-side product_type filter (see PRODUCT_AGNOSTIC_KPIS in the
+    // backend), so a group may carry rows for several product types.
+    // PREFER rows matching the selected product type when they exist —
+    // Mixing genuinely records OEE per-compound (Master vs Final) — and
+    // fall back to the line-level rows otherwise: TBM records OEE only
+    // under "Green Tyre", Curing/Stock under a NULL section row, so
+    // selecting a secondary product type must still show the line value
+    // instead of an empty card. Product-specific KPIs (Production, etc.)
+    // are already narrowed server-side, so the match keeps all of them
+    // (no-op) and they never fall back to a different product.
+    if (productType) {
+      const matching = groupDesc.filter(
+        (r) => denan(r.product_type) === productType,
+      );
+      if (matching.length > 0) groupDesc = matching;
+    }
+
+    // Some KPIs (Production) are recorded in MULTIPLE units in the same
+    // period (e.g. MT *and* Batches), as separate rows. That makes the
+    // "latest row" ambiguous. When a KPI declares a canonical `unit` and
+    // the group carries more than one, keep only the canonical-unit rows.
+    if (
+      kpiDef.unit &&
+      new Set(groupDesc.map((r) => r.unit_of_measurement)).size > 1
+    ) {
+      groupDesc = groupDesc.filter(
+        (r) => r.unit_of_measurement === kpiDef.unit,
+      );
+    }
 
     // Snapshot path: pick the LATEST row at the active granularity
     // and read actual_value verbatim. Works for Today (Daily), Month

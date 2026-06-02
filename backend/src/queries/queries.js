@@ -1,4 +1,4 @@
-import { config } from "./config.js";
+import { config } from "../config.js";
 
 /**
  * SQL builders for gold_dummy. Pure functions, no side effects.
