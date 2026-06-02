@@ -47,6 +47,8 @@ export function presetToDateRange(timeRange, asOf = null) {
   const today = toIso(anchor);
 
   if (preset === "today") {
+    // A short trailing window so the sparkline still has a few points;
+    // the headline reads the latest Daily row (the as-of day).
     return {
       granularity: "Daily",
       from: shift(anchor, -7),
@@ -56,24 +58,34 @@ export function presetToDateRange(timeRange, asOf = null) {
   }
 
   if (preset === "month") {
+    // The window IS the month-to-date period: 1st of the as-of month → as-of.
     return {
       granularity: "MTD",
-      from: shift(anchor, -7),
+      from: toIso(startOfMonth(anchor)),
       to: today,
       mode: "snapshot",
     };
   }
 
   if (preset === "year") {
+    // The window IS the year-to-date period: Jan 1 of the as-of year → as-of.
     return {
       granularity: "YTD",
-      from: shift(anchor, -7),
+      from: toIso(startOfYear(anchor)),
       to: today,
       mode: "snapshot",
     };
   }
 
   return { granularity: null, from: null, to: null, mode: "snapshot" };
+}
+
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0);
+}
+
+function startOfYear(d) {
+  return new Date(d.getFullYear(), 0, 1, 12, 0, 0);
 }
 
 function parseIso(iso) {

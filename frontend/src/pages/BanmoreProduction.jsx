@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
 import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
-import StockSubSelector from "@/components/production/StockSubSelector.jsx";
+import NavTabs from "@/components/production/NavTabs.jsx";
 import ProductionBodySkeleton from "@/components/production/ProductionBodySkeleton.jsx";
 import ShiftComparisonCard from "@/components/production/ShiftComparisonCard.jsx";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
@@ -22,9 +22,11 @@ import {
   getCategoryTabs,
   getPlantSummary,
   getAsOf,
+  getSectionOee,
 } from "@/api/plants.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
+import { exportElementToPdf } from "@/lib/exportPdf.js";
 
 /**
  * Banmore Production dashboard — Phase 1 ships Banmore plant + Production.
@@ -37,6 +39,26 @@ import { presetToDateRange } from "@/lib/timeRange.js";
 function BanmoreProduction() {
   const theme = useTheme();
   const [trendKpi, setTrendKpi] = useState(null);
+  // Whole-page PDF export. `exporting` temporarily releases the static
+  // 100vh layout (height auto / overflow visible) so the FULL page +
+  // full render box are captured on one un-split page, then restores it.
+  const rootRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  const onExportPdf = async () => {
+    setExporting(true);
+    // Wait two frames for the expanded layout to commit before capturing.
+    await new Promise((r) =>
+      requestAnimationFrame(() => requestAnimationFrame(r)),
+    );
+    try {
+      await exportElementToPdf(rootRef.current, {
+        filename: "banmore-production.pdf",
+        backgroundColor: theme.palette.background.default,
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data: plant, isLoading: plantLoading } = usePolledQuery(
     () => getPlant("banmore"),
@@ -71,6 +93,30 @@ function BanmoreProduction() {
   const sectionName = { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[
     dashboard.section
   ] ?? dashboard.section;
+
+  // Per-section OEE for the sidebar donut rings, tracking the active
+  // granularity (Today / Month / Year). Keyed by artifact section id.
+  const { data: sectionOeeData } = usePolledQuery(
+    () => getSectionOee("banmore", dashboard.granularity ?? "MTD"),
+    { interval: 0, deps: [dashboard.granularity] },
+  );
+  const sectionOeeById = {
+    mix: sectionOeeData?.Mixing ?? null,
+    stk: sectionOeeData?.Stock ?? null,
+    tbm: sectionOeeData?.TBM ?? null,
+    cur: sectionOeeData?.Curing ?? null,
+  };
+  // The ACTIVE section's ring should mirror the OEE actually shown in the
+  // render box right now (it already reflects the selected sub-section /
+  // product type / granularity, so it updates up AND down). When no OEE
+  // card is shown (e.g. non-Productivity tab), we keep the endpoint's
+  // first-item value as the fallback.
+  const shownOee = kpis.find(
+    (k) => k.id === "oee" && typeof k.value === "number",
+  )?.value;
+  if (typeof shownOee === "number") {
+    sectionOeeById[dashboard.section] = shownOee;
+  }
 
   // Section metadata per artifact (full title shown in section header).
   const SECTION_TITLE = {
@@ -146,53 +192,43 @@ function BanmoreProduction() {
     return presetToDateRange({ preset }, asOf).granularity;
   };
 
+  // Handlers ONLY update the UI state (pure functional updater so the
+  // custom date dialog's sequential onFromChange→onToChange calls chain
+  // correctly). The single effect below derives the fetch filter from
+  // that state — this avoids dispatching setFilter inside a setState
+  // updater (which StrictMode runs twice and dropped the update).
   const onTimeRangeChange = (updater) => {
-    setTimeRange((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      const resolved = presetToDateRange(next, asOf);
-      const gran = effectiveGranularity(next.preset, shiftKey);
-      setFilter(
-        {
-          date: null,
-          from: resolved.from,
-          to: resolved.to,
-          granularity: gran,
-          mode: resolved.mode,
-        },
-        false,
-      );
-      return next;
-    });
+    setTimeRange((prev) =>
+      typeof updater === "function" ? updater(prev) : updater,
+    );
   };
 
-  // Push the current range into the hook on mount AND whenever the as-of
-  // date resolves (the window is anchored to it). Until as-of loads this
-  // falls back to the system clock; once it arrives the window snaps to
-  // the latest available data date.
+  const onShiftChange = (next) => {
+    setShiftKey(next);
+  };
+
+  // Resolve the active range → fetch filter whenever the time range, the
+  // shift, or the as-of date changes (also fires on mount, and again once
+  // as-of loads so the window snaps to the latest available data date).
+  // The shift only applies to Today, so it's ignored for Month/Year even
+  // if a stale value lingers.
   useEffect(() => {
+    const effShift = timeRange.preset === "today" ? shiftKey : "all";
     const resolved = presetToDateRange(timeRange, asOf);
     setFilter(
       {
         date: null,
         from: resolved.from,
         to: resolved.to,
-        granularity: effectiveGranularity(timeRange.preset, shiftKey),
+        granularity: effectiveGranularity(timeRange.preset, effShift),
         mode: resolved.mode,
       },
       false,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOf]);
+  }, [timeRange, shiftKey, asOf]);
 
   const { from, to } = presetToDateRange(timeRange, asOf);
-
-  const onShiftChange = (next) => {
-    setShiftKey(next);
-    setFilter(
-      { granularity: effectiveGranularity(timeRange.preset, next) },
-      false,
-    );
-  };
 
   const onSectionSelect = (id) => {
     // Entering Stock seeds the default sub-section + "Overall" product type
@@ -216,38 +252,6 @@ function BanmoreProduction() {
     prodSubBySection[dashboard.section] ?? prodSubOptions[0] ?? "";
   const setProdSub = (val) =>
     setProdSubBySection((prev) => ({ ...prev, [dashboard.section]: val }));
-
-  // Section OEE shown in the header — mirrors the OEE card so the
-  // user sees consistent numbers. For snapshot mode (Today/Month/Year)
-  // pick the latest row at the active granularity; for aggregate mode
-  // (custom range) average Daily rows like the card does.
-  const sectionOee = (() => {
-    if (!rawRows) return null;
-    const gran = dashboard.granularity ?? "Daily";
-    const filtered = rawRows.filter(
-      (r) =>
-        r.section === sectionName &&
-        r.kpi_name === "OEE_o" &&
-        r.granularity === gran &&
-        // For Stock, scope the header OEE to the active sub-section so it
-        // matches the OEE card (OEE rows carry sub_section, empty product_type).
-        (!dashboard.subSection || r.sub_section === dashboard.subSection),
-    );
-    if (filtered.length === 0) return null;
-    if (dashboard.mode === "snapshot") {
-      // Latest row's actual_value.
-      const sorted = [...filtered].sort((a, b) =>
-        (b.date ?? "").localeCompare(a.date ?? ""),
-      );
-      const v = sorted[0]?.actual_value;
-      return typeof v === "number" && Number.isFinite(v) ? v : null;
-    }
-    const vals = filtered
-      .map((r) => r.actual_value)
-      .filter((v) => typeof v === "number" && Number.isFinite(v));
-    if (vals.length === 0) return null;
-    return vals.reduce((s, v) => s + v, 0) / vals.length;
-  })();
 
   // Only one drill open at a time. Clicking a different card closes the
   // previous one; clicking the same card again closes it.
@@ -279,20 +283,35 @@ function BanmoreProduction() {
 
   return (
     <Box
+      ref={rootRef}
       sx={{
-        minHeight: "100vh",
+        height: exporting ? "auto" : "100vh",
+        overflow: exporting ? "visible" : "hidden",
         backgroundColor: "background.default",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      <ProductionHeader
-        plant={plant}
-        timeRange={timeRange}
-        onTimeRangeChange={onTimeRangeChange}
-        shift={shiftKey}
-        onShiftChange={onShiftChange}
-      />
+      {/* Top region: header (logo + plant) with the category nav links
+          directly below it. The page itself never scrolls — only the
+          content card scrolls — so this stays fixed at the top. */}
+      <Box sx={{ flexShrink: 0, zIndex: theme.zIndex.appBar }}>
+        <ProductionHeader
+          plant={plant}
+          timeRange={timeRange}
+          onTimeRangeChange={onTimeRangeChange}
+          shift={shiftKey}
+          onShiftChange={onShiftChange}
+          onExport={onExportPdf}
+        />
+        {Array.isArray(tabs) && (
+          <CategoryTabs
+            tabs={tabs}
+            activeTabId={dashboard.category}
+            onSelect={onCategorySelect}
+          />
+        )}
+      </Box>
 
       {!ready ? (
         <ProductionBodySkeleton />
@@ -300,6 +319,8 @@ function BanmoreProduction() {
         <Box
           sx={{
             flex: 1,
+            minHeight: exporting ? "auto" : 0,
+            overflow: exporting ? "visible" : "hidden",
             display: "grid",
             gridTemplateColumns:
               dashboard.category === "i"
@@ -310,7 +331,10 @@ function BanmoreProduction() {
           }}
         >
           {dashboard.category !== "i" && (
-            <Stack spacing={2} sx={{ height: "100%" }}>
+            <Stack
+              spacing={2}
+              sx={{ height: exporting ? "auto" : "100%", minHeight: 0 }}
+            >
               <Box
                 sx={{
                   backgroundColor: "background.paper",
@@ -319,12 +343,15 @@ function BanmoreProduction() {
                   borderRadius: 1.25,
                   p: 1,
                   flex: 1,
+                  minHeight: 0,
+                  overflowY: exporting ? "visible" : "auto",
                 }}
               >
                 <SectionSidebar
                   sections={sections}
                   activeSectionId={dashboard.section}
                   onSelect={onSectionSelect}
+                  oeeBySectionId={sectionOeeById}
                 />
               </Box>
               <PlantSummaryCard plant={plant} summary={summary} />
@@ -340,183 +367,91 @@ function BanmoreProduction() {
               boxShadow: theme.custom.shadow,
               display: "flex",
               flexDirection: "column",
+              minHeight: 0,
+              overflowY: exporting ? "visible" : "auto",
             }}
           >
-            <CategoryTabs
-              tabs={tabs}
-              activeTabId={dashboard.category}
-              onSelect={onCategorySelect}
-            />
             {dashboard.category === "i" ? (
               <InventoryPage plantId="banmore" />
             ) : (
               <>
-                {/* Section header — section full name + OEE + category badge */}
+                {/* Section header row — title (left) + nav controls (right)
+                    on ONE line, styled like the top nav bar with a
+                    full-width border-bottom. The card has no padding, so
+                    this row's own px insets the content while the border
+                    still spans edge-to-edge. */}
                 <Box
                   sx={{
-                    px: 2,
-                    pt: 2,
                     display: "flex",
                     alignItems: "center",
-                    gap: 1,
+                    justifyContent: "space-between",
+                    gap: 1.5,
                     flexWrap: "wrap",
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: "divider",
                   }}
                 >
-                  <Typography sx={{ fontSize: 17, fontWeight: 700 }}>
+                  <Typography
+                    sx={{ fontSize: 17, fontWeight: 700, whiteSpace: "nowrap" }}
+                  >
                     {SECTION_TITLE[dashboard.section] ?? sectionName}
                   </Typography>
-                  {sectionOee != null && (
-                    <>
-                      <Box
-                        sx={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          backgroundColor:
-                            sectionOee >= 90
-                              ? "success.main"
-                              : sectionOee >= 80
-                                ? "warning.main"
-                                : "error.main",
-                        }}
-                      />
-                      <Typography
-                        sx={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color:
-                            sectionOee >= 90
-                              ? "success.main"
-                              : sectionOee >= 80
-                                ? "warning.main"
-                                : "error.main",
-                        }}
-                      >
-                        {sectionOee.toFixed(1)}% OEE
-                      </Typography>
-                    </>
-                  )}
-                  {tabs?.find((t) => t.id === dashboard.category) && (
-                    <Box
-                      sx={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 1,
-                        backgroundColor: "primary.main",
-                        color: "primary.contrastText",
-                        opacity: 0.9,
-                      }}
-                    >
-                      {tabs.find((t) => t.id === dashboard.category)?.name ??
-                        ""}
-                    </Box>
-                  )}
-                </Box>
 
-                {/* Stock sub-section + product-type selectors (BRD §13.2/§13.3).
-                    Shown on EVERY tab for Stock — the sub-section filters all
-                    KPIs; the product type scopes the production KPIs (with
-                    "Overall" = the sub-section total). */}
-                {isStock && (
-                  <Stack spacing={1} sx={{ px: 2, pt: 1.5 }}>
-                    <StockSubSelector
-                      value={activeSubSection}
-                      onChange={onStockSubChange}
-                    />
-                    <Box
-                      sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}
-                    >
-                      {stockProductOptions.map((opt) => {
-                        const active = activeProductType === opt;
-                        return (
-                          <Box
-                            key={opt}
-                            onClick={() => onStockProductChange(opt)}
-                            sx={{
-                              px: 1.5,
-                              py: 0.5,
-                              borderRadius: 999,
-                              border: 1,
-                              borderColor: active ? "primary.main" : "divider",
-                              backgroundColor: active
-                                ? "primary.50"
-                                : "background.paper",
-                              color: active ? "primary.main" : "text.primary",
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              userSelect: "none",
-                            }}
-                          >
-                            {opt}
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  </Stack>
-                )}
-
-                {/* Product-type sub-pills — Productivity & Quality tabs only */}
-                {(dashboard.category === "p" ||
-                  dashboard.category === "q") &&
-                  prodSubOptions.length > 0 && (
-                    <Box
-                      sx={{
-                        px: 2,
-                        pt: 1,
-                        display: "flex",
-                        gap: 1,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      {prodSubOptions.map((opt) => {
-                        const active = prodSub === opt;
-                        return (
-                          <Box
-                            key={opt}
-                            onClick={() => setProdSub(opt)}
-                            sx={{
-                              px: 1.5,
-                              py: 0.5,
-                              borderRadius: 999,
-                              border: 1,
-                              borderColor: active
-                                ? "primary.main"
-                                : "divider",
-                              backgroundColor: active
-                                ? "primary.50"
-                                : "background.paper",
-                              color: active ? "primary.main" : "text.primary",
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              userSelect: "none",
-                            }}
-                          >
-                            {opt}
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  )}
-
-                {/* Drill hint — matches artifact "▶ Click any KPI card to expand drill-down" */}
-                <Box sx={{ px: 2, pt: 2 }}>
-                  <Typography
+                  {/* Right: nav controls. Stock → sub-section selector;
+                      Mixing/TBM/Curing (Productivity & Quality) → product
+                      type pills. */}
+                  <Box
                     sx={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "warning.main",
                       display: "flex",
                       alignItems: "center",
-                      gap: 0.5,
+                      gap: 1,
+                      flexWrap: "wrap",
+                      justifyContent: "flex-end",
                     }}
                   >
-                    Click any KPI card to expand drill-down
-                  </Typography>
+                    {isStock ? (
+                      <NavTabs
+                        items={STOCK_SUBSECTIONS.map((s) => ({ id: s, label: s }))}
+                        value={activeSubSection}
+                        onChange={onStockSubChange}
+                        layoutId="stockSubFill"
+                      />
+                    ) : (
+                      (dashboard.category === "p" ||
+                        dashboard.category === "q") &&
+                      prodSubOptions.length > 0 && (
+                        <NavTabs
+                          items={prodSubOptions.map((o) => ({ id: o, label: o }))}
+                          value={prodSub}
+                          onChange={setProdSub}
+                          layoutId="prodTypeFill"
+                        />
+                      )
+                    )}
+                  </Box>
                 </Box>
+
+                {/* Stock product-type pills — second row (BRD §13.3 two-step:
+                    sub-section first, then product type; "Overall" = total). */}
+                {isStock && (
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1.25,
+                      borderBottom: 1,
+                      borderColor: "divider",
+                    }}
+                  >
+                    <NavTabs
+                      items={stockProductOptions.map((o) => ({ id: o, label: o }))}
+                      value={activeProductType}
+                      onChange={onStockProductChange}
+                      layoutId="stockProdFill"
+                    />
+                  </Box>
+                )}
 
                 <KpiGrid
                   kpis={kpis}

@@ -1,4 +1,5 @@
 import { Box, Stack, Typography, useTheme } from "@mui/material";
+import { motion } from "framer-motion";
 
 /**
  * Left vertical section sidebar (BRD FR-P4). Each row shows an OEE
@@ -6,18 +7,22 @@ import { Box, Stack, Typography, useTheme } from "@mui/material";
  * Down-chevrons between rows denote the process flow (Mixing → Stock
  * → TBM → Curing), per docs/artifact.jsx.
  */
-function SectionSidebar({ sections, activeSectionId, onSelect }) {
+function SectionSidebar({ sections, activeSectionId, onSelect, oeeBySectionId }) {
   return (
     <Stack spacing={0}>
       <Typography
         sx={{
-          fontSize: 10,
-          color: "primary.main",
-          textTransform: "uppercase",
-          letterSpacing: 1.5,
+          // Big heading matching the render-box header, with a full-width
+          // border-bottom (negative mx cancels the sidebar card's padding).
+          fontSize: 17,
           fontWeight: 700,
-          px: 1.5,
-          py: 1,
+          color: "text.primary",
+          mx: -1,
+          px: 2,
+          py: 1.25,
+          mb: 1,
+          borderBottom: 1,
+          borderColor: "divider",
         }}
       >
         Sections
@@ -26,6 +31,7 @@ function SectionSidebar({ sections, activeSectionId, onSelect }) {
         <Box key={s.id}>
           <SidebarRow
             section={s}
+            oee={oeeBySectionId?.[s.id] ?? null}
             active={s.id === activeSectionId}
             onClick={() => onSelect(s.id)}
           />
@@ -36,14 +42,15 @@ function SectionSidebar({ sections, activeSectionId, onSelect }) {
   );
 }
 
-function SidebarRow({ section, active, onClick }) {
+function SidebarRow({ section, oee: oeeProp, active, onClick }) {
   const theme = useTheme();
-  const oee = typeof section.oee === "number" ? section.oee : null;
+  const oee = typeof oeeProp === "number" ? oeeProp : null;
   const ringColor = oeeColor(theme, oee);
   return (
     <Box
       onClick={onClick}
       sx={{
+        position: "relative",
         display: "flex",
         alignItems: "center",
         gap: 1.25,
@@ -51,38 +58,54 @@ function SidebarRow({ section, active, onClick }) {
         py: 1,
         borderRadius: 1,
         cursor: "pointer",
-        backgroundColor: active ? "primary.light" : "transparent",
-        borderLeft: 3,
-        borderColor: active ? "primary.main" : "transparent",
-        transition: "background-color 0.15s, border-color 0.15s",
+        transition: "background-color 0.15s",
         "&:hover": {
-          backgroundColor: active ? "primary.light" : theme.custom.surface.soft,
+          backgroundColor: active ? "transparent" : theme.custom.surface.soft,
         },
       }}
     >
-      <Ring value={oee} color={ringColor} />
-      <Stack spacing={0.1} sx={{ minWidth: 0 }}>
+      {/* Active highlight slides between sections (shared layout), with a
+          left accent bar — same animated treatment as the nav tabs. */}
+      {active && (
+        <motion.div
+          layoutId="sectionActiveFill"
+          transition={{ type: "spring", stiffness: 520, damping: 19, mass: 0.7 }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: theme.palette.primary.light,
+            borderRadius: 8,
+            borderLeft: `3px solid ${theme.palette.primary.main}`,
+            zIndex: 0,
+          }}
+        />
+      )}
+      <Box sx={{ position: "relative", zIndex: 1, flexShrink: 0 }}>
+        <Ring value={oee} color={ringColor} />
+      </Box>
+      <Stack spacing={0.1} sx={{ minWidth: 0, position: "relative", zIndex: 1 }}>
         <Typography
           sx={{
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: active ? 700 : 500,
-            color: active ? "primary.main" : "text.primary",
+            color: "text.primary",
             lineHeight: 1.1,
           }}
         >
-          {section.name}
-        </Typography>
-        {oee !== null && (
-          <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-            OEE: {oee}%
+          {section.name}{" "}
+          <Typography
+            component="span"
+            sx={{ fontSize: 11, fontWeight: 500, color: "text.disabled" }}
+          >
+            (OEE)
           </Typography>
-        )}
+        </Typography>
       </Stack>
     </Box>
   );
 }
 
-function Ring({ value, color, size = 36, stroke = 3.5 }) {
+function Ring({ value, color, size = 44, stroke = 4 }) {
   const theme = useTheme();
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -121,12 +144,12 @@ function Ring({ value, color, size = 36, stroke = 3.5 }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 11,
+          fontSize: 10.5,
           fontWeight: 700,
           color,
         }}
       >
-        {value == null ? "–" : Math.round(value)}
+        {value == null ? "–" : value.toFixed(1)}
       </Box>
     </Box>
   );
@@ -158,9 +181,10 @@ function FlowArrow() {
 }
 
 function oeeColor(theme, value) {
+  // Thresholds match the section header chip: ≥90 green, ≥80 amber, else red.
   if (value == null) return theme.custom.text.muted;
   if (value >= 90) return theme.custom.brand.green;
-  if (value >= 85) return theme.custom.brand.amber;
+  if (value >= 80) return theme.custom.brand.amber;
   return theme.custom.brand.red;
 }
 

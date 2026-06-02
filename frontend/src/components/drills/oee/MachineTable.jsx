@@ -30,10 +30,22 @@ function MachineTable({ machines, selectedCell, onSelectCell }) {
         borderRadius: 1.25,
       }}
     >
-      <Table size="small" stickyHeader>
+      <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            border: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom.surface.soft,
+          },
+        })}
+      >
         <TableHead>
           <TableRow>
-            <Th align="left">Machine</Th>
+            <Th align="center">Machine</Th>
             <Th>OEE %</Th>
             <Th>Availability %</Th>
             <Th>Performance %</Th>
@@ -46,7 +58,7 @@ function MachineTable({ machines, selectedCell, onSelectCell }) {
               <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
                 {m.name}
               </TableCell>
-              <TableCell align="right" sx={{ fontSize: 13, fontWeight: 600 }}>
+              <TableCell align="center" sx={{ fontSize: 13, fontWeight: 600 }}>
                 {oee(m)}
               </TableCell>
               <ComponentCell
@@ -87,7 +99,7 @@ function MachineTable({ machines, selectedCell, onSelectCell }) {
   );
 }
 
-function Th({ children, align = "right" }) {
+function Th({ children, align = "center" }) {
   return (
     <TableCell
       align={align}
@@ -113,11 +125,13 @@ function ComponentCell({ component, value, selected, onClick }) {
   return (
     <TableCell
       onClick={onClick}
-      align="right"
+      align="center"
       sx={{
         cursor: "pointer",
         fontSize: 13,
         fontWeight: 600,
+        // Selected cell fills with the VALUE's status colour (green/amber/
+        // red). The drill panel below uses this same colour for its accent.
         color: selected ? "primary.contrastText" : color,
         backgroundColor: selected ? color : "transparent",
         transition: "background-color 0.15s",

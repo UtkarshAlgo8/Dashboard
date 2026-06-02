@@ -77,11 +77,23 @@ function InventoryItemTable({ bar }) {
           borderRadius: 1.25,
         }}
       >
-        <Table size="small" stickyHeader>
+        <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            border: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom.surface.soft,
+          },
+        })}
+      >
           <TableHead>
             <TableRow>
-              <Th align="left">Item Code</Th>
-              <Th align="left">Description</Th>
+              <Th align="center">Item Code</Th>
+              <Th align="center">Description</Th>
               <Th>Live Stock</Th>
             </TableRow>
           </TableHead>
@@ -92,7 +104,7 @@ function InventoryItemTable({ bar }) {
                   {it.itemCode}
                 </TableCell>
                 <TableCell sx={{ fontSize: 13 }}>{it.description}</TableCell>
-                <TableCell align="right" sx={{ fontSize: 16, fontWeight: 700 }}>
+                <TableCell align="center" sx={{ fontSize: 16, fontWeight: 700 }}>
                   {it.liveStock.toLocaleString()}{" "}
                   <Typography
                     component="span"
@@ -114,7 +126,7 @@ function InventoryItemTable({ bar }) {
   );
 }
 
-function Th({ children, align = "right" }) {
+function Th({ children, align = "center" }) {
   return (
     <TableCell
       align={align}

@@ -221,6 +221,29 @@ const DISPLAY_NAME = {
 /* ---------- public API ---------- */
 
 /**
+ * A no-data placeholder card so a KPI keeps its fixed slot in the grid
+ * even when the current view has no rows for it. Stable positions avoid
+ * the confusion of cards reordering / disappearing when data changes.
+ */
+function placeholderCard(kpiDef) {
+  return {
+    id: kpiDef.id,
+    name: DISPLAY_NAME[kpiDef.name] ?? kpiDef.name,
+    rawName: kpiDef.name,
+    value: "—",
+    unit: kpiDef.unit ?? null,
+    spark: [],
+    trend: null,
+    trendFavourable: true,
+    drillable: false,
+    drillType: null,
+    drillTargets: null,
+    status: null,
+    target: null,
+  };
+}
+
+/**
  * KPI card shape (matches KpiCard.jsx props):
  *   id, name, value, unit, spark[], trend, trendFavourable,
  *   drillable, drillType, drillTargets, status, target
@@ -301,10 +324,14 @@ export function toKpiGrid(
   }
 
   const result = [];
-  for (const [name, groupDesc] of groups) {
-    // gold_dummy stores pre-aggregated rows for every granularity (Daily,
-    // Shift A/B/C, MTD, YTD). The per-KPI agg rule in dashboard_kpi_map_
-    // reference is defined ONLY for Daily rows; the others would double-
+  // Iterate in the FIXED spec order (allowedKpis) — NEVER in data-arrival
+  // order — so each KPI always occupies the same slot (e.g. OEE,
+  // Production, Downtime, Plan Compliance). A KPI with no data for the
+  // current view gets a placeholder card, so the grid never reflows.
+  for (const kpiDef of allowedKpis) {
+    const name = kpiDef.name;
+    const groupDesc = groups.get(name) ?? [];
+
     // Snapshot path: pick the LATEST row at the active granularity
     // and read actual_value verbatim. Works for Today (Daily), Month
     // (MTD), Year (YTD) — gold_dummy already stored the right
@@ -313,13 +340,19 @@ export function toKpiGrid(
       const preRows = groupDesc
         .filter((r) => r.granularity === granularity)
         .sort((a, b) => (b.date > a.date ? 1 : -1));
-      if (preRows.length === 0) continue;
+      if (preRows.length === 0) {
+        result.push(placeholderCard(kpiDef));
+        continue;
+      }
 
       const kpi = kpiByName.get(name);
       const numericVals = preRows
         .map((r) => numberOrNull(r.actual_value))
         .filter((v) => v !== null);
-      if (numericVals.length === 0) continue;
+      if (numericVals.length === 0) {
+        result.push(placeholderCard(kpiDef));
+        continue;
+      }
 
       const value = Math.round(numericVals[0] * 100) / 100; // newest
       const sparkVals = numericVals.slice(0, sparkLength).reverse();
@@ -363,13 +396,19 @@ export function toKpiGrid(
       .filter((r) => r.granularity === granularity)
       .sort((a, b) => (b.date > a.date ? 1 : -1));
 
-    if (dailyRows.length === 0) continue;
+    if (dailyRows.length === 0) {
+      result.push(placeholderCard(kpiDef));
+      continue;
+    }
 
     const numericVals = dailyRows
       .map((r) => numberOrNull(r.actual_value))
       .filter((v) => v !== null);
 
-    if (numericVals.length === 0) continue;
+    if (numericVals.length === 0) {
+      result.push(placeholderCard(kpiDef));
+      continue;
+    }
 
     const kpi = kpiByName.get(name);
     const agg = kpi.agg ?? "AVG";

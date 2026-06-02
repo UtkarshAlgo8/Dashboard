@@ -315,7 +315,12 @@ export function buildFetchQuery({
   // The upstream Lambda cannot serialize a raw DATE column to JSON (it
   // 500s). Select every column EXCEPT date, then re-add date cast to a
   // VARCHAR (ISO yyyy-mm-dd) so transformers still get a `date` field.
-  return `SELECT * EXCLUDE(date), CAST(date AS VARCHAR) AS date FROM ${table} ${whereSql} LIMIT ${lim}`
+  //
+  // ORDER BY newest-first BEFORE the LIMIT: if a wide window ever exceeds
+  // the row cap, truncation drops the OLDEST rows, never the latest ones
+  // the cards/snapshots need. Without this the upstream returns an
+  // arbitrary slice and the current view can intermittently come up empty.
+  return `SELECT * EXCLUDE(date), CAST(date AS VARCHAR) AS date FROM ${table} ${whereSql} ORDER BY ${DATE_YYYYMMDD} DESC LIMIT ${lim}`
     .replace(/\s+/g, " ")
     .trim();
 }

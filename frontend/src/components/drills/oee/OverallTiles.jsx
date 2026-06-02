@@ -92,7 +92,7 @@ function Tile({ component, value, sectionName, machineCount }) {
   return (
     <Box
       sx={{
-        backgroundColor: theme.custom.surface.soft,
+        backgroundColor: "background.paper",
         border: 1,
         borderColor: "divider",
         borderTop: `3px solid ${color}`,

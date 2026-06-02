@@ -4,6 +4,7 @@ import OverallTiles from "./OverallTiles.jsx";
 import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
+import { thresholdTier } from "./thresholds.js";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 
 /**
@@ -200,6 +201,15 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
     ? { id: selectedCell.machineId, name: selectedCell.machineId }
     : null;
 
+  // Status tier (green/amber/red) of the selected cell's value, so the
+  // SubDrill accent matches the highlighted cell's colour.
+  const selectedTier = useMemo(() => {
+    if (!selectedCell) return null;
+    const m = machines.find((x) => x.id === selectedCell.machineId);
+    if (!m) return null;
+    return thresholdTier(selectedCell.component, m[selectedCell.component] ?? 0);
+  }, [selectedCell, machines]);
+
   if (!overall) {
     // While the drill fetch is in flight, show a skeleton instead of the
     // empty-state message — otherwise the user reads "no data" for the
@@ -294,6 +304,7 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
                 subCategory={subCategory}
                 onSelectSubCategory={setSubCategory}
                 rows={subRows}
+                accentTier={selectedTier}
               />
             )}
           </>

@@ -173,16 +173,28 @@ function TraceabilityTable({ rows }) {
         backgroundColor: "background.paper",
       }}
     >
-      <Table size="small" stickyHeader>
+      <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            border: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom.surface.soft,
+          },
+        })}
+      >
         <TableHead>
           <TableRow>
-            <Th align="left">Production ID</Th>
-            <Th align="left">Shift</Th>
-            <Th align="left">Operator</Th>
+            <Th align="center">Production ID</Th>
+            <Th align="center">Shift</Th>
+            <Th align="center">Operator</Th>
             <Th>Produced (kg)</Th>
             <Th>Scrap (kg)</Th>
-            <Th align="left">Date &amp; Time</Th>
-            <Th align="left">Machine Parameters</Th>
+            <Th align="center">Date &amp; Time</Th>
+            <Th align="center">Machine Parameters</Th>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -195,10 +207,10 @@ function TraceabilityTable({ rows }) {
                 <ShiftPill shift={r.shift} />
               </TableCell>
               <TableCell sx={{ fontSize: 13 }}>{r.operator}</TableCell>
-              <TableCell align="right" sx={{ fontSize: 13 }}>
+              <TableCell align="center" sx={{ fontSize: 13 }}>
                 {r.produced}
               </TableCell>
-              <TableCell align="right" sx={{ fontSize: 13, fontWeight: 600 }}>
+              <TableCell align="center" sx={{ fontSize: 13, fontWeight: 600 }}>
                 {r.scrap}
               </TableCell>
               <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>
@@ -221,7 +233,7 @@ function TraceabilityTable({ rows }) {
   );
 }
 
-function Th({ children, align = "right" }) {
+function Th({ children, align = "center" }) {
   return (
     <TableCell
       align={align}
