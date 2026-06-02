@@ -88,18 +88,16 @@ const SECTIONS = [
   { id: "cur", name: "Curing" },
 ];
 
-// Inventory category is NOT present in gold_dummy (PM, 2026-05-27 —
-// "Inventory data I will tell later, not added yet"). The tab is
-// marked disabled so the frontend can show a "Phase 2" tooltip.
-// When the data lands, flip `enabled: true` and add { id: "i" } to
-// CATEGORY_LABEL in queries.js.
+// Inventory category now lives in gold_dummy (category = 'Inventory',
+// kpi_name = 'Inventory' / 'Inventory_item') — enabled per BRD §13.4.
+// The Inventory page reads GET /plants/:id/inventory (routes/inventory.js).
 const CATEGORY_TABS = [
   { id: "p", code: "P", name: "Productivity", enabled: true },
   { id: "q", code: "Q", name: "Quality", enabled: true },
   { id: "c", code: "C", name: "Cost", enabled: true },
   { id: "m", code: "M", name: "Morale", enabled: true },
   { id: "s", code: "S", name: "Safety", enabled: true },
-  { id: "i", code: "I", name: "Inventory", enabled: false },
+  { id: "i", code: "I", name: "Inventory", enabled: true },
 ];
 
 router.get("/plants", (_req, res) => {

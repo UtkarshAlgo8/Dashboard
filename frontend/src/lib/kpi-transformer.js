@@ -238,6 +238,8 @@ export function toKpiGrid(
     sparkLength = 8,
     granularity = "Daily",
     mode = "snapshot",
+    subSection = null,
+    productType = null,
   } = {},
 ) {
   if (!Array.isArray(rows) || rows.length === 0) return [];
@@ -265,10 +267,25 @@ export function toKpiGrid(
   // Filter rows to this section/category AND only spec KPI names.
   // Plant-level KPIs (e.g. Absenteeism, per spec §6) come back from the
   // backend with section="nan"; skip the section equality check for them.
+  //
+  // Stock sub-section + product-type scoping (BRD §13.2/§13.3):
+  //   - subSection: keep only rows for the active sub-section. Plant-level
+  //     KPIs bypass this (they have no sub_section).
+  //   - productType: production KPIs carry a product_type (incl. the
+  //     "Overall" sub-section total); section-level KPIs like OEE carry an
+  //     EMPTY product_type. So a row passes when its product_type is empty
+  //     (not product-scoped) OR equals the selected one. Selecting nothing
+  //     resolves to "Overall" upstream, which keeps the sub-section total.
   const filtered = rows.filter((r) => {
     if (!allowedNames.has(r.kpi_name)) return false;
     if (plantLevelNames.has(r.kpi_name)) return true;
-    return r.section === section;
+    if (r.section !== section) return false;
+    if (subSection && denan(r.sub_section) !== subSection) return false;
+    if (productType) {
+      const pt = denan(r.product_type);
+      if (pt != null && pt !== "" && pt !== productType) return false;
+    }
+    return true;
   });
   if (filtered.length === 0) return [];
 

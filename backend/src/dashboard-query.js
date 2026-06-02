@@ -68,16 +68,59 @@ export const ALLOWED_GRANULARITIES = new Set([
 ]);
 export const ALLOWED_TYRE_TYPES = new Set(["PCR", "TBR", "LTR", "All"]);
 
+// Stock sub-sections (BRD §13.2) + Curing tredges — the only sub_section
+// values the frontend may filter by. Keeps the WHERE surface tight.
+export const ALLOWED_SUB_SECTIONS = new Set([
+  "4 Roll",
+  "Extruder",
+  "3 Roll",
+  "Cutter",
+  "Slitter",
+  "Tredge 1",
+  "Tredge 2",
+  "Tredge 3",
+  "Tredge 4",
+  "Tredge 5",
+  "Tredge 6",
+]);
+
 /**
  * Strict allow-list per context key. Keys not listed here accept any
  * string (length-bounded, no control chars — see safeStringValue).
+ * product_type is intentionally unrestricted (dozens of values across
+ * sections, incl. "Overall" subsection totals — see §13.3).
  */
 const CONTEXT_ALLOW_LISTS = {
   section: ALLOWED_SECTIONS,
   category: ALLOWED_CATEGORIES,
   granularity: ALLOWED_GRANULARITIES,
   tyre_type: ALLOWED_TYRE_TYPES,
+  sub_section: ALLOWED_SUB_SECTIONS,
 };
+
+/**
+ * SQL expression that normalizes the `date` column to a sortable,
+ * comparable YYYYMMDD string REGARDLESS of stored type/format. The live
+ * gold_dummy stores `date` as a real DATE type; older/CSV-backed envs
+ * store it as a STRING in ISO `yyyy-mm-dd` or `DD-MM-YYYY`. We:
+ *   1. CAST to VARCHAR first — SUBSTRING needs VARCHAR, and a DATE casts
+ *      to ISO "yyyy-mm-dd"; a string passes through unchanged.
+ *   2. Detect the format by dash position rather than assuming one:
+ *        ISO         "2026-04-01" → dash at char 5 → YYYY MM DD inline
+ *        DD-MM-YYYY  "01-04-2026" → dash at char 3 → reorder to YYYYMMDD
+ * Engine-agnostic (Athena / DuckDB / Trino). No year/month/day column
+ * predicate (those trigger upstream partition-path lookups that fail).
+ */
+const DATE_STR = "CAST(date AS VARCHAR)";
+export const DATE_YYYYMMDD =
+  `(CASE WHEN SUBSTRING(${DATE_STR}, 5, 1) = '-' ` +
+  `THEN SUBSTRING(${DATE_STR}, 1, 4) || SUBSTRING(${DATE_STR}, 6, 2) || SUBSTRING(${DATE_STR}, 9, 2) ` +
+  `ELSE SUBSTRING(${DATE_STR}, 7, 4) || SUBSTRING(${DATE_STR}, 4, 2) || SUBSTRING(${DATE_STR}, 1, 2) END)`;
+
+/** ISO yyyy-mm-dd → YYYYMMDD digit string for comparison literals. */
+function isoToYyyymmdd(iso) {
+  return iso.replaceAll("-", "");
+}
 
 export class QueryValidationError extends Error {
   constructor(message) {
@@ -201,22 +244,33 @@ export function buildFetchQuery({
         `Invalid ${key}: ${value}. Allowed: ${[...allow].join(", ")}`,
       );
     }
-    where.push(`${key} = ${escapeLiteral(value)}`);
+    if (key === "section") {
+      // Plant-level KPIs (e.g. Absenteeism, spec §6) carry a NULL/'nan'
+      // section but must still appear under each section's tab. Include
+      // them alongside the requested section so the backend can narrow
+      // the (large) result set without dropping plant-level rows.
+      where.push(
+        `(section = ${escapeLiteral(value)} OR section IS NULL OR section = 'nan')`,
+      );
+    } else {
+      where.push(`${key} = ${escapeLiteral(value)}`);
+    }
   }
 
-  // 2. Date predicate. ISO yyyy-mm-dd string column.
+  // 2. Date predicate. Format-robust: compare the normalized YYYYMMDD
+  //    form of the stored `date` (ISO or DD-MM-YYYY) against the
+  //    YYYYMMDD form of the caller's ISO input.
   //    - `date` (single value) → equality. Used for Today / single-day.
   //    - `from` + `to` → BETWEEN range. Used for Month / Year / custom.
   //    Either form, not both.
   if (date != null && date !== "") {
-    const iso = toIsoDate(date);
-    where.push(`date = ${escapeLiteral(iso)}`);
+    where.push(`${DATE_YYYYMMDD} = '${isoToYyyymmdd(toIsoDate(date))}'`);
   } else {
     if (from != null && from !== "") {
-      where.push(`date >= ${escapeLiteral(toIsoDate(from))}`);
+      where.push(`${DATE_YYYYMMDD} >= '${isoToYyyymmdd(toIsoDate(from))}'`);
     }
     if (to != null && to !== "") {
-      where.push(`date <= ${escapeLiteral(toIsoDate(to))}`);
+      where.push(`${DATE_YYYYMMDD} <= '${isoToYyyymmdd(toIsoDate(to))}'`);
     }
   }
 
@@ -258,5 +312,10 @@ export function buildFetchQuery({
 
   const table = config.upstream.table || "gold_dummy";
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  return `SELECT * FROM ${table} ${whereSql} LIMIT ${lim}`.replace(/\s+/g, " ").trim();
+  // The upstream Lambda cannot serialize a raw DATE column to JSON (it
+  // 500s). Select every column EXCEPT date, then re-add date cast to a
+  // VARCHAR (ISO yyyy-mm-dd) so transformers still get a `date` field.
+  return `SELECT * EXCLUDE(date), CAST(date AS VARCHAR) AS date FROM ${table} ${whereSql} LIMIT ${lim}`
+    .replace(/\s+/g, " ")
+    .trim();
 }

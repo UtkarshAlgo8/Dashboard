@@ -78,3 +78,17 @@ export function getPlantSummary(plantId) {
   if (USE_MOCK) return mockDelay(PLANT_SUMMARIES[plantId] ?? null);
   return client.get(`/plants/${plantId}/summary`);
 }
+
+/**
+ * As-of date — the latest available data date (ISO yyyy-mm-dd). The
+ * dashboard anchors Today / MTD / YTD windows to this instead of the
+ * system clock (BRD §13.5). Mock returns the latest date present in the
+ * v24 gold export.
+ *
+ * @param {string} plantId
+ * @returns {Promise<{ asOf: string | null }>}
+ */
+export function getAsOf(plantId) {
+  if (USE_MOCK) return mockDelay({ asOf: "2026-05-14" });
+  return client.get(`/plants/${plantId}/as-of`);
+}

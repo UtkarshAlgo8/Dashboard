@@ -5,6 +5,7 @@ import SectionSidebar from "@/components/production/SectionSidebar.jsx";
 import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
+import StockSubSelector from "@/components/production/StockSubSelector.jsx";
 import ProductionBodySkeleton from "@/components/production/ProductionBodySkeleton.jsx";
 import ShiftComparisonCard from "@/components/production/ShiftComparisonCard.jsx";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
@@ -20,6 +21,7 @@ import {
   getSections,
   getCategoryTabs,
   getPlantSummary,
+  getAsOf,
 } from "@/api/plants.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
@@ -45,6 +47,12 @@ function BanmoreProduction() {
   const { data: summary } = usePolledQuery(() => getPlantSummary("banmore"), {
     interval: 0,
   });
+  // As-of date (BRD §13.5) — anchor for all time-range windows so values
+  // render even when the calendar runs ahead of the available data.
+  const { data: asOfData } = usePolledQuery(() => getAsOf("banmore"), {
+    interval: 0,
+  });
+  const asOf = asOfData?.asOf ?? null;
 
   // CR-08: v2 dashboard fetch — owns section/category/granularity/date/drill state.
   const {
@@ -83,6 +91,32 @@ function BanmoreProduction() {
   };
   const prodSubOptions = PROD_SUB_OPTIONS[dashboard.section] ?? [];
 
+  // Stock sub-sections (BRD §13.2) and the product types each one carries
+  // (BRD §13.3). The first sub-section is the default on entering Stock.
+  const STOCK_SUBSECTIONS = ["4 Roll", "Extruder", "3 Roll", "Cutter", "Slitter"];
+  const STOCK_PRODUCT_TYPES = {
+    "4 Roll": ["Rubberised Ply", "Rubberised Belt"],
+    Extruder: ["Sidewall", "Tread"],
+    "3 Roll": ["Inner Liner"],
+    Cutter: ["Belt", "Ply"],
+    Slitter: ["Cap Strip", "Chafer"],
+  };
+  const isStock = dashboard.section === "stk";
+  const activeSubSection = dashboard.subSection ?? STOCK_SUBSECTIONS[0];
+  // "Overall" = the sub-section total row (shown when no specific product
+  // type is selected). The pill row prepends it to the real product types.
+  const activeProductType = dashboard.productType ?? "Overall";
+  const stockProductOptions = ["Overall", ...(STOCK_PRODUCT_TYPES[activeSubSection] ?? [])];
+
+  const onStockSubChange = (next) => {
+    // Switching sub-section resets the product type back to the sub-section
+    // total — the previous product type may not exist under the new one.
+    setFilter({ subSection: next, productType: "Overall" }, false);
+  };
+  const onStockProductChange = (next) => {
+    setFilter({ productType: next }, false);
+  };
+
   const ready =
     !plantLoading &&
     plant &&
@@ -109,13 +143,13 @@ function BanmoreProduction() {
     const map = { all: null, a: "Shift A", b: "Shift B", c: "Shift C" };
     const shiftGran = map[shift];
     if (shiftGran) return shiftGran;
-    return presetToDateRange({ preset }).granularity;
+    return presetToDateRange({ preset }, asOf).granularity;
   };
 
   const onTimeRangeChange = (updater) => {
     setTimeRange((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      const resolved = presetToDateRange(next);
+      const resolved = presetToDateRange(next, asOf);
       const gran = effectiveGranularity(next.preset, shiftKey);
       setFilter(
         {
@@ -131,23 +165,26 @@ function BanmoreProduction() {
     });
   };
 
-  // Initial fetch: push the default "month" range into the hook on mount.
+  // Push the current range into the hook on mount AND whenever the as-of
+  // date resolves (the window is anchored to it). Until as-of loads this
+  // falls back to the system clock; once it arrives the window snaps to
+  // the latest available data date.
   useEffect(() => {
-    const resolved = presetToDateRange(timeRange);
+    const resolved = presetToDateRange(timeRange, asOf);
     setFilter(
       {
         date: null,
         from: resolved.from,
         to: resolved.to,
-        granularity: resolved.granularity,
+        granularity: effectiveGranularity(timeRange.preset, shiftKey),
         mode: resolved.mode,
       },
       false,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [asOf]);
 
-  const { from, to } = presetToDateRange(timeRange);
+  const { from, to } = presetToDateRange(timeRange, asOf);
 
   const onShiftChange = (next) => {
     setShiftKey(next);
@@ -157,7 +194,19 @@ function BanmoreProduction() {
     );
   };
 
-  const onSectionSelect = (id) => setFilter({ section: id }, true);
+  const onSectionSelect = (id) => {
+    // Entering Stock seeds the default sub-section + "Overall" product type
+    // (BRD §13.2/§13.3); leaving Stock clears both so other sections aren't
+    // accidentally scoped to a stale sub-section.
+    if (id === "stk") {
+      setFilter(
+        { section: id, subSection: STOCK_SUBSECTIONS[0], productType: "Overall" },
+        true,
+      );
+    } else {
+      setFilter({ section: id, subSection: null, productType: null }, true);
+    }
+  };
   const onCategorySelect = (id) => setFilter({ category: id }, true);
 
   // Selected product-type pill, keyed by section so it auto-resets when
@@ -179,7 +228,10 @@ function BanmoreProduction() {
       (r) =>
         r.section === sectionName &&
         r.kpi_name === "OEE_o" &&
-        r.granularity === gran,
+        r.granularity === gran &&
+        // For Stock, scope the header OEE to the active sub-section so it
+        // matches the OEE card (OEE rows carry sub_section, empty product_type).
+        (!dashboard.subSection || r.sub_section === dashboard.subSection),
     );
     if (filtered.length === 0) return null;
     if (dashboard.mode === "snapshot") {
@@ -363,6 +415,49 @@ function BanmoreProduction() {
                   )}
                 </Box>
 
+                {/* Stock sub-section + product-type selectors (BRD §13.2/§13.3).
+                    Shown on EVERY tab for Stock — the sub-section filters all
+                    KPIs; the product type scopes the production KPIs (with
+                    "Overall" = the sub-section total). */}
+                {isStock && (
+                  <Stack spacing={1} sx={{ px: 2, pt: 1.5 }}>
+                    <StockSubSelector
+                      value={activeSubSection}
+                      onChange={onStockSubChange}
+                    />
+                    <Box
+                      sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}
+                    >
+                      {stockProductOptions.map((opt) => {
+                        const active = activeProductType === opt;
+                        return (
+                          <Box
+                            key={opt}
+                            onClick={() => onStockProductChange(opt)}
+                            sx={{
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: 999,
+                              border: 1,
+                              borderColor: active ? "primary.main" : "divider",
+                              backgroundColor: active
+                                ? "primary.50"
+                                : "background.paper",
+                              color: active ? "primary.main" : "text.primary",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              userSelect: "none",
+                            }}
+                          >
+                            {opt}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </Stack>
+                )}
+
                 {/* Product-type sub-pills — Productivity & Quality tabs only */}
                 {(dashboard.category === "p" ||
                   dashboard.category === "q") &&
@@ -466,6 +561,8 @@ function BanmoreProduction() {
                     <ShiftComparisonCard
                       section={sectionName}
                       rows={rawRows ?? []}
+                      subSection={dashboard.subSection}
+                      productType={dashboard.productType}
                     />
                   </Box>
                 )}
@@ -482,6 +579,9 @@ function BanmoreProduction() {
         kpi={trendKpi}
         section={dashboard.section}
         category={dashboard.category}
+        subSection={dashboard.subSection}
+        productType={dashboard.productType}
+        asOf={asOf}
       />
     </Box>
   );

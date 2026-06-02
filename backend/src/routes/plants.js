@@ -2,6 +2,7 @@ import { Router } from "express";
 import { cached, buildCacheKey } from "../cache.js";
 import { runQuery } from "../upstream.js";
 import { escapeLiteral } from "../queries.js";
+import { DATE_YYYYMMDD } from "../dashboard-query.js";
 import { config } from "../config.js";
 
 /**
@@ -79,6 +80,43 @@ router.get("/:plantId/summary", async (req, res, next) => {
         return { value: row.actual_value, date: `${dd}-${mm}-${yyyy}` };
       };
       return { oee: pick("OEE"), ftq: pick("FTQ"), scrap: pick("Scrap") };
+    });
+    res.json({ data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * As-of date — the latest available data date for the plant (BRD §13.5).
+ * The dashboard anchors Today / MTD / YTD windows to THIS date, not the
+ * system clock, so values still render when the calendar is ahead of the
+ * data. Format-robust via DATE_YYYYMMDD; returned as ISO yyyy-mm-dd.
+ */
+router.get("/:plantId/as-of", async (req, res, next) => {
+  if (req.params.plantId !== PHASE_1_PLANT) {
+    res.status(404).json({
+      error: { code: "PLANT_NOT_AVAILABLE", message: "Unknown plant." },
+    });
+    return;
+  }
+  const key = buildCacheKey(`/plants/${req.params.plantId}/as-of`, {});
+  try {
+    const data = await cached(key, async () => {
+      const sql = `
+        SELECT MAX(${DATE_YYYYMMDD}) AS d
+        FROM ${config.upstream.table}
+        WHERE plant = ${escapeLiteral("Banmore")}
+          AND department = ${escapeLiteral("Production")}
+      `.trim();
+      const rows = await runQuery(sql);
+      const raw = rows?.[0] ? Object.values(rows[0])[0] : null;
+      // raw is "YYYYMMDD" → ISO yyyy-mm-dd.
+      const s = raw == null ? "" : String(raw);
+      const asOf = /^\d{8}$/.test(s)
+        ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+        : null;
+      return { asOf };
     });
     res.json({ data });
   } catch (err) {
