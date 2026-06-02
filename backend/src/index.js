@@ -1,8 +1,11 @@
 import express from "express";
-import cors from "cors";
 import { config } from "./config.js";
-import { UpstreamError } from "./upstream.js";
-import { QueryValidationError } from "./dashboard-query.js";
+
+import { corsMiddleware } from "./middlewares/cors.js";
+import { requestLogger } from "./middlewares/requestLogger.js";
+import { notFound } from "./middlewares/notFound.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
+
 import { router as staticRouter } from "./routes/static.js";
 import { router as plantsRouter } from "./routes/plants.js";
 import { router as kpisRouter } from "./routes/kpis.js";
@@ -14,61 +17,25 @@ import { router as dashboardRouter } from "./routes/dashboard.js";
 
 const app = express();
 
-// CORS. FRONTEND_ORIGIN may be a comma-separated allow-list (prod). In
-// dev we also accept ANY localhost / 127.0.0.1 origin regardless of port,
-// because Vite falls back to 5174+ when 5173 is busy and "127.0.0.1" is a
-// different origin from "localhost" — both otherwise trip exact-match CORS.
-const allowedOrigins = new Set(
-  (config.frontendOrigin || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
-);
-const isLocalOrigin = (o) =>
-  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
-
-app.use(
-  cors({
-    origin(origin, cb) {
-      // No Origin header → non-browser client (curl, server-to-server).
-      if (!origin) return cb(null, true);
-      if (allowedOrigins.has(origin) || isLocalOrigin(origin)) {
-        return cb(null, true);
-      }
-      return cb(new Error(`Origin not allowed by CORS: ${origin}`));
-    },
-    credentials: true,
-  }),
-);
+app.use(corsMiddleware);
 app.use(express.json());
-
-// One-line request log for dev. Skip in tests if we add them later.
-app.use((req, _res, next) => {
-  // eslint-disable-next-line no-console
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-  next();
-});
+app.use(requestLogger);
 
 app.get("/api/v1/health", (_req, res) => {
   res.json({ data: { status: "ok", time: new Date().toISOString() } });
 });
 
-// URL layout mirrors what the frontend's src/api/*.js already
-// targets (audit done 2026-05-26 for CR-06 → reused for CR-07):
-//
+// URL layout (unchanged from CR-07):
 //   /api/v1/{plants,functions,sections,category-tabs}     → static
-//   /api/v1/plants/:id                                    → one plant
-//   /api/v1/plants/:id/summary                            → summary
-//   /api/v1/plants/:id/inventory                          → inventory (stub)
-//   /api/v1/plants/:id/anomalies                          → anomalies (stub)
+//   /api/v1/plants/:id(/summary|/as-of|/section-oee)      → plants
+//   /api/v1/plants/:id/inventory                          → inventory
+//   /api/v1/plants/:id/anomalies                          → anomalies
 //   /api/v1/plants/:id/production/kpis                    → KPI grid
 //   /api/v1/plants/:id/production/trends                  → trends
-//   /api/v1/plants/:id/production/drills/{oee,production,
-//                                         downtime,plan-compliance,
-//                                         scrap-traceability}  → drills
+//   /api/v1/plants/:id/production/drills/*                → drills
+//   /api/v1/dashboard/{fetch,vocab}                       → dashboard
 //
-// staticRouter mounts FIRST so /plants (list) doesn't shadow the
-// /plants/:id mount below it.
+// staticRouter mounts FIRST so /plants (list) doesn't shadow /plants/:id.
 app.use("/api/v1", staticRouter);
 app.use("/api/v1/plants", plantsRouter);
 app.use("/api/v1/plants/:plantId/production/kpis", kpisRouter);
@@ -78,36 +45,8 @@ app.use("/api/v1/plants/:plantId/inventory", inventoryRouter);
 app.use("/api/v1/plants/:plantId/anomalies", anomaliesRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 
-app.use((req, res) => {
-  res.status(404).json({
-    error: {
-      code: "NOT_FOUND",
-      message: `No route for ${req.method} ${req.originalUrl}`,
-    },
-  });
-});
-
-// eslint-disable-next-line no-unused-vars
-app.use((err, _req, res, _next) => {
-  if (err instanceof UpstreamError) {
-    res
-      .status(err.status)
-      .json({ error: { code: err.type, message: err.message } });
-    return;
-  }
-  if (err instanceof QueryValidationError) {
-    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: err.message } });
-    return;
-  }
-  // eslint-disable-next-line no-console
-  console.error("Unhandled error:", err);
-  res.status(500).json({
-    error: {
-      code: "INTERNAL_ERROR",
-      message: "Something went wrong on the server.",
-    },
-  });
-});
+app.use(notFound);
+app.use(errorHandler);
 
 app.listen(config.port, () => {
   // eslint-disable-next-line no-console

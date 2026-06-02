@@ -97,9 +97,21 @@ function buildContext(state) {
   // still shows. Result: ~a few thousand rows per section/category.
   ctx.section = sectionIdToName(state.section);
   ctx.category = categoryIdToName(state.category);
-  // sub_section / product_type are filtered CLIENT-SIDE in toKpiGrid
-  // (BRD §13.2/§13.3) so plant-level KPIs (no sub_section) survive and
-  // OEE-style rows (empty product_type) aren't dropped.
+  // sub_section / product_type are sent to the backend (server-side
+  // filter) so changing them is a real API call. The backend keeps rows
+  // with no value for these columns (NULL/'') too, so section-level KPIs
+  // (e.g. OEE) and plant-level KPIs (no sub_section) still come through.
+  if (state.subSection) ctx.sub_section = state.subSection;
+  // product_type only applies to the tabs that have product pills
+  // (Productivity / Quality). On Cost / Morale / Safety the KPIs carry a
+  // DIFFERENT product_type (e.g. "Compound"), so sending the Productivity
+  // product type would filter them all out.
+  if (
+    (state.category === "p" || state.category === "q") &&
+    state.productType
+  ) {
+    ctx.product_type = state.productType;
+  }
   if (state.granularity) ctx.granularity = state.granularity;
   // date / from / to are NOT in context — they are top-level payload
   // fields. The backend rejects them inside the context object.
@@ -225,7 +237,9 @@ export function useDashboardFetch() {
         category: state.category.toUpperCase(),
         granularity: state.granularity ?? "Daily",
         mode: state.mode ?? "snapshot",
-        subSection: state.subSection ?? null,
+        // Equipment KPIs come back for every product type now (backend
+        // exemption); the transformer uses this to prefer the selected
+        // product's row when it exists and fall back to the line value.
         productType: state.productType ?? null,
       })
     : [];

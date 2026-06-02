@@ -1,119 +1,18 @@
 import { Router } from "express";
+import {
+  getPlants,
+  getFunctions,
+  getSections,
+  getCategoryTabs,
+} from "../controllers/static.controller.js";
 
 /**
- * Static lookup endpoints — small lists the frontend renders for its
- * chrome. Same shape regardless of plant. No upstream calls; safe
- * to hit even before any data is loaded.
- *
- * Mount at /api/v1 (unscoped).
+ * Static lookup endpoints (unscoped). Mount at /api/v1.
+ *   GET /plants /functions /sections /category-tabs
  */
-
 export const router = Router();
 
-// sx / sy are SVG coordinates for the India map markers (viewBox
-// 0..MAP_W × 0..MAP_H, see frontend/src/lib/indiaMap.js). `sub` is the
-// subtitle shown on the plant card and the map hover popover. oe/otif/
-// yield are the headline KPI values surfaced on the card.
-const PLANTS = [
-  {
-    id: "banmore",
-    name: "Banmore Plant",
-    sub: "Gwalior, Madhya Pradesh",
-    location: "Banmore",
-    state: "Madhya Pradesh",
-    tyreType: "PCR",
-    sx: 169.7,
-    sy: 228.6,
-    oe: 91.5,
-    otif: 94.3,
-    yield: 97.8,
-    enabled: true,
-  },
-  {
-    id: "chennai",
-    name: "Chennai Plant",
-    sub: "Tamil Nadu",
-    location: "Chennai",
-    state: "Tamil Nadu",
-    tyreType: "PCR/TBR",
-    sx: 202.0,
-    sy: 446.6,
-    oe: 94.2,
-    otif: 96.8,
-    yield: 98.5,
-    enabled: false,
-  },
-  {
-    id: "laksar",
-    name: "Laksar Plant",
-    sub: "Haridwar, Uttarakhand",
-    location: "Laksar",
-    state: "Uttarakhand",
-    tyreType: "PCR/TBR",
-    sx: 167.6,
-    sy: 170.2,
-    oe: 93.1,
-    otif: 95.6,
-    yield: 98.1,
-    enabled: false,
-  },
-  {
-    id: "mysore",
-    name: "Mysore Plant",
-    sub: "Karnataka",
-    location: "Mysore",
-    state: "Karnataka",
-    tyreType: "PCR/TBR",
-    sx: 163.0,
-    sy: 441.0,
-    oe: 92.6,
-    otif: 95.1,
-    yield: 98.0,
-    enabled: false,
-  },
-];
-
-const FUNCTIONS = [
-  { id: "ph", name: "Plant Head", enabled: false },
-  { id: "prod", name: "Production", enabled: true },
-  { id: "qual", name: "Quality", enabled: false },
-  { id: "tech", name: "Technical", enabled: false },
-  { id: "eng", name: "Engineering", enabled: false },
-];
-
-const SECTIONS = [
-  { id: "mix", name: "Mixing" },
-  { id: "stk", name: "Stock" },
-  { id: "tbm", name: "TBM" },
-  { id: "cur", name: "Curing" },
-];
-
-// Inventory category now lives in gold_dummy (category = 'Inventory',
-// kpi_name = 'Inventory' / 'Inventory_item') — enabled per BRD §13.4.
-// The Inventory page reads GET /plants/:id/inventory (routes/inventory.js).
-const CATEGORY_TABS = [
-  { id: "p", code: "P", name: "Productivity", enabled: true },
-  { id: "q", code: "Q", name: "Quality", enabled: true },
-  { id: "c", code: "C", name: "Cost", enabled: true },
-  { id: "m", code: "M", name: "Morale", enabled: true },
-  { id: "s", code: "S", name: "Safety", enabled: true },
-  { id: "i", code: "I", name: "Inventory", enabled: true },
-];
-
-router.get("/plants", (_req, res) => {
-  res.json({ data: PLANTS });
-});
-
-router.get("/functions", (_req, res) => {
-  res.json({ data: FUNCTIONS });
-});
-
-router.get("/sections", (_req, res) => {
-  res.json({ data: SECTIONS });
-});
-
-router.get("/category-tabs", (_req, res) => {
-  res.json({ data: CATEGORY_TABS });
-});
-
-export { PLANTS, FUNCTIONS, SECTIONS, CATEGORY_TABS };
+router.get("/plants", getPlants);
+router.get("/functions", getFunctions);
+router.get("/sections", getSections);
+router.get("/category-tabs", getCategoryTabs);

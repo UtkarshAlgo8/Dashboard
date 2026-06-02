@@ -1,4 +1,4 @@
-import { config } from "./config.js";
+import { config } from "../config.js";
 
 /**
  * In-memory TTL cache. Frontend polls every 60s; we cache for half

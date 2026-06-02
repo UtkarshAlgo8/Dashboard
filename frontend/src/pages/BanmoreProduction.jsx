@@ -127,13 +127,21 @@ function BanmoreProduction() {
   };
 
   // Product-type / sub-category pills per artifact buildKpis().
-  // Banmore is PCR-only (FR-X2) so for TBM/Curing the radial-type pills
-  // are UI selectors only — the data scope doesn't change.
+  // Product types per section, from the gold data. The first entry is the
+  // default (the section-level "overall" where one exists). Selecting one
+  // sends product_type to the backend — a real, server-side-filtered API
+  // call (no client-side fallback).
   const PROD_SUB_OPTIONS = {
     mix: ["Master Compound", "Final Compound"],
-    tbm: ["Passenger Radial", "LT Radial", "SCV Radial"],
-    cur: ["Passenger Radial", "LT Radial", "SCV Radial"],
-    stk: [], // Stock uses sub-section selector (4 Roll / Extruder / ...)
+    tbm: ["Green Tyre", "Passenger Radial", "LT Radial", "SUV Radial"],
+    cur: ["Cured Tyre", "Passenger Radial", "LT Radial", "SUV Radial"],
+    stk: [], // Stock uses the sub-section selector + its own product types.
+  };
+  const SECTION_DEFAULT_PRODUCT = {
+    mix: "Master Compound",
+    tbm: "Green Tyre",
+    cur: "Cured Tyre",
+    stk: "Overall",
   };
   const prodSubOptions = PROD_SUB_OPTIONS[dashboard.section] ?? [];
 
@@ -149,9 +157,11 @@ function BanmoreProduction() {
   };
   const isStock = dashboard.section === "stk";
   const activeSubSection = dashboard.subSection ?? STOCK_SUBSECTIONS[0];
-  // "Overall" = the sub-section total row (shown when no specific product
-  // type is selected). The pill row prepends it to the real product types.
-  const activeProductType = dashboard.productType ?? "Overall";
+  // The active product type (sent to the backend). Falls back to the
+  // section default. "Overall" = the Stock sub-section total.
+  const activeProductType =
+    dashboard.productType ??
+    (isStock ? "Overall" : SECTION_DEFAULT_PRODUCT[dashboard.section]);
   const stockProductOptions = ["Overall", ...(STOCK_PRODUCT_TYPES[activeSubSection] ?? [])];
 
   const onStockSubChange = (next) => {
@@ -240,18 +250,28 @@ function BanmoreProduction() {
         true,
       );
     } else {
-      setFilter({ section: id, subSection: null, productType: null }, true);
+      setFilter(
+        {
+          section: id,
+          subSection: null,
+          productType: SECTION_DEFAULT_PRODUCT[id] ?? null,
+        },
+        true,
+      );
     }
   };
   const onCategorySelect = (id) => setFilter({ category: id }, true);
 
-  // Selected product-type pill, keyed by section so it auto-resets when
-  // the user switches sections (no useEffect needed).
-  const [prodSubBySection, setProdSubBySection] = useState({});
-  const prodSub =
-    prodSubBySection[dashboard.section] ?? prodSubOptions[0] ?? "";
-  const setProdSub = (val) =>
-    setProdSubBySection((prev) => ({ ...prev, [dashboard.section]: val }));
+  // Ensure the active section always has a product type set (covers the
+  // initial mount, where the default section has no product type yet).
+  useEffect(() => {
+    if (dashboard.productType == null) {
+      const def = isStock ? "Overall" : SECTION_DEFAULT_PRODUCT[dashboard.section];
+      if (def) setFilter({ productType: def }, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboard.section]);
+
 
   // Only one drill open at a time. Clicking a different card closes the
   // previous one; clicking the same card again closes it.
@@ -424,8 +444,10 @@ function BanmoreProduction() {
                       prodSubOptions.length > 0 && (
                         <NavTabs
                           items={prodSubOptions.map((o) => ({ id: o, label: o }))}
-                          value={prodSub}
-                          onChange={setProdSub}
+                          // Selecting a product type sends it to the backend
+                          // (server-side filter / real API call).
+                          value={activeProductType}
+                          onChange={(v) => setFilter({ productType: v }, false)}
                           layoutId="prodTypeFill"
                         />
                       )
@@ -482,7 +504,7 @@ function BanmoreProduction() {
                           shift={dashboard.granularity}
                           allDrillRows={drillRows}
                           rawRows={rawRows}
-                          prodSub={prodSub}
+                          prodSub={activeProductType}
                           isLoading={isDrillLoading}
                         />
                       </Box>
