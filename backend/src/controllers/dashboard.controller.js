@@ -1,4 +1,5 @@
 import { cached, buildCacheKey } from "../utils/cache.js";
+import { config } from "../config.js";
 import { runQuery } from "../utils/upstream.js";
 import {
   buildFetchQuery,
@@ -70,12 +71,13 @@ export async function getVocab(_req, res, next) {
     const vocab = await cached("dashboard:vocab", async () => {
       const grab = (sql) =>
         runQuery(sql).then((rows) => rows.map((r) => Object.values(r)[0]));
+      const table = config.upstream.sqlTable;
 
       const [sections, categories, granularities, tyreTypes] = await Promise.all([
-        grab(`SELECT DISTINCT section FROM gold_dummy WHERE section IS NOT NULL AND section != 'nan' AND section != '' ORDER BY section`),
-        grab(`SELECT DISTINCT category FROM gold_dummy WHERE category IS NOT NULL AND category != 'nan' AND category != '' ORDER BY category`),
-        grab(`SELECT DISTINCT granularity FROM gold_dummy WHERE granularity IS NOT NULL AND granularity != 'nan' AND granularity != '' ORDER BY granularity`),
-        grab(`SELECT DISTINCT tyre_type FROM gold_dummy WHERE tyre_type IS NOT NULL AND tyre_type != 'nan' AND tyre_type != '' ORDER BY tyre_type`),
+        grab(`SELECT DISTINCT section FROM ${table} WHERE section IS NOT NULL AND section != 'nan' AND section != '' ORDER BY section`),
+        grab(`SELECT DISTINCT category FROM ${table} WHERE category IS NOT NULL AND category != 'nan' AND category != '' ORDER BY category`),
+        grab(`SELECT DISTINCT granularity FROM ${table} WHERE granularity IS NOT NULL AND granularity != 'nan' AND granularity != '' ORDER BY granularity`),
+        grab(`SELECT DISTINCT tyre_type FROM ${table} WHERE tyre_type IS NOT NULL AND tyre_type != 'nan' AND tyre_type != '' ORDER BY tyre_type`),
       ]);
 
       return { sections, categories, granularities, tyreTypes };

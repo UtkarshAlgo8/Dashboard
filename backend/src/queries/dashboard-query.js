@@ -369,7 +369,7 @@ export function buildFetchQuery({
     ? limit
     : 5000;
 
-  const table = config.upstream.table || "gold_dummy";
+  const table = config.upstream.sqlTable || "gold";
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   // The upstream Lambda cannot serialize a raw DATE column to JSON (it
   // 500s). Select every column EXCEPT date, then re-add date cast to a

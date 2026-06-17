@@ -21,7 +21,7 @@ export async function getInventory(req, res, next) {
       const sql = `
         SELECT CAST(date AS VARCHAR) AS date, product_type, itemcode, kpi_name,
                unit_of_measurement, actual_value, drill_down_level
-        FROM ${config.upstream.table}
+        FROM ${config.upstream.sqlTable}
         WHERE plant = ${escapeLiteral("Banmore")}
           AND department = ${escapeLiteral("Production")}
           AND category = ${escapeLiteral("Inventory")}

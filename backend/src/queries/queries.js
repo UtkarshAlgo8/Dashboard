@@ -34,7 +34,7 @@ import { config } from "../config.js";
  * via `dateRangeFilter` below.
  */
 
-const TABLE = () => config.upstream.table;
+const TABLE = () => config.upstream.sqlTable;
 const NAN = "nan";
 
 export function escapeLiteral(value) {
@@ -263,30 +263,38 @@ export function productionDrillQuery({
   from,
   to,
 }) {
+  const dateExpr =
+    "(CASE WHEN SUBSTRING(CAST(date AS VARCHAR), 5, 1) = '-' " +
+    "THEN SUBSTRING(CAST(date AS VARCHAR), 1, 4) || SUBSTRING(CAST(date AS VARCHAR), 6, 2) || SUBSTRING(CAST(date AS VARCHAR), 9, 2) " +
+    "ELSE SUBSTRING(CAST(date AS VARCHAR), 7, 4) || SUBSTRING(CAST(date AS VARCHAR), 4, 2) || SUBSTRING(CAST(date AS VARCHAR), 1, 2) END)";
   const innerWhere = whereClause({
     plant,
     department: "Production",
     section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
     category: "Productivity",
-    kpi_name: "Production",
     tyre_type: tyreType,
     granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
   });
   return `
-    SELECT machine, itemcode, product_type, drill_down_attribute, actual_value
+    SELECT kpi_name, machine, itemcode, product_type, drill_down_attribute, actual_value
     FROM (
-      SELECT machine, itemcode, product_type, drill_down_attribute, actual_value,
+      SELECT kpi_name, machine, itemcode, product_type, drill_down_attribute, actual_value,
              ROW_NUMBER() OVER (
-               PARTITION BY machine, itemcode, product_type
-               ORDER BY year DESC, CAST(month AS INTEGER) DESC, day DESC
+               PARTITION BY kpi_name, machine, itemcode, product_type
+               ORDER BY ${dateExpr} DESC
              ) AS rn
       FROM ${TABLE()}
       ${innerWhere}
+        AND kpi_name IN (
+          ${escapeLiteral("Production_m")},
+          ${escapeLiteral("Production_sku")},
+          ${escapeLiteral("Production_m_sku")}
+        )
         AND machine != ${escapeLiteral(NAN)}
         ${dateRangeFilter(from, to)}
     ) ranked
     WHERE rn = 1
-    ORDER BY machine, itemcode
+    ORDER BY kpi_name, machine, itemcode
   `.trim();
 }
 

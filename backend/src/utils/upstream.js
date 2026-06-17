@@ -1,14 +1,14 @@
 import { config } from "../config.js";
 
 /**
- * The ONE place that talks to the upstream gold_dummy data API.
+ * The ONE place that talks to the upstream data API.
  * Holds the API key. No other module imports the upstream env vars
  * or hits the upstream URL directly.
  *
  * Upstream contract (confirmed via Postman 2026-05-26):
  *   POST <AWS_DATA_URL>
  *     headers: { x-api-key, content-type: application/json }
- *     body:    { sql: "<SELECT or WITH statement>", tables: ["gold_dummy"] }
+ *     body:    { sql: "<SELECT or WITH statement>", tables: ["databricks_table/gold"] }
  *   response (success): { "columns": [...], "rows": [...] }
  *     `rows` may be objects-keyed-by-column-name OR positional arrays;
  *     we zip with `columns` if positional.
