@@ -363,6 +363,7 @@ export function toProductionDrill(rows, { keyOf }) {
     if (!key) continue;
     if (!buckets[key]) buckets[key] = [];
     buckets[key].push({
+      kpiName: denan(r.kpi_name),
       sku: denan(r.itemcode),
       itemCode: denan(r.itemcode),
       machine: denan(r.machine),

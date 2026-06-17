@@ -1,5 +1,10 @@
 import { Box, Typography } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import {
+  denanDimension,
+  isProductAgnosticKpi,
+  preferScopedRows,
+} from "@/lib/dashboardRowScopes.js";
 
 /**
  * Shift Comparison card — appears below KPI grid, Productivity tab only.
@@ -23,10 +28,11 @@ export default function ShiftComparisonCard({
 }) {
   const unit =
     section === "Mixing" ? "MT" : section === "Stock" ? "units" : "nos";
+  const scopedRows = preferScopedRows(rows, productType);
 
   const shifts = ["Shift A", "Shift B", "Shift C"];
   const tableRows = shifts.map((g) => {
-    const shiftRows = rows.filter(
+    const shiftRows = scopedRows.filter(
       (r) =>
         r.section === section &&
         r.granularity === g &&
@@ -34,10 +40,8 @@ export default function ShiftComparisonCard({
         // product_type scoping: keep rows with no product_type (OEE/FTQ)
         // or matching the selected one (Production with "Overall"/specific).
         (!productType ||
-          r.product_type == null ||
-          r.product_type === "" ||
-          r.product_type === "nan" ||
-          r.product_type === productType),
+          isProductAgnosticKpi(r.kpi_name) ||
+          denanDimension(r.product_type) === productType),
     );
     const plan = avgField(shiftRows, "Production", "threshold_value");
     const actual = avgField(shiftRows, "Production", "actual_value");

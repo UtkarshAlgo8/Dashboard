@@ -21,6 +21,11 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getTrend } from "@/api/trends.js";
 import client from "@/api/client.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
+import {
+  denanDimension,
+  isProductAgnosticKpi,
+  preferScopedRows,
+} from "@/lib/dashboardRowScopes.js";
 
 /**
  * KPI Trend Analysis modal per BRD §9.3 (FR-X10 through FR-X17).
@@ -81,12 +86,17 @@ function TrendModal({
       ? "YTD"
       : "Daily";
   const useV2 = Boolean(kpi?.rawName);
+  const shouldSendProductType =
+    Boolean(productType) &&
+    (category === "p" || category === "q" || category === "P" || category === "Q");
   const v2Payload = useV2
     ? {
         context: {
           section: sectionName,
           category: categoryIdToName(category),
           granularity: v2Granularity,
+          ...(subSection ? { sub_section: subSection } : {}),
+          ...(shouldSendProductType ? { product_type: productType } : {}),
         },
         date: range === "today" ? resolved.from : null,
         from: range === "today" ? null : isMonthly ? monthlyFrom : resolved.from,
@@ -150,17 +160,21 @@ function TrendModal({
     // Pin the series to one product type + sub-section so the line is a
     // single consistent series, not a blend (BRD §13.6). product_type is
     // empty for section-level KPIs (OEE) — those rows always pass.
-    const pinned = v2Rows.filter((r) => {
+    const scoped = v2Rows.filter((r) => {
       if (r.section !== sectionName || r.kpi_name !== kpi.rawName) return false;
       if (subSection && r.sub_section !== subSection) return false;
-      if (productType) {
-        const pt = r.product_type;
-        if (pt != null && pt !== "" && pt !== "nan" && pt !== productType) {
-          return false;
-        }
+      if (
+        productType &&
+        !isProductAgnosticKpi(kpi.rawName) &&
+        denanDimension(r.product_type) !== productType
+      ) {
+        return false;
       }
       return true;
     });
+    const pinned = isProductAgnosticKpi(kpi.rawName)
+      ? preferScopedRows(scoped, productType)
+      : scoped;
 
     if (isMonthly) {
       // One point per month = the latest available MTD record in that

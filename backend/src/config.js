@@ -45,7 +45,8 @@ export const config = {
   upstream: {
     url: required("AWS_DATA_URL"),
     apiKey: required("AWS_DATA_API_KEY"),
-    table: optional("AWS_DATA_TABLE", "gold_dummy"),
+    table: optional("AWS_DATA_TABLE", "databricks_table/gold"),
+    sqlTable: optional("AWS_DATA_SQL_TABLE", "gold"),
     timeoutMs: asInt("AWS_DATA_TIMEOUT_MS", 30_000),
   },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),

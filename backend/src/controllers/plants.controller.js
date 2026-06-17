@@ -47,7 +47,7 @@ export async function getSummary(req, res, next) {
                    PARTITION BY kpi_name
                    ORDER BY year DESC, CAST(month AS INTEGER) DESC, day DESC
                  ) AS rn
-          FROM ${config.upstream.table}
+          FROM ${config.upstream.sqlTable}
           WHERE plant = ${escapeLiteral("Banmore")}
             AND department = ${escapeLiteral("Production")}
             AND machine = ${escapeLiteral("nan")}
@@ -88,7 +88,7 @@ export async function getAsOf(req, res, next) {
     const data = await cached(key, async () => {
       const sql = `
         SELECT MAX(${DATE_YYYYMMDD}) AS d
-        FROM ${config.upstream.table}
+        FROM ${config.upstream.sqlTable}
         WHERE plant = ${escapeLiteral("Banmore")}
           AND department = ${escapeLiteral("Production")}
       `.trim();
@@ -146,7 +146,7 @@ export async function getSectionOee(req, res, next) {
                    PARTITION BY section, sub_section
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
-          FROM ${config.upstream.table}
+          FROM ${config.upstream.sqlTable}
           WHERE plant = ${escapeLiteral("Banmore")}
             AND department = ${escapeLiteral("Production")}
             AND kpi_name = ${escapeLiteral("OEE_o")}

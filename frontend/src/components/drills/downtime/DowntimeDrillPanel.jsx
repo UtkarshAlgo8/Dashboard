@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
+import { snapshotLatest } from "@/lib/drillDate.js";
 
 /**
  * Downtime drill — leaf table per dashboard_kpi_map_reference §11:
@@ -18,11 +19,17 @@ import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
  *   Downtime_category | Code · Machine · Reason · Frequency
  *                     · Total Min · Hrs/Day
  *
- * Source: gold_dummy `Downtime_category` rows already in hand via
- * `rawRows`. The remarks column stores both Code and Reason as
- * "BD-ELEC: Motor overload trip" — split on the first ":" to fill
- * the two columns. unit_of_measurement is hrs; Total DT (Min) is
- * Total Hrs × 60.
+ * Source: gold `Downtime_category` rows already in hand via `rawRows`.
+ * The remarks column stores both Code and Reason as
+ * "BD-ELEC: Motor overload trip" — split on the first ":" to fill the
+ * two columns. unit_of_measurement is hrs; Total DT (Min) = Hrs × 60.
+ *
+ * Scope (journey.md §15.5): Downtime is a MACHINE event — NOT
+ * product-scoped — so we ignore the active product pill and pin section
+ * only. Time (§3): in snapshot mode collapse to the latest available
+ * date so the per-category minutes reconcile with the card; we sum
+ * events WITHIN that day (multiple stoppages per reason) but never
+ * across the trailing window.
  */
 const SECTION_NAME = {
   mix: "Mixing",
@@ -31,22 +38,29 @@ const SECTION_NAME = {
   stk: "Stock",
 };
 
-function DowntimeDrillPanel({ section, rawRows, isLoading = false }) {
+function DowntimeDrillPanel({
+  section,
+  rawRows,
+  mode = "snapshot",
+  isLoading = false,
+}) {
   const sectionName = SECTION_NAME[section] ?? section;
 
   const grouped = useMemo(() => {
     if (!Array.isArray(rawRows)) return [];
-    const rows = rawRows.filter(
-      (r) =>
-        r.section === sectionName &&
-        r.kpi_name === "Downtime_category" &&
-        r.granularity === "Daily",
+    const rows = snapshotLatest(
+      rawRows.filter(
+        (r) =>
+          r.section === sectionName &&
+          r.kpi_name === "Downtime_category" &&
+          r.granularity === "Daily",
+      ),
+      mode,
     );
     const groups = new Map();
     for (const r of rows) {
       const { code, reason } = parseRemarks(r.remarks);
-      const machine =
-        r.machine && r.machine !== "nan" ? r.machine : "—";
+      const machine = r.machine && r.machine !== "nan" ? r.machine : "—";
       const key = `${code}||${machine}||${reason}`;
       if (!groups.has(key)) {
         groups.set(key, {
@@ -71,7 +85,7 @@ function DowntimeDrillPanel({ section, rawRows, isLoading = false }) {
         totalHrs: g.totalHrs,
       }))
       .sort((a, b) => b.totalHrs - a.totalHrs);
-  }, [rawRows, sectionName]);
+  }, [mode, rawRows, sectionName]);
 
   if (grouped.length === 0) {
     if (isLoading) {
@@ -109,18 +123,18 @@ function DowntimeDrillPanel({ section, rawRows, isLoading = false }) {
         }}
       >
         <Table
-        size="small"
-        stickyHeader
-        sx={(t) => ({
-          "& .MuiTableCell-root": {
-            border: "1px solid",
-            borderColor: t.palette.divider,
-          },
-          "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
-          },
-        })}
-      >
+          size="small"
+          stickyHeader
+          sx={(t) => ({
+            "& .MuiTableCell-root": {
+              border: "1px solid",
+              borderColor: t.palette.divider,
+            },
+            "& thead .MuiTableCell-root": {
+              backgroundColor: t.custom.surface.soft,
+            },
+          })}
+        >
           <TableHead>
             <TableRow>
               <Th align="center">Code Category</Th>

@@ -6,22 +6,23 @@ import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
 import { thresholdTier } from "./thresholds.js";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
+import { snapshotLatest } from "@/lib/drillDate.js";
 
 /**
- * OEE drill panel — derives its data straight from the gold_dummy rows
- * the dashboard fetch already returned (`rawRows`). No second API call.
+ * OEE drill panel — derives its data straight from the gold rows the
+ * dashboard fetch already returned (`rawRows`). No second API call.
  *
- * Per dashboard_kpi_map_reference §3 and §11:
- *   - Top tiles (overall A/P/Q) come from `Availability_o`,
- *     `Performance_o`, `Quality_o` rows for the active section,
- *     averaged over the selected date range (AVG of Daily rows).
- *   - Machine table comes from `Availability_m`, `Performance_m`,
- *     `Quality_m` rows for the section, grouped by machine and
- *     averaged. OEE_m = A_m × P_m × Q_m display-side per §9.2.
- *
- * Sub-cell click and scrap traceability are intentionally not wired in
- * this commit — once the section-level table works the drill-deeper
- * panels can be re-added against the same data path.
+ * Per journey.md §7.1, §15.5 and dashboard_kpi_map_reference §3/§11:
+ *   - OEE is a MACHINE event — NOT product-scoped (§15.5). The drill
+ *     ignores the active product pill entirely and pins section only.
+ *   - Values are read VERBATIM from the stored row for the snapshot day
+ *     (§7.1: "read VERBATIM… NEVER average daily OEE values"). We do NOT
+ *     average a week of Daily rows — snapshotLatest() collapses to the
+ *     latest available date so the tiles/table reconcile with the card.
+ *   - Top tiles (overall A/P/Q) come from `Availability_o` /
+ *     `Performance_o` / `Quality_o`; the machine table from
+ *     `Availability_m` / `Performance_m` / `Quality_m`. OEE_m =
+ *     A_m × P_m × Q_m display-side per §9.2.
  */
 // Sub-category leaf kpi_names per spec §3 — for each (machine, A/P/Q
 // component), the row click drills into one of these gold_dummy kpis.
@@ -48,13 +49,18 @@ const FIRST_SUB = {
   quality: "defect",
 };
 
-function OeeDrillPanel({ section, rawRows, isLoading = false }) {
+function OeeDrillPanel({
+  section,
+  rawRows,
+  mode = "snapshot",
+  isLoading = false,
+}) {
   const [search, setSearch] = useState("");
   const [selectedCell, setSelectedCell] = useState(null);
   const [subCategory, setSubCategory] = useState(null);
 
-  // Section name in gold_dummy values ("Mixing", "TBM", etc.) — the
-  // panel may receive the UI id ("mix", "tbm") or the full name.
+  // Section name in gold values ("Mixing", "TBM", etc.) — the panel may
+  // receive the UI id ("mix", "tbm") or the full name.
   const sectionName = useMemo(
     () =>
       ({ mix: "Mixing", tbm: "TBM", cur: "Curing", stk: "Stock" })[section] ??
@@ -62,36 +68,48 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
     [section],
   );
 
-  // Average Daily rows for one kpi_name (optionally machine-scoped).
-  const avgDaily = (kpiName, machine) => {
-    if (!Array.isArray(rawRows)) return null;
-    const vals = rawRows
-      .filter(
-        (r) =>
-          r.section === sectionName &&
-          r.kpi_name === kpiName &&
-          r.granularity === "Daily" &&
-          (machine == null || r.machine === machine),
-      )
-      .map((r) => r.actual_value)
-      .filter((v) => typeof v === "number" && Number.isFinite(v));
-    if (vals.length === 0) return null;
-    return vals.reduce((s, v) => s + v, 0) / vals.length;
+  // OEE is machine-scoped only (§15.5): use the rows as-is, no product
+  // filtering. Collapse to the latest available date in snapshot mode so
+  // the drill reconciles with the card and we never average a week.
+  const scopedRows = useMemo(
+    () => snapshotLatest(rawRows ?? [], mode),
+    [rawRows, mode],
+  );
+
+  // Read the stored value for one kpi_name VERBATIM (optionally
+  // machine-scoped). scopedRows is already collapsed to the snapshot day,
+  // so there is one stored row per (kpi, machine) — take it as-is and
+  // never average. In aggregate mode (custom range) more than one day may
+  // be present; we still read the latest matching row, never a mean of
+  // percentages (§7.1).
+  const latestVal = (kpiName, machine) => {
+    if (!Array.isArray(scopedRows)) return null;
+    const matching = scopedRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === kpiName &&
+        r.granularity === "Daily" &&
+        (machine == null || r.machine === machine) &&
+        typeof r.actual_value === "number" &&
+        Number.isFinite(r.actual_value),
+    );
+    if (matching.length === 0) return null;
+    return matching[0].actual_value;
   };
 
   const overall = useMemo(() => {
-    const a = avgDaily("Availability_o");
-    const p = avgDaily("Performance_o");
-    const q = avgDaily("Quality_o");
+    const a = latestVal("Availability_o");
+    const p = latestVal("Performance_o");
+    const q = latestVal("Quality_o");
     if (a == null && p == null && q == null) return null;
     return { availability: a ?? 0, performance: p ?? 0, quality: q ?? 0 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, sectionName]);
+  }, [scopedRows, sectionName]);
 
   const machines = useMemo(() => {
-    if (!Array.isArray(rawRows)) return [];
+    if (!Array.isArray(scopedRows)) return [];
     const names = new Set(
-      rawRows
+      scopedRows
         .filter(
           (r) =>
             r.section === sectionName &&
@@ -107,18 +125,16 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
       .map((name) => ({
         id: name,
         name,
-        availability: avgDaily("Availability_m", name),
-        performance: avgDaily("Performance_m", name),
-        quality: avgDaily("Quality_m", name),
+        availability: latestVal("Availability_m", name),
+        performance: latestVal("Performance_m", name),
+        quality: latestVal("Quality_m", name),
       }))
       .filter(
         (m) =>
-          m.availability != null ||
-          m.performance != null ||
-          m.quality != null,
+          m.availability != null || m.performance != null || m.quality != null,
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, sectionName]);
+  }, [scopedRows, sectionName]);
 
   const filteredMachines = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -128,7 +144,10 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
 
   const handleSelectCell = (machineId, component) => {
     setSelectedCell((current) => {
-      if (current?.machineId === machineId && current?.component === component) {
+      if (
+        current?.machineId === machineId &&
+        current?.component === component
+      ) {
         setSubCategory(null);
         return null;
       }
@@ -141,10 +160,10 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
   // subCategory) tuple. Group Daily rows by `remarks` (the reason text),
   // count events, sum minutes per spec §11.
   const subRows = useMemo(() => {
-    if (!selectedCell || !subCategory || !Array.isArray(rawRows)) return [];
+    if (!selectedCell || !subCategory || !Array.isArray(scopedRows)) return [];
     const leafKpi = SUB_KPI_NAMES[selectedCell.component]?.[subCategory];
     if (!leafKpi) return [];
-    const matching = rawRows.filter(
+    const matching = scopedRows.filter(
       (r) =>
         r.section === sectionName &&
         r.kpi_name === leafKpi &&
@@ -165,7 +184,8 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
           traceable: subCategory === "scrap",
         };
         if (typeof r.actual_value === "number") cur.qty += r.actual_value;
-        if (typeof r.threshold_value === "number") cur.totalProduced += r.threshold_value;
+        if (typeof r.threshold_value === "number")
+          cur.totalProduced += r.threshold_value;
         byItem.set(key, cur);
       }
       return [...byItem.values()]
@@ -195,7 +215,7 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
       .filter((r) => r.durationMin > 0)
       .sort((a, b) => b.durationMin - a.durationMin)
       .map((r) => ({ ...r, durationMin: Math.round(r.durationMin) }));
-  }, [selectedCell, subCategory, rawRows, sectionName]);
+  }, [selectedCell, subCategory, scopedRows, sectionName]);
 
   const selectedMachine = selectedCell
     ? { id: selectedCell.machineId, name: selectedCell.machineId }
@@ -207,7 +227,10 @@ function OeeDrillPanel({ section, rawRows, isLoading = false }) {
     if (!selectedCell) return null;
     const m = machines.find((x) => x.id === selectedCell.machineId);
     if (!m) return null;
-    return thresholdTier(selectedCell.component, m[selectedCell.component] ?? 0);
+    return thresholdTier(
+      selectedCell.component,
+      m[selectedCell.component] ?? 0,
+    );
   }, [selectedCell, machines]);
 
   if (!overall) {

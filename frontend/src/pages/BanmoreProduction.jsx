@@ -90,9 +90,10 @@ function BanmoreProduction() {
     resetDrill,
   } = useDashboardFetch();
 
-  const sectionName = { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[
-    dashboard.section
-  ] ?? dashboard.section;
+  const sectionName =
+    { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[
+      dashboard.section
+    ] ?? dashboard.section;
 
   // Per-section OEE for the sidebar donut rings, tracking the active
   // granularity (Today / Month / Year). Keyed by artifact section id.
@@ -147,7 +148,13 @@ function BanmoreProduction() {
 
   // Stock sub-sections (BRD §13.2) and the product types each one carries
   // (BRD §13.3). The first sub-section is the default on entering Stock.
-  const STOCK_SUBSECTIONS = ["4 Roll", "Extruder", "3 Roll", "Cutter", "Slitter"];
+  const STOCK_SUBSECTIONS = [
+    "4 Roll",
+    "Extruder",
+    "3 Roll",
+    "Cutter",
+    "Slitter",
+  ];
   const STOCK_PRODUCT_TYPES = {
     "4 Roll": ["Rubberised Ply", "Rubberised Belt"],
     Extruder: ["Sidewall", "Tread"],
@@ -162,7 +169,10 @@ function BanmoreProduction() {
   const activeProductType =
     dashboard.productType ??
     (isStock ? "Overall" : SECTION_DEFAULT_PRODUCT[dashboard.section]);
-  const stockProductOptions = ["Overall", ...(STOCK_PRODUCT_TYPES[activeSubSection] ?? [])];
+  const stockProductOptions = [
+    "Overall",
+    ...(STOCK_PRODUCT_TYPES[activeSubSection] ?? []),
+  ];
 
   const onStockSubChange = (next) => {
     // Switching sub-section resets the product type back to the sub-section
@@ -246,7 +256,11 @@ function BanmoreProduction() {
     // accidentally scoped to a stale sub-section.
     if (id === "stk") {
       setFilter(
-        { section: id, subSection: STOCK_SUBSECTIONS[0], productType: "Overall" },
+        {
+          section: id,
+          subSection: STOCK_SUBSECTIONS[0],
+          productType: "Overall",
+        },
         true,
       );
     } else {
@@ -266,12 +280,13 @@ function BanmoreProduction() {
   // initial mount, where the default section has no product type yet).
   useEffect(() => {
     if (dashboard.productType == null) {
-      const def = isStock ? "Overall" : SECTION_DEFAULT_PRODUCT[dashboard.section];
+      const def = isStock
+        ? "Overall"
+        : SECTION_DEFAULT_PRODUCT[dashboard.section];
       if (def) setFilter({ productType: def }, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboard.section]);
-
 
   // Only one drill open at a time. Clicking a different card closes the
   // previous one; clicking the same card again closes it.
@@ -433,7 +448,10 @@ function BanmoreProduction() {
                   >
                     {isStock ? (
                       <NavTabs
-                        items={STOCK_SUBSECTIONS.map((s) => ({ id: s, label: s }))}
+                        items={STOCK_SUBSECTIONS.map((s) => ({
+                          id: s,
+                          label: s,
+                        }))}
                         value={activeSubSection}
                         onChange={onStockSubChange}
                         layoutId="stockSubFill"
@@ -443,7 +461,10 @@ function BanmoreProduction() {
                         dashboard.category === "q") &&
                       prodSubOptions.length > 0 && (
                         <NavTabs
-                          items={prodSubOptions.map((o) => ({ id: o, label: o }))}
+                          items={prodSubOptions.map((o) => ({
+                            id: o,
+                            label: o,
+                          }))}
                           // Selecting a product type sends it to the backend
                           // (server-side filter / real API call).
                           value={activeProductType}
@@ -467,7 +488,10 @@ function BanmoreProduction() {
                     }}
                   >
                     <NavTabs
-                      items={stockProductOptions.map((o) => ({ id: o, label: o }))}
+                      items={stockProductOptions.map((o) => ({
+                        id: o,
+                        label: o,
+                      }))}
                       value={activeProductType}
                       onChange={onStockProductChange}
                       layoutId="stockProdFill"
@@ -505,6 +529,7 @@ function BanmoreProduction() {
                           allDrillRows={drillRows}
                           rawRows={rawRows}
                           prodSub={activeProductType}
+                          mode={dashboard.mode}
                           isLoading={isDrillLoading}
                         />
                       </Box>
@@ -562,6 +587,7 @@ function DrillPanelRouter({
   allDrillRows,
   rawRows,
   prodSub,
+  mode,
   isLoading,
 }) {
   if (!kpi) return null;
@@ -581,6 +607,7 @@ function DrillPanelRouter({
         <OeeDrillPanel
           section={section}
           rawRows={rawRows}
+          mode={mode}
           isLoading={isLoading}
         />
       );
@@ -592,6 +619,7 @@ function DrillPanelRouter({
           section={section}
           prodSub={prodSub}
           rawRows={rawRows}
+          mode={mode}
           isLoading={isLoading}
         />
       );
@@ -600,6 +628,7 @@ function DrillPanelRouter({
         <DowntimeDrillPanel
           section={section}
           rawRows={rawRows}
+          mode={mode}
           isLoading={isLoading}
         />
       );
@@ -621,6 +650,7 @@ function DrillPanelRouter({
           drillRows={drillRows}
           section={section}
           sectionName={sectionName}
+          mode={mode}
           isLoading={isLoading}
         />
       );

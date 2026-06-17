@@ -1,5 +1,6 @@
 import { Stack } from "@mui/material";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
+import { snapshotLatestPerSeries } from "@/lib/drillDate.js";
 import FtdDrillPanel from "@/components/drills/quality/FtdDrillPanel.jsx";
 import ScrapDrillPanel from "@/components/drills/quality/ScrapDrillPanel.jsx";
 import ScrapRateDrillPanel from "@/components/drills/quality/ScrapRateDrillPanel.jsx";
@@ -24,6 +25,7 @@ export default function GenericTableDrillPanel({
   drillRows,
   section,
   sectionName,
+  mode = "snapshot",
   isLoading = false,
 }) {
   // While the drill fetch is still in flight and we don't yet have any
@@ -32,12 +34,16 @@ export default function GenericTableDrillPanel({
   if (isLoading && (!drillRows || drillRows.length === 0)) {
     return <DrillSkeleton title rows={5} cols={4} />;
   }
+  // Time (journey.md §3): in snapshot mode collapse every series to its
+  // latest available date BEFORE the sub-panels aggregate, so a "Today"
+  // drill reconciles with the card instead of summing/averaging the
+  // trailing window. Done per-series so each entity keeps its own newest
+  // row. Aggregate mode (custom range) passes through untouched.
+  const windowed = snapshotLatestPerSeries(drillRows ?? [], mode);
   // Per spec §10, drill rows must be filtered to the active section
   // before aggregation. Absenteeism is plant-level (section=NULL/"nan")
   // — it bypasses this filter inside its own panel.
-  const sectionFiltered = (drillRows ?? []).filter(
-    (r) => r.section === sectionName,
-  );
+  const sectionFiltered = windowed.filter((r) => r.section === sectionName);
   switch (kpi?.id) {
     // Quality
     case "ftq":
@@ -55,9 +61,9 @@ export default function GenericTableDrillPanel({
       return <SpecificPowerDrillPanel drillRows={sectionFiltered} />;
     // Morale
     case "ab":
-      // Plant-level — pass raw (already filtered to Absenteeism_section
-      // children regardless of section by the router).
-      return <AbsenteeismDrillPanel drillRows={drillRows} />;
+      // Plant-level — pass the windowed rows (NOT section-filtered;
+      // Absenteeism_section children span every section).
+      return <AbsenteeismDrillPanel drillRows={windowed} />;
     case "tq":
       return <TqmDrillPanel drillRows={sectionFiltered} />;
     case "sg":
