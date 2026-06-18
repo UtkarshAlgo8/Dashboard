@@ -21,12 +21,12 @@ function splitRemarks(remarks) {
   };
 }
 
-export default function ReportableDrillPanel({ drillRows }) {
+export default function ReportableDrillPanel({ drillRows, granularity = "Daily" }) {
   const rows = (drillRows ?? [])
     .filter(
       (r) =>
         r.kpiName === "Reportable_log" &&
-        r.granularity === "Daily" &&
+        r.granularity === granularity &&
         typeof r.actual === "number" &&
         r.actual > 0,
     )

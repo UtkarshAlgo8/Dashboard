@@ -16,11 +16,11 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function SafetyAuditDrillPanel({ drillRows }) {
+export default function SafetyAuditDrillPanel({ drillRows, granularity = "Daily" }) {
   const byArea = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Audit_area") continue;
-    if (r.granularity !== "Daily") continue;
+    if (r.granularity !== granularity) continue;
     const area = r.remarks ?? "—";
     if (area === "—") continue;
     if (!byArea.has(area)) byArea.set(area, []);

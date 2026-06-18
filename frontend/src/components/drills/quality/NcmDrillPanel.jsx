@@ -10,11 +10,11 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
  * Batch as part of `drill_down_attribute` when present; gold_dummy
  * currently leaves it as "nan", so we display the SKU itself.
  */
-export default function NcmDrillPanel({ drillRows }) {
+export default function NcmDrillPanel({ drillRows, granularity = "Daily" }) {
   const latestBySkuReason = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "NCM_Hold_sku") continue;
-    if (r.granularity !== "Daily") continue;
+    if (r.granularity !== granularity) continue;
     if (!r.itemCode) continue;
     const sku = r.itemCode;
     const reason = r.remarks ?? "—";

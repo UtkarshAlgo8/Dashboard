@@ -16,11 +16,11 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function TqmDrillPanel({ drillRows }) {
+export default function TqmDrillPanel({ drillRows, granularity = "Daily" }) {
   const byPillar = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "TQM_pillar") continue;
-    if (r.granularity !== "Daily") continue;
+    if (r.granularity !== granularity) continue;
     const pillar = r.remarks ?? "—";
     if (pillar === "—") continue;
     if (!byPillar.has(pillar)) {

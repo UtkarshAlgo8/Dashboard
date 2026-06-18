@@ -12,11 +12,11 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
  *
  * SUM per (SKU, reason) over the active date range, sorted by total desc.
  */
-export default function ScrapDrillPanel({ drillRows }) {
+export default function ScrapDrillPanel({ drillRows, granularity = "Daily" }) {
   const groups = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Defect_Scrap_sku") continue;
-    if (r.granularity !== "Daily") continue;
+    if (r.granularity !== granularity) continue;
     const sku = r.itemCode ?? "—";
     const reason = r.remarks ?? "—";
     const key = `${sku}|${reason}`;

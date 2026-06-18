@@ -26,6 +26,7 @@ export default function GenericTableDrillPanel({
   section,
   sectionName,
   mode = "snapshot",
+  granularity = "Daily",
   isLoading = false,
 }) {
   // While the drill fetch is still in flight and we don't yet have any
@@ -47,43 +48,43 @@ export default function GenericTableDrillPanel({
   switch (kpi?.id) {
     // Quality
     case "ftq":
-      return <FtdDrillPanel drillRows={sectionFiltered} />;
+      return <FtdDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "ds":
-      return <ScrapDrillPanel drillRows={sectionFiltered} />;
+      return <ScrapDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "sr":
-      return <ScrapRateDrillPanel drillRows={sectionFiltered} />;
+      return <ScrapRateDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "rw":
-      return <ReworkDrillPanel drillRows={sectionFiltered} />;
+      return <ReworkDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "ncm":
-      return <NcmDrillPanel drillRows={sectionFiltered} />;
+      return <NcmDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     // Cost
     case "spc":
-      return <SpecificPowerDrillPanel drillRows={sectionFiltered} />;
+      return <SpecificPowerDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     // Morale
     case "ab":
       // Plant-level — pass the windowed rows (NOT section-filtered;
       // Absenteeism_section children span every section).
-      return <AbsenteeismDrillPanel drillRows={windowed} />;
+      return <AbsenteeismDrillPanel drillRows={windowed} granularity={granularity} />;
     case "tq":
-      return <TqmDrillPanel drillRows={sectionFiltered} />;
+      return <TqmDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "sg":
-      return <SuggestionsDrillPanel drillRows={sectionFiltered} />;
+      return <SuggestionsDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "tr":
-      return <TrainingDrillPanel drillRows={sectionFiltered} />;
+      return <TrainingDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     // Safety
     case "ri":
       return (
-        <ReportableDrillPanel drillRows={sectionFiltered} section={section} />
+        <ReportableDrillPanel drillRows={sectionFiltered} section={section} granularity={granularity} />
       );
     case "fa":
       return (
-        <FirstAidDrillPanel drillRows={sectionFiltered} section={section} />
+        <FirstAidDrillPanel drillRows={sectionFiltered} section={section} granularity={granularity} />
       );
     case "nm":
-      return <NearMissDrillPanel drillRows={sectionFiltered} />;
+      return <NearMissDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "sa":
       return (
-        <SafetyAuditDrillPanel drillRows={sectionFiltered} section={section} />
+        <SafetyAuditDrillPanel drillRows={sectionFiltered} section={section} granularity={granularity} />
       );
     default:
       return (

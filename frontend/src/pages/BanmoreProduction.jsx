@@ -592,6 +592,13 @@ function DrillPanelRouter({
 }) {
   if (!kpi) return null;
 
+  // Drilldown inherits the card's granularity (journey.md §5): the panels
+  // filter their rows to this exact granularity so the children always
+  // match the card. `shift` carries the card's effective granularity
+  // (Daily / Shift A-C / MTD / YTD); fall back to Daily when none is set
+  // (All-Shifts Today / custom range).
+  const granularity = shift ?? "Daily";
+
   // Filter drill rows to this KPI's drill TARGET kpi_names (children),
   // not the landing kpi_name itself. drillTargets is the list of child
   // kpi_names the panel needs to render (e.g. FTQ → ["FTQ_m"]).
@@ -608,6 +615,7 @@ function DrillPanelRouter({
           section={section}
           rawRows={rawRows}
           mode={mode}
+          granularity={granularity}
           isLoading={isLoading}
         />
       );
@@ -620,6 +628,7 @@ function DrillPanelRouter({
           prodSub={prodSub}
           rawRows={rawRows}
           mode={mode}
+          granularity={granularity}
           isLoading={isLoading}
         />
       );
@@ -629,6 +638,7 @@ function DrillPanelRouter({
           section={section}
           rawRows={rawRows}
           mode={mode}
+          granularity={granularity}
           isLoading={isLoading}
         />
       );
@@ -651,6 +661,7 @@ function DrillPanelRouter({
           section={section}
           sectionName={sectionName}
           mode={mode}
+          granularity={granularity}
           isLoading={isLoading}
         />
       );

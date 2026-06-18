@@ -9,12 +9,12 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
  * in `actual_value`. SUM per category over the active date range,
  * share = pct of total.
  */
-export default function NearMissDrillPanel({ drillRows }) {
+export default function NearMissDrillPanel({ drillRows, granularity = "Daily" }) {
   const byCat = new Map();
   let total = 0;
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Near_Miss_category") continue;
-    if (r.granularity !== "Daily") continue;
+    if (r.granularity !== granularity) continue;
     const cat = r.remarks ?? "—";
     if (cat === "—") continue;
     if (!byCat.has(cat)) byCat.set(cat, 0);

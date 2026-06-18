@@ -53,6 +53,7 @@ function OeeDrillPanel({
   section,
   rawRows,
   mode = "snapshot",
+  granularity = "Daily",
   isLoading = false,
 }) {
   const [search, setSearch] = useState("");
@@ -88,7 +89,7 @@ function OeeDrillPanel({
       (r) =>
         r.section === sectionName &&
         r.kpi_name === kpiName &&
-        r.granularity === "Daily" &&
+        r.granularity === granularity &&
         (machine == null || r.machine === machine) &&
         typeof r.actual_value === "number" &&
         Number.isFinite(r.actual_value),
@@ -114,7 +115,7 @@ function OeeDrillPanel({
           (r) =>
             r.section === sectionName &&
             r.kpi_name === "OEE_m" &&
-            r.granularity === "Daily" &&
+            r.granularity === granularity &&
             r.machine &&
             r.machine !== "nan",
         )
@@ -167,7 +168,7 @@ function OeeDrillPanel({
       (r) =>
         r.section === sectionName &&
         r.kpi_name === leafKpi &&
-        r.granularity === "Daily" &&
+        r.granularity === granularity &&
         r.machine === selectedCell.machineId,
     );
     if (matching.length === 0) return [];
@@ -215,7 +216,7 @@ function OeeDrillPanel({
       .filter((r) => r.durationMin > 0)
       .sort((a, b) => b.durationMin - a.durationMin)
       .map((r) => ({ ...r, durationMin: Math.round(r.durationMin) }));
-  }, [selectedCell, subCategory, scopedRows, sectionName]);
+  }, [selectedCell, subCategory, scopedRows, sectionName, granularity]);
 
   const selectedMachine = selectedCell
     ? { id: selectedCell.machineId, name: selectedCell.machineId }

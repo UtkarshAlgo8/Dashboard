@@ -11,11 +11,11 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
  *
  * Aggregation: SUM submitted per category over the active date range.
  */
-export default function SuggestionsDrillPanel({ drillRows }) {
+export default function SuggestionsDrillPanel({ drillRows, granularity = "Daily" }) {
   const byCat = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Suggestions_category") continue;
-    if (r.granularity !== "Daily") continue;
+    if (r.granularity !== granularity) continue;
     const cat = r.remarks ?? "—";
     if (cat === "—") continue;
     if (!byCat.has(cat)) byCat.set(cat, 0);

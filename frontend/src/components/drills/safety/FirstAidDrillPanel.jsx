@@ -22,12 +22,12 @@ function splitRemarks(remarks) {
   };
 }
 
-export default function FirstAidDrillPanel({ drillRows }) {
+export default function FirstAidDrillPanel({ drillRows, granularity = "Daily" }) {
   const rows = (drillRows ?? [])
     .filter(
       (r) =>
         r.kpiName === "First_Aid_log" &&
-        r.granularity === "Daily" &&
+        r.granularity === granularity &&
         typeof r.actual === "number" &&
         r.actual > 0,
     )

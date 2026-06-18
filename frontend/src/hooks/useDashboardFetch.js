@@ -180,15 +180,17 @@ export function useDashboardFetch() {
   // children for the active card. Lambda's 5000-row cap applies only to
   // drill-level rows here, not the landing band.
   //
-  // Drill panels show per-machine / per-area breakdowns over the period,
-  // which needs Daily granularity. The landing payload may use MTD/YTD
-  // (for pre-aggregated headline values), but the drill fetch overrides
-  // back to Daily so drill panels never get a single MTD/YTD row.
+  // Drilldown inherits the SAME granularity as the card (journey.md §5):
+  // if the card is Shift B, every machine row is Shift B too; Month → MTD,
+  // Year → YTD, Today → Daily. We therefore fetch drill children at the
+  // card's effective granularity (state.granularity), falling back to
+  // Daily only when no granularity is active (All-Shifts Today / custom
+  // range, where the panels aggregate Daily rows over the window).
   const drillPayload = state.drillKpis
     ? {
         context: {
           ...buildContext(state),
-          granularity: "Daily",
+          granularity: state.granularity ?? "Daily",
         },
         date: state.date,
         from: state.from,

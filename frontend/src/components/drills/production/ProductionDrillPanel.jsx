@@ -88,6 +88,7 @@ function ProductionDrillPanel({
   prodSub,
   rawRows,
   mode = "snapshot",
+  granularity = "Daily",
   isLoading = false,
 }) {
   const [search, setSearch] = useState("");
@@ -119,14 +120,16 @@ function ProductionDrillPanel({
   // Production_m value differs from that sum, so doing so makes the
   // machine lens show a different number when a pill is active vs not.
   //
-  // Granularity / time: the drill fetch always pulls Daily rows over the
-  // selected window (a trailing 7-day window for the "today" preset, so
-  // the sparkline has points). The headline card reads only the LATEST
-  // day's value (snapshot mode). The table must match it: in snapshot
-  // mode keep only the rows on the latest available date — otherwise we
-  // SUM every Daily row in the window and the table shows ~7× the card.
-  // In aggregate mode (an explicit custom range) summing the window is
-  // the intended behaviour, so we keep all Daily rows.
+  // Granularity / time: the drill inherits the card's granularity
+  // (journey.md §5) — Shift B card → Shift B rows, Month → MTD, Year →
+  // YTD, Today → Daily. The drill fetch pulls rows at that same
+  // granularity over the selected window (a trailing 7-day window for the
+  // "today" preset, so the sparkline has points). The headline card reads
+  // only the LATEST row's value (snapshot mode). The table must match it:
+  // in snapshot mode keep only the rows on the latest available date —
+  // otherwise we SUM every row in the window and the table overshoots the
+  // card. In aggregate mode (an explicit custom range) summing the window
+  // is the intended behaviour, so we keep all rows.
   const scopedRows = useMemo(() => {
     if (!Array.isArray(rawRows)) return [];
 
@@ -138,7 +141,7 @@ function ProductionDrillPanel({
       (r) =>
         r.section === sectionName &&
         r.kpi_name === kpiName &&
-        r.granularity === "Daily" &&
+        r.granularity === granularity &&
         r.unit_of_measurement === unit &&
         (ptFilter == null || r.product_type === ptFilter),
     );
@@ -146,7 +149,7 @@ function ProductionDrillPanel({
     // Snapshot mode collapses to the latest available date so the table
     // reconciles with the card; aggregate mode keeps the full window.
     return snapshotLatest(matched, mode);
-  }, [rawRows, sectionName, kpiName, prodSub, unit, mode]);
+  }, [rawRows, sectionName, kpiName, prodSub, unit, mode, granularity]);
 
   // Group per the active lens. We show the ACTUAL stored value per row,
   // never a sum: each leaf kpi already carries the pre-aggregated value

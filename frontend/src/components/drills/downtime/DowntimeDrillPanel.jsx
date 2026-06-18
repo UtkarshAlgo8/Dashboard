@@ -42,6 +42,7 @@ function DowntimeDrillPanel({
   section,
   rawRows,
   mode = "snapshot",
+  granularity = "Daily",
   isLoading = false,
 }) {
   const sectionName = SECTION_NAME[section] ?? section;
@@ -53,7 +54,7 @@ function DowntimeDrillPanel({
         (r) =>
           r.section === sectionName &&
           r.kpi_name === "Downtime_category" &&
-          r.granularity === "Daily",
+          r.granularity === granularity,
       ),
       mode,
     );
@@ -85,7 +86,7 @@ function DowntimeDrillPanel({
         totalHrs: g.totalHrs,
       }))
       .sort((a, b) => b.totalHrs - a.totalHrs);
-  }, [mode, rawRows, sectionName]);
+  }, [mode, rawRows, sectionName, granularity]);
 
   if (grouped.length === 0) {
     if (isLoading) {
