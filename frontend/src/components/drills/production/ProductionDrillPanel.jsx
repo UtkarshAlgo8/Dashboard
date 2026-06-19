@@ -93,6 +93,13 @@ function ProductionDrillPanel({
 }) {
   const [search, setSearch] = useState("");
   const [viewBy, setViewBy] = useState("machine");
+  // dashboard_doc.md §7: Curing only — a trench (Tredge) level sits ABOVE
+  // the press/SKU table. Selecting a Tredge filters the press/SKU lenses to
+  // that sub_section (Production_m / _m_sku / _sku_m all carry sub_section =
+  // Tredge N). Other sections have no trench tier (selectedTredge stays
+  // null and the table shows all rows, unchanged).
+  const isCuring = section === "cur";
+  const [selectedTredge, setSelectedTredge] = useState(null);
 
   const unitOptions = UNIT_OPTIONS[section] ?? null;
   const defaultUnit = unitOptions ? unitOptions[0].value : "nos";
@@ -143,13 +150,55 @@ function ProductionDrillPanel({
         r.kpi_name === kpiName &&
         r.granularity === granularity &&
         r.unit_of_measurement === unit &&
-        (ptFilter == null || r.product_type === ptFilter),
+        (ptFilter == null || r.product_type === ptFilter) &&
+        // Curing trench drill (§7): once a Tredge is picked, the press/SKU
+        // table is scoped to that trench's sub_section.
+        (!isCuring || selectedTredge == null || r.sub_section === selectedTredge),
     );
 
     // Snapshot mode collapses to the latest available date so the table
     // reconciles with the card; aggregate mode keeps the full window.
     return snapshotLatest(matched, mode);
-  }, [rawRows, sectionName, kpiName, prodSub, unit, mode, granularity]);
+  }, [
+    rawRows,
+    sectionName,
+    kpiName,
+    prodSub,
+    unit,
+    mode,
+    granularity,
+    isCuring,
+    selectedTredge,
+  ]);
+
+  // Curing trench rows (§7): Production_s, one row per Tredge. Backs the
+  // trench selector shown above the press/SKU table for Curing only.
+  const tredgeRows = useMemo(() => {
+    if (!isCuring || !Array.isArray(rawRows)) return [];
+    const ptFilter = prodSub ? prodSub : null;
+    const matched = rawRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === "Production_s" &&
+        r.granularity === granularity &&
+        r.unit_of_measurement === unit &&
+        (ptFilter == null || r.product_type === ptFilter) &&
+        r.sub_section &&
+        r.sub_section !== "nan",
+    );
+    const latest = snapshotLatest(matched, mode);
+    const byTredge = new Map();
+    for (const r of latest) {
+      const t = r.sub_section;
+      const cur = byTredge.get(t) ?? { tredge: t, planned: null, actual: null };
+      if (typeof r.threshold_value === "number") cur.planned = r.threshold_value;
+      if (typeof r.actual_value === "number") cur.actual = r.actual_value;
+      byTredge.set(t, cur);
+    }
+    return [...byTredge.values()].sort((a, b) =>
+      a.tredge.localeCompare(b.tredge, undefined, { numeric: true }),
+    );
+  }, [isCuring, rawRows, sectionName, prodSub, unit, mode, granularity]);
 
   // Group per the active lens. We show the ACTUAL stored value per row,
   // never a sum: each leaf kpi already carries the pre-aggregated value
@@ -218,7 +267,12 @@ function ProductionDrillPanel({
     ? `${sectionTitle} — ${prodSub} Production`
     : `${sectionTitle} Production`;
 
-  if (filtered.length === 0) {
+  // Curing trench tier (§7): until a Tredge is selected, show the
+  // trench-wise list (Production_s). Selecting one reveals its press/SKU
+  // table below. Other sections skip this and go straight to the table.
+  const showTrenchPicker = isCuring && tredgeRows.length > 0;
+
+  if (filtered.length === 0 && !showTrenchPicker) {
     if (isLoading) {
       return <DrillSkeleton title rows={5} cols={5} />;
     }
@@ -246,33 +300,156 @@ function ProductionDrillPanel({
         {title}
       </Typography>
 
-      <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
-        <ToggleGroup
-          label="View by"
-          value={viewBy}
-          onChange={setViewBy}
-          options={VIEW_BY_OPTIONS}
+      {/* Curing trench tier (§7): Tredge-wise list (Production_s). Click a
+          Tredge to drill into its presses / SKUs. */}
+      {showTrenchPicker && (
+        <TrenchPicker
+          rows={tredgeRows}
+          selected={selectedTredge}
+          onSelect={(t) =>
+            setSelectedTredge((cur) => (cur === t ? null : t))
+          }
+          unit={unitLabel}
+          fmt={fmt}
         />
-        {unitOptions && (
-          <ToggleGroup
-            label="Unit"
-            value={unit}
-            onChange={setUnit}
-            options={unitOptions}
-          />
-        )}
-      </Stack>
+      )}
 
-      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
-        <MachineSearch value={search} onChange={setSearch} />
-        <Box sx={{ flex: 1 }} />
-        <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-          {filtered.length} of {aggregated.length} rows
-          {prodSub ? ` in ${prodSub}` : ""}
-        </Typography>
-      </Stack>
+      {/* Press/SKU breakdown — for Curing, only after a Tredge is picked. */}
+      {(!showTrenchPicker || selectedTredge) && (
+        <>
+          <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
+            <ToggleGroup
+              label="View by"
+              value={viewBy}
+              onChange={setViewBy}
+              options={VIEW_BY_OPTIONS}
+            />
+            {unitOptions && (
+              <ToggleGroup
+                label="Unit"
+                value={unit}
+                onChange={setUnit}
+                options={unitOptions}
+              />
+            )}
+          </Stack>
 
-      <ResultTable rows={filtered} viewBy={viewBy} unit={unitLabel} fmt={fmt} />
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1.5}
+            flexWrap="wrap"
+          >
+            <MachineSearch value={search} onChange={setSearch} />
+            <Box sx={{ flex: 1 }} />
+            <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+              {filtered.length} of {aggregated.length} rows
+              {selectedTredge ? ` in ${selectedTredge}` : ""}
+              {prodSub ? ` · ${prodSub}` : ""}
+            </Typography>
+          </Stack>
+
+          {filtered.length > 0 ? (
+            <ResultTable
+              rows={filtered}
+              viewBy={viewBy}
+              unit={unitLabel}
+              fmt={fmt}
+            />
+          ) : (
+            <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
+              <Typography sx={{ fontSize: 13 }}>
+                No press / SKU rows for {selectedTredge ?? sectionName} in this
+                fetch.
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+    </Stack>
+  );
+}
+
+/**
+ * Curing trench tier (§7): one clickable row per Tredge (Production_s).
+ * Selecting a Tredge drills into its presses / SKUs below.
+ */
+function TrenchPicker({ rows, selected, onSelect, unit, fmt }) {
+  const theme = useTheme();
+  return (
+    <Stack spacing={1}>
+      <Typography
+        sx={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.4,
+        }}
+      >
+        Trench-wise — click to drill into presses
+      </Typography>
+      <TableContainer
+        sx={{ border: 1, borderColor: "divider", borderRadius: 1.25 }}
+      >
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <Th align="left">Tredge</Th>
+              <Th>{`Planned (${unit})`}</Th>
+              <Th>{`Actual (${unit})`}</Th>
+              <Th>Achievement</Th>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((r) => {
+              const ach =
+                r.planned > 0 ? (r.actual / r.planned) * 100 : null;
+              const achColor =
+                ach == null
+                  ? theme.palette.text.disabled
+                  : ach >= 100
+                    ? theme.custom.brand.green
+                    : ach >= 95
+                      ? theme.custom.brand.amber
+                      : theme.custom.brand.red;
+              const isSel = selected === r.tredge;
+              return (
+                <TableRow
+                  key={r.tredge}
+                  hover
+                  onClick={() => onSelect(r.tredge)}
+                  sx={{
+                    cursor: "pointer",
+                    backgroundColor: isSel
+                      ? `${theme.custom.brand.orange}1f`
+                      : undefined,
+                  }}
+                >
+                  <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
+                    {r.tredge}
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontSize: 13 }}>
+                    {fmt(r.planned)}
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    sx={{ fontSize: 13, fontWeight: 600 }}
+                  >
+                    {fmt(r.actual)}
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    sx={{ fontSize: 13, fontWeight: 700, color: achColor }}
+                  >
+                    {ach == null ? "—" : `${ach.toFixed(1)}%`}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Stack>
   );
 }

@@ -164,6 +164,13 @@ function BanmoreProduction() {
   };
   const isStock = dashboard.section === "stk";
   const activeSubSection = dashboard.subSection ?? STOCK_SUBSECTIONS[0];
+  // dashboard_doc.md §3/§8: OEE is disambiguated by sub_section. Stock OEE
+  // has one OEE_o row PER sub_section (5 rows/date), so a plot/shift card
+  // that doesn't pin one stacks all five points on the same date. Stock is
+  // always viewed per sub_section, so pin the resolved sub_section (which
+  // defaults to the first one before the user picks). Other sections have a
+  // single section-level OEE_o row (sub_section empty), so they stay null.
+  const pinnedSubSection = isStock ? activeSubSection : dashboard.subSection;
   // The active product type (sent to the backend). Falls back to the
   // section default. "Overall" = the Stock sub-section total.
   const activeProductType =
@@ -543,7 +550,7 @@ function BanmoreProduction() {
                     <ShiftComparisonCard
                       section={sectionName}
                       rows={rawRows ?? []}
-                      subSection={dashboard.subSection}
+                      subSection={pinnedSubSection}
                       productType={dashboard.productType}
                     />
                   </Box>
@@ -561,7 +568,7 @@ function BanmoreProduction() {
         kpi={trendKpi}
         section={dashboard.section}
         category={dashboard.category}
-        subSection={dashboard.subSection}
+        subSection={pinnedSubSection}
         productType={dashboard.productType}
         asOf={asOf}
       />
@@ -610,6 +617,7 @@ function DrillPanelRouter({
   switch (kpi.drillType) {
     // Productivity
     case "mixOEE":
+    case "curOEE":
       return (
         <OeeDrillPanel
           section={section}
@@ -617,11 +625,15 @@ function DrillPanelRouter({
           mode={mode}
           granularity={granularity}
           isLoading={isLoading}
+          // dashboard_doc.md §6: Curing inserts a trench (OEE_s) tier above
+          // the press table. curOEE turns it on; mixOEE keeps the flat flow.
+          trench={kpi.drillType === "curOEE"}
         />
       );
     case "mixProd":
     case "tbmProd":
     case "stkProd":
+    case "curProd":
       return (
         <ProductionDrillPanel
           section={section}

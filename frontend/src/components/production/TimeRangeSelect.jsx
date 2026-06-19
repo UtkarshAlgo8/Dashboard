@@ -25,6 +25,11 @@ import { DateRangeFilterDialog } from "@/components/common";
  *
  * Parent owns `preset`, `from`, `to` (ISO yyyy-MM-dd strings) and
  * optionally `shift` ("all" | "a" | "b" | "c").
+ *
+ * `presetLabels` optionally overrides the display text per preset id
+ * WITHOUT changing the ids — the dashboard header keeps Today/Month/Year,
+ * while the Trend modal passes Daily/Monthly/Yearly (dashboard_doc.md §1).
+ * The granularity mapping downstream keys off the id, so it is unaffected.
  */
 const PRESETS = [
   { id: "today", label: "Today" },
@@ -48,6 +53,7 @@ function TimeRangeSelect({
   onToChange,
   shift,
   onShiftChange,
+  presetLabels,
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -118,7 +124,7 @@ function TimeRangeSelect({
       >
         {PRESETS.map((p) => (
           <ToggleButton key={p.id} value={p.id}>
-            {p.label}
+            {presetLabels?.[p.id] ?? p.label}
           </ToggleButton>
         ))}
       </ToggleButtonGroup>

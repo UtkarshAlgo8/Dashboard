@@ -123,8 +123,15 @@ const ALLOWED_KPIS = {
   },
   Curing: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", unit: "nos", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      // dashboard_doc.md §6: Curing OEE has a trench level (OEE_s). The
+      // overall OEE_o card drills straight to OEE_s (one row per Tredge),
+      // then to OEE_m (presses). curOEE adds the trench tier on top of the
+      // standard press flow; drillTargets carry OEE_s + the _s components.
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "curOEE", drillTargets: ["OEE_s", "Availability_s", "Performance_s", "Quality_s", "Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
+      // dashboard_doc.md §7: Curing Production has a trench level
+      // (Production_s, one row per Tredge), then press/SKU lenses. Only
+      // Curing uses Production_s; other sections keep the standard chain.
+      { id: "prod", name: "Production", unit: "nos", agg: "SUM", drillType: "curProd", drillTargets: ["Production_s", "Production_m", "Production_sku", "Production_m_sku", "Production_sku_m"] },
       { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],

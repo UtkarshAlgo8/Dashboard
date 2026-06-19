@@ -64,9 +64,17 @@ function TrendModal({
   // window wider than the snapshot's trailing few days — back to the
   // start of the as-of year through the as-of date.
   const isMonthly = range === "month" && !from && !to;
+  // Daily trend (dashboard_doc.md §2): the CURRENT MONTH day-by-day, one
+  // point per day, anchored to the latest available date — NOT a single
+  // day. So when the preset is "today" with no custom range, we fetch the
+  // whole current month at Daily granularity and plot every day.
+  const isDailyTrend = range === "today" && !from && !to;
   const anchorIso = asOf ?? resolved.to ?? null;
   const monthlyFrom = anchorIso ? `${anchorIso.slice(0, 4)}-01-01` : resolved.from;
   const monthlyTo = anchorIso ?? resolved.to;
+  // First day of the anchor month → anchor day.
+  const dailyFrom = anchorIso ? `${anchorIso.slice(0, 7)}-01` : resolved.from;
+  const dailyTo = anchorIso ?? resolved.to;
 
   const sectionName = sectionIdToName(section);
 
@@ -98,9 +106,12 @@ function TrendModal({
           ...(subSection ? { sub_section: subSection } : {}),
           ...(shouldSendProductType ? { product_type: productType } : {}),
         },
-        date: range === "today" ? resolved.from : null,
-        from: range === "today" ? null : isMonthly ? monthlyFrom : resolved.from,
-        to: range === "today" ? null : isMonthly ? monthlyTo : resolved.to,
+        // Daily trend sends a RANGE (current month), not a single-day
+        // equality, so the series has one point per day (§2). Monthly/
+        // Yearly use their wider windows; custom ranges pass through.
+        date: null,
+        from: isDailyTrend ? dailyFrom : isMonthly ? monthlyFrom : resolved.from,
+        to: isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to,
         drillKpis: null,
         limit: 10000,
       }
@@ -264,6 +275,11 @@ function TrendModal({
         <Box>
           <TimeRangeSelect
             preset={range}
+            // dashboard_doc.md §1: the Trend modal labels its presets
+            // Daily / Monthly / Yearly (vs the header's Today/Month/Year).
+            // ids stay today/month/year so the granularity mapping below
+            // (Daily / MTD / YTD) is unchanged.
+            presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
             from={from}
             to={to}
             onPresetChange={(p) => {

@@ -1,5 +1,16 @@
 import { useMemo, useState } from "react";
-import { Box, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+  useTheme,
+} from "@mui/material";
 import OverallTiles from "./OverallTiles.jsx";
 import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
@@ -55,10 +66,17 @@ function OeeDrillPanel({
   mode = "snapshot",
   granularity = "Daily",
   isLoading = false,
+  trench = false,
 }) {
   const [search, setSearch] = useState("");
   const [selectedCell, setSelectedCell] = useState(null);
   const [subCategory, setSubCategory] = useState(null);
+  // dashboard_doc.md §6: Curing only — a trench (Tredge) tier sits ABOVE the
+  // press table. OEE_s carries one row per Tredge (with trench-level
+  // Availability_s / Performance_s / Quality_s). Selecting a Tredge scopes
+  // the OEE_m press table to that sub_section. Non-Curing sections pass
+  // trench=false and keep the flat overall→press→leaf flow unchanged.
+  const [selectedTredge, setSelectedTredge] = useState(null);
 
   // Section name in gold values ("Mixing", "TBM", etc.) — the panel may
   // receive the UI id ("mix", "tbm") or the full name.
@@ -98,14 +116,70 @@ function OeeDrillPanel({
     return matching[0].actual_value;
   };
 
+  // Like latestVal but pinned to a sub_section (Tredge) — used by the
+  // Curing trench tier to read OEE_s / Availability_s / etc. per Tredge.
+  const latestValSub = (kpiName, subSection) => {
+    if (!Array.isArray(scopedRows)) return null;
+    const m = scopedRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === kpiName &&
+        r.granularity === granularity &&
+        r.sub_section === subSection &&
+        typeof r.actual_value === "number" &&
+        Number.isFinite(r.actual_value),
+    );
+    return m.length ? m[0].actual_value : null;
+  };
+
+  // Curing trench rows (§6): one per Tredge from OEE_s, each carrying its
+  // trench-level Availability_s / Performance_s / Quality_s.
+  const tredges = useMemo(() => {
+    if (!trench || !Array.isArray(scopedRows)) return [];
+    const names = new Set(
+      scopedRows
+        .filter(
+          (r) =>
+            r.section === sectionName &&
+            r.kpi_name === "OEE_s" &&
+            r.granularity === granularity &&
+            r.sub_section &&
+            r.sub_section !== "nan",
+        )
+        .map((r) => r.sub_section),
+    );
+    return [...names]
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map((t) => ({
+        id: t,
+        name: t,
+        oee: latestValSub("OEE_s", t),
+        availability: latestValSub("Availability_s", t),
+        performance: latestValSub("Performance_s", t),
+        quality: latestValSub("Quality_s", t),
+      }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trench, scopedRows, sectionName, granularity]);
+
   const overall = useMemo(() => {
+    // When a Tredge is selected (Curing §6), the tiles show that trench's
+    // Availability_s / Performance_s / Quality_s; otherwise the section
+    // overall (_o). This keeps the tiles consistent with the press table
+    // below, which is scoped to the selected trench.
+    if (trench && selectedTredge) {
+      const a = latestValSub("Availability_s", selectedTredge);
+      const p = latestValSub("Performance_s", selectedTredge);
+      const q = latestValSub("Quality_s", selectedTredge);
+      if (a == null && p == null && q == null) return null;
+      return { availability: a ?? 0, performance: p ?? 0, quality: q ?? 0 };
+    }
     const a = latestVal("Availability_o");
     const p = latestVal("Performance_o");
     const q = latestVal("Quality_o");
     if (a == null && p == null && q == null) return null;
     return { availability: a ?? 0, performance: p ?? 0, quality: q ?? 0 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopedRows, sectionName]);
+  }, [scopedRows, sectionName, trench, selectedTredge]);
 
   const machines = useMemo(() => {
     if (!Array.isArray(scopedRows)) return [];
@@ -116,6 +190,9 @@ function OeeDrillPanel({
             r.section === sectionName &&
             r.kpi_name === "OEE_m" &&
             r.granularity === granularity &&
+            // Curing trench drill (§6): once a Tredge is picked, scope the
+            // press table to that trench's sub_section.
+            (!trench || selectedTredge == null || r.sub_section === selectedTredge) &&
             r.machine &&
             r.machine !== "nan",
         )
@@ -135,7 +212,7 @@ function OeeDrillPanel({
           m.availability != null || m.performance != null || m.quality != null,
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopedRows, sectionName]);
+  }, [scopedRows, sectionName, trench, selectedTredge]);
 
   const filteredMachines = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -255,16 +332,38 @@ function OeeDrillPanel({
     );
   }
 
+  const showTrench = trench && tredges.length > 0;
+
   return (
     <Stack spacing={3}>
-      {/* A/P/Q card row — sits as a secondary KPI band under the main grid. */}
+      {/* A/P/Q card row — sits as a secondary KPI band under the main grid.
+          For Curing, reflects the selected trench (or section overall). */}
       <OverallTiles
         overall={overall}
-        sectionName={sectionName}
+        sectionName={
+          showTrench && selectedTredge
+            ? `${sectionName} · ${selectedTredge}`
+            : sectionName
+        }
         machineCount={machines.length}
       />
 
-      {/* Machine-wise breakdown — its own labelled section. */}
+      {/* Curing trench tier (§6): Tredge list (OEE_s + A_s/P_s/Q_s). Click a
+          Tredge to drill into its presses. */}
+      {showTrench && (
+        <TrenchTable
+          tredges={tredges}
+          selected={selectedTredge}
+          onSelect={(t) => {
+            setSelectedTredge((cur) => (cur === t ? null : t));
+            setSelectedCell(null);
+            setSubCategory(null);
+          }}
+        />
+      )}
+
+      {/* Machine-wise breakdown — for Curing, only after a Tredge is picked. */}
+      {(!showTrench || selectedTredge) && (
       <Stack spacing={1.5}>
         <Stack
           direction="row"
@@ -334,7 +433,103 @@ function OeeDrillPanel({
           </>
         )}
       </Stack>
+      )}
     </Stack>
+  );
+}
+
+/**
+ * Curing trench tier (§6): one clickable row per Tredge, showing the
+ * trench's OEE_s + Availability_s / Performance_s / Quality_s. Selecting a
+ * Tredge drills into its presses (OEE_m) below.
+ */
+function TrenchTable({ tredges, selected, onSelect }) {
+  const theme = useTheme();
+  const fmtPct = (v) => (v == null ? "—" : `${v.toFixed(1)}%`);
+  return (
+    <Stack spacing={1.5}>
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: "primary.main",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        Trench-wise OEE — click to drill into presses
+      </Typography>
+      <TableContainer
+        sx={{ border: 1, borderColor: "divider", borderRadius: 1.25 }}
+      >
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TrenchTh align="left">Tredge</TrenchTh>
+              <TrenchTh>OEE</TrenchTh>
+              <TrenchTh>Availability</TrenchTh>
+              <TrenchTh>Performance</TrenchTh>
+              <TrenchTh>Quality</TrenchTh>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {tredges.map((t) => {
+              const isSel = selected === t.id;
+              return (
+                <TableRow
+                  key={t.id}
+                  hover
+                  onClick={() => onSelect(t.id)}
+                  sx={{
+                    cursor: "pointer",
+                    backgroundColor: isSel
+                      ? `${theme.custom.brand.orange}1f`
+                      : undefined,
+                  }}
+                >
+                  <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
+                    {t.name}
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    sx={{ fontSize: 13, fontWeight: 700 }}
+                  >
+                    {fmtPct(t.oee)}
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontSize: 13 }}>
+                    {fmtPct(t.availability)}
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontSize: 13 }}>
+                    {fmtPct(t.performance)}
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontSize: 13 }}>
+                    {fmtPct(t.quality)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
+  );
+}
+
+function TrenchTh({ children, align = "center" }) {
+  return (
+    <TableCell
+      align={align}
+      sx={{
+        fontSize: 11,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: 0.6,
+        color: "text.disabled",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </TableCell>
   );
 }
 
