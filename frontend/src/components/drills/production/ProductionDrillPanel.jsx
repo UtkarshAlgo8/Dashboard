@@ -83,6 +83,24 @@ const VIEW_BY_OPTIONS = [
   { value: "both", label: "Machine + SKU" },
 ];
 
+// Aggregate ("sum") product types whose SKU-level drill children are stored
+// under the finer tyre-category names. When the user has the aggregate
+// selected, the SKU lenses must accept the child categories instead of
+// filtering to the aggregate name (which no child row carries). Mirrors the
+// backend AGGREGATE_PRODUCT_CHILDREN expansion.
+const AGGREGATE_PRODUCT_CHILDREN = {
+  "Green Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
+  "Cured Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
+};
+
+/** Does a row's product_type satisfy the selected product pill? */
+function matchesProduct(rowPt, selected) {
+  if (selected == null) return true;
+  if (rowPt === selected) return true;
+  const kids = AGGREGATE_PRODUCT_CHILDREN[selected];
+  return Boolean(kids && kids.includes(rowPt));
+}
+
 function ProductionDrillPanel({
   section,
   prodSub,
@@ -150,7 +168,7 @@ function ProductionDrillPanel({
         r.kpi_name === kpiName &&
         r.granularity === granularity &&
         r.unit_of_measurement === unit &&
-        (ptFilter == null || r.product_type === ptFilter) &&
+        matchesProduct(r.product_type, ptFilter) &&
         // Curing trench drill (§7): once a Tredge is picked, the press/SKU
         // table is scoped to that trench's sub_section.
         (!isCuring || selectedTredge == null || r.sub_section === selectedTredge),
@@ -182,7 +200,7 @@ function ProductionDrillPanel({
         r.kpi_name === "Production_s" &&
         r.granularity === granularity &&
         r.unit_of_measurement === unit &&
-        (ptFilter == null || r.product_type === ptFilter) &&
+        matchesProduct(r.product_type, ptFilter) &&
         r.sub_section &&
         r.sub_section !== "nan",
     );

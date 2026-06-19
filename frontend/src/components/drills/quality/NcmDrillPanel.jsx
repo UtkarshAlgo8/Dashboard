@@ -2,50 +2,55 @@ import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 
 /**
- * NCM Hold drill — NCM Hold detail (kpi_name = NCM_Hold_sku).
+ * NCM Hold drill — item-code-wise hold details (kpi_name = NCM_Hold_sku).
  *
- * Per spec §11 columns: SKU | Batch | # Batches | Kgs | Hold Reason.
- * NCM_Hold is a SNAP KPI (§9) — show the latest non-zero value per
- * (SKU, hold reason) within the active date range. The dataset stores
- * Batch as part of `drill_down_attribute` when present; gold_dummy
- * currently leaves it as "nan", so we display the SKU itself.
+ * quality-change.md §6: columns are Item Code | Hold Quantity | Final
+ * Status | Remark / Reason. NCM Hold automatically reflects the currently
+ * selected context (section / sub_section / product_type) — the user does
+ * NOT re-pick the product type after clicking. That pinning is already
+ * applied server-side on the drill fetch (the context carries the active
+ * sub_section + product_type), so this panel just renders the rows it is
+ * handed for the snapshot day.
+ *
+ * NCM_Hold is a SNAP KPI (§9) — show the latest value per (item code,
+ * reason) within the active date range.
  */
 export default function NcmDrillPanel({ drillRows, granularity = "Daily" }) {
-  const latestBySkuReason = new Map();
+  const latestByItemReason = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "NCM_Hold_sku") continue;
     if (r.granularity !== granularity) continue;
     if (!r.itemCode) continue;
-    const sku = r.itemCode;
+    const itemCode = r.itemCode;
     const reason = r.remarks ?? "—";
-    const key = `${sku}|${reason}`;
-    const existing = latestBySkuReason.get(key);
+    const key = `${itemCode}|${reason}`;
+    const existing = latestByItemReason.get(key);
     if (!existing || (r.date && r.date > existing.date)) {
-      latestBySkuReason.set(key, {
-        sku,
+      latestByItemReason.set(key, {
+        itemCode,
         reason,
         date: r.date,
         actual: typeof r.actual === "number" ? r.actual : null,
-        unit: r.unit,
+        status: r.status ?? "—",
       });
     }
   }
 
-  const rows = [...latestBySkuReason.values()]
+  const rows = [...latestByItemReason.values()]
     .filter((row) => row.actual != null && row.actual > 0)
     .sort((a, b) => b.actual - a.actual)
-    .map((row) => {
-      const isKg = (row.unit || "").toLowerCase().includes("kg");
-      const kgs = isKg ? Math.round(row.actual) : "—";
-      const batches = isKg ? "—" : Math.round(row.actual);
-      return [row.sku, row.sku, String(batches), String(kgs), row.reason];
-    });
+    .map((row) => [
+      row.itemCode,
+      Math.round(row.actual).toLocaleString(),
+      row.status ?? "—",
+      row.reason,
+    ]);
 
   return (
     <Stack spacing={2}>
       <DrillTable
         title="NCM Hold Details"
-        cols={["SKU", "Batch", "# Batches", "Kgs", "Hold Reason"]}
+        cols={["Item Code", "Hold Quantity", "Final Status", "Remark / Reason"]}
         rows={rows}
       />
     </Stack>

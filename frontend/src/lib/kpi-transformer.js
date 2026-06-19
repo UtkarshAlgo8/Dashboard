@@ -64,8 +64,11 @@ const ALLOWED_KPIS = {
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "ds", name: "Defect_Scrap", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Defect_Scrap_m", "Defect_Scrap_sku"] },
-      { id: "sr", name: "Scrap_Rate", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Scrap_Rate_m", "Scrap_Rate_sku"] },
+      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
+      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
+      // quantities with a subsection → reason/machine/sku drill (§4/§5).
+      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
@@ -97,8 +100,11 @@ const ALLOWED_KPIS = {
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "ds", name: "Defect_Scrap", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Defect_Scrap_m", "Defect_Scrap_sku"] },
-      { id: "sr", name: "Scrap_Rate", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Scrap_Rate_m", "Scrap_Rate_sku"] },
+      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
+      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
+      // quantities with a subsection → reason/machine/sku drill (§4/§5).
+      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
@@ -137,8 +143,11 @@ const ALLOWED_KPIS = {
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "ds", name: "Defect_Scrap", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Defect_Scrap_m", "Defect_Scrap_sku"] },
-      { id: "sr", name: "Scrap_Rate", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Scrap_Rate_m", "Scrap_Rate_sku"] },
+      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
+      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
+      // quantities with a subsection → reason/machine/sku drill (§4/§5).
+      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
@@ -170,8 +179,11 @@ const ALLOWED_KPIS = {
     ],
     Q: [
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "ds", name: "Defect_Scrap", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Defect_Scrap_m", "Defect_Scrap_sku"] },
-      { id: "sr", name: "Scrap_Rate", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Scrap_Rate_m", "Scrap_Rate_sku"] },
+      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
+      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
+      // quantities with a subsection → reason/machine/sku drill (§4/§5).
+      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
       { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
@@ -211,6 +223,8 @@ const DISPLAY_NAME = {
   FTQ: "FTQ",
   Defect_Scrap: "Defect + Scrap",
   Scrap_Rate: "Scrap Rate",
+  Scrap: "Scrap",
+  Rework: "Rework",
   NCM_Hold: "NCM Hold",
   Specific_Power: "Specific Power",
   Scrap_Cost: "Scrap Cost",
@@ -507,6 +521,7 @@ export function toDrillRows(rows) {
   return (rows ?? []).map((r) => ({
     kpiName: r.kpi_name,
     section: r.section,
+    subSection: denan(r.sub_section),
     machine: denan(r.machine),
     itemCode: denan(r.itemcode),
     productType: denan(r.product_type),

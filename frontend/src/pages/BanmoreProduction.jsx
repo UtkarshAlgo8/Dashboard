@@ -14,6 +14,7 @@ import OeeDrillPanel from "@/components/drills/oee/OeeDrillPanel.jsx";
 import ProductionDrillPanel from "@/components/drills/production/ProductionDrillPanel.jsx";
 import DowntimeDrillPanel from "@/components/drills/downtime/DowntimeDrillPanel.jsx";
 import GenericTableDrillPanel from "@/components/drills/shared/GenericTableDrillPanel.jsx";
+import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
 import BudgetDrillPanel from "@/components/drills/shared/BudgetDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import {
@@ -552,6 +553,8 @@ function BanmoreProduction() {
                       rows={rawRows ?? []}
                       subSection={pinnedSubSection}
                       productType={dashboard.productType}
+                      asOf={asOf}
+                      periodIsDay={timeRange.preset === "today"}
                     />
                   </Box>
                 )}
@@ -662,6 +665,17 @@ function DrillPanelRouter({
           from={from}
           to={to}
           shift={shift}
+        />
+      );
+    // Scrap / Rework (Quality §4/§5): subsection → reason/machine/sku drill.
+    case "qScrapRework":
+      return (
+        <ScrapReworkDrillPanel
+          kind={kpi.rawName === "Rework" ? "Rework" : "Scrap"}
+          drillRows={drillRows}
+          mode={mode}
+          granularity={granularity}
+          isLoading={isLoading}
         />
       );
     // "table" type — route by kpi.id

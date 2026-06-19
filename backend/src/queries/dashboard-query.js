@@ -113,6 +113,23 @@ const PRODUCT_AGNOSTIC_KPIS_SQL = `kpi_name IN (${[...PRODUCT_AGNOSTIC_KPIS]
   .map((k) => `'${k}'`)
   .join(", ")})`;
 
+/**
+ * Aggregate ("sum / overall") product types whose drill children are
+ * stored under finer category names, not the aggregate name itself.
+ *   - TBM "Green Tyre"  / Curing "Cured Tyre" = sum of the tyre categories.
+ *   - Stock "Overall"   = the sub-section total.
+ * Card + section-level rows DO carry the aggregate name, but SKU-level
+ * drill children (Production_m_sku, NCM_Hold_sku, …) carry the category
+ * names (Passenger / LT / SUV Radial). So when the user has the aggregate
+ * selected, pinning product_type = the aggregate would drop every child
+ * row. We expand the predicate to also accept the child categories so the
+ * detail tables populate. Selecting a SPECIFIC category still pins just it.
+ */
+const AGGREGATE_PRODUCT_CHILDREN = {
+  "Green Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
+  "Cured Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
+};
+
 // Stock sub-sections (BRD §13.2) + Curing tredges — the only sub_section
 // values the frontend may filter by. Keeps the WHERE surface tight.
 export const ALLOWED_SUB_SECTIONS = new Set([
@@ -306,8 +323,16 @@ export function buildFetchQuery({
       // this exemption, selecting a secondary product type makes OEE /
       // Downtime cards disappear. The frontend prefers the product-matching
       // row when present and falls back to the line-level row otherwise.
-      const extra =
+      let extra =
         key === "product_type" ? ` OR ${PRODUCT_AGNOSTIC_KPIS_SQL}` : "";
+      // Aggregate product types (Green/Cured Tyre): also accept the child
+      // tyre categories so SKU-level drill children populate (see map docs).
+      if (key === "product_type" && AGGREGATE_PRODUCT_CHILDREN[value]) {
+        const kids = AGGREGATE_PRODUCT_CHILDREN[value]
+          .map((c) => `${key} = ${escapeLiteral(c)}`)
+          .join(" OR ");
+        extra += ` OR ${kids}`;
+      }
       where.push(
         `(${key} = ${escapeLiteral(value)} OR ${key} IS NULL OR ${key} = 'nan' OR ${key} = ''${extra})`,
       );
@@ -344,10 +369,24 @@ export function buildFetchQuery({
   }
 
   // 4. Drill shape. Null/undefined → landing only. Array → return BOTH
-  //    landing rows (drill_down_level = 1) AND drill children so the grid
-  //    always has cards while the drill panel is open.
+  //    landing rows AND drill children so the grid always has cards while
+  //    the drill panel is open.
+  //
+  //    A landing card is a TOP-LEVEL row. Most carry drill_down_level = 1,
+  //    but the Quality Scrap/Rework parents (quality-change.md §4/§5) are
+  //    stored with drill_down_level = NULL. The spec says navigation is
+  //    attribute-driven and drill_down_level is "not used" — so we identify
+  //    a landing card structurally: drill_down_level = 1, OR a parent row
+  //    with no machine / itemcode / sub_section (a true section/plant-level
+  //    card). The sub_section IS NULL clause keeps the Scrap_s / Scrap_reason
+  //    children OUT of the landing grid (they carry a sub_section).
+  const LANDING_PREDICATE =
+    "(drill_down_level = 1 OR (drill_down_level IS NULL " +
+    "AND (machine IS NULL OR machine = 'nan') " +
+    "AND (itemcode IS NULL OR itemcode = 'nan') " +
+    "AND (sub_section IS NULL OR sub_section = 'nan')))";
   if (drillKpis == null) {
-    where.push("drill_down_level = 1");
+    where.push(LANDING_PREDICATE);
   } else {
     if (!Array.isArray(drillKpis) || drillKpis.length === 0) {
       throw new QueryValidationError(
@@ -361,7 +400,9 @@ export function buildFetchQuery({
       escapeLiteral(safeStringValue(k, "drillKpis[]")),
     );
     // Always include landing rows so the grid doesn't go empty during drill.
-    where.push(`(drill_down_level = 1 OR kpi_name IN (${escaped.join(", ")}))`);
+    where.push(
+      `(${LANDING_PREDICATE} OR kpi_name IN (${escaped.join(", ")}))`,
+    );
   }
 
   // 5. Bound result size. Upstream Lambda has its own limit too.
