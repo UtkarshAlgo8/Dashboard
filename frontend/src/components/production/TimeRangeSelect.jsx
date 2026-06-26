@@ -31,10 +31,14 @@ import { DateRangeFilterDialog } from "@/components/common";
  * while the Trend modal passes Daily/Monthly/Yearly (dashboard_doc.md §1).
  * The granularity mapping downstream keys off the id, so it is unaffected.
  */
+// realdata.md §3: no yearly (YTD) data yet — the Year option stays visible
+// but disabled. Flip `disabled` off (and ENABLE_YEAR in timeRange.js) when
+// yearly data arrives; no other change needed.
+const ENABLE_YEAR = false;
 const PRESETS = [
   { id: "today", label: "Today" },
   { id: "month", label: "Month" },
-  { id: "year", label: "Year" },
+  { id: "year", label: "Year", disabled: !ENABLE_YEAR },
 ];
 
 const SHIFT_OPTIONS = [
@@ -123,7 +127,7 @@ function TimeRangeSelect({
         }}
       >
         {PRESETS.map((p) => (
-          <ToggleButton key={p.id} value={p.id}>
+          <ToggleButton key={p.id} value={p.id} disabled={p.disabled}>
             {presetLabels?.[p.id] ?? p.label}
           </ToggleButton>
         ))}

@@ -26,7 +26,7 @@ export default function GenericTableDrillPanel({
   section,
   sectionName,
   mode = "snapshot",
-  granularity = "Daily",
+  granularity = "DAY",
   isLoading = false,
 }) {
   // While the drill fetch is still in flight and we don't yet have any

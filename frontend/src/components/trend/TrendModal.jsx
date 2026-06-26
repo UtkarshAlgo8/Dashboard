@@ -84,15 +84,15 @@ function TrendModal({
    * drillKpis flag — it OR-joins with drill_down_level=1 and pollutes the
    * series with mixed KPIs.
    */
-  // Narrow the fetch with section/category/granularity — the v24 table is
-  // far too large to fetch unfiltered (the row cap would truncate the
-  // series). granularity is MTD for the monthly trend, YTD for yearly,
-  // Daily otherwise — matching what the series builder reads below.
+  // Narrow the fetch with section/category/granularity — the table is far
+  // too large to fetch unfiltered (the row cap would truncate the series).
+  // realdata.md §3: real granularities are MONTH (monthly), DAY otherwise.
+  // Year/YTD is disabled — a stale "year" range falls back to MONTH.
   const v2Granularity = isMonthly
-    ? "MTD"
+    ? "MONTH"
     : range === "year"
-      ? "YTD"
-      : "Daily";
+      ? "MONTH"
+      : "DAY";
   const useV2 = Boolean(kpi?.rawName);
   const shouldSendProductType =
     Boolean(productType) &&
@@ -193,7 +193,7 @@ function TrendModal({
       // month). Group MTD rows by YYYY-MM, keep the max-date row each.
       const byMonth = new Map();
       for (const r of pinned) {
-        if (r.granularity !== "MTD") continue;
+        if (r.granularity !== "MONTH") continue;
         const mk = monthKey(r.date);
         if (!mk) continue;
         const prev = byMonth.get(mk);
@@ -203,10 +203,12 @@ function TrendModal({
       labels = months;
       values = months.map((m) => numOrNull(byMonth.get(m).actual_value));
     } else if (range === "year") {
-      // One point per year = the latest available YTD record that year.
+      // Year/YTD disabled (realdata.md §3) — no yearly granularity in the
+      // real data. Match MONTH so a stale "year" range still renders a series
+      // instead of going blank; the Year preset itself is disabled upstream.
       const byYear = new Map();
       for (const r of pinned) {
-        if (r.granularity !== "YTD") continue;
+        if (r.granularity !== "MONTH") continue;
         const yk = dateKey(r.date).slice(0, 4);
         if (!yk) continue;
         const prev = byYear.get(yk);
@@ -217,7 +219,7 @@ function TrendModal({
       values = years.map((y) => numOrNull(byYear.get(y).actual_value));
     } else {
       const sorted = pinned
-        .filter((r) => r.granularity === "Daily")
+        .filter((r) => r.granularity === "DAY")
         .sort((a, b) => (dateKey(a.date) > dateKey(b.date) ? 1 : -1));
       labels = sorted.map((r) => r.date ?? "");
       values = sorted.map((r) => numOrNull(r.actual_value));

@@ -2,7 +2,18 @@ import { cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
+import {
+  plantDepartmentPredicate,
+  excludeUnknownKpiPredicate,
+  normalizeGranularity,
+  allowedGranularities,
+  DEFAULT_GRANULARITY,
+} from "../utils/normalize.js";
 import { config } from "../config.js";
+
+// Always-on core filter (realdata.md §1/§2/§9).
+const CORE_FILTER =
+  `${plantDepartmentPredicate()} AND ${excludeUnknownKpiPredicate()}`;
 
 /**
  * Plant-scoped controllers: one plant, summary, as-of date, per-section OEE.
@@ -39,20 +50,25 @@ export async function getSummary(req, res, next) {
   const key = buildCacheKey(`/plants/${req.params.plantId}/summary`, req.query);
   try {
     const data = await cached(key, async () => {
+      // Real KPI names (realdata.md §9): the plain "OEE" is gone — Banmore
+      // production uses OEE_o. Each KPI anchors to ITS OWN latest date
+      // (PARTITION BY kpi_name → rn=1), so a day with only Production data
+      // doesn't blank the OEE/Scrap headline (realdata.md §17). machine is
+      // SQL NULL on the overall rows (not the 'nan' literal). FTQ has no data
+      // yet → its pick() returns null and the card shows a placeholder (§15).
       const sql = `
-        SELECT kpi_name, actual_value, year, month, day
+        SELECT kpi_name, actual_value, d
         FROM (
-          SELECT kpi_name, actual_value, year, month, day,
+          SELECT kpi_name, actual_value, ${DATE_YYYYMMDD} AS d,
                  ROW_NUMBER() OVER (
                    PARTITION BY kpi_name
-                   ORDER BY year DESC, CAST(month AS INTEGER) DESC, day DESC
+                   ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
           FROM ${config.upstream.sqlTable}
-          WHERE plant = ${escapeLiteral("Banmore")}
-            AND department = ${escapeLiteral("Production")}
-            AND machine = ${escapeLiteral("nan")}
+          WHERE ${CORE_FILTER}
+            AND (machine IS NULL OR machine = 'nan')
             AND kpi_name IN (
-              ${escapeLiteral("OEE")},
+              ${escapeLiteral("OEE_o")},
               ${escapeLiteral("FTQ")},
               ${escapeLiteral("Scrap")}
             )
@@ -63,12 +79,14 @@ export async function getSummary(req, res, next) {
       const pick = (name) => {
         const row = rows.find((r) => r.kpi_name === name);
         if (!row) return null;
-        const yyyy = row.year;
-        const mm = String(row.month).padStart(2, "0");
-        const dd = String(row.day).padStart(2, "0");
-        return { value: row.actual_value, date: `${dd}-${mm}-${yyyy}` };
+        // d is "YYYYMMDD" → DD-MM-YYYY for the card.
+        const s = row.d == null ? "" : String(row.d);
+        const date = /^\d{8}$/.test(s)
+          ? `${s.slice(6, 8)}-${s.slice(4, 6)}-${s.slice(0, 4)}`
+          : null;
+        return { value: row.actual_value, date };
       };
-      return { oee: pick("OEE"), ftq: pick("FTQ"), scrap: pick("Scrap") };
+      return { oee: pick("OEE_o"), ftq: pick("FTQ"), scrap: pick("Scrap") };
     });
     res.json({ data });
   } catch (err) {
@@ -89,8 +107,7 @@ export async function getAsOf(req, res, next) {
       const sql = `
         SELECT MAX(${DATE_YYYYMMDD}) AS d
         FROM ${config.upstream.sqlTable}
-        WHERE plant = ${escapeLiteral("Banmore")}
-          AND department = ${escapeLiteral("Production")}
+        WHERE ${CORE_FILTER}
       `.trim();
       const rows = await runQuery(sql);
       const raw = rows?.[0] ? Object.values(rows[0])[0] : null;
@@ -114,43 +131,45 @@ export async function getAsOf(req, res, next) {
  * that only has per-sub_section rows (Stock) falls back to its first
  * sub-section. Honours an optional ?granularity, defaulting to MTD.
  */
-const SECTION_OEE_GRANULARITIES = new Set([
-  "Daily",
-  "Shift A",
-  "Shift B",
-  "Shift C",
-  "MTD",
-  "YTD",
-]);
+const SECTION_OEE_GRANULARITIES = allowedGranularities();
 
-// Preferred sub-section order so a section with no section-level row
-// (e.g. Stock) uses its FIRST sub-section's value, not an average.
+// Preferred sub-section order so a section with no section-level OEE_o row
+// (e.g. Stock) uses its FIRST sub-section's value, not an average. Read from
+// the real data (realdata.md §16): Stock subsections, Curing production
+// trenches (TrenchN, no space; no Trench3). Any value not listed still falls
+// back to list[0], so a new subsection name never breaks the ring.
 const PREFERRED_SUB = {
-  Stock: ["4 Roll", "Extruder", "3 Roll", "Cutter", "Slitter"],
-  Curing: ["Tredge 1", "Tredge 2", "Tredge 3", "Tredge 4", "Tredge 5", "Tredge 6"],
+  Stock: ["4 Roll", "3 Roll", "Three Roll", "Extruder", "Cutter", "Slitter", "Bead"],
+  Curing: ["Trench1", "Trench2", "Trench4", "Trench5", "Trench6", "Trench7", "Trench8"],
 };
 
 export async function getSectionOee(req, res, next) {
   if (notPhase1Plant(req, res, "Unknown plant.")) return;
-  const requested =
-    typeof req.query.granularity === "string" ? req.query.granularity : "";
-  const gran = SECTION_OEE_GRANULARITIES.has(requested) ? requested : "MTD";
+  // realdata.md §3: the OEE/section default granularity now falls back to
+  // MONTH (was MTD). Inbound values are normalized through the synonym map.
+  const gran =
+    normalizeGranularity(req.query.granularity) ?? DEFAULT_GRANULARITY;
   const key = buildCacheKey(`/plants/${req.params.plantId}/section-oee`, { gran });
   try {
     const data = await cached(key, async () => {
+      // realdata.md §18.2: OEE level differs by section. Mixing/Curing have
+      // overall OEE_o (sub_section NULL); Stock has NO overall — only OEE_s
+      // per subsection; TBM has neither. Fetch BOTH OEE_o and OEE_s so the
+      // sidebar ring can use the section-level value where it exists and fall
+      // back to a subsection's OEE_s otherwise (Stock). machine is NULL on all
+      // OEE_o/OEE_s rows.
       const sql = `
-        SELECT section, sub_section, actual_value
+        SELECT kpi_name, section, sub_section, actual_value
         FROM (
-          SELECT section, sub_section, actual_value,
+          SELECT kpi_name, section, sub_section, actual_value,
                  ROW_NUMBER() OVER (
-                   PARTITION BY section, sub_section
+                   PARTITION BY kpi_name, section, sub_section
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
           FROM ${config.upstream.sqlTable}
-          WHERE plant = ${escapeLiteral("Banmore")}
-            AND department = ${escapeLiteral("Production")}
-            AND kpi_name = ${escapeLiteral("OEE_o")}
-            AND machine IS NULL
+          WHERE ${CORE_FILTER}
+            AND kpi_name IN (${escapeLiteral("OEE_o")}, ${escapeLiteral("OEE_s")})
+            AND (machine IS NULL OR machine = 'nan')
             AND granularity = ${escapeLiteral(gran)}
         ) ranked
         WHERE rn = 1
@@ -163,27 +182,35 @@ export async function getSectionOee(req, res, next) {
         if (!sec || sec === "nan") continue;
         const val = Number(r.actual_value);
         if (!Number.isFinite(val)) continue;
-        (bySection[sec] ??= []).push({ sub: r.sub_section, val });
+        (bySection[sec] ??= []).push({
+          kpi: r.kpi_name,
+          sub: r.sub_section,
+          val,
+        });
       }
 
       const out = {};
       for (const [sec, list] of Object.entries(bySection)) {
+        // Prefer the overall OEE_o section-level row (sub_section NULL).
         const sectionLevel = list.find(
-          (x) => x.sub == null || x.sub === "" || x.sub === "nan",
+          (x) =>
+            x.kpi === "OEE_o" &&
+            (x.sub == null || x.sub === "" || x.sub === "nan"),
         );
         let v;
         if (sectionLevel) {
           v = sectionLevel.val;
         } else {
+          // No overall (Stock) — use the first preferred subsection's OEE_s.
           const order = PREFERRED_SUB[sec] ?? [];
           const first =
             order.map((s) => list.find((x) => x.sub === s)).find(Boolean) ??
             list[0];
-          v = first.val;
+          v = first?.val;
         }
-        out[sec] = Math.round(v * 10) / 10;
+        if (v != null && Number.isFinite(v)) out[sec] = Math.round(v * 10) / 10;
       }
-      return out; // { Mixing: 83.9, Stock: <4 Roll>, TBM: ..., Curing: ... }
+      return out; // { Mixing: 18.8, Curing: 31.7, Stock: <3 Roll>, TBM: (absent) }
     });
     res.json({ data });
   } catch (err) {

@@ -99,7 +99,7 @@ function BanmoreProduction() {
   // Per-section OEE for the sidebar donut rings, tracking the active
   // granularity (Today / Month / Year). Keyed by artifact section id.
   const { data: sectionOeeData } = usePolledQuery(
-    () => getSectionOee("banmore", dashboard.granularity ?? "MTD"),
+    () => getSectionOee("banmore", dashboard.granularity ?? "MONTH"),
     { interval: 0, deps: [dashboard.granularity] },
   );
   const sectionOeeById = {
@@ -213,8 +213,9 @@ function BanmoreProduction() {
   const [shiftKey, setShiftKey] = useState("all");
 
   // Resolve the effective granularity from preset + shift selector.
+  // realdata.md §3: real shift granularities are uppercase SHIFT A/B/C.
   const effectiveGranularity = (preset, shift) => {
-    const map = { all: null, a: "Shift A", b: "Shift B", c: "Shift C" };
+    const map = { all: null, a: "SHIFT A", b: "SHIFT B", c: "SHIFT C" };
     const shiftGran = map[shift];
     if (shiftGran) return shiftGran;
     return presetToDateRange({ preset }, asOf).granularity;
@@ -605,9 +606,9 @@ function DrillPanelRouter({
   // Drilldown inherits the card's granularity (journey.md §5): the panels
   // filter their rows to this exact granularity so the children always
   // match the card. `shift` carries the card's effective granularity
-  // (Daily / Shift A-C / MTD / YTD); fall back to Daily when none is set
-  // (All-Shifts Today / custom range).
-  const granularity = shift ?? "Daily";
+  // (DAY / SHIFT A-C / MONTH); fall back to DAY when none is set
+  // (All-Shifts Today / custom range) — realdata.md §3.
+  const granularity = shift ?? "DAY";
 
   // Filter drill rows to this KPI's drill TARGET kpi_names (children),
   // not the landing kpi_name itself. drillTargets is the list of child

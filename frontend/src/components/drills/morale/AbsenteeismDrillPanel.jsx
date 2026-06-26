@@ -16,7 +16,7 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function AbsenteeismDrillPanel({ drillRows, granularity = "Daily" }) {
+export default function AbsenteeismDrillPanel({ drillRows, granularity = "DAY" }) {
   const bySection = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Absenteeism_section") continue;

@@ -20,28 +20,32 @@ export const SECTION_BY_ID = {
   cur: "Curing",
 };
 
-/** `category` URL param. Internal tab ID → gold_dummy.category value. */
+/** `category` URL param. Internal tab ID → gold.category value.
+ *  realdata.md §5: only Productivity / Quality / Inventory exist in the
+ *  real data. Cost / Morale / Safety remain mapped (their tabs are shown
+ *  but disabled — see static.controller CATEGORY_TABS) but never produce a
+ *  successful query. */
 export const CATEGORY_BY_ID = {
   p: "Productivity",
   q: "Quality",
+  i: "Inventory",
   c: "Cost",
   m: "Morale",
   s: "Safety",
-  // i intentionally omitted — Inventory tab is Phase 2; the api/kpis
-  // route short-circuits before any backend call.
 };
 
 /**
- * `granularity` URL param. Internal shift ID → gold_dummy.granularity
- * value. `"all"` is intentionally absent — when the user picks "All
- * Shifts" we omit the query param so no granularity predicate is
- * emitted.
+ * `granularity` URL param. Internal shift ID → real gold.granularity value
+ * (realdata.md §3: DAY / SHIFT A/B/C). `"all"` is intentionally absent —
+ * when the user picks "All Shifts" we omit the param so no granularity
+ * predicate is emitted. The backend also accepts the old names as synonyms,
+ * but the frontend now sends the real ones.
  */
 export const GRANULARITY_BY_SHIFT = {
-  daily: "Daily",
-  a: "Shift A",
-  b: "Shift B",
-  c: "Shift C",
+  daily: "DAY",
+  a: "SHIFT A",
+  b: "SHIFT B",
+  c: "SHIFT C",
 };
 
 /** Convenience: convert internal section ID, falling back to the raw value. */

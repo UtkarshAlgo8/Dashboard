@@ -21,7 +21,7 @@ function splitRemarks(remarks) {
   };
 }
 
-export default function ReportableDrillPanel({ drillRows, granularity = "Daily" }) {
+export default function ReportableDrillPanel({ drillRows, granularity = "DAY" }) {
   const rows = (drillRows ?? [])
     .filter(
       (r) =>

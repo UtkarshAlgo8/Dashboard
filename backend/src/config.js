@@ -45,13 +45,11 @@ export const config = {
   upstream: {
     url: required("AWS_DATA_URL"),
     apiKey: required("AWS_DATA_API_KEY"),
-    // Defaults are gold_dummy: the real `gold` table is not yet populated
-    // with the full Banmore/Production dataset, so an env-less deploy must
-    // not silently fall back to it (that 500s with a catalog error). Set
-    // both env vars to the real gold pair (databricks_table/gold + gold)
-    // once the production data is loaded.
-    table: optional("AWS_DATA_TABLE", "gold_dummy"),
-    sqlTable: optional("AWS_DATA_SQL_TABLE", "gold_dummy"),
+    // Real data: the full Banmore/Production dataset lives in `gold`
+    // (catalog path databricks_table/gold; SQL FROM target `gold`). The
+    // defaults below point at the real table so an env-less deploy works.
+    table: optional("AWS_DATA_TABLE", "databricks_table/gold"),
+    sqlTable: optional("AWS_DATA_SQL_TABLE", "gold"),
     timeoutMs: asInt("AWS_DATA_TIMEOUT_MS", 30_000),
   },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),

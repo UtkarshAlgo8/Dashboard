@@ -71,7 +71,13 @@ export default function ShiftComparisonCard({
   );
 
   const scopedRows = preferScopedRows(rows, productType);
-  const shifts = ["Shift A", "Shift B", "Shift C"];
+  // realdata.md §3: shift granularity values are uppercase SHIFT A/B/C in the
+  // real data. `gran` matches the row; `label` is the display text.
+  const shifts = [
+    { gran: "SHIFT A", label: "Shift A" },
+    { gran: "SHIFT B", label: "Shift B" },
+    { gran: "SHIFT C", label: "Shift C" },
+  ];
 
   // Production: from the Productivity rows in hand, pinned to the selected
   // product. One stored summary row per shift on the latest day.
@@ -105,11 +111,11 @@ export default function ShiftComparisonCard({
     return sumLatestDay(matched);
   };
 
-  const tableRows = shifts.map((g) => [
-    g,
-    fmtQty(prodByShift(g), unit),
-    fmtQty(qByShift("Scrap", g), null),
-    fmtQty(qByShift("Rework", g), null),
+  const tableRows = shifts.map(({ gran, label }) => [
+    label,
+    fmtQty(prodByShift(gran), unit),
+    fmtQty(qByShift("Scrap", gran), null),
+    fmtQty(qByShift("Rework", gran), null),
   ]);
 
   return (

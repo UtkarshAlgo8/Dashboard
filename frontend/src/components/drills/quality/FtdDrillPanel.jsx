@@ -29,7 +29,7 @@ function topDefect(remarksList) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
-export default function FtdDrillPanel({ drillRows, granularity = "Daily" }) {
+export default function FtdDrillPanel({ drillRows, granularity = "DAY" }) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "FTQ_m") continue;

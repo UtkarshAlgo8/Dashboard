@@ -15,7 +15,7 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
  * NCM_Hold is a SNAP KPI (§9) — show the latest value per (item code,
  * reason) within the active date range.
  */
-export default function NcmDrillPanel({ drillRows, granularity = "Daily" }) {
+export default function NcmDrillPanel({ drillRows, granularity = "DAY" }) {
   const latestByItemReason = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "NCM_Hold_sku") continue;

@@ -22,7 +22,7 @@ function fmt(v, d = 1) {
   return typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
 }
 
-export default function SpecificPowerDrillPanel({ drillRows, granularity = "Daily" }) {
+export default function SpecificPowerDrillPanel({ drillRows, granularity = "DAY" }) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Specific_Power_m") continue;

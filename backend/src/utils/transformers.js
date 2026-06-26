@@ -18,11 +18,21 @@
  *   the frontend sees clean nulls.
  */
 
+import {
+  parseDrillAttribute as parseDrillAttributeShared,
+  normalizeUnit,
+} from "./normalize.js";
+
 const NAN = "nan";
 
 function denan(v) {
   if (v === NAN) return null;
   return v;
+}
+
+/** Unit for the API payload — normalized; "(unset)"/"nan" → null. */
+function unit(v) {
+  return normalizeUnit(denan(v));
 }
 
 /** Normalize a date (ISO yyyy-mm-dd or DD-MM-YYYY) to sortable YYYYMMDD. */
@@ -72,6 +82,20 @@ const INVENTORY_BARS = {
   "Master Compound": { group: "compound", id: "master", label: "Master", histKey: "master" },
 };
 
+/**
+ * Group an unmapped real product_type. Compounds → compound group; the
+ * finished/green/cured products → production; everything else (the bulk of
+ * Stock semi-finished items: Belt, Cap Strip, Chaffer, SideWall, …) → stock.
+ */
+function inferGroup(pt) {
+  const s = String(pt).toLowerCase();
+  if (s.includes("compound")) return "compound";
+  if (s.includes("green") || s.includes("cured") || s === "fg") {
+    return "production";
+  }
+  return "stock";
+}
+
 const INVENTORY_GROUP_ORDER = ["production", "stock", "compound"];
 const INVENTORY_GROUP_TITLES = {
   production: "Production",
@@ -103,7 +127,7 @@ export function toInventory(rows) {
         itemCode: denan(r.itemcode),
         description: denan(r.itemcode),
         liveStock: numOrNull(r.actual_value) ?? 0,
-        unit: denan(r.unit_of_measurement) ?? "",
+        unit: unit(r.unit_of_measurement) ?? "",
       }))
       .sort((a, b) => a.itemCode.localeCompare(b.itemCode));
   };
@@ -122,19 +146,34 @@ export function toInventory(rows) {
     groups[groupId] = { title: INVENTORY_GROUP_TITLES[groupId], bars: [] };
   }
 
-  for (const [pt, meta] of Object.entries(INVENTORY_BARS)) {
+  // realdata.md §7/§16: read product_types from the DATA, don't hardcode. The
+  // real inventory products (Belt, Cap Strip, Chaffer, SideWall, Master
+  // Compound, Green, …) differ from the dummy's frozen INVENTORY_BARS list.
+  // Known products use their mapped group/label; unknown ones get a derived
+  // bar in a sensible default group so they still render.
+  const metaFor = (pt) =>
+    INVENTORY_BARS[pt] ?? {
+      group: inferGroup(pt),
+      id: slug(pt),
+      label: pt,
+      histKey: slug(pt),
+    };
+
+  // Iterate over the product_types actually present, in stable label order.
+  for (const pt of [...barsByType.keys()].sort((a, b) => a.localeCompare(b))) {
+    const meta = metaFor(pt);
     const rs = (barsByType.get(pt) ?? []).sort(
       (a, b) => (dateKey(b.date) > dateKey(a.date) ? 1 : -1),
     );
     if (rs.length === 0) continue;
     const today = numOrNull(rs[0].actual_value) ?? 0;
     const yesterday = rs[1] ? (numOrNull(rs[1].actual_value) ?? 0) : today;
-    groups[meta.group].bars.push({
+    (groups[meta.group] ?? groups.stock).bars.push({
       id: meta.id,
       label: meta.label,
       today,
       yesterday,
-      unit: denan(rs[0].unit_of_measurement) ?? "",
+      unit: unit(rs[0].unit_of_measurement) ?? "",
       items: itemsFor(pt),
     });
   }
@@ -144,8 +183,8 @@ export function toInventory(rows) {
   const byDate = new Map();
   for (const r of barRows) {
     const pt = denan(r.product_type);
-    const meta = INVENTORY_BARS[pt];
-    if (!meta) continue;
+    if (!pt) continue;
+    const meta = metaFor(pt);
     const k = dateKey(r.date);
     if (!k) continue;
     if (!byDate.has(k)) byDate.set(k, { date: toIsoDate(r.date) });
@@ -160,20 +199,13 @@ export function toInventory(rows) {
 }
 
 /**
- * Parse the gold_dummy `drill_down_attribute` column. Documented as
- * a JSON-encoded string (e.g. `"[\"Absenteeism_area\"]"`). Tolerant:
- * plain strings, "nan", and nulls all fall through to null/the raw
- * value. Never throws.
+ * Parse the `drill_down_attribute` column into a real array of child KPI
+ * names. The real data stores a Python-style SINGLE-quoted list
+ * (['Production_m', …]) which a strict JSON.parse can't read — the shared
+ * tolerant parser (normalize.js §6) handles single OR double quotes and
+ * aliases Production_sku_m → Production_m_sku. Never throws.
  */
-export function parseDrillAttribute(raw) {
-  if (raw == null || raw === "" || raw === NAN) return null;
-  if (typeof raw !== "string") return raw;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
+export const parseDrillAttribute = parseDrillAttributeShared;
 
 /**
  * KPI grid payload — matches frontend/src/components/production/
@@ -195,11 +227,11 @@ export function parseDrillAttribute(raw) {
  * ordered `kpi_name ASC, rn ASC` where rn=1 is the newest.
  */
 
-/** KPI ids whose drill panel exists in the frontend. */
+/** KPI ids whose drill panel exists in the frontend. Downtime is removed
+ *  entirely in the real data (realdata.md §15) — its drill is gone. */
 const DRILLABLE_IDS = new Set([
   "oee",
   "production",
-  "downtime",
   "plan-compliance",
 ]);
 
@@ -267,7 +299,7 @@ export function toKpiGrid(rows) {
       id,
       name,
       value,
-      unit: denan(latest.unit_of_measurement) ?? null,
+      unit: unit(latest.unit_of_measurement) ?? null,
       spark: sparkValues,
       trend,
       trendFavourable,

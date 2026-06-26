@@ -53,29 +53,26 @@ const SECTION_NAME = {
   stk: "Stock",
 };
 
-// Per the journey doc §15.4: Production carries one STORED row per unit
-// (Mixing MT/Batches, Stock units/kg, TBM/Curing nos/kg). Never combine
-// or derive one unit from another — each toggle selects its own stored
-// row and we read actual_value verbatim. `value` is the data's exact
-// unit_of_measurement string we filter on; `label` is what we show.
-const UNIT_OPTIONS = {
-  mix: [
-    { value: "MT", label: "MT" },
-    { value: "Batches", label: "Batches" },
-  ],
-  stk: [
-    { value: "units", label: "Units" },
-    { value: "kg", label: "Kg" },
-  ],
-  tbm: [
-    { value: "nos", label: "Nos" },
-    { value: "kg", label: "Kg" },
-  ],
-  cur: [
-    { value: "nos", label: "Nos" },
-    { value: "kg", label: "Kg" },
-  ],
-};
+// realdata.md §7: units are READ FROM THE DATA, not hardcoded. The real
+// units are %, KG, M, NOS (the dummy's MT/Batches/units don't exist), and
+// they vary by section/product, so a frozen per-section list never matches.
+// We derive the unit toggle from the distinct unit_of_measurement values
+// actually present on the Production rows in hand (see deriveUnitOptions),
+// and a multi-unit KPI shows the toggle while a single-unit one just pins it.
+function deriveUnitOptions(rows, sectionName, ptFilter) {
+  if (!Array.isArray(rows)) return [];
+  const units = new Set();
+  for (const r of rows) {
+    if (r.section !== sectionName) continue;
+    if (!String(r.kpi_name ?? "").startsWith("Production")) continue;
+    if (!matchesProduct(r.product_type, ptFilter)) continue;
+    const u = r.unit_of_measurement;
+    if (u && u !== "nan" && u !== "(unset)") units.add(u);
+  }
+  return [...units]
+    .sort((a, b) => a.localeCompare(b))
+    .map((u) => ({ value: u, label: u }));
+}
 
 const VIEW_BY_OPTIONS = [
   { value: "machine", label: "Machine" },
@@ -88,9 +85,10 @@ const VIEW_BY_OPTIONS = [
 // selected, the SKU lenses must accept the child categories instead of
 // filtering to the aggregate name (which no child row carries). Mirrors the
 // backend AGGREGATE_PRODUCT_CHILDREN expansion.
+// realdata.md §6a: the real per-product children of the overall tyre.
 const AGGREGATE_PRODUCT_CHILDREN = {
-  "Green Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
-  "Cured Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
+  "Green Tyre": ["Passenger Radial", "LCV", "Unknown"],
+  "Cured Tyre": ["Passenger Radial", "LCV", "Unknown"],
 };
 
 /** Does a row's product_type satisfy the selected product pill? */
@@ -106,7 +104,7 @@ function ProductionDrillPanel({
   prodSub,
   rawRows,
   mode = "snapshot",
-  granularity = "Daily",
+  granularity = "DAY",
   isLoading = false,
 }) {
   const [search, setSearch] = useState("");
@@ -119,14 +117,22 @@ function ProductionDrillPanel({
   const isCuring = section === "cur";
   const [selectedTredge, setSelectedTredge] = useState(null);
 
-  const unitOptions = UNIT_OPTIONS[section] ?? null;
-  const defaultUnit = unitOptions ? unitOptions[0].value : "nos";
-  const [unit, setUnit] = useState(defaultUnit);
-  // Display label for the active unit (header text); the stored unit
-  // string drives row selection above.
-  const unitLabel = unitOptions?.find((o) => o.value === unit)?.label ?? unit;
-
   const sectionName = SECTION_NAME[section] ?? section;
+  const ptFilterForUnits = prodSub ? prodSub : null;
+  // realdata.md §7: derive the unit toggle from the data, not a frozen list.
+  const unitOptions = useMemo(
+    () => deriveUnitOptions(rawRows, sectionName, ptFilterForUnits),
+    [rawRows, sectionName, ptFilterForUnits],
+  );
+  const [unit, setUnit] = useState(null);
+  // Pin a unit once the data arrives (first available); keep the user's pick
+  // if it's still present. Single-unit KPIs just show that unit, multi-unit
+  // KPIs get a real toggle — but we never combine units.
+  const activeUnit =
+    unit && unitOptions.some((o) => o.value === unit)
+      ? unit
+      : unitOptions[0]?.value ?? null;
+  const unitLabel = activeUnit ?? "";
   const sectionTitle = SECTION_TITLE[section] ?? section;
 
   // Pick which kpi_name backs the table based on viewBy.
@@ -167,7 +173,7 @@ function ProductionDrillPanel({
         r.section === sectionName &&
         r.kpi_name === kpiName &&
         r.granularity === granularity &&
-        r.unit_of_measurement === unit &&
+        r.unit_of_measurement === activeUnit &&
         matchesProduct(r.product_type, ptFilter) &&
         // Curing trench drill (§7): once a Tredge is picked, the press/SKU
         // table is scoped to that trench's sub_section.
@@ -182,7 +188,7 @@ function ProductionDrillPanel({
     sectionName,
     kpiName,
     prodSub,
-    unit,
+    activeUnit,
     mode,
     granularity,
     isCuring,
@@ -199,7 +205,7 @@ function ProductionDrillPanel({
         r.section === sectionName &&
         r.kpi_name === "Production_s" &&
         r.granularity === granularity &&
-        r.unit_of_measurement === unit &&
+        r.unit_of_measurement === activeUnit &&
         matchesProduct(r.product_type, ptFilter) &&
         r.sub_section &&
         r.sub_section !== "nan",
@@ -216,7 +222,7 @@ function ProductionDrillPanel({
     return [...byTredge.values()].sort((a, b) =>
       a.tredge.localeCompare(b.tredge, undefined, { numeric: true }),
     );
-  }, [isCuring, rawRows, sectionName, prodSub, unit, mode, granularity]);
+  }, [isCuring, rawRows, sectionName, prodSub, activeUnit, mode, granularity]);
 
   // Group per the active lens. We show the ACTUAL stored value per row,
   // never a sum: each leaf kpi already carries the pre-aggregated value
@@ -277,7 +283,8 @@ function ProductionDrillPanel({
   // MT renders to one decimal under 1000 to keep small lots legible.
   const fmt = (v) => {
     if (v == null) return "—";
-    if (unit === "MT" && v < 1000) return v.toFixed(1);
+    // KG can be fractional for small lots; keep one decimal under 1000.
+    if (activeUnit === "KG" && v < 1000) return v.toFixed(1);
     return Math.round(v).toLocaleString();
   };
 
@@ -342,10 +349,12 @@ function ProductionDrillPanel({
               onChange={setViewBy}
               options={VIEW_BY_OPTIONS}
             />
-            {unitOptions && (
+            {/* realdata.md §7: a multi-unit KPI shows the toggle; a
+                single-unit one just displays its unit (no toggle). */}
+            {unitOptions.length > 1 && (
               <ToggleGroup
                 label="Unit"
-                value={unit}
+                value={activeUnit}
                 onChange={setUnit}
                 options={unitOptions}
               />

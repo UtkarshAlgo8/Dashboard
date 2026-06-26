@@ -100,13 +100,15 @@ export const SECTIONS = [
  * Inventory ("I") replaces the section view when active (BRD §6.13)
  * — spec 15 implements the Inventory page.
  */
+// realdata.md §5: Cost / Morale / Safety shown but NOT clickable
+// (enabled:false) — no data in the real set yet.
 export const CATEGORY_TABS = [
-  { id: "p", code: "P", name: "Productivity" },
-  { id: "q", code: "Q", name: "Quality" },
-  { id: "c", code: "C", name: "Cost" },
-  { id: "m", code: "M", name: "Morale" },
-  { id: "s", code: "S", name: "Safety" },
-  { id: "i", code: "I", name: "Inventory" },
+  { id: "p", code: "P", name: "Productivity", enabled: true },
+  { id: "q", code: "Q", name: "Quality", enabled: true },
+  { id: "c", code: "C", name: "Cost", enabled: false },
+  { id: "m", code: "M", name: "Morale", enabled: false },
+  { id: "s", code: "S", name: "Safety", enabled: false },
+  { id: "i", code: "I", name: "Inventory", enabled: true },
 ];
 
 /**

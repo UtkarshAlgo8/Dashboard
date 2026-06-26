@@ -42,7 +42,7 @@ function DowntimeDrillPanel({
   section,
   rawRows,
   mode = "snapshot",
-  granularity = "Daily",
+  granularity = "DAY",
   isLoading = false,
 }) {
   const sectionName = SECTION_NAME[section] ?? section;

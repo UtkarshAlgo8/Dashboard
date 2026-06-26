@@ -1,4 +1,13 @@
 import { config } from "../config.js";
+import {
+  plantDepartmentPredicate,
+  normalizeGranularity,
+  allowedGranularities,
+  excludeUnknownKpiPredicate,
+  GRAN_DAY,
+  GRAN_MONTH,
+  YEAR_GRANULARITY,
+} from "../utils/normalize.js";
 
 /**
  * SQL builders for gold_dummy. Pure functions, no side effects.
@@ -37,6 +46,27 @@ import { config } from "../config.js";
 const TABLE = () => config.upstream.sqlTable;
 const NAN = "nan";
 
+/**
+ * Format-robust YYYYMMDD ordering key over the real `date` DATE column
+ * (realdata.md §10: true date type, ISO yyyy-mm-dd). The real `gold`
+ * table has no reliable year/month/day INT columns, so every ORDER BY /
+ * PARTITION uses this expression instead. Mirrors DATE_YYYYMMDD in
+ * dashboard-query.js.
+ */
+const DATE_KEY =
+  "(CASE WHEN SUBSTRING(CAST(date AS VARCHAR), 5, 1) = '-' " +
+  "THEN SUBSTRING(CAST(date AS VARCHAR), 1, 4) || SUBSTRING(CAST(date AS VARCHAR), 6, 2) || SUBSTRING(CAST(date AS VARCHAR), 9, 2) " +
+  "ELSE SUBSTRING(CAST(date AS VARCHAR), 7, 4) || SUBSTRING(CAST(date AS VARCHAR), 4, 2) || SUBSTRING(CAST(date AS VARCHAR), 1, 2) END)";
+
+/**
+ * The always-on core filter (realdata.md §1/§2/§9): plant = BANMORE
+ * (case-insensitive), department = production (case-insensitive), and the
+ * stray UNKNOWN kpi_name excluded. Every legacy query AND-prepends this so
+ * BTP / the Quality department (SPC) can never appear.
+ */
+const CORE_FILTER =
+  `${plantDepartmentPredicate()} AND ${excludeUnknownKpiPredicate()}`;
+
 export function escapeLiteral(value) {
   if (value == null) return "NULL";
   if (typeof value === "number") {
@@ -54,14 +84,20 @@ export function escapeLiteral(value) {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-/** Build a WHERE clause from a {column: value} dict. Empty → "". */
+/**
+ * Build a WHERE clause from a {column: value} dict, AND-prepended with the
+ * always-on CORE_FILTER (plant/department/UNKNOWN). plant and department
+ * keys are IGNORED here — they're forced case-insensitively by CORE_FILTER,
+ * so passing the old mixed-case "Banmore"/"Production" literals is harmless.
+ */
 function whereClause(filters) {
-  const parts = [];
+  const parts = [CORE_FILTER];
   for (const [col, val] of Object.entries(filters)) {
     if (val === undefined || val === null) continue;
+    if (col === "plant" || col === "department") continue; // forced by CORE_FILTER
     parts.push(`${col} = ${escapeLiteral(val)}`);
   }
-  return parts.length ? `WHERE ${parts.join(" AND ")}` : "";
+  return `WHERE ${parts.join(" AND ")}`;
 }
 
 /**
@@ -138,19 +174,15 @@ function parseIsoDate(iso) {
  * new section / category / granularity value lands in the data.
  */
 export const ALLOWED_SECTIONS = new Set(["Mixing", "Stock", "TBM", "Curing"]);
+// realdata.md §5: Cost/Morale/Safety don't exist in the real data.
 export const ALLOWED_CATEGORIES = new Set([
   "Productivity",
   "Quality",
-  "Cost",
-  "Morale",
-  "Safety",
+  "Inventory",
 ]);
-export const ALLOWED_GRANULARITIES = new Set([
-  "Daily",
-  "Shift A",
-  "Shift B",
-  "Shift C",
-]);
+// realdata.md §3: real granularities (DAY/MONTH/SHIFT A/B/C, + YTD when
+// the Year flag is on). Sourced from the shared normalization layer.
+export const ALLOWED_GRANULARITIES = allowedGranularities();
 
 function requireAllowed(value, allowed, label) {
   if (!value) throw new Error(`Missing required field: ${label}`);
@@ -170,6 +202,22 @@ function optionalAllowed(value, allowed, label) {
     );
   }
   return value;
+}
+
+/**
+ * Normalize an inbound granularity through the shared synonym map
+ * (Daily/MTD/Shift A → DAY/MONTH/SHIFT A) then validate. Returns null for
+ * empty / "all" / disabled-YTD so no granularity predicate is emitted.
+ */
+function normGran(value) {
+  const gran = normalizeGranularity(value);
+  if (gran == null) return null;
+  if (!ALLOWED_GRANULARITIES.has(gran)) {
+    throw new Error(
+      `Unknown granularity: ${value}. Expected one of ${[...ALLOWED_GRANULARITIES].join(", ")}.`,
+    );
+  }
+  return gran;
 }
 
 /* ---------------------------------------------------------------- *
@@ -198,7 +246,7 @@ export function kpiGridQuery({
     section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
     category: requireAllowed(category, ALLOWED_CATEGORIES, "category"),
     tyre_type: tyreType,
-    granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
+    granularity: normGran(granularity),
     machine: NAN, // KPI grid is section-level — machine column is 'nan'
   });
   return `
@@ -207,7 +255,7 @@ export function kpiGridQuery({
       SELECT kpi_name, unit_of_measurement, actual_value, drill_down_attribute,
              ROW_NUMBER() OVER (
                PARTITION BY kpi_name
-               ORDER BY year DESC, CAST(month AS INTEGER) DESC, day DESC
+               ORDER BY ${DATE_KEY} DESC
              ) AS rn
       FROM ${TABLE()}
       ${innerWhere}
@@ -231,7 +279,7 @@ export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to 
     category: "Productivity",
     kpi_name: "OEE",
     tyre_type: tyreType,
-    granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
+    granularity: normGran(granularity),
   });
   return `
     SELECT machine, drill_down_attribute, actual_value
@@ -239,7 +287,7 @@ export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to 
       SELECT machine, drill_down_attribute, actual_value,
              ROW_NUMBER() OVER (
                PARTITION BY machine, drill_down_attribute
-               ORDER BY year DESC, CAST(month AS INTEGER) DESC, day DESC
+               ORDER BY ${DATE_KEY} DESC
              ) AS rn
       FROM ${TABLE()}
       ${innerWhere}
@@ -273,7 +321,7 @@ export function productionDrillQuery({
     section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
     category: "Productivity",
     tyre_type: tyreType,
-    granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
+    granularity: normGran(granularity),
   });
   return `
     SELECT kpi_name, machine, itemcode, product_type, drill_down_attribute, actual_value
@@ -319,11 +367,11 @@ export function downtimeDrillQuery({
       category: "Productivity",
       kpi_name: "Downtime",
       tyre_type: tyreType,
-      granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
+      granularity: normGran(granularity),
     })}
       AND machine != ${escapeLiteral(NAN)}
       ${dateRangeFilter(from, to)}
-    ORDER BY year DESC, CAST(month AS INTEGER) DESC, day DESC, machine
+    ORDER BY ${DATE_KEY} DESC, machine
   `.trim();
 }
 
@@ -345,7 +393,7 @@ export function planComplianceDrillQuery({
       category: "Productivity",
       kpi_name: "Plan Compliance",
       tyre_type: tyreType,
-      granularity: optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity"),
+      granularity: normGran(granularity),
     })}
       AND machine != ${escapeLiteral(NAN)}
       ${dateRangeFilter(from, to)}
@@ -382,7 +430,7 @@ export function scrapTraceQuery({
     })}
       AND production_ids != ${escapeLiteral(NAN)}
       ${dateRangeFilter(from, to)}
-    ORDER BY year DESC, CAST(month AS INTEGER) DESC, day DESC
+    ORDER BY ${DATE_KEY} DESC
   `.trim();
 }
 
@@ -426,9 +474,7 @@ export function trendQuery({
     section: requireAllowed(section, ALLOWED_SECTIONS, "section"),
     category: requireAllowed(category, ALLOWED_CATEGORIES, "category"),
     kpi_name: kpiName,
-    granularity:
-      optionalAllowed(granularity, ALLOWED_GRANULARITIES, "granularity") ??
-      "Daily",
+    granularity: normGran(granularity) ?? GRAN_DAY,
     tyre_type: tyreType,
     product_type: productType,
     sub_section: subSection,
@@ -472,7 +518,7 @@ export function trendQuery({
                  ORDER BY ${dateExpr} DESC
                ) AS rn
         FROM ${TABLE()}
-        ${pinnedFilters("MTD")}
+        ${pinnedFilters(GRAN_MONTH)}
       ) ranked
       WHERE rn = 1
       ORDER BY dk
@@ -480,7 +526,8 @@ export function trendQuery({
   }
 
   if (range === "year") {
-    // Latest YTD row per calendar year.
+    // Latest yearly row per calendar year. Gated behind ENABLE_YEAR
+    // (realdata.md §3) — there is no YTD data yet, but the code path stays.
     return `
       SELECT date, actual_value
       FROM (
@@ -490,7 +537,7 @@ export function trendQuery({
                  ORDER BY ${dateExpr} DESC
                ) AS rn
         FROM ${TABLE()}
-        ${pinnedFilters("YTD")}
+        ${pinnedFilters(YEAR_GRANULARITY)}
       ) ranked
       WHERE rn = 1
       ORDER BY dk
@@ -512,11 +559,11 @@ export function trendQuery({
   }
 
   return `
-    SELECT CAST(date AS VARCHAR) AS date, actual_value, year, month, day
+    SELECT CAST(date AS VARCHAR) AS date, actual_value
     FROM ${TABLE()}
     ${baseFilters}
       ${dateRangeFilter(effectiveFrom, effectiveTo)}
-    ORDER BY year, CAST(month AS INTEGER), day
+    ORDER BY ${DATE_KEY}
   `.trim();
 }
 

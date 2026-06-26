@@ -2,6 +2,10 @@ import { cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { toInventory } from "../utils/transformers.js";
+import {
+  plantDepartmentPredicate,
+  excludeUnknownKpiPredicate,
+} from "../utils/normalize.js";
 import { config } from "../config.js";
 
 /**
@@ -19,11 +23,11 @@ export async function getInventory(req, res, next) {
   try {
     const data = await cached(key, async () => {
       const sql = `
-        SELECT CAST(date AS VARCHAR) AS date, product_type, itemcode, kpi_name,
-               unit_of_measurement, actual_value, drill_down_level
+        SELECT CAST(date AS VARCHAR) AS date, section, product_type, itemcode,
+               kpi_name, unit_of_measurement, actual_value, drill_down_level
         FROM ${config.upstream.sqlTable}
-        WHERE plant = ${escapeLiteral("Banmore")}
-          AND department = ${escapeLiteral("Production")}
+        WHERE ${plantDepartmentPredicate()}
+          AND ${excludeUnknownKpiPredicate()}
           AND category = ${escapeLiteral("Inventory")}
         LIMIT 10000
       `.trim();

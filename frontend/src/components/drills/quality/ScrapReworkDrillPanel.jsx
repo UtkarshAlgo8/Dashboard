@@ -43,7 +43,7 @@ import { snapshotLatest } from "@/lib/drillDate.js";
 function ScrapReworkDrillPanel({
   kind = "Scrap",
   drillRows = [],
-  granularity = "Daily",
+  granularity = "DAY",
   mode = "snapshot",
   isLoading = false,
 }) {

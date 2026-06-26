@@ -81,14 +81,16 @@ export const SECTIONS = [
   { id: "cur", name: "Curing" },
 ];
 
-// Inventory category now lives in gold_dummy (category = 'Inventory',
-// kpi_name = 'Inventory' / 'Inventory_item') — enabled per BRD §13.4.
+// realdata.md §5: only Productivity / Quality / Inventory exist in the real
+// data. Cost / Morale / Safety are shown as tabs but NOT clickable
+// (enabled:false → the frontend renders them disabled with a tooltip) until
+// that data arrives. Inventory is enabled (category = 'Inventory').
 export const CATEGORY_TABS = [
   { id: "p", code: "P", name: "Productivity", enabled: true },
   { id: "q", code: "Q", name: "Quality", enabled: true },
-  { id: "c", code: "C", name: "Cost", enabled: true },
-  { id: "m", code: "M", name: "Morale", enabled: true },
-  { id: "s", code: "S", name: "Safety", enabled: true },
+  { id: "c", code: "C", name: "Cost", enabled: false },
+  { id: "m", code: "M", name: "Morale", enabled: false },
+  { id: "s", code: "S", name: "Safety", enabled: false },
   { id: "i", code: "I", name: "Inventory", enabled: true },
 ];
 

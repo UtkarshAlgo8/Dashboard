@@ -27,10 +27,18 @@
  * Pass `null` for any context key the caller does not set.
  */
 import { config } from "../config.js";
+import {
+  plantDepartmentPredicate,
+  normalizeGranularity,
+  allowedGranularities,
+  excludeUnknownKpiPredicate,
+} from "../utils/normalize.js";
 
 export const ALLOWED_CONTEXT_KEYS = new Set([
-  "plant",
-  "department",
+  // plant + department are NO LONGER accepted from the caller — they are
+  // forced server-side to BANMORE / production (realdata.md §1/§2) so BTP
+  // and the Quality department (SPC) can never leak in. Sending them is a
+  // validation error to surface stale frontend code early.
   "section",
   "sub_section",
   "product_type",
@@ -49,63 +57,60 @@ export const ALLOWED_PARENT_FILTER_KEYS = new Set([
  * Anything outside these lists is rejected at the route layer. We
  * still escape on the way in via escapeLiteral as defence-in-depth,
  * but reject early so the upstream Lambda never sees junk. */
+// realdata.md §4: keep ONLY these four sections. Final Finish and
+// TUO & DBM are excluded by being absent from the allow-list.
 export const ALLOWED_SECTIONS = new Set(["Mixing", "TBM", "Curing", "Stock"]);
+// realdata.md §5: after the BANMORE + Production filter only these three
+// categories survive (Cost/Morale/Safety don't exist in the real data;
+// SPC lives under department = Quality and is excluded). category = Quality
+// is KEPT (the Quality tab: Scrap/Rework/NCM Hold).
 export const ALLOWED_CATEGORIES = new Set([
   "Productivity",
   "Quality",
-  "Cost",
-  "Morale",
-  "Safety",
   "Inventory",
 ]);
-export const ALLOWED_GRANULARITIES = new Set([
-  "Daily",
-  "Shift A",
-  "Shift B",
-  "Shift C",
-  "MTD",
-  "YTD",
-]);
+// realdata.md §3: real granularities are DAY / MONTH / SHIFT A/B/C (YTD only
+// when ENABLE_YEAR). Sourced from the shared normalization layer so this
+// stays in lock-step with the synonym map.
+export const ALLOWED_GRANULARITIES = allowedGranularities();
 export const ALLOWED_TYRE_TYPES = new Set(["PCR", "TBR", "LTR", "All"]);
 
 /**
  * Equipment-level KPIs are recorded against the MACHINE/LINE, not a
- * product type. Across sections they are stored inconsistently:
- *   - Mixing: per-compound (Master / Final) — genuinely product-scoped.
- *   - TBM:    ONLY under the line's primary product ("Green Tyre").
- *   - Curing: under "Cured Tyre" + a section-level NULL row.
- *   - Stock:  section-level NULL only.
- * So when a user picks a secondary product type (e.g. TBM "Passenger
- * Radial"), a plain product_type filter drops OEE/Downtime entirely and
- * the card vanishes. We exempt these KPIs from the product_type predicate
- * so the line-level value always survives; the frontend transformer then
- * PREFERS the product-matching row when one exists (Mixing) and falls
- * back to the line-level row otherwise (TBM/Curing/Stock).
+ * product type — OEE rows are product_type NULL and never pin a product
+ * (realdata.md §17.2). We exempt these from the product_type predicate so
+ * the line-level value always survives when a user has a secondary product
+ * selected; the frontend prefers the product-matching row when present and
+ * falls back otherwise.
+ *
+ * realdata.md §9/§10/§15: the dummy's Downtime/Setup/Startup/ToolChange/…
+ * KPIs do NOT exist in the real data — Downtime is removed entirely (its
+ * purpose is served by the OEE availability-loss reasons). The real
+ * OEE-loss reason leaves are: Breakdown, No Schedule, Power Failure,
+ * Preventive Maintenance, Setup & Change, Operations/Material/Manpower.
+ * Plan_Compliance is kept (null card until data arrives, §15).
  */
 export const PRODUCT_AGNOSTIC_KPIS = new Set([
   "OEE_o",
+  "OEE_s",
   "Availability_o",
   "Performance_o",
   "Quality_o",
+  "Availability_s",
+  "Performance_s",
+  "Quality_s",
   "OEE_m",
   "Availability_m",
   "Performance_m",
   "Quality_m",
-  // Plan_Compliance is a line/section metric, stored like OEE/Downtime:
-  // TBM/Curing record it ONLY under the primary product ("Green Tyre" /
-  // "Cured Tyre") with no NULL fallback, so picking a secondary product
-  // type drops the card unless it's exempt here.
   "Plan_Compliance",
-  "Downtime",
-  "Downtime_category",
+  // Real OEE availability-loss reasons (replace the old Downtime KPI).
   "Breakdown",
-  "Setup",
-  "Startup",
-  "ToolChange",
-  "MinorStoppage",
-  "ReducedSpeed",
-  "Defect",
-  "Scrap",
+  "No Schedule",
+  "Power Failure",
+  "Preventive Maintenance",
+  "Setup & Change",
+  "Operations/Material/Manpower",
 ]);
 
 /** Pre-built SQL fragment: kpi_name IN ('OEE_o', ...) for the exemption. */
@@ -114,37 +119,32 @@ const PRODUCT_AGNOSTIC_KPIS_SQL = `kpi_name IN (${[...PRODUCT_AGNOSTIC_KPIS]
   .join(", ")})`;
 
 /**
- * Aggregate ("sum / overall") product types whose drill children are
- * stored under finer category names, not the aggregate name itself.
- *   - TBM "Green Tyre"  / Curing "Cured Tyre" = sum of the tyre categories.
- *   - Stock "Overall"   = the sub-section total.
- * Card + section-level rows DO carry the aggregate name, but SKU-level
- * drill children (Production_m_sku, NCM_Hold_sku, …) carry the category
- * names (Passenger / LT / SUV Radial). So when the user has the aggregate
- * selected, pinning product_type = the aggregate would drop every child
- * row. We expand the predicate to also accept the child categories so the
- * detail tables populate. Selecting a SPECIFIC category still pins just it.
+ * Aggregate ("overall") product types whose per-product children are
+ * stored under the real product-type names (realdata.md §6a):
+ *   - TBM    "Green Tyre" = overall total; products = Passenger Radial,
+ *            LCV, Unknown.
+ *   - Curing "Cured Tyre" = overall total; products = Passenger Radial,
+ *            LCV, Unknown.
+ * The card pins the aggregate (product_type NULL for the overall), but
+ * product-split drill children carry the real product names. When the
+ * aggregate is selected we expand the predicate to also accept the child
+ * products so the detail tables populate. (The "overall" row itself —
+ * Green/Cured Tyre — is excluded from the per-product list downstream so
+ * products don't double-count.)
  */
 const AGGREGATE_PRODUCT_CHILDREN = {
-  "Green Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
-  "Cured Tyre": ["Passenger Radial", "LT Radial", "SUV Radial"],
+  "Green Tyre": ["Passenger Radial", "LCV", "Unknown"],
+  "Cured Tyre": ["Passenger Radial", "LCV", "Unknown"],
 };
 
-// Stock sub-sections (BRD §13.2) + Curing tredges — the only sub_section
-// values the frontend may filter by. Keeps the WHERE surface tight.
-export const ALLOWED_SUB_SECTIONS = new Set([
-  "4 Roll",
-  "Extruder",
-  "3 Roll",
-  "Cutter",
-  "Slitter",
-  "Tredge 1",
-  "Tredge 2",
-  "Tredge 3",
-  "Tredge 4",
-  "Tredge 5",
-  "Tredge 6",
-]);
+// realdata.md §16: sub_section values are NOT uniform and differ from the
+// dummy (Stock: 4 Roll / 3 Roll / Three Roll / Extruder / Cutter / Slitter /
+// Bead; Curing: Trench1…Trench8 with no Trench3, plus the uppercase scrap
+// areas BUILDING / CURING / ENGINEERING). The spec says to read them from
+// the data, never hardcode a fixed list/range — so we no longer pin a frozen
+// allow-list. sub_section values are still bounded by safeStringValue
+// (length + no control/meta chars) and escaped on the way into SQL.
+export const ALLOWED_SUB_SECTIONS = null;
 
 /**
  * Strict allow-list per context key. Keys not listed here accept any
@@ -155,9 +155,10 @@ export const ALLOWED_SUB_SECTIONS = new Set([
 const CONTEXT_ALLOW_LISTS = {
   section: ALLOWED_SECTIONS,
   category: ALLOWED_CATEGORIES,
-  granularity: ALLOWED_GRANULARITIES,
   tyre_type: ALLOWED_TYRE_TYPES,
-  sub_section: ALLOWED_SUB_SECTIONS,
+  // granularity is handled specially (normalized via the synonym map, not a
+  // raw literal match) and sub_section is read-from-data (no frozen list) —
+  // neither has an entry here.
 };
 
 /**
@@ -290,6 +291,14 @@ export function buildFetchQuery({
 
   const where = [];
 
+  // 0. ALWAYS-ON core filters (realdata.md §1/§2/§9). Applied on every
+  //    query, before any caller-supplied context, so BTP (wrong plant),
+  //    the Quality department (SPC), and the stray UNKNOWN kpi_name can
+  //    never reach the dashboard. Plant is matched uppercase, department
+  //    lowercase — case-insensitive against the real data's casing.
+  where.push(plantDepartmentPredicate());
+  where.push(excludeUnknownKpiPredicate());
+
   // 1. Context filters. Keys outside ALLOWED_CONTEXT_KEYS are
   //    rejected so the frontend can't smuggle extra columns into the
   //    WHERE without us adding them deliberately.
@@ -300,6 +309,23 @@ export function buildFetchQuery({
     if (raw == null || raw === "") continue; // null / empty = no filter
 
     const value = safeStringValue(raw, key);
+
+    // granularity: normalize synonyms → canonical real value (DAY / MONTH /
+    // SHIFT A/B/C), then validate against the allowed set. A YTD/Year value
+    // with the Year flag OFF normalizes to null → no granularity predicate
+    // (realdata.md §3). Anything still unrecognized is rejected.
+    if (key === "granularity") {
+      const gran = normalizeGranularity(value);
+      if (gran == null) continue; // disabled (YTD) or "all" → no filter
+      if (!ALLOWED_GRANULARITIES.has(gran)) {
+        throw new QueryValidationError(
+          `Invalid granularity: ${value}. Allowed: ${[...ALLOWED_GRANULARITIES].join(", ")}`,
+        );
+      }
+      where.push(`granularity = ${escapeLiteral(gran)}`);
+      continue;
+    }
+
     const allow = CONTEXT_ALLOW_LISTS[key];
     if (allow && !allow.has(value)) {
       throw new QueryValidationError(
@@ -410,7 +436,7 @@ export function buildFetchQuery({
     ? limit
     : 5000;
 
-  const table = config.upstream.sqlTable || "gold_dummy";
+  const table = config.upstream.sqlTable || "gold";
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   // The upstream Lambda cannot serialize a raw DATE column to JSON (it
   // 500s). Select every column EXCEPT date, then re-add date cast to a

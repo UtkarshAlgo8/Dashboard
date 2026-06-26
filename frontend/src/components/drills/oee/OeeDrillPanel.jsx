@@ -64,7 +64,7 @@ function OeeDrillPanel({
   section,
   rawRows,
   mode = "snapshot",
-  granularity = "Daily",
+  granularity = "DAY",
   isLoading = false,
   trench = false,
 }) {

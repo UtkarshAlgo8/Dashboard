@@ -22,7 +22,7 @@ function splitRemarks(remarks) {
   };
 }
 
-export default function FirstAidDrillPanel({ drillRows, granularity = "Daily" }) {
+export default function FirstAidDrillPanel({ drillRows, granularity = "DAY" }) {
   const rows = (drillRows ?? [])
     .filter(
       (r) =>

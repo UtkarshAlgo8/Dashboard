@@ -21,14 +21,63 @@ function denan(v) {
   return v === NAN ? null : v;
 }
 
+// realdata.md §13: the real data only ships Production_m_sku; the dummy's
+// Production_sku_m view is aliased to it (serve the same rows, never two
+// views, never error on either name).
+const KPI_ALIASES = { Production_sku_m: "Production_m_sku" };
+export function aliasKpiName(name) {
+  return typeof name === "string" ? KPI_ALIASES[name] ?? name : name;
+}
+
+/**
+ * Tolerant drill_down_attribute parser (realdata.md §6).
+ *
+ * The real data stores a Python-style list with SINGLE quotes:
+ *   ['Production_m', 'Production_sku']
+ * A strict JSON.parse fails on that → drilldowns die. Accept single OR
+ * double quotes and ALWAYS return a real array of child KPI names (or null
+ * for a leaf). Aliases Production_sku_m → Production_m_sku. Never throws.
+ */
 export function parseDrillAttribute(raw) {
-  if (raw == null || raw === "" || raw === NAN) return null;
-  if (typeof raw !== "string") return raw;
+  if (raw == null) return null;
+  if (Array.isArray(raw)) return normAttr(raw);
+  if (typeof raw !== "string") return null;
+
+  const t = raw.trim();
+  if (t === "" || t === NAN || t === "[]") return null;
+
+  // 1. Strict JSON (double-quoted dummy form).
   try {
-    return JSON.parse(raw);
+    const p = JSON.parse(t);
+    if (Array.isArray(p)) return normAttr(p);
   } catch {
-    return raw;
+    /* fall through */
   }
+  // 2. Single-quoted Python list → swap quotes, parse.
+  if (t.startsWith("[") && t.endsWith("]")) {
+    try {
+      const p = JSON.parse(t.replace(/'/g, '"'));
+      if (Array.isArray(p)) return normAttr(p);
+    } catch {
+      // 3. Last resort: hand-split on commas, strip quotes.
+      const inner = t.slice(1, -1).trim();
+      if (inner === "") return null;
+      const items = inner
+        .split(",")
+        .map((s) => s.trim().replace(/^['"]|['"]$/g, "").trim())
+        .filter(Boolean);
+      return items.length ? normAttr(items) : null;
+    }
+  }
+  // A bare child name → single-element array.
+  return normAttr([t]);
+}
+
+function normAttr(arr) {
+  const out = arr
+    .filter((x) => typeof x === "string" && x.trim() !== "")
+    .map((x) => aliasKpiName(x.trim()));
+  return out.length ? out : null;
 }
 
 /* ---------- KPI allow-list per (section, tab) ----------
@@ -44,6 +93,27 @@ export function parseDrillAttribute(raw) {
  *               "stkProd" | "downtime" | "compliance" | "budget" |
  *               "table" | null (card only)
  */
+// realdata.md §10/§19.4: the OEE drill children. Components (overall + per
+// machine) plus the REAL availability-loss reasons (No Schedule, Power
+// Failure, Preventive Maintenance, Setup & Change, Operations/Material/
+// Manpower, Breakdown) — these replace the dummy's Breakdown/Setup/Startup/…
+// and the old Downtime KPI. Production_sku_m is aliased to Production_m_sku.
+const OEE_DRILL_TARGETS = [
+  "Availability_o",
+  "Performance_o",
+  "Quality_o",
+  "OEE_m",
+  "Availability_m",
+  "Performance_m",
+  "Quality_m",
+  "Breakdown",
+  "No Schedule",
+  "Power Failure",
+  "Preventive Maintenance",
+  "Setup & Change",
+  "Operations/Material/Manpower",
+];
+
 const ALLOWED_KPIS = {
   // Section keys match gold_dummy section values (Mixing, TBM, Curing, Stock).
   // Tab keys match artifact tab ids (P, Q, C, M, S).
@@ -57,19 +127,23 @@ const ALLOWED_KPIS = {
   //   S: ri, fa, nm, sa
   Mixing: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", unit: "MT", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      // realdata.md §10: OEE loss reasons are the real names (No Schedule,
+      // Power Failure, …). Downtime is removed (§15) — its drill is gone.
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: OEE_DRILL_TARGETS },
+      // realdata.md §7: Production unit is read from data (Mixing = KG), not
+      // hardcoded. Mixing has no Production_product / Production_s level.
+      { id: "prod", name: "Production", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      // Plan Compliance: no data yet → null card (§15).
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
+      // realdata.md §15: FTQ has no data yet → null card. Units are read from
+      // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
+      // follows the row (NOS/KG/M, or (unset)→blank).
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
-      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
-      // quantities with a subsection → reason/machine/sku drill (§4/§5).
-      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
+      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
       { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
@@ -93,19 +167,23 @@ const ALLOWED_KPIS = {
   },
   TBM: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", unit: "nos", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      // realdata.md §18.2/§15: TBM has no overall OEE_o/OEE_s → null card now;
+      // press-level OEE_m still appears in the drill. Fills in when TBM
+      // overall-OEE data arrives.
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: OEE_DRILL_TARGETS },
+      // realdata.md §6a: TBM Production starts with Production_product (by
+      // product type), then machine/SKU. Unit (NOS) read from data.
+      { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_product", "Production_m", "Production_sku", "Production_m_sku"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
+      // realdata.md §15: FTQ has no data yet → null card. Units are read from
+      // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
+      // follows the row (NOS/KG/M, or (unset)→blank).
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
-      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
-      // quantities with a subsection → reason/machine/sku drill (§4/§5).
-      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
+      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
       { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
@@ -129,26 +207,26 @@ const ALLOWED_KPIS = {
   },
   Curing: {
     P: [
-      // dashboard_doc.md §6: Curing OEE has a trench level (OEE_s). The
-      // overall OEE_o card drills straight to OEE_s (one row per Tredge),
-      // then to OEE_m (presses). curOEE adds the trench tier on top of the
-      // standard press flow; drillTargets carry OEE_s + the _s components.
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "curOEE", drillTargets: ["OEE_s", "Availability_s", "Performance_s", "Quality_s", "Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      // dashboard_doc.md §7: Curing Production has a trench level
-      // (Production_s, one row per Tredge), then press/SKU lenses. Only
-      // Curing uses Production_s; other sections keep the standard chain.
-      { id: "prod", name: "Production", unit: "nos", agg: "SUM", drillType: "curProd", drillTargets: ["Production_s", "Production_m", "Production_sku", "Production_m_sku", "Production_sku_m"] },
-      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      // realdata.md §14: Curing has overall OEE_o (sub_section NULL) and
+      // drills to press (OEE_m), NOT trench — the trench-level OEE_s is
+      // deferred (no data yet). Use the generic OEE chain (mixOEE), not the
+      // dummy's curOEE trench tier.
+      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: OEE_DRILL_TARGETS },
+      // realdata.md §6a/§17.1: Curing Production is the fullest chain —
+      // Production_product (by product type) → Production_s (by trench, leaf)
+      // → Production_m → Production_sku → Production_m_sku. Production_sku_m is
+      // aliased to Production_m_sku (§13). Unit (NOS) read from data.
+      { id: "prod", name: "Production", agg: "SUM", drillType: "curProd", drillTargets: ["Production_product", "Production_s", "Production_m", "Production_sku", "Production_m_sku"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
+      // realdata.md §15: FTQ has no data yet → null card. Units are read from
+      // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
+      // follows the row (NOS/KG/M, or (unset)→blank).
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
-      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
-      // quantities with a subsection → reason/machine/sku drill (§4/§5).
-      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
+      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
       { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
@@ -172,19 +250,23 @@ const ALLOWED_KPIS = {
   },
   Stock: {
     P: [
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: ["Availability_o", "Performance_o", "Quality_o", "OEE_m", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "Setup", "Startup", "ToolChange", "MinorStoppage", "ReducedSpeed", "Defect", "Scrap"] },
-      { id: "prod", name: "Production", unit: "units", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "dt", name: "Downtime", agg: "SUM", drillType: "downtime", drillTargets: ["Downtime_category"] },
+      // realdata.md §18.2/§19.4a: Stock has NO overall OEE_o — its OEE is
+      // OEE_s per subsection, and OEE_s nests by sub_section → press (OEE_m).
+      { id: "oee", name: "OEE_s", agg: "AVG", drillType: "mixOEE", drillTargets: ["OEE_m", "Availability_s", "Performance_s", "Quality_s", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "No Schedule", "Power Failure", "Preventive Maintenance", "Setup & Change", "Operations/Material/Manpower"] },
+      // realdata.md §18.1: Stock has no overall Production — the card pins
+      // sub_section + product. No Production_product/Production_s level. Unit
+      // (M/NOS) read from data.
+      { id: "prod", name: "Production", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
       { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
     ],
     Q: [
+      // realdata.md §15: FTQ has no data yet → null card. Units are read from
+      // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
+      // follows the row (NOS/KG/M, or (unset)→blank).
       { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      // quality-change.md §2: Quality tab KPIs are FTQ, Scrap, Rework, NCM
-      // Hold (Defect+Scrap and Scrap Rate removed). Scrap/Rework are SUM
-      // quantities with a subsection → reason/machine/sku drill (§4/§5).
-      { id: "scrap", name: "Scrap", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", unit: "nos", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", unit: "batches", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
+      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
+      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
     ],
     C: [
       { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
@@ -214,11 +296,21 @@ const ALLOWED_KPIS = {
  */
 const DISPLAY_NAME = {
   OEE_o: "OEE",
+  OEE_s: "OEE",
+  OEE_m: "OEE",
   Availability_o: "Availability",
   Performance_o: "Performance",
   Quality_o: "Quality",
+  Availability_s: "Availability",
+  Performance_s: "Performance",
+  Quality_s: "Quality",
   Production: "Production",
-  Downtime: "Downtime",
+  // realdata.md §6a: new Production drill levels.
+  Production_product: "By Product Type",
+  Production_s: "By Subsection",
+  Production_m: "By Machine",
+  Production_sku: "By SKU",
+  Production_m_sku: "By Machine + SKU",
   Plan_Compliance: "Plan Compliance",
   FTQ: "FTQ",
   Defect_Scrap: "Defect + Scrap",
@@ -280,7 +372,7 @@ export function toKpiGrid(
     section = "MIX",
     category = "P",
     sparkLength = 8,
-    granularity = "Daily",
+    granularity = "DAY",
     mode = "snapshot",
     productType = null,
   } = {},

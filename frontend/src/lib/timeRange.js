@@ -31,15 +31,24 @@
  * and the dashboard would go blank. Callers pass the backend-provided
  * as-of date; we fall back to `new Date()` only when it is unknown.
  */
+// realdata.md §3: real granularities are DAY / MONTH / SHIFT A-C. There is
+// no YTD data yet, so Year is disabled behind a single flag (mirrors the
+// backend ENABLE_YEAR). Flip to true + set YEAR_GRANULARITY when yearly data
+// arrives — Year then behaves like Month at the yearly granularity.
+export const ENABLE_YEAR = false;
+const DAY_GRAN = "DAY";
+const MONTH_GRAN = "MONTH";
+const YEAR_GRANULARITY = "YTD";
+
 export function presetToDateRange(timeRange, asOf = null) {
   if (!timeRange) {
     return { granularity: null, from: null, to: null, mode: "snapshot" };
   }
   const { preset, from, to } = timeRange;
 
-  // Explicit custom range wins — aggregate Daily rows per spec.
+  // Explicit custom range wins — aggregate DAY rows per spec.
   if (from && to) {
-    return { granularity: "Daily", from, to, mode: "aggregate" };
+    return { granularity: DAY_GRAN, from, to, mode: "aggregate" };
   }
 
   // Anchor to the as-of date when known; otherwise the system clock.
@@ -48,9 +57,9 @@ export function presetToDateRange(timeRange, asOf = null) {
 
   if (preset === "today") {
     // A short trailing window so the sparkline still has a few points;
-    // the headline reads the latest Daily row (the as-of day).
+    // the headline reads the latest DAY row (the as-of day).
     return {
-      granularity: "Daily",
+      granularity: DAY_GRAN,
       from: shift(anchor, -7),
       to: today,
       mode: "snapshot",
@@ -60,7 +69,7 @@ export function presetToDateRange(timeRange, asOf = null) {
   if (preset === "month") {
     // The window IS the month-to-date period: 1st of the as-of month → as-of.
     return {
-      granularity: "MTD",
+      granularity: MONTH_GRAN,
       from: toIso(startOfMonth(anchor)),
       to: today,
       mode: "snapshot",
@@ -68,13 +77,19 @@ export function presetToDateRange(timeRange, asOf = null) {
   }
 
   if (preset === "year") {
-    // The window IS the year-to-date period: Jan 1 of the as-of year → as-of.
-    return {
-      granularity: "YTD",
-      from: toIso(startOfYear(anchor)),
-      to: today,
-      mode: "snapshot",
-    };
+    // Year/YTD is disabled (realdata.md §3) — no yearly data yet. When
+    // ENABLE_YEAR is on it behaves like Month at the yearly granularity;
+    // until then it falls through to "no granularity" so nothing breaks if
+    // a stale Year selection survives.
+    if (ENABLE_YEAR) {
+      return {
+        granularity: YEAR_GRANULARITY,
+        from: toIso(startOfYear(anchor)),
+        to: today,
+        mode: "snapshot",
+      };
+    }
+    return { granularity: null, from: null, to: null, mode: "snapshot" };
   }
 
   return { granularity: null, from: null, to: null, mode: "snapshot" };

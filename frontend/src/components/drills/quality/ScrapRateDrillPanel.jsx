@@ -16,7 +16,7 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function ScrapRateDrillPanel({ drillRows, granularity = "Daily" }) {
+export default function ScrapRateDrillPanel({ drillRows, granularity = "DAY" }) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Scrap_Rate_m") continue;
