@@ -141,6 +141,8 @@ function PlantCard({
 }
 
 function KpiCell({ label, value, color }) {
+  // Phase-2 plants have no data — show a dash, not "null%".
+  const hasValue = typeof value === "number" && Number.isFinite(value);
   return (
     <Box
       sx={{
@@ -151,14 +153,23 @@ function KpiCell({ label, value, color }) {
         backgroundColor: "action.hover",
       }}
     >
-      <Typography sx={{ fontSize: 18, fontWeight: 700, lineHeight: 1, color }}>
-        {value}
-        <Typography
-          component="span"
-          sx={{ fontSize: 11, color: "text.disabled", ml: 0.25 }}
-        >
-          %
-        </Typography>
+      <Typography
+        sx={{
+          fontSize: 18,
+          fontWeight: 700,
+          lineHeight: 1,
+          color: hasValue ? color : "text.disabled",
+        }}
+      >
+        {hasValue ? value : "—"}
+        {hasValue && (
+          <Typography
+            component="span"
+            sx={{ fontSize: 11, color: "text.disabled", ml: 0.25 }}
+          >
+            %
+          </Typography>
+        )}
       </Typography>
       <Typography
         sx={{

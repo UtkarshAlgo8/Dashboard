@@ -282,6 +282,7 @@ function IndiaMap({
 }
 
 function KpiMini({ label, value }) {
+  const hasValue = typeof value === "number" && Number.isFinite(value);
   return (
     <Box sx={{ textAlign: "center" }}>
       <Typography
@@ -299,17 +300,19 @@ function KpiMini({ label, value }) {
         sx={{
           fontSize: 16,
           fontWeight: 700,
-          color: "success.main",
+          color: hasValue ? "success.main" : "text.disabled",
           lineHeight: 1,
         }}
       >
-        {value}
-        <Typography
-          component="span"
-          sx={{ fontSize: 10, color: "success.main" }}
-        >
-          %
-        </Typography>
+        {hasValue ? value : "—"}
+        {hasValue && (
+          <Typography
+            component="span"
+            sx={{ fontSize: 10, color: "success.main" }}
+          >
+            %
+          </Typography>
+        )}
       </Typography>
     </Box>
   );

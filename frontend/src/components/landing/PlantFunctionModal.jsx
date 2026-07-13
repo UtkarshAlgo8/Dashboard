@@ -125,6 +125,7 @@ function PlantFunctionModal({
 }
 
 function KpiPill({ label, value }) {
+  const hasValue = typeof value === "number" && Number.isFinite(value);
   return (
     <Box sx={{ textAlign: "center" }}>
       <Typography
@@ -148,13 +149,15 @@ function KpiPill({ label, value }) {
           sx={{
             fontSize: 26,
             fontWeight: 700,
-            color: "success.main",
+            color: hasValue ? "success.main" : "text.disabled",
             lineHeight: 1,
           }}
         >
-          {value}
+          {hasValue ? value : "—"}
         </Typography>
-        <Typography sx={{ fontSize: 12, color: "success.main" }}>%</Typography>
+        {hasValue && (
+          <Typography sx={{ fontSize: 12, color: "success.main" }}>%</Typography>
+        )}
       </Stack>
     </Box>
   );

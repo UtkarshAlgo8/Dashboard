@@ -95,7 +95,14 @@ export const CATEGORY_TABS = [
 ];
 
 export function getPlants(_req, res) {
-  res.json({ data: PLANTS });
+  // Only Banmore has real data (Phase 1). The oe/otif/yield numbers on the
+  // other plants were placeholder constants — do NOT surface fabricated KPI
+  // values for a plant we have no data for. Null them out for disabled
+  // plants so the card/map render a blank ("—") instead of a fake number.
+  const data = PLANTS.map((p) =>
+    p.enabled ? p : { ...p, oe: null, otif: null, yield: null },
+  );
+  res.json({ data });
 }
 
 export function getFunctions(_req, res) {
