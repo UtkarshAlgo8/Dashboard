@@ -15,11 +15,57 @@
  * NULL sentinel: "nan" is treated as null throughout.
  */
 
-const NAN = "nan";
+// changes.md §0: missing-value sentinels are the literal strings "nan"
+// AND "null" (not JS null), plus "". Treat all as empty everywhere.
+const EMPTY_TOKENS = new Set(["", "nan", "null"]);
+
+function isEmptyToken(v) {
+  return v == null || EMPTY_TOKENS.has(String(v).trim().toLowerCase());
+}
 
 function denan(v) {
-  return v === NAN ? null : v;
+  return isEmptyToken(v) ? null : v;
 }
+
+// changes.md §6: canonicalize product_type on read so SideWall/Sidewall
+// merge to one value/bar. Empty sentinels collapse to null first.
+const PRODUCT_TYPE_CANONICAL = new Map([["sidewall", "SideWall"]]);
+function canonicalizeProductType(v) {
+  const d = denan(v);
+  if (d == null) return null;
+  const t = String(d).trim();
+  return PRODUCT_TYPE_CANONICAL.get(t.toLowerCase()) ?? t;
+}
+
+// changes.md §8/§10: granularity comparisons must be spelling-tolerant.
+// Old callers still pass "Daily"/"Monthly" while the real rows carry
+// "DAY"/"MONTH"; a raw === compare silently matched nothing (custom-range
+// bug). Normalize both the row value and the requested value first.
+const GRAN_SYNONYMS = new Map([
+  ["daily", "DAY"],
+  ["day", "DAY"],
+  ["today", "DAY"],
+  ["mtd", "MONTH"],
+  ["month", "MONTH"],
+  ["monthly", "MONTH"],
+  ["shift a", "SHIFT A"],
+  ["shift b", "SHIFT B"],
+  ["shift c", "SHIFT C"],
+]);
+
+function normGran(v) {
+  if (v == null) return null;
+  const k = String(v).trim().toLowerCase().replace(/\s+/g, " ");
+  return GRAN_SYNONYMS.get(k) ?? String(v).trim().toUpperCase();
+}
+
+function sameGran(rowGran, wantGran) {
+  return normGran(rowGran) === normGran(wantGran);
+}
+
+// changes.md §8.2: KPIs whose SNAPSHOT agg is SNAP but which are additive
+// (flow) quantities over a custom date range → summed in aggregate mode.
+const ADDITIVE_IN_RANGE = new Set(["NCM_Hold"]);
 
 // realdata.md §13: the real data only ships Production_m_sku; the dummy's
 // Production_sku_m view is aliased to it (serve the same rows, never two
@@ -44,7 +90,9 @@ export function parseDrillAttribute(raw) {
   if (typeof raw !== "string") return null;
 
   const t = raw.trim();
-  if (t === "" || t === NAN || t === "[]") return null;
+  // changes.md §0/§1: "null"/"nan" are missing sentinels → leaf (no
+  // children), never a fake child KPI named "null".
+  if (t === "[]" || isEmptyToken(t)) return null;
 
   // 1. Strict JSON (double-quoted dummy form).
   try {
@@ -443,8 +491,11 @@ export function toKpiGrid(
     // are already narrowed server-side, so the match keeps all of them
     // (no-op) and they never fall back to a different product.
     if (productType) {
+      // changes.md §6: compare canonically so "Sidewall" rows match a
+      // "SideWall" selection (and vice-versa) instead of splitting.
+      const wantPt = canonicalizeProductType(productType);
       const matching = groupDesc.filter(
-        (r) => denan(r.product_type) === productType,
+        (r) => canonicalizeProductType(r.product_type) === wantPt,
       );
       if (matching.length > 0) groupDesc = matching;
     }
@@ -468,7 +519,7 @@ export function toKpiGrid(
     // pre-aggregated value, no client roll-up needed.
     if (isSnapshot) {
       const preRows = groupDesc
-        .filter((r) => r.granularity === granularity)
+        .filter((r) => sameGran(r.granularity, granularity))
         .sort((a, b) => (b.date > a.date ? 1 : -1));
       if (preRows.length === 0) {
         result.push(placeholderCard(kpiDef));
@@ -523,7 +574,7 @@ export function toKpiGrid(
     // Use the active granularity (Daily by default; Shift A/B/C when
     // the user picked a specific shift), sort newest-first.
     const dailyRows = groupDesc
-      .filter((r) => r.granularity === granularity)
+      .filter((r) => sameGran(r.granularity, granularity))
       .sort((a, b) => (b.date > a.date ? 1 : -1));
 
     if (dailyRows.length === 0) {
@@ -541,7 +592,15 @@ export function toKpiGrid(
     }
 
     const kpi = kpiByName.get(name);
-    const agg = kpi.agg ?? "AVG";
+    let agg = kpi.agg ?? "AVG";
+
+    // changes.md §8.2: NCM Hold QUANTITY is additive over a custom date
+    // range — sum the pinned daily rows. Its snapshot agg stays SNAP
+    // (Month/Year buttons read the latest pre-aggregated row), but in the
+    // aggregate (custom-range) path it must SUM, not take the latest day.
+    if (agg === "SNAP" && ADDITIVE_IN_RANGE.has(name)) {
+      agg = "SUM";
+    }
 
     // Per spec section 9: SUM = totals over the period, AVG = mean,
     // COUNT = entry count, SNAP = latest, MULT = OEE multiplicative
@@ -616,7 +675,7 @@ export function toDrillRows(rows) {
     subSection: denan(r.sub_section),
     machine: denan(r.machine),
     itemCode: denan(r.itemcode),
-    productType: denan(r.product_type),
+    productType: canonicalizeProductType(r.product_type),
     actual: numberOrNull(r.actual_value),
     threshold: numberOrNull(r.threshold_value),
     unit: denan(r.unit_of_measurement),
@@ -651,7 +710,7 @@ export function toGenericDrill(rows, { title } = {}) {
 /* ---------- helpers ---------- */
 
 function numberOrNull(v) {
-  if (v == null || v === "" || v === NAN) return null;
+  if (isEmptyToken(v)) return null;
   const n = typeof v === "number" ? v : Number.parseFloat(v);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
 }

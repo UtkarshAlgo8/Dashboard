@@ -15,6 +15,33 @@ import {
 } from "@mui/material";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { snapshotLatest } from "@/lib/drillDate.js";
+import { canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
+
+// changes.md §1/§8: match granularity spelling-tolerantly ("Daily" vs the
+// real "DAY") so the subsection drill pins the SAME granularity as the card
+// and never sums DAY + SHIFT + MONTH rows together.
+const GRAN_SYNONYMS = new Map([
+  ["daily", "DAY"],
+  ["day", "DAY"],
+  ["today", "DAY"],
+  ["mtd", "MONTH"],
+  ["month", "MONTH"],
+  ["monthly", "MONTH"],
+  ["shift a", "SHIFT A"],
+  ["shift b", "SHIFT B"],
+  ["shift c", "SHIFT C"],
+]);
+function normGran(v) {
+  if (v == null) return null;
+  const k = String(v).trim().toLowerCase().replace(/\s+/g, " ");
+  return GRAN_SYNONYMS.get(k) ?? String(v).trim().toUpperCase();
+}
+function sameGran(a, b) {
+  return normGran(a) === normGran(b);
+}
+function sameSub(a, b) {
+  return canonicalizeSubSection(a) === canonicalizeSubSection(b);
+}
 
 /**
  * Scrap / Rework drill panel — quality-change.md §4 / §5.
@@ -62,7 +89,7 @@ function ScrapReworkDrillPanel({
   const atGranularity = useMemo(
     () =>
       snapshotLatest(
-        (drillRows ?? []).filter((r) => r.granularity === granularity),
+        (drillRows ?? []).filter((r) => sameGran(r.granularity, granularity)),
         mode,
       ),
     [drillRows, granularity, mode],
@@ -72,10 +99,12 @@ function ScrapReworkDrillPanel({
   const subsections = useMemo(() => {
     const bySub = new Map();
     for (const r of atGranularity) {
-      if (r.kpiName !== K.s || !r.subSection) continue;
-      const cur = bySub.get(r.subSection) ?? { sub: r.subSection, total: 0 };
+      // changes.md §6: merge casing/spelling duplicates into one subsection.
+      const sub = canonicalizeSubSection(r.subSection);
+      if (r.kpiName !== K.s || !sub) continue;
+      const cur = bySub.get(sub) ?? { sub, total: 0 };
       if (typeof r.actual === "number") cur.total += r.actual;
-      bySub.set(r.subSection, cur);
+      bySub.set(sub, cur);
     }
     return [...bySub.values()].sort((a, b) => b.total - a.total);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -88,7 +117,7 @@ function ScrapReworkDrillPanel({
   const detailRows = useMemo(() => {
     if (!selectedSub) return [];
     const matched = atGranularity.filter(
-      (r) => r.kpiName === leafKpi && r.subSection === selectedSub,
+      (r) => r.kpiName === leafKpi && sameSub(r.subSection, selectedSub),
     );
     const groups = new Map();
     const keyOf = (r) => {

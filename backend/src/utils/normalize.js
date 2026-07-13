@@ -17,6 +17,33 @@
  */
 
 /* ----------------------------------------------------------------- *
+ * Missing-value sentinels (changes.md §0)                            *
+ * ----------------------------------------------------------------- *
+ * The real gold table encodes "missing" as the literal STRING "null"
+ * (as well as the older dummy's "nan"). Neither is a SQL NULL. Every
+ * "is this value empty?" check — in JS and in SQL — must treat BOTH
+ * "null" and "nan" (and "") as empty, or overall rows (product_type =
+ * "null") get missed and fake drill KPIs named "null" get created.
+ */
+
+// Lowercased tokens that mean "no value" for a dimension column.
+export const EMPTY_VALUE_TOKENS = new Set(["", "nan", "null"]);
+
+/** True when a raw string dimension value is a missing-value sentinel. */
+export function isEmptyValue(v) {
+  if (v == null) return true;
+  return EMPTY_VALUE_TOKENS.has(String(v).trim().toLowerCase());
+}
+
+/**
+ * SQL fragment: does `column` hold no value? Covers SQL NULL and the
+ * literal sentinel strings "nan"/"null"/"" (case-insensitively).
+ */
+export function emptyColumnPredicate(column) {
+  return `(${column} IS NULL OR LOWER(${column}) = 'nan' OR LOWER(${column}) = 'null' OR ${column} = '')`;
+}
+
+/* ----------------------------------------------------------------- *
  * Plant / department                                                *
  * ----------------------------------------------------------------- */
 
@@ -132,6 +159,76 @@ export function normalizeGranularity(raw) {
 }
 
 /* ----------------------------------------------------------------- *
+ * Dimension canonicalization (changes.md §6 / §7)                   *
+ * ----------------------------------------------------------------- *
+ * The real data is inconsistent in casing/spelling on some low-
+ * cardinality FILTER dimensions. We canonicalize ONCE on read (both
+ * the incoming filter value AND the row value) so duplicate spellings
+ * merge into a single bar with a combined total, and a filter matches
+ * regardless of casing. This is NOT blind LOWER() — only these
+ * dimensions are folded; kpi_name/remarks/itemcode stay exact (§6.2).
+ *
+ * Canonicalize = case-fold to look up + map to ONE canonical spelling.
+ * Look-alikes (Green vs Green Tyre, 3 Roll vs Three Roll) are handled
+ * by EXPLICIT alias maps, never by case-folding (§6.3).
+ */
+
+// product_type: reported SideWall/Sidewall split (1,108 Stock rows).
+// Key is the lowercased form; value is the canonical spelling.
+const PRODUCT_TYPE_CANONICAL = new Map([["sidewall", "SideWall"]]);
+
+// sub_section: "3 Roll" and "Three Roll" are the same Stock subsection
+// spelled two ways — merge via explicit alias (case-folding won't catch
+// it). Key is lowercased; value is the canonical spelling.
+const SUB_SECTION_CANONICAL = new Map([
+  ["3 roll", "3 Roll"],
+  ["three roll", "3 Roll"],
+]);
+
+/** Canonicalize a product_type value (case-insensitive + spelling merge). */
+export function canonicalizeProductType(raw) {
+  if (raw == null) return raw;
+  const trimmed = String(raw).trim();
+  if (trimmed === "") return trimmed;
+  return PRODUCT_TYPE_CANONICAL.get(trimmed.toLowerCase()) ?? trimmed;
+}
+
+/** Canonicalize a sub_section value (case-insensitive + 3 Roll alias). */
+export function canonicalizeSubSection(raw) {
+  if (raw == null) return raw;
+  const trimmed = String(raw).trim();
+  if (trimmed === "") return trimmed;
+  return SUB_SECTION_CANONICAL.get(trimmed.toLowerCase()) ?? trimmed;
+}
+
+/**
+ * SQL predicate matching `column` against a canonical dimension value
+ * case-insensitively AND across its known spelling aliases. Used for
+ * product_type / sub_section so SideWall/Sidewall and 3 Roll/Three Roll
+ * both match the one canonical selection. Returns a parenthesized
+ * `LOWER(col) IN (...)` fragment.
+ */
+export function canonicalDimensionPredicate(column, canonicalValue) {
+  const canon = String(canonicalValue).trim();
+  const lc = canon.toLowerCase();
+  const spellings = new Set([lc]);
+  // Gather every raw spelling that canonicalizes to this value.
+  const maps =
+    column === "product_type"
+      ? PRODUCT_TYPE_CANONICAL
+      : column === "sub_section"
+        ? SUB_SECTION_CANONICAL
+        : new Map();
+  for (const [rawLc, canonical] of maps) {
+    if (canonical.toLowerCase() === lc) spellings.add(rawLc);
+  }
+  const list = [...spellings]
+    .map((s) => `'${s.replaceAll("'", "''")}'`)
+    .join(", ");
+  return `LOWER(${column}) IN (${list})`;
+}
+
+/* ----------------------------------------------------------------- *
  * drill_down_attribute parser (realdata.md §6)                      *
  * ----------------------------------------------------------------- */
 
@@ -165,7 +262,11 @@ export function parseDrillAttribute(raw) {
   if (typeof raw !== "string") return null;
 
   const trimmed = raw.trim();
-  if (trimmed === "" || trimmed === "nan" || trimmed === "[]") return null;
+  // changes.md §0/§1: "null" (and "nan") are missing-value sentinels, NOT a
+  // child KPI. A Scrap_s row whose drill_down_attribute is the literal
+  // "null" is a leaf (children = []); without this it would be wrapped as a
+  // fake single-child KPI ["null"] and drilling would open an empty card.
+  if (trimmed === "" || trimmed === "[]" || isEmptyValue(trimmed)) return null;
 
   // 1. Try strict JSON first (double-quoted dummy form).
   try {

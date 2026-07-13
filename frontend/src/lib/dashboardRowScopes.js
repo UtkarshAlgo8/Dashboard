@@ -1,4 +1,32 @@
-const NAN = "nan";
+// changes.md §0: the real data's missing-value sentinels are the literal
+// strings "nan" AND "null" (not JS null). Treat both (case-insensitively)
+// plus "" as empty so overall rows (product_type = "null") are recognised.
+const EMPTY_TOKENS = new Set(["", "nan", "null"]);
+
+function isEmptyToken(value) {
+  return value == null || EMPTY_TOKENS.has(String(value).trim().toLowerCase());
+}
+
+// changes.md §6: canonical spellings for the folded filter dimensions.
+const PRODUCT_TYPE_CANONICAL = new Map([["sidewall", "SideWall"]]);
+const SUB_SECTION_CANONICAL = new Map([
+  ["3 roll", "3 Roll"],
+  ["three roll", "3 Roll"],
+]);
+
+export function canonicalizeProductType(value) {
+  const d = denanDimension(value);
+  if (d == null) return null;
+  const t = String(d).trim();
+  return PRODUCT_TYPE_CANONICAL.get(t.toLowerCase()) ?? t;
+}
+
+export function canonicalizeSubSection(value) {
+  const d = denanDimension(value);
+  if (d == null) return null;
+  const t = String(d).trim();
+  return SUB_SECTION_CANONICAL.get(t.toLowerCase()) ?? t;
+}
 
 const PRODUCT_AGNOSTIC_KPIS = new Set([
   "OEE_o",
@@ -23,7 +51,7 @@ const PRODUCT_AGNOSTIC_KPIS = new Set([
 ]);
 
 export function denanDimension(value) {
-  return value == null || value === "" || value === NAN ? null : value;
+  return isEmptyToken(value) ? null : value;
 }
 
 export function isProductAgnosticKpi(kpiName) {

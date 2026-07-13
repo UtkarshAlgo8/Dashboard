@@ -190,7 +190,12 @@ export function useDashboardFetch() {
     ? {
         context: {
           ...buildContext(state),
-          granularity: state.granularity ?? "Daily",
+          // changes.md §8: fall back to the real "DAY" granularity (not the
+          // stale "Daily" literal, which matches no real rows) when no
+          // shift/preset granularity is active (All-Shifts Today / custom
+          // range). The backend synonym map accepts either, but DAY keeps
+          // the drill children aligned with the aggregate DAY rows.
+          granularity: state.granularity ?? "DAY",
         },
         date: state.date,
         from: state.from,
@@ -237,7 +242,7 @@ export function useDashboardFetch() {
     ? toKpiGrid(data, {
         section: sectionIdToName(state.section),
         category: state.category.toUpperCase(),
-        granularity: state.granularity ?? "Daily",
+        granularity: state.granularity ?? "DAY",
         mode: state.mode ?? "snapshot",
         // Equipment KPIs come back for every product type now (backend
         // exemption); the transformer uses this to prefer the selected

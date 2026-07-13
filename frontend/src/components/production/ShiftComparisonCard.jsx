@@ -3,9 +3,9 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import {
-  denanDimension,
-  isProductAgnosticKpi,
   preferScopedRows,
+  canonicalizeProductType,
+  canonicalizeSubSection,
 } from "@/lib/dashboardRowScopes.js";
 
 /**
@@ -28,7 +28,7 @@ import {
  * @param {string} section - gold_dummy section ("Mixing"/"TBM"/"Curing"/"Stock")
  * @param {object[]} rows  - raw dashboard rows for the active section + range
  * @param {string|null} [subSection] - Stock sub-section to scope to
- * @param {string|null} [productType] - product type / "Overall"
+ * @param {string|null} [productType] - selected product type (Mixing/Stock)
  * @param {string|null} [asOf] - latest available date (anchor) ISO yyyy-mm-dd
  * @param {boolean} [periodIsDay] - false when the top filter is Month/Year
  */
@@ -79,20 +79,40 @@ export default function ShiftComparisonCard({
     { gran: "SHIFT C", label: "Shift C" },
   ];
 
-  // Production: from the Productivity rows in hand, pinned to the selected
-  // product. One stored summary row per shift on the latest day.
+  // changes.md §3: Production pinning differs by section, and the "null"
+  // sentinel must be treated as empty (denanDimension now handles it):
+  //   • Curing / TBM — pin the OVERALL row (product_type empty). The overall
+  //     shift rows store product_type = "null"; matching a specific product
+  //     (the section default pill) misses them → Production blank. So here we
+  //     IGNORE the product pill and take the empty-product_type row.
+  //   • Mixing — pin the selected compound (Master / Final).
+  //   • Stock — pin the selected sub_section + product.
+  // All three shifts (A/B/C) are always scanned.
+  const usesOverallProduction = section === "Curing" || section === "TBM";
   const prodByShift = (g) => {
-    const matched = scopedRows.filter(
-      (r) =>
-        r.section === section &&
-        r.kpi_name === "Production" &&
-        r.granularity === g &&
-        r.unit_of_measurement === unit &&
-        (!subSection || r.sub_section === subSection) &&
-        (!productType ||
-          isProductAgnosticKpi(r.kpi_name) ||
-          denanDimension(r.product_type) === productType),
-    );
+    // changes.md §3: for Curing/TBM we want the OVERALL (empty product_type)
+    // Production row. Read from the RAW rows, not preferScopedRows — the
+    // latter dedups on a key that ignores product_type, so when a product
+    // pill is selected it can discard the overall row in favour of a
+    // per-product one, blanking Production again. Mixing/Stock keep the
+    // product-scoped rows (that IS the pin they need).
+    const source = usesOverallProduction ? rows : scopedRows;
+    const matched = source.filter((r) => {
+      if (r.section !== section) return false;
+      if (r.kpi_name !== "Production") return false;
+      if (r.granularity !== g) return false;
+      if (r.unit_of_measurement !== unit) return false;
+      if (subSection && canonicalizeSubSection(r.sub_section) !== canonicalizeSubSection(subSection))
+        return false;
+      const rowPt = canonicalizeProductType(r.product_type);
+      if (usesOverallProduction) {
+        // Overall = the empty-product_type row ("null"/"nan"/"" → null).
+        return rowPt == null;
+      }
+      // Mixing / Stock: pin the selected compound / product (canonically).
+      if (!productType) return true;
+      return rowPt === canonicalizeProductType(productType);
+    });
     return sumLatestDay(matched);
   };
 
@@ -106,7 +126,9 @@ export default function ShiftComparisonCard({
         r.section === section &&
         r.kpi_name === kpiName &&
         r.granularity === g &&
-        (!subSection || r.sub_section === subSection),
+        (!subSection ||
+          canonicalizeSubSection(r.sub_section) ===
+            canonicalizeSubSection(subSection)),
     );
     return sumLatestDay(matched);
   };

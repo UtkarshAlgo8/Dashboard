@@ -14,9 +14,15 @@ const EMPTY = { groups: {}, history: [] };
  * @param {string} params.plantId
  * @returns {Promise<{ groups: object, history: Array }>}
  */
-export function getInventory({ plantId }) {
+export function getInventory({ plantId, from = null, to = null }) {
   if (USE_MOCK) {
     return mockDelay(INVENTORY_BY_PLANT[plantId] ?? EMPTY);
   }
-  return client.get(`/plants/${plantId}/inventory`);
+  // changes.md §8.5: pass the custom range so the backend clamps to the
+  // latest IN-RANGE day (balance as of range end), never summing/averaging.
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", from);
+  if (to) qs.set("to", to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return client.get(`/plants/${plantId}/inventory${suffix}`);
 }

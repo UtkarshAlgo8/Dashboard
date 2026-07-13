@@ -6,8 +6,9 @@ import {
   plantDepartmentPredicate,
   excludeUnknownKpiPredicate,
   normalizeGranularity,
-  allowedGranularities,
   DEFAULT_GRANULARITY,
+  emptyColumnPredicate,
+  isEmptyValue,
 } from "../utils/normalize.js";
 import { config } from "../config.js";
 
@@ -125,24 +126,12 @@ export async function getAsOf(req, res, next) {
 }
 
 /**
- * Per-section OEE — latest OEE_o per section, for the sidebar donut rings.
- * Top-level rows have machine = NULL. A section with a section-level row
- * (sub_section NULL — Mixing / TBM / Curing) uses it directly; a section
- * that only has per-sub_section rows (Stock) falls back to its first
- * sub-section. Honours an optional ?granularity, defaulting to MTD.
+ * Per-section OEE — latest OVERALL OEE_o per section, for the left section
+ * column (changes.md §2). Section-level rows have machine / product_type /
+ * sub_section empty. Sections with no overall OEE_o for the requested
+ * granularity (Stock, TBM, and Mixing at MONTH) are omitted → the frontend
+ * shows NULL. Honours an optional ?granularity, defaulting to MONTH.
  */
-const SECTION_OEE_GRANULARITIES = allowedGranularities();
-
-// Preferred sub-section order so a section with no section-level OEE_o row
-// (e.g. Stock) uses its FIRST sub-section's value, not an average. Read from
-// the real data (realdata.md §16): Stock subsections, Curing production
-// trenches (TrenchN, no space; no Trench3). Any value not listed still falls
-// back to list[0], so a new subsection name never breaks the ring.
-const PREFERRED_SUB = {
-  Stock: ["4 Roll", "3 Roll", "Three Roll", "Extruder", "Cutter", "Slitter", "Bead"],
-  Curing: ["Trench1", "Trench2", "Trench4", "Trench5", "Trench6", "Trench7", "Trench8"],
-};
-
 export async function getSectionOee(req, res, next) {
   if (notPhase1Plant(req, res, "Unknown plant.")) return;
   // realdata.md §3: the OEE/section default granularity now falls back to
@@ -152,65 +141,43 @@ export async function getSectionOee(req, res, next) {
   const key = buildCacheKey(`/plants/${req.params.plantId}/section-oee`, { gran });
   try {
     const data = await cached(key, async () => {
-      // realdata.md §18.2: OEE level differs by section. Mixing/Curing have
-      // overall OEE_o (sub_section NULL); Stock has NO overall — only OEE_s
-      // per subsection; TBM has neither. Fetch BOTH OEE_o and OEE_s so the
-      // sidebar ring can use the section-level value where it exists and fall
-      // back to a subsection's OEE_s otherwise (Stock). machine is NULL on all
-      // OEE_o/OEE_s rows.
+      // changes.md §2: the left section column shows each section's OVERALL
+      // OEE_o only. OEE is product-agnostic (never pin product_type) and
+      // section-level (sub_section empty). Where OEE_o is absent for the
+      // section/granularity — Stock (no OEE_o), TBM (none), Mixing-Month
+      // (no MONTH row) — the section shows NULL. We DO NOT fabricate a value
+      // from OEE_s; that number is a subsection metric, not the section OEE.
       const sql = `
-        SELECT kpi_name, section, sub_section, actual_value
+        SELECT section, sub_section, actual_value
         FROM (
-          SELECT kpi_name, section, sub_section, actual_value,
+          SELECT section, sub_section, actual_value,
                  ROW_NUMBER() OVER (
-                   PARTITION BY kpi_name, section, sub_section
+                   PARTITION BY section
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
           FROM ${config.upstream.sqlTable}
           WHERE ${CORE_FILTER}
-            AND kpi_name IN (${escapeLiteral("OEE_o")}, ${escapeLiteral("OEE_s")})
-            AND (machine IS NULL OR machine = 'nan')
+            AND kpi_name = ${escapeLiteral("OEE_o")}
+            AND ${emptyColumnPredicate("machine")}
+            AND ${emptyColumnPredicate("product_type")}
+            AND ${emptyColumnPredicate("sub_section")}
             AND granularity = ${escapeLiteral(gran)}
         ) ranked
         WHERE rn = 1
       `.trim();
       const rows = await runQuery(sql);
 
-      const bySection = {};
+      const out = {};
       for (const r of rows) {
         const sec = r.section;
-        if (!sec || sec === "nan") continue;
+        if (isEmptyValue(sec)) continue;
         const val = Number(r.actual_value);
         if (!Number.isFinite(val)) continue;
-        (bySection[sec] ??= []).push({
-          kpi: r.kpi_name,
-          sub: r.sub_section,
-          val,
-        });
+        out[sec] = Math.round(val * 10) / 10;
       }
-
-      const out = {};
-      for (const [sec, list] of Object.entries(bySection)) {
-        // Prefer the overall OEE_o section-level row (sub_section NULL).
-        const sectionLevel = list.find(
-          (x) =>
-            x.kpi === "OEE_o" &&
-            (x.sub == null || x.sub === "" || x.sub === "nan"),
-        );
-        let v;
-        if (sectionLevel) {
-          v = sectionLevel.val;
-        } else {
-          // No overall (Stock) — use the first preferred subsection's OEE_s.
-          const order = PREFERRED_SUB[sec] ?? [];
-          const first =
-            order.map((s) => list.find((x) => x.sub === s)).find(Boolean) ??
-            list[0];
-          v = first?.val;
-        }
-        if (v != null && Number.isFinite(v)) out[sec] = Math.round(v * 10) / 10;
-      }
-      return out; // { Mixing: 18.8, Curing: 31.7, Stock: <3 Roll>, TBM: (absent) }
+      // Sections with no overall OEE_o row (Stock / TBM, and Mixing at MONTH)
+      // are simply absent from `out` → the frontend renders NULL for them.
+      return out; // e.g. { Mixing: 18.8, Curing: 31.7 } (Stock/TBM null)
     });
     res.json({ data });
   } catch (err) {

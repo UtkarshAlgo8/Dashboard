@@ -21,13 +21,29 @@
 import {
   parseDrillAttribute as parseDrillAttributeShared,
   normalizeUnit,
+  isEmptyValue,
+  canonicalizeProductType,
+  canonicalizeSubSection,
 } from "./normalize.js";
 
-const NAN = "nan";
-
+// changes.md §0: the real data's missing-value sentinels are the literal
+// strings "nan" AND "null" (not SQL NULL). Treat both (case-insensitively)
+// as null at the API boundary so the frontend sees clean nulls and overall
+// rows (product_type = "null") are recognised as empty, not a product.
 function denan(v) {
-  if (v === NAN) return null;
-  return v;
+  return isEmptyValue(v) ? null : v;
+}
+
+// changes.md §6: canonicalize dimension spellings on read so duplicate
+// spellings merge into one bucket/bar with a combined total (SideWall vs
+// Sidewall; 3 Roll vs Three Roll). Empty sentinels still collapse to null.
+function productType(v) {
+  const d = denan(v);
+  return d == null ? null : canonicalizeProductType(d);
+}
+function subSection(v) {
+  const d = denan(v);
+  return d == null ? null : canonicalizeSubSection(d);
 }
 
 /** Unit for the API payload — normalized; "(unset)"/"nan" → null. */
@@ -50,7 +66,7 @@ function toIsoDate(d) {
 }
 
 function numOrNull(v) {
-  if (v == null || v === "" || v === NAN) return null;
+  if (isEmptyValue(v)) return null;
   const n = typeof v === "number" ? v : Number.parseFloat(v);
   return Number.isFinite(n) ? n : null;
 }
@@ -111,7 +127,7 @@ export function toInventory(rows) {
   // Item-level live stock per product_type: latest date wins per itemcode.
   const itemsByType = new Map();
   for (const r of itemRows) {
-    const pt = denan(r.product_type);
+    const pt = productType(r.product_type);
     const code = denan(r.itemcode);
     if (!pt || !code) continue;
     if (!itemsByType.has(pt)) itemsByType.set(pt, new Map());
@@ -135,7 +151,7 @@ export function toInventory(rows) {
   // Bar today/yesterday: the two most recent dates for each product_type.
   const barsByType = new Map();
   for (const r of barRows) {
-    const pt = denan(r.product_type);
+    const pt = productType(r.product_type);
     if (!pt) continue;
     if (!barsByType.has(pt)) barsByType.set(pt, []);
     barsByType.get(pt).push(r);
@@ -182,7 +198,7 @@ export function toInventory(rows) {
   // product_type's value under its history column key.
   const byDate = new Map();
   for (const r of barRows) {
-    const pt = denan(r.product_type);
+    const pt = productType(r.product_type);
     if (!pt) continue;
     const meta = metaFor(pt);
     const k = dateKey(r.date);
@@ -265,7 +281,7 @@ export function toKpiGrid(rows) {
   const groups = new Map();
   for (const r of rows) {
     const name = r.kpi_name;
-    if (!name || name === NAN) continue;
+    if (isEmptyValue(name)) continue;
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(r);
   }
@@ -399,7 +415,7 @@ export function toProductionDrill(rows, { keyOf }) {
       sku: denan(r.itemcode),
       itemCode: denan(r.itemcode),
       machine: denan(r.machine),
-      productType: denan(r.product_type),
+      productType: productType(r.product_type),
       actual: numberOrNull(r.actual_value),
       drillDown: parseDrillAttribute(r.drill_down_attribute),
     });
@@ -456,7 +472,7 @@ export function toTrendSeries(rows) {
  * further (e.g. drop the decimal when the value is a whole number).
  */
 function numberOrNull(v) {
-  if (v === null || v === undefined || v === "" || v === NAN) return null;
+  if (isEmptyValue(v)) return null;
   const n = typeof v === "number" ? v : Number.parseFloat(v);
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100) / 100;

@@ -143,7 +143,9 @@ function BanmoreProduction() {
     mix: "Master Compound",
     tbm: "Green Tyre",
     cur: "Cured Tyre",
-    stk: "Overall",
+    // changes.md §4: Stock's default product is resolved from the active
+    // sub-section's first REAL product, never a synthetic "Overall".
+    stk: null,
   };
   const prodSubOptions = PROD_SUB_OPTIONS[dashboard.section] ?? [];
 
@@ -172,20 +174,22 @@ function BanmoreProduction() {
   // defaults to the first one before the user picks). Other sections have a
   // single section-level OEE_o row (sub_section empty), so they stay null.
   const pinnedSubSection = isStock ? activeSubSection : dashboard.subSection;
+  // changes.md §4: Stock has NO synthetic "Overall" product in the real
+  // data — the drill must show only the real product/category rows for the
+  // sub-section. We no longer inject an "Overall" option or default to it;
+  // the first real product of the active sub-section is the default.
+  const stockProductOptions = STOCK_PRODUCT_TYPES[activeSubSection] ?? [];
   // The active product type (sent to the backend). Falls back to the
-  // section default. "Overall" = the Stock sub-section total.
+  // section default; for Stock that is the sub-section's first real product.
   const activeProductType =
     dashboard.productType ??
-    (isStock ? "Overall" : SECTION_DEFAULT_PRODUCT[dashboard.section]);
-  const stockProductOptions = [
-    "Overall",
-    ...(STOCK_PRODUCT_TYPES[activeSubSection] ?? []),
-  ];
+    (isStock ? stockProductOptions[0] : SECTION_DEFAULT_PRODUCT[dashboard.section]);
 
   const onStockSubChange = (next) => {
-    // Switching sub-section resets the product type back to the sub-section
-    // total — the previous product type may not exist under the new one.
-    setFilter({ subSection: next, productType: "Overall" }, false);
+    // Switching sub-section resets the product type to the new sub-section's
+    // first real product — the previous product may not exist under it.
+    const firstProduct = (STOCK_PRODUCT_TYPES[next] ?? [])[0] ?? null;
+    setFilter({ subSection: next, productType: firstProduct }, false);
   };
   const onStockProductChange = (next) => {
     setFilter({ productType: next }, false);
@@ -218,7 +222,12 @@ function BanmoreProduction() {
     const map = { all: null, a: "SHIFT A", b: "SHIFT B", c: "SHIFT C" };
     const shiftGran = map[shift];
     if (shiftGran) return shiftGran;
-    return presetToDateRange({ preset }, asOf).granularity;
+    // changes.md §8: a custom calendar range must resolve to DAY (aggregate
+    // DAY rows), NOT null. Pass the FULL timeRange (incl. from/to) so
+    // presetToDateRange returns granularity="DAY" for a custom range; a
+    // bare {preset} would drop the range and yield null → the "Daily"
+    // fallback that never matches the real "DAY" rows.
+    return presetToDateRange({ ...timeRange, preset }, asOf).granularity;
   };
 
   // Handlers ONLY update the UI state (pure functional updater so the
@@ -260,15 +269,17 @@ function BanmoreProduction() {
   const { from, to } = presetToDateRange(timeRange, asOf);
 
   const onSectionSelect = (id) => {
-    // Entering Stock seeds the default sub-section + "Overall" product type
-    // (BRD §13.2/§13.3); leaving Stock clears both so other sections aren't
-    // accidentally scoped to a stale sub-section.
+    // Entering Stock seeds the default sub-section + its first REAL product
+    // (changes.md §4: no synthetic "Overall"); leaving Stock clears both so
+    // other sections aren't accidentally scoped to a stale sub-section.
     if (id === "stk") {
+      const firstSub = STOCK_SUBSECTIONS[0];
+      const firstProduct = (STOCK_PRODUCT_TYPES[firstSub] ?? [])[0] ?? null;
       setFilter(
         {
           section: id,
-          subSection: STOCK_SUBSECTIONS[0],
-          productType: "Overall",
+          subSection: firstSub,
+          productType: firstProduct,
         },
         true,
       );
@@ -290,7 +301,7 @@ function BanmoreProduction() {
   useEffect(() => {
     if (dashboard.productType == null) {
       const def = isStock
-        ? "Overall"
+        ? (STOCK_PRODUCT_TYPES[activeSubSection] ?? [])[0] ?? null
         : SECTION_DEFAULT_PRODUCT[dashboard.section];
       if (def) setFilter({ productType: def }, false);
     }
@@ -486,7 +497,8 @@ function BanmoreProduction() {
                 </Box>
 
                 {/* Stock product-type pills — second row (BRD §13.3 two-step:
-                    sub-section first, then product type; "Overall" = total). */}
+                    sub-section first, then product type). changes.md §4: only
+                    the real products of the sub-section, no synthetic Overall. */}
                 {isStock && (
                   <Box
                     sx={{

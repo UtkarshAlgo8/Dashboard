@@ -32,6 +32,10 @@ import {
   normalizeGranularity,
   allowedGranularities,
   excludeUnknownKpiPredicate,
+  emptyColumnPredicate,
+  canonicalizeProductType,
+  canonicalizeSubSection,
+  canonicalDimensionPredicate,
 } from "../utils/normalize.js";
 
 export const ALLOWED_CONTEXT_KEYS = new Set([
@@ -150,7 +154,8 @@ export const ALLOWED_SUB_SECTIONS = null;
  * Strict allow-list per context key. Keys not listed here accept any
  * string (length-bounded, no control chars — see safeStringValue).
  * product_type is intentionally unrestricted (dozens of values across
- * sections, incl. "Overall" subsection totals — see §13.3).
+ * sections). Note: Stock has NO synthetic "Overall" product in the real
+ * data (changes.md §4) — the frontend no longer sends one.
  */
 const CONTEXT_ALLOW_LISTS = {
   section: ALLOWED_SECTIONS,
@@ -332,6 +337,15 @@ export function buildFetchQuery({
         `Invalid ${key}: ${value}. Allowed: ${[...allow].join(", ")}`,
       );
     }
+    // changes.md §6: canonicalize the incoming filter value before it goes
+    // into the predicate, so "Sidewall"/"sidewall" match the canonical
+    // "SideWall" rows and "Three Roll" matches "3 Roll".
+    const canonValue =
+      key === "product_type"
+        ? canonicalizeProductType(value)
+        : key === "sub_section"
+          ? canonicalizeSubSection(value)
+          : value;
     if (key === "section" || key === "sub_section" || key === "product_type") {
       // Filter to the requested value BUT also keep rows that carry no
       // value for this column (NULL / 'nan' / ''):
@@ -353,14 +367,22 @@ export function buildFetchQuery({
         key === "product_type" ? ` OR ${PRODUCT_AGNOSTIC_KPIS_SQL}` : "";
       // Aggregate product types (Green/Cured Tyre): also accept the child
       // tyre categories so SKU-level drill children populate (see map docs).
-      if (key === "product_type" && AGGREGATE_PRODUCT_CHILDREN[value]) {
-        const kids = AGGREGATE_PRODUCT_CHILDREN[value]
+      if (key === "product_type" && AGGREGATE_PRODUCT_CHILDREN[canonValue]) {
+        const kids = AGGREGATE_PRODUCT_CHILDREN[canonValue]
           .map((c) => `${key} = ${escapeLiteral(c)}`)
           .join(" OR ");
         extra += ` OR ${kids}`;
       }
+      // Match clause: exact for section; canonical case-insensitive +
+      // spelling-alias match for product_type / sub_section (§6). The empty
+      // fallback (emptyColumnPredicate) treats NULL / "nan" / "null" / "" as
+      // "no value" so overall / section-level rows survive (§0).
+      const matchClause =
+        key === "product_type" || key === "sub_section"
+          ? canonicalDimensionPredicate(key, canonValue)
+          : `${key} = ${escapeLiteral(canonValue)}`;
       where.push(
-        `(${key} = ${escapeLiteral(value)} OR ${key} IS NULL OR ${key} = 'nan' OR ${key} = ''${extra})`,
+        `(${matchClause} OR ${emptyColumnPredicate(key)}${extra})`,
       );
     } else {
       where.push(`${key} = ${escapeLiteral(value)}`);
@@ -408,9 +430,9 @@ export function buildFetchQuery({
   //    children OUT of the landing grid (they carry a sub_section).
   const LANDING_PREDICATE =
     "(drill_down_level = 1 OR (drill_down_level IS NULL " +
-    "AND (machine IS NULL OR machine = 'nan') " +
-    "AND (itemcode IS NULL OR itemcode = 'nan') " +
-    "AND (sub_section IS NULL OR sub_section = 'nan')))";
+    `AND ${emptyColumnPredicate("machine")} ` +
+    `AND ${emptyColumnPredicate("itemcode")} ` +
+    `AND ${emptyColumnPredicate("sub_section")}))`;
   if (drillKpis == null) {
     where.push(LANDING_PREDICATE);
   } else {
