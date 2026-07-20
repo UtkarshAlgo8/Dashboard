@@ -45,11 +45,17 @@ export const config = {
   upstream: {
     url: required("AWS_DATA_URL"),
     apiKey: required("AWS_DATA_API_KEY"),
-    // Real data: the full Banmore/Production dataset lives in `gold`
-    // (catalog path databricks_table/gold; SQL FROM target `gold`). The
-    // defaults below point at the real table so an env-less deploy works.
+    // Query engine on the upstream Lambda. "athena" (default) reads the
+    // gold table via Athena and needs a schema-qualified FROM target
+    // (`gold.gold`). Set to "databricks" to fall back to the legacy
+    // path (bare `gold` + the `tables` array below).
+    engine: optional("AWS_DATA_ENGINE", "athena"),
+    // Real data: the full Banmore/Production dataset lives in `gold`.
+    // `table` is the legacy Databricks catalog path (only used when
+    // engine=databricks). `sqlTable` is the SQL FROM target; Athena
+    // requires the `gold.gold` schema-qualified form.
     table: optional("AWS_DATA_TABLE", "databricks_table/gold"),
-    sqlTable: optional("AWS_DATA_SQL_TABLE", "gold"),
+    sqlTable: optional("AWS_DATA_SQL_TABLE", "gold.gold"),
     timeoutMs: asInt("AWS_DATA_TIMEOUT_MS", 30_000),
   },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),

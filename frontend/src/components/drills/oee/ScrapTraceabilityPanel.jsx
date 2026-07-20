@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
+  CircularProgress,
   Stack,
   Table,
   TableBody,
@@ -28,29 +30,87 @@ const SHIFT_COLOR_KEY = { A: "blue", B: "amber", C: "purple" };
  * Opens beneath the Quality/Scrap sub-drill table when a traceable
  * scrap row is clicked. Owns its own fetch and the CSV download.
  */
+const PAGE_SIZE = 100;
+
 function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
   const theme = useTheme();
   const toast = useToast();
 
+  // Pagination: fetch one PAGE_SIZE page at a time and accumulate. Rows are
+  // stored per-page (keyed by page index) so an in-flight "Load more" can't
+  // append the previous page's data twice — the fetch tags its own page.
+  const [page, setPage] = useState(0);
+  const [pageRows, setPageRows] = useState({}); // { [pageIndex]: row[] }
+  const [hasMore, setHasMore] = useState(true);
+
+  // Reset the accumulation whenever the traced entity changes. Done during
+  // render (React's "adjusting state on prop change" pattern) rather than in
+  // an effect, so the stale pages never flash before an effect can clear them.
+  const entityKey = `${plantId}/${section}/${machine.id}/${itemCode}`;
+  const [prevEntityKey, setPrevEntityKey] = useState(entityKey);
+  if (prevEntityKey !== entityKey) {
+    setPrevEntityKey(entityKey);
+    setPage(0);
+    setPageRows({});
+    setHasMore(true);
+  }
+
   const { data, isLoading, error } = usePolledQuery(
-    () =>
-      getScrapTraceability({
+    async () => {
+      const rows = await getScrapTraceability({
         plantId,
         section,
         machineId: machine.id,
         itemCode,
-      }),
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      // Tag the result with the page it belongs to so the accumulator below
+      // correlates async responses to the correct page (no stale closure).
+      return { page, rows: Array.isArray(rows) ? rows : [] };
+    },
     {
       interval: 0, // point-in-time snapshot; no polling
-      deps: [plantId, section, machine.id, itemCode],
+      deps: [plantId, section, machine.id, itemCode, page],
     },
   );
+
+  // Accumulate each resolved page into pageRows. Reacting to the async fetch
+  // result IS synchronizing with an external system, so the synchronous
+  // setState here is the canonical pattern (same as usePolledQuery itself).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!data) return;
+    const { page: p, rows } = data;
+    setPageRows((prev) => ({ ...prev, [p]: rows }));
+    // A short page (< PAGE_SIZE) is the last one — hide "Load more".
+    setHasMore(rows.length === PAGE_SIZE);
+  }, [data]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (error) {
     toast.error("Could not load traceability report.");
   }
 
-  const rows = Array.isArray(data) ? data : [];
+  // Flatten accumulated pages in order.
+  const rows = useMemo(
+    () =>
+      Object.keys(pageRows)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .flatMap((p) => pageRows[p]),
+    [pageRows],
+  );
+
+  // Only the FIRST page shows the full-panel skeleton; later pages keep the
+  // existing rows visible and show a spinner on the "Load more" button.
+  const isLoadingFirstPage = isLoading && rows.length === 0;
+  const isLoadingMore = isLoading && rows.length > 0;
+
+  const handleLoadMore = () => {
+    if (isLoading) return;
+    setPage((p) => p + 1);
+  };
 
   const handleDownload = () => {
     if (rows.length === 0) {
@@ -138,7 +198,7 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
         </Button>
       </Stack>
 
-      {isLoading && rows.length === 0 ? (
+      {isLoadingFirstPage ? (
         <TableSkeleton rows={4} cols={7} />
       ) : rows.length === 0 ? (
         <Box
@@ -156,7 +216,28 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
           />
         </Box>
       ) : (
-        <TraceabilityTable rows={rows} />
+        <>
+          <TraceabilityTable rows={rows} />
+          {hasMore && (
+            <Stack alignItems="center" sx={{ mt: 1.5 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+                startIcon={
+                  isLoadingMore ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : undefined
+                }
+              >
+                {isLoadingMore
+                  ? "Loading…"
+                  : `Load more (${rows.length} shown)`}
+              </Button>
+            </Stack>
+          )}
+        </>
       )}
     </Box>
   );

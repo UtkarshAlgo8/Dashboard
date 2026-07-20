@@ -428,8 +428,11 @@ export function buildFetchQuery({
   //    with no machine / itemcode / sub_section (a true section/plant-level
   //    card). The sub_section IS NULL clause keeps the Scrap_s / Scrap_reason
   //    children OUT of the landing grid (they carry a sub_section).
+  // drill_down_level is stored as a VARCHAR in the real gold table
+  // ("1", not 1), so compare against a string literal — Athena rejects
+  // `varchar = integer` with a TYPE_MISMATCH.
   const LANDING_PREDICATE =
-    "(drill_down_level = 1 OR (drill_down_level IS NULL " +
+    "(drill_down_level = '1' OR (drill_down_level IS NULL " +
     `AND ${emptyColumnPredicate("machine")} ` +
     `AND ${emptyColumnPredicate("itemcode")} ` +
     `AND ${emptyColumnPredicate("sub_section")}))`;
@@ -458,17 +461,23 @@ export function buildFetchQuery({
     ? limit
     : 5000;
 
-  const table = config.upstream.sqlTable || "gold";
+  const table = config.upstream.sqlTable || "gold.gold";
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  // The upstream Lambda cannot serialize a raw DATE column to JSON (it
-  // 500s). Select every column EXCEPT date, then re-add date cast to a
-  // VARCHAR (ISO yyyy-mm-dd) so transformers still get a `date` field.
-  //
+  // Athena (Trino) has no `* EXCLUDE(...)` syntax and serializes a DATE
+  // column to an ISO yyyy-mm-dd string natively, so a plain `SELECT *`
+  // is both valid and gives transformers the `date` field they expect.
+  // The EXCLUDE trick is only needed on the legacy databricks/DuckDB
+  // path, whose Lambda 500s serializing a raw DATE column — there we
+  // drop `date` and re-add it cast to VARCHAR.
+  const selectClause =
+    config.upstream.engine === "databricks"
+      ? "SELECT * EXCLUDE(date), CAST(date AS VARCHAR) AS date"
+      : "SELECT *";
   // ORDER BY newest-first BEFORE the LIMIT: if a wide window ever exceeds
   // the row cap, truncation drops the OLDEST rows, never the latest ones
   // the cards/snapshots need. Without this the upstream returns an
   // arbitrary slice and the current view can intermittently come up empty.
-  return `SELECT * EXCLUDE(date), CAST(date AS VARCHAR) AS date FROM ${table} ${whereSql} ORDER BY ${DATE_YYYYMMDD} DESC LIMIT ${lim}`
+  return `${selectClause} FROM ${table} ${whereSql} ORDER BY ${DATE_YYYYMMDD} DESC LIMIT ${lim}`
     .replace(/\s+/g, " ")
     .trim();
 }

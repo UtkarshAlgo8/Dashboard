@@ -15,6 +15,14 @@ import {
   toScrapTrace,
 } from "../utils/transformers.js";
 
+// Parse a query-string integer, clamping to [min, max]; returns `fallback`
+// when the value is missing or not a finite integer.
+function clampInt(raw, fallback, min, max) {
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 // Send a 400 + return false when any required query param is missing.
 function requireParams(res, params, names) {
   for (const n of names) {
@@ -151,6 +159,12 @@ export async function getScrapTraceability(req, res, next) {
       `/plants/${req.params.plantId}/production/drills/scrap-traceability`,
       { ...req.query, itemcode },
     );
+    // Pagination: the UI requests one page of raw production-ID rows at a
+    // time ("Load more"). Clamp limit to [1, 100] and offset to >= 0; bad or
+    // missing values fall back to the first 100. limit/offset are part of
+    // req.query, so they already vary the cache key above.
+    const limit = clampInt(req.query.limit, 100, 1, 100);
+    const offset = clampInt(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
     const data = await cached(key, async () => {
       const sql = scrapTraceQuery({
         plant: "Banmore",
@@ -160,6 +174,8 @@ export async function getScrapTraceability(req, res, next) {
         tyreType: req.query.tyreType ?? null,
         from: req.query.from,
         to: req.query.to,
+        limit,
+        offset,
       });
       const rows = await runQuery(sql);
       return toScrapTrace(rows);

@@ -104,15 +104,21 @@ export function getScrapTraceability({
   itemCode,
   from,
   to,
+  limit = 100,
+  offset = 0,
 }) {
   if (USE_MOCK) {
     const key = `${plantId}/${section}/${machineId}/${itemCode}`;
-    return mockDelay(SCRAP_TRACEABILITY[key] ?? []);
+    const all = SCRAP_TRACEABILITY[key] ?? [];
+    // Mirror the server-side LIMIT/OFFSET so "Load more" behaves in mock too.
+    return mockDelay(all.slice(offset, offset + limit));
   }
   const query = new URLSearchParams({
     section: toSectionValue(section),
     machine: machineId,
     itemCode,
+    limit: String(limit),
+    offset: String(offset),
   });
   appendTimeShift(query, { from, to });
   return client.get(

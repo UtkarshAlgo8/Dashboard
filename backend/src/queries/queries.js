@@ -4,6 +4,7 @@ import {
   normalizeGranularity,
   allowedGranularities,
   excludeUnknownKpiPredicate,
+  emptyColumnPredicate,
   GRAN_DAY,
   GRAN_MONTH,
   YEAR_GRANULARITY,
@@ -34,8 +35,12 @@ import {
  *   previous_values, threshold_value, status, remarks,
  *   drill_down_level, record_id, hour
  *
- * NULL sentinel: missing values arrive as the literal string "nan",
- * not SQL NULL. Use `= 'nan'` / `!= 'nan'` rather than IS NULL.
+ * Empty/NULL sentinel: "missing" values differ by engine — the legacy
+ * databricks path stored the literal string "nan", while Athena's gold
+ * table uses '' or SQL NULL. Use the engine-robust `emptyColumnPredicate`
+ * (col IS NULL OR lower(col) in ('nan','null') OR col = '') instead of a
+ * bare `= 'nan'` / `!= 'nan'`, which matches zero Athena rows (for `=`)
+ * or leaks section-level rows into drills (for `!=`, since '' != 'nan').
  *
  * Date filtering: date is stored as DD-MM-YYYY string. Lexicographic
  * range comparison would be wrong (12-2026 < 01-2026 alphabetically).
@@ -44,7 +49,6 @@ import {
  */
 
 const TABLE = () => config.upstream.sqlTable;
-const NAN = "nan";
 
 /**
  * Format-robust YYYYMMDD ordering key over the real `date` DATE column
@@ -228,7 +232,7 @@ export const KPI_SPARK_LENGTH = 8;
 
 /**
  * KPI grid — up to 8 most recent rows per `kpi_name` (top-level rows
- * where machine = 'nan'). Transformer groups by kpi_name to build the
+ * where machine is empty). Transformer groups by kpi_name to build the
  * value + sparkline + trend %.
  */
 export function kpiGridQuery({
@@ -247,7 +251,6 @@ export function kpiGridQuery({
     category: requireAllowed(category, ALLOWED_CATEGORIES, "category"),
     tyre_type: tyreType,
     granularity: normGran(granularity),
-    machine: NAN, // KPI grid is section-level — machine column is 'nan'
   });
   return `
     SELECT kpi_name, unit_of_measurement, actual_value, drill_down_attribute
@@ -259,6 +262,7 @@ export function kpiGridQuery({
              ) AS rn
       FROM ${TABLE()}
       ${innerWhere}
+        AND ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
     ) ranked
     WHERE rn <= ${KPI_SPARK_LENGTH}
@@ -268,7 +272,7 @@ export function kpiGridQuery({
 
 /**
  * OEE drill — one row per (machine, drill_down_attribute) combo,
- * latest by date. Rows with `machine = 'nan'` are filtered out
+ * latest by date. Rows with an empty `machine` are filtered out
  * (those are the top-level KPI rows, not drill rows).
  */
 export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to }) {
@@ -291,7 +295,7 @@ export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to 
              ) AS rn
       FROM ${TABLE()}
       ${innerWhere}
-        AND machine != ${escapeLiteral(NAN)}
+        AND NOT ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
     ) ranked
     WHERE rn = 1
@@ -338,7 +342,7 @@ export function productionDrillQuery({
           ${escapeLiteral("Production_sku")},
           ${escapeLiteral("Production_m_sku")}
         )
-        AND machine != ${escapeLiteral(NAN)}
+        AND NOT ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
     ) ranked
     WHERE rn = 1
@@ -369,7 +373,7 @@ export function downtimeDrillQuery({
       tyre_type: tyreType,
       granularity: normGran(granularity),
     })}
-      AND machine != ${escapeLiteral(NAN)}
+      AND NOT ${emptyColumnPredicate("machine")}
       ${dateRangeFilter(from, to)}
     ORDER BY ${DATE_KEY} DESC, machine
   `.trim();
@@ -395,7 +399,7 @@ export function planComplianceDrillQuery({
       tyre_type: tyreType,
       granularity: normGran(granularity),
     })}
-      AND machine != ${escapeLiteral(NAN)}
+      AND NOT ${emptyColumnPredicate("machine")}
       ${dateRangeFilter(from, to)}
     ORDER BY machine, itemcode
   `.trim();
@@ -413,7 +417,18 @@ export function scrapTraceQuery({
   tyreType,
   from,
   to,
+  limit,
+  offset,
 }) {
+  // Traceability is a raw production-ID list (no cross-row aggregation), so
+  // it paginates cleanly: fetch one page of `limit` rows at a time to keep
+  // fetch time bounded, advancing `offset` for each "Load more". Bounds:
+  // limit ≤ 100 (the page size the UI requests), offset ≥ 0. Athena's Trino
+  // engine wants OFFSET before LIMIT; we emit OFFSET only when non-zero so
+  // the first page stays a plain LIMIT.
+  const lim = Number.isInteger(limit) && limit > 0 && limit <= 100 ? limit : 100;
+  const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
+  const pageClause = off > 0 ? `OFFSET ${off} LIMIT ${lim}` : `LIMIT ${lim}`;
   return `
     SELECT production_ids, machine, itemcode, drill_down_attribute,
            actual_value, CAST(date AS VARCHAR) AS date
@@ -428,9 +443,10 @@ export function scrapTraceQuery({
       itemcode,
       tyre_type: tyreType,
     })}
-      AND production_ids != ${escapeLiteral(NAN)}
+      AND NOT ${emptyColumnPredicate("production_ids")}
       ${dateRangeFilter(from, to)}
     ORDER BY ${DATE_KEY} DESC
+    ${pageClause}
   `.trim();
 }
 
@@ -478,8 +494,7 @@ export function trendQuery({
     tyre_type: tyreType,
     product_type: productType,
     sub_section: subSection,
-    machine: NAN,
-  });
+  }) + ` AND ${emptyColumnPredicate("machine")}`;
 
   // Format-robust YYYYMMDD: CAST to VARCHAR (date is a DATE type in the
   // live gold_dummy; a string in CSV-backed envs) then handle ISO or
@@ -490,7 +505,7 @@ export function trendQuery({
     "ELSE SUBSTRING(CAST(date AS VARCHAR), 7, 4) || SUBSTRING(CAST(date AS VARCHAR), 4, 2) || SUBSTRING(CAST(date AS VARCHAR), 1, 2) END)";
 
   // Pinned filters at the requested pre-aggregated granularity (MTD for
-  // monthly, YTD for yearly). machine='nan' = top-level rows only.
+  // monthly, YTD for yearly). Empty machine = top-level (section) rows only.
   const pinnedFilters = (gran) =>
     whereClause({
       plant,
@@ -502,8 +517,7 @@ export function trendQuery({
       tyre_type: tyreType,
       product_type: productType,
       sub_section: subSection,
-      machine: NAN,
-    });
+    }) + ` AND ${emptyColumnPredicate("machine")}`;
 
   // The upstream Lambda 500s on a raw DATE column — always cast to VARCHAR.
   if (range === "month") {

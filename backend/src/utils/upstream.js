@@ -8,7 +8,10 @@ import { config } from "../config.js";
  * Upstream contract (confirmed via Postman 2026-05-26):
  *   POST <AWS_DATA_URL>
  *     headers: { x-api-key, content-type: application/json }
- *     body:    { sql: "<SELECT or WITH statement>", tables: ["databricks_table/gold"] }
+ *     body:    { engine: "athena", sql: "<SELECT/WITH>", tables: ["databricks_table/gold"] }
+ *              engine selects the upstream query engine (athena | databricks);
+ *              Athena needs a schema-qualified FROM target (gold.gold) and
+ *              ignores `tables`, which only the legacy databricks path reads.
  *   response (success): { "columns": [...], "rows": [...] }
  *     `rows` may be objects-keyed-by-column-name OR positional arrays;
  *     we zip with `columns` if positional.
@@ -60,6 +63,10 @@ export async function runQuery(sql) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        // `engine` selects the upstream query engine (athena | databricks).
+        // `tables` is only consumed by the legacy databricks path; Athena
+        // ignores it, so we send it unconditionally to serve both engines.
+        engine: config.upstream.engine,
         sql,
         tables: [config.upstream.table],
       }),

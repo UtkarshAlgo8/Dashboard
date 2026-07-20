@@ -145,8 +145,34 @@ function categoryIdToName(id) {
 }
 // ---------- API call ----------
 
+// Athena serializes EVERY column as a string ("1641178.55", "" for empty),
+// whereas the legacy DuckDB path returned the measure columns as JSON
+// numbers / null. Raw-row drill panels (Production / OEE / Downtime) gate on
+// `typeof r.actual_value === "number"`, so under Athena those gates match
+// zero rows and the tables render blank. Coerce the measure columns back to
+// number|null at the fetch boundary to restore the pre-migration row shape;
+// numberOrNull-based consumers (KPI grid, toDrillRows) already tolerate both.
+const MEASURE_COLUMNS = ["actual_value", "threshold_value"];
+
+function coerceMeasures(rows) {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map((r) => {
+    if (!r || typeof r !== "object") return r;
+    const out = { ...r };
+    for (const col of MEASURE_COLUMNS) {
+      const v = out[col];
+      if (typeof v === "number") continue;
+      const n = typeof v === "string" ? Number.parseFloat(v) : NaN;
+      out[col] = Number.isFinite(n) ? n : null;
+    }
+    return out;
+  });
+}
+
 async function fetchDashboard(payload) {
-  return client.post("/dashboard/fetch", payload).then((r) => r.data ?? r);
+  return client
+    .post("/dashboard/fetch", payload)
+    .then((r) => coerceMeasures(r.data ?? r));
 }
 
 // ---------- hook ----------
