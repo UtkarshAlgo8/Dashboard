@@ -30,7 +30,7 @@ import {
 /**
  * KPI Trend Analysis modal per BRD §9.3 (FR-X10 through FR-X17).
  *
- * Uses v2 POST /dashboard/fetch when kpi.name is available (live data),
+ * Uses v2 POST /dashboard/kpi-data when kpi.name is available (live data),
  * falling back to the legacy GET /plants/:id/production/trends endpoint
  * (mock / older integration).
  *
@@ -70,7 +70,9 @@ function TrendModal({
   // whole current month at Daily granularity and plot every day.
   const isDailyTrend = range === "today" && !from && !to;
   const anchorIso = asOf ?? resolved.to ?? null;
-  const monthlyFrom = anchorIso ? `${anchorIso.slice(0, 4)}-01-01` : resolved.from;
+  const monthlyFrom = anchorIso
+    ? `${anchorIso.slice(0, 4)}-01-01`
+    : resolved.from;
   const monthlyTo = anchorIso ?? resolved.to;
   // First day of the anchor month → anchor day.
   const dailyFrom = anchorIso ? `${anchorIso.slice(0, 7)}-01` : resolved.from;
@@ -96,7 +98,10 @@ function TrendModal({
   const useV2 = Boolean(kpi?.rawName);
   const shouldSendProductType =
     Boolean(productType) &&
-    (category === "p" || category === "q" || category === "P" || category === "Q");
+    (category === "p" ||
+      category === "q" ||
+      category === "P" ||
+      category === "Q");
   const v2Payload = useV2
     ? {
         context: {
@@ -110,7 +115,11 @@ function TrendModal({
         // equality, so the series has one point per day (§2). Monthly/
         // Yearly use their wider windows; custom ranges pass through.
         date: null,
-        from: isDailyTrend ? dailyFrom : isMonthly ? monthlyFrom : resolved.from,
+        from: isDailyTrend
+          ? dailyFrom
+          : isMonthly
+            ? monthlyFrom
+            : resolved.from,
         to: isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to,
         drillKpis: null,
         limit: 10000,
@@ -120,7 +129,7 @@ function TrendModal({
   const { data: v2Rows, isLoading: v2Loading } = usePolledQuery(
     v2Payload
       ? () =>
-          client.post("/dashboard/fetch", v2Payload).then((r) => r.data ?? r)
+          client.post("/dashboard/kpi-data", v2Payload).then((r) => r.data ?? r)
       : () => null,
     {
       enabled: Boolean(v2Payload),
@@ -351,14 +360,16 @@ function sectionIdToName(id) {
 }
 
 function categoryIdToName(id) {
-  return {
-    p: "Productivity",
-    q: "Quality",
-    c: "Cost",
-    m: "Morale",
-    s: "Safety",
-    i: "Inventory",
-  }[id] ?? id;
+  return (
+    {
+      p: "Productivity",
+      q: "Quality",
+      c: "Cost",
+      m: "Morale",
+      s: "Safety",
+      i: "Inventory",
+    }[id] ?? id
+  );
 }
 
 function numOrNull(v) {

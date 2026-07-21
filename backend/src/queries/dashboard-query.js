@@ -286,6 +286,12 @@ export function buildFetchQuery({
   drillKpis = null,
   parentFilters = {},
   limit = 5000,
+  // Pagination + drill-only mode (used by the paginated Production drill).
+  // offset: rows to skip. drillOnly: when true, return ONLY the drill rows
+  // (kpi_name IN drillKpis) — NO landing band — so a page is exactly `limit`
+  // rows of that one lens for LIMIT/OFFSET paging.
+  offset = 0,
+  drillOnly = false,
 } = {}) {
   if (typeof context !== "object" || context === null) {
     throw new QueryValidationError("context must be an object");
@@ -450,16 +456,20 @@ export function buildFetchQuery({
     const escaped = drillKpis.map((k) =>
       escapeLiteral(safeStringValue(k, "drillKpis[]")),
     );
-    // Always include landing rows so the grid doesn't go empty during drill.
-    where.push(
-      `(${LANDING_PREDICATE} OR kpi_name IN (${escaped.join(", ")}))`,
-    );
+    if (drillOnly) {
+      // Paginated drill: ONLY the drill rows for this lens — no landing band
+      // — so a page is exactly `limit` rows of `kpi_name IN (...)`.
+      where.push(`kpi_name IN (${escaped.join(", ")})`);
+    } else {
+      // Always include landing rows so the grid doesn't go empty during drill.
+      where.push(`(${LANDING_PREDICATE} OR kpi_name IN (${escaped.join(", ")}))`);
+    }
   }
 
   // 5. Bound result size. Upstream Lambda has its own limit too.
-  const lim = Number.isInteger(limit) && limit > 0 && limit <= 10000
-    ? limit
-    : 5000;
+  const lim =
+    Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
+  const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
 
   const table = config.upstream.sqlTable || "gold.gold";
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -475,9 +485,16 @@ export function buildFetchQuery({
       : "SELECT *";
   // ORDER BY newest-first BEFORE the LIMIT: if a wide window ever exceeds
   // the row cap, truncation drops the OLDEST rows, never the latest ones
-  // the cards/snapshots need. Without this the upstream returns an
-  // arbitrary slice and the current view can intermittently come up empty.
-  return `${selectClause} FROM ${table} ${whereSql} ORDER BY ${DATE_YYYYMMDD} DESC LIMIT ${lim}`
+  // the cards/snapshots need. A machine/itemcode/unit tiebreak makes the
+  // order fully deterministic so LIMIT/OFFSET paging is stable (no skipped or
+  // repeated rows between pages) and rows land in a readable grouping.
+  // Trino wants OFFSET before LIMIT; emit OFFSET only when non-zero so the
+  // first page stays a plain LIMIT.
+  const orderBy = `ORDER BY ${DATE_YYYYMMDD} DESC, machine, itemcode, unit_of_measurement, actual_value`;
+  const pageClause = off > 0 ? `OFFSET ${off} LIMIT ${lim}` : `LIMIT ${lim}`;
+  return `${selectClause} FROM ${table} ${whereSql} ${orderBy} ${pageClause}`
     .replace(/\s+/g, " ")
     .trim();
+
+  console.log(selectClause, table, whereSql, DATE_YYYYMMDD, lim);
 }

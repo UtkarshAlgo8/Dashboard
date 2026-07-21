@@ -29,6 +29,11 @@ import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
 import { exportElementToPdf } from "@/lib/exportPdf.js";
 
+// Production drill types render ProductionDrillPanel, which owns its own
+// paginated per-lens fetch — so drilling them must NOT kick off the generic
+// 10k-row drill fetch in useDashboardFetch.
+const PROD_DRILL_TYPES = new Set(["mixProd", "tbmProd", "stkProd", "curProd"]);
+
 /**
  * Banmore Production dashboard — Phase 1 ships Banmore plant + Production.
  *
@@ -72,9 +77,10 @@ function BanmoreProduction() {
   });
   // As-of date (BRD §13.5) — anchor for all time-range windows so values
   // render even when the calendar runs ahead of the available data.
-  const { data: asOfData } = usePolledQuery(() => getAsOf("banmore"), {
-    interval: 0,
-  });
+  const { data: asOfData, isLoading: asOfLoading } = usePolledQuery(
+    () => getAsOf("banmore"),
+    { interval: 0 },
+  );
   const asOf = asOfData?.asOf ?? null;
 
   // CR-08: v2 dashboard fetch — owns section/category/granularity/date/drill state.
@@ -98,9 +104,19 @@ function BanmoreProduction() {
 
   // Per-section OEE for the sidebar donut rings, tracking the active
   // granularity (Today / Month / Year). Keyed by artifact section id.
+  // Gate on the resolved window (same rule as the landing fetch) so the
+  // sidebar OEE call fires once — after the granularity settles — instead of
+  // once on mount and again when the preset resolves.
+  const hasDateRange = Boolean(
+    (dashboard.from && dashboard.to) || dashboard.date,
+  );
   const { data: sectionOeeData } = usePolledQuery(
     () => getSectionOee("banmore", dashboard.granularity ?? "MONTH"),
-    { interval: 0, deps: [dashboard.granularity] },
+    {
+      interval: 0,
+      enabled: hasDateRange,
+      deps: [dashboard.granularity, hasDateRange],
+    },
   );
   const sectionOeeById = {
     mix: sectionOeeData?.Mixing ?? null,
@@ -183,7 +199,9 @@ function BanmoreProduction() {
   // section default; for Stock that is the sub-section's first real product.
   const activeProductType =
     dashboard.productType ??
-    (isStock ? stockProductOptions[0] : SECTION_DEFAULT_PRODUCT[dashboard.section]);
+    (isStock
+      ? stockProductOptions[0]
+      : SECTION_DEFAULT_PRODUCT[dashboard.section]);
 
   const onStockSubChange = (next) => {
     // Switching sub-section resets the product type to the new sub-section's
@@ -251,6 +269,13 @@ function BanmoreProduction() {
   // The shift only applies to Today, so it's ignored for Month/Year even
   // if a stale value lingers.
   useEffect(() => {
+    // Wait for the as-of query to SETTLE before resolving the window. The
+    // window depends on the as-of anchor, so firing before it loads sets a
+    // system-clock range, then a corrected range once as-of arrives — two
+    // landing fetches. Gating on !asOfLoading collapses that to one. (On
+    // as-of error, asOf is null and presetToDateRange falls back to the
+    // system clock, so this never stalls.)
+    if (asOfLoading) return;
     const effShift = timeRange.preset === "today" ? shiftKey : "all";
     const resolved = presetToDateRange(timeRange, asOf);
     setFilter(
@@ -264,7 +289,7 @@ function BanmoreProduction() {
       false,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeRange, shiftKey, asOf]);
+  }, [timeRange, shiftKey, asOf, asOfLoading]);
 
   const { from, to } = presetToDateRange(timeRange, asOf);
 
@@ -301,7 +326,7 @@ function BanmoreProduction() {
   useEffect(() => {
     if (dashboard.productType == null) {
       const def = isStock
-        ? (STOCK_PRODUCT_TYPES[activeSubSection] ?? [])[0] ?? null
+        ? ((STOCK_PRODUCT_TYPES[activeSubSection] ?? [])[0] ?? null)
         : SECTION_DEFAULT_PRODUCT[dashboard.section];
       if (def) setFilter({ productType: def }, false);
     }
@@ -324,7 +349,13 @@ function BanmoreProduction() {
 
     // Different card (or first open) — switch.
     setOpenDrillKpiId(kpi.id);
-    if (kpi.drillTargets) {
+    if (PROD_DRILL_TYPES.has(kpi.drillType)) {
+      // Production drills self-fetch (paginated, 100 rows per lens), so DON'T
+      // trigger the generic 10k drill fetch. Pass an empty target list: the
+      // reducer leaves drillKpis null (no fetch) but records drillSourceKpiId,
+      // which drives the card's Batch→KG unit switch while drilled.
+      drillInto([], kpi.id);
+    } else if (kpi.drillTargets) {
       drillInto(kpi.drillTargets, kpi.id);
     } else {
       resetDrill();
@@ -654,9 +685,12 @@ function DrillPanelRouter({
         <ProductionDrillPanel
           section={section}
           prodSub={prodSub}
+          // rawRows only seeds the unit toggle; the table rows come from the
+          // panel's own paginated per-lens fetch (from/to drive its window).
           rawRows={rawRows}
-          mode={mode}
           granularity={granularity}
+          from={from}
+          to={to}
           isLoading={isLoading}
         />
       );

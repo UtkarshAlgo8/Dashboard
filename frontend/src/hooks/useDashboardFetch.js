@@ -106,10 +106,7 @@ function buildContext(state) {
   // (Productivity / Quality). On Cost / Morale / Safety the KPIs carry a
   // DIFFERENT product_type (e.g. "Compound"), so sending the Productivity
   // product type would filter them all out.
-  if (
-    (state.category === "p" || state.category === "q") &&
-    state.productType
-  ) {
+  if ((state.category === "p" || state.category === "q") && state.productType) {
     ctx.product_type = state.productType;
   }
   if (state.granularity) ctx.granularity = state.granularity;
@@ -134,14 +131,16 @@ function sectionIdToName(id) {
 
 function categoryIdToName(id) {
   // Tab IDs → gold_dummy category values.
-  return {
-    p: "Productivity",
-    q: "Quality",
-    c: "Cost",
-    m: "Morale",
-    s: "Safety",
-    i: "Inventory",
-  }[id] ?? id;
+  return (
+    {
+      p: "Productivity",
+      q: "Quality",
+      c: "Cost",
+      m: "Morale",
+      s: "Safety",
+      i: "Inventory",
+    }[id] ?? id
+  );
 }
 // ---------- API call ----------
 
@@ -171,7 +170,7 @@ function coerceMeasures(rows) {
 
 async function fetchDashboard(payload) {
   return client
-    .post("/dashboard/fetch", payload)
+    .post("/dashboard/kpi-data", payload)
     .then((r) => coerceMeasures(r.data ?? r));
 }
 
@@ -201,6 +200,13 @@ export function useDashboardFetch() {
     parentFilters: {},
     limit: 10000,
   };
+
+  // Never fetch without a resolved date window: a single day (Today) OR a
+  // from/to range (Month/Year/custom). On first mount the window is null
+  // until the page settles the as-of anchor + preset — gating here stops the
+  // redundant no-date landing fetch that used to fire before the range was
+  // known (and refetch again once it resolved).
+  const hasDateRange = Boolean((state.from && state.to) || state.date);
 
   // Drill payload — only fetched when a card is drilled. Returns drill
   // children for the active card. Lambda's 5000-row cap applies only to
@@ -232,22 +238,28 @@ export function useDashboardFetch() {
       }
     : null;
 
-  const { data: landingData, isLoading: landingLoading, error: landingError } =
-    usePolledQuery(() => fetchDashboard(landingPayload), {
-      enabled: true,
-      interval: 0,
-      deps: [JSON.stringify(landingPayload)],
-    });
+  const {
+    data: landingData,
+    isLoading: landingLoading,
+    error: landingError,
+  } = usePolledQuery(() => fetchDashboard(landingPayload), {
+    enabled: hasDateRange,
+    interval: 0,
+    deps: [JSON.stringify(landingPayload)],
+  });
 
-  const { data: drillData, isLoading: drillLoading, error: drillError } =
-    usePolledQuery(
-      () => (drillPayload ? fetchDashboard(drillPayload) : Promise.resolve([])),
-      {
-        enabled: Boolean(drillPayload),
-        interval: 0,
-        deps: [JSON.stringify(drillPayload)],
-      },
-    );
+  const {
+    data: drillData,
+    isLoading: drillLoading,
+    error: drillError,
+  } = usePolledQuery(
+    () => (drillPayload ? fetchDashboard(drillPayload) : Promise.resolve([])),
+    {
+      enabled: Boolean(drillPayload),
+      interval: 0,
+      deps: [JSON.stringify(drillPayload)],
+    },
+  );
 
   // Merge: landing always present; drill children appended when a card
   // is drilled. The transformer and panels both read from this combined
@@ -258,7 +270,11 @@ export function useDashboardFetch() {
         ? [...landingData, ...drillData]
         : landingData
       : null;
-  const isLoading = landingLoading || (Boolean(drillPayload) && drillLoading);
+  // Treat "waiting for the date window" as loading too, so the grid shows a
+  // skeleton (not an empty "no data" state) while the range resolves and the
+  // gated landing fetch has not run yet.
+  const isLoading =
+    !hasDateRange || landingLoading || (Boolean(drillPayload) && drillLoading);
   // Drill-only loading flag so drill panels can render a skeleton while
   // their fetch is in flight, without confusing it with landing reload.
   const isDrillLoading = Boolean(drillPayload) && drillLoading;
@@ -274,6 +290,10 @@ export function useDashboardFetch() {
         // exemption); the transformer uses this to prefer the selected
         // product's row when it exists and fall back to the line value.
         productType: state.productType ?? null,
+        // The card whose drill is open — lets the transformer switch a
+        // multi-unit KPI (Production: Batch/KG) to its mass unit while
+        // drilled, and back to Batch when closed.
+        drilledKpiId: state.drillSourceKpiId ?? null,
       })
     : [];
   const drillRows = data && state.drillKpis !== null ? toDrillRows(data) : null;

@@ -72,7 +72,7 @@ const ADDITIVE_IN_RANGE = new Set(["NCM_Hold"]);
 // views, never error on either name).
 const KPI_ALIASES = { Production_sku_m: "Production_m_sku" };
 export function aliasKpiName(name) {
-  return typeof name === "string" ? KPI_ALIASES[name] ?? name : name;
+  return typeof name === "string" ? (KPI_ALIASES[name] ?? name) : name;
 }
 
 /**
@@ -112,7 +112,12 @@ export function parseDrillAttribute(raw) {
       if (inner === "") return null;
       const items = inner
         .split(",")
-        .map((s) => s.trim().replace(/^['"]|['"]$/g, "").trim())
+        .map((s) =>
+          s
+            .trim()
+            .replace(/^['"]|['"]$/g, "")
+            .trim(),
+        )
         .filter(Boolean);
       return items.length ? normAttr(items) : null;
     }
@@ -177,40 +182,173 @@ const ALLOWED_KPIS = {
     P: [
       // realdata.md §10: OEE loss reasons are the real names (No Schedule,
       // Power Failure, …). Downtime is removed (§15) — its drill is gone.
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: OEE_DRILL_TARGETS },
+      {
+        id: "oee",
+        name: "OEE_o",
+        agg: "AVG",
+        drillType: "mixOEE",
+        drillTargets: OEE_DRILL_TARGETS,
+      },
       // realdata.md §7: Production unit is read from data (Mixing = KG), not
       // hardcoded. Mixing has no Production_product / Production_s level.
-      { id: "prod", name: "Production", agg: "SUM", drillType: "mixProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
+      {
+        id: "prod",
+        name: "Production",
+        agg: "SUM",
+        drillType: "mixProd",
+        drillTargets: ["Production_m", "Production_sku", "Production_m_sku"],
+      },
       // Plan Compliance: no data yet → null card (§15).
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
+      {
+        id: "comp",
+        name: "Plan_Compliance",
+        agg: "AVG",
+        drillType: null,
+        drillTargets: null,
+      },
     ],
     Q: [
       // realdata.md §15: FTQ has no data yet → null card. Units are read from
       // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
       // follows the row (NOS/KG/M, or (unset)→blank).
-      { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      {
+        id: "ftq",
+        name: "FTQ",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["FTQ_m"],
+      },
+      {
+        id: "scrap",
+        name: "Scrap",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Scrap_s",
+          "Scrap_reason",
+          "Scrap_m",
+          "Scrap_sku",
+          "Scrap_m_sku",
+        ],
+      },
+      {
+        id: "rw",
+        name: "Rework",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Rework_s",
+          "Rework_reason",
+          "Rework_m",
+          "Rework_sku",
+          "Rework_m_sku",
+        ],
+      },
+      {
+        id: "ncm",
+        name: "NCM_Hold",
+        agg: "SNAP",
+        drillType: "table",
+        drillTargets: ["NCM_Hold_sku"],
+      },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
+      {
+        id: "spc",
+        name: "Specific_Power",
+        unit: "kWh/MT",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Specific_Power_m"],
+      },
+      {
+        id: "scrc",
+        name: "Scrap_Cost",
+        unit: "₹L",
+        agg: "SUM",
+        drillType: null,
+        drillTargets: null,
+      },
+      {
+        id: "bud",
+        name: "Budget_Util",
+        unit: "%",
+        agg: "AVG",
+        drillType: "budget",
+        drillTargets: null,
+      },
     ],
     M: [
       // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
       // section's Morale tab. plantLevel flag tells the section filter to skip it.
-      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
-      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
-      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
-      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
+      {
+        id: "ab",
+        name: "Absenteeism",
+        unit: "%",
+        agg: "AVG",
+        plantLevel: true,
+        drillType: "table",
+        drillTargets: ["Absenteeism_section"],
+      },
+      {
+        id: "tq",
+        name: "TQM_Score",
+        unit: "/5",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["TQM_pillar"],
+      },
+      {
+        id: "sg",
+        name: "Suggestions",
+        unit: "/person",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Suggestions_category"],
+      },
+      {
+        id: "tr",
+        name: "Training",
+        unit: "hrs/m",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Training_area"],
+      },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
-      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
-      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
-      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
+      {
+        id: "ri",
+        name: "Reportable",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Reportable_log"],
+      },
+      {
+        id: "fa",
+        name: "First_Aid",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["First_Aid_log"],
+      },
+      {
+        id: "nm",
+        name: "Near_Miss",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Near_Miss_category"],
+      },
+      {
+        id: "sa",
+        name: "Safety_Audit",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Audit_area"],
+      },
     ],
   },
   TBM: {
@@ -218,39 +356,177 @@ const ALLOWED_KPIS = {
       // realdata.md §18.2/§15: TBM has no overall OEE_o/OEE_s → null card now;
       // press-level OEE_m still appears in the drill. Fills in when TBM
       // overall-OEE data arrives.
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: OEE_DRILL_TARGETS },
+      {
+        id: "oee",
+        name: "OEE_o",
+        agg: "AVG",
+        drillType: "mixOEE",
+        drillTargets: OEE_DRILL_TARGETS,
+      },
       // realdata.md §6a: TBM Production starts with Production_product (by
       // product type), then machine/SKU. Unit (NOS) read from data.
-      { id: "prod", name: "Production", agg: "SUM", drillType: "tbmProd", drillTargets: ["Production_product", "Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
+      {
+        id: "prod",
+        name: "Production",
+        agg: "SUM",
+        drillType: "tbmProd",
+        drillTargets: [
+          "Production_product",
+          "Production_m",
+          "Production_sku",
+          "Production_m_sku",
+        ],
+      },
+      {
+        id: "comp",
+        name: "Plan_Compliance",
+        agg: "AVG",
+        drillType: null,
+        drillTargets: null,
+      },
     ],
     Q: [
       // realdata.md §15: FTQ has no data yet → null card. Units are read from
       // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
       // follows the row (NOS/KG/M, or (unset)→blank).
-      { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      {
+        id: "ftq",
+        name: "FTQ",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["FTQ_m"],
+      },
+      {
+        id: "scrap",
+        name: "Scrap",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Scrap_s",
+          "Scrap_reason",
+          "Scrap_m",
+          "Scrap_sku",
+          "Scrap_m_sku",
+        ],
+      },
+      {
+        id: "rw",
+        name: "Rework",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Rework_s",
+          "Rework_reason",
+          "Rework_m",
+          "Rework_sku",
+          "Rework_m_sku",
+        ],
+      },
+      {
+        id: "ncm",
+        name: "NCM_Hold",
+        agg: "SNAP",
+        drillType: "table",
+        drillTargets: ["NCM_Hold_sku"],
+      },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
+      {
+        id: "spc",
+        name: "Specific_Power",
+        unit: "kWh/MT",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Specific_Power_m"],
+      },
+      {
+        id: "scrc",
+        name: "Scrap_Cost",
+        unit: "₹L",
+        agg: "SUM",
+        drillType: null,
+        drillTargets: null,
+      },
+      {
+        id: "bud",
+        name: "Budget_Util",
+        unit: "%",
+        agg: "AVG",
+        drillType: "budget",
+        drillTargets: null,
+      },
     ],
     M: [
       // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
       // section's Morale tab. plantLevel flag tells the section filter to skip it.
-      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
-      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
-      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
-      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
+      {
+        id: "ab",
+        name: "Absenteeism",
+        unit: "%",
+        agg: "AVG",
+        plantLevel: true,
+        drillType: "table",
+        drillTargets: ["Absenteeism_section"],
+      },
+      {
+        id: "tq",
+        name: "TQM_Score",
+        unit: "/5",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["TQM_pillar"],
+      },
+      {
+        id: "sg",
+        name: "Suggestions",
+        unit: "/person",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Suggestions_category"],
+      },
+      {
+        id: "tr",
+        name: "Training",
+        unit: "hrs/m",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Training_area"],
+      },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
-      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
-      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
-      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
+      {
+        id: "ri",
+        name: "Reportable",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Reportable_log"],
+      },
+      {
+        id: "fa",
+        name: "First_Aid",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["First_Aid_log"],
+      },
+      {
+        id: "nm",
+        name: "Near_Miss",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Near_Miss_category"],
+      },
+      {
+        id: "sa",
+        name: "Safety_Audit",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Audit_area"],
+      },
     ],
   },
   Curing: {
@@ -259,81 +535,367 @@ const ALLOWED_KPIS = {
       // drills to press (OEE_m), NOT trench — the trench-level OEE_s is
       // deferred (no data yet). Use the generic OEE chain (mixOEE), not the
       // dummy's curOEE trench tier.
-      { id: "oee", name: "OEE_o", agg: "AVG", drillType: "mixOEE", drillTargets: OEE_DRILL_TARGETS },
+      {
+        id: "oee",
+        name: "OEE_o",
+        agg: "AVG",
+        drillType: "mixOEE",
+        drillTargets: OEE_DRILL_TARGETS,
+      },
       // realdata.md §6a/§17.1: Curing Production is the fullest chain —
       // Production_product (by product type) → Production_s (by trench, leaf)
       // → Production_m → Production_sku → Production_m_sku. Production_sku_m is
       // aliased to Production_m_sku (§13). Unit (NOS) read from data.
-      { id: "prod", name: "Production", agg: "SUM", drillType: "curProd", drillTargets: ["Production_product", "Production_s", "Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
+      {
+        id: "prod",
+        name: "Production",
+        agg: "SUM",
+        drillType: "curProd",
+        drillTargets: [
+          "Production_product",
+          "Production_s",
+          "Production_m",
+          "Production_sku",
+          "Production_m_sku",
+        ],
+      },
+      {
+        id: "comp",
+        name: "Plan_Compliance",
+        agg: "AVG",
+        drillType: null,
+        drillTargets: null,
+      },
     ],
     Q: [
       // realdata.md §15: FTQ has no data yet → null card. Units are read from
       // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
       // follows the row (NOS/KG/M, or (unset)→blank).
-      { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      {
+        id: "ftq",
+        name: "FTQ",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["FTQ_m"],
+      },
+      {
+        id: "scrap",
+        name: "Scrap",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Scrap_s",
+          "Scrap_reason",
+          "Scrap_m",
+          "Scrap_sku",
+          "Scrap_m_sku",
+        ],
+      },
+      {
+        id: "rw",
+        name: "Rework",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Rework_s",
+          "Rework_reason",
+          "Rework_m",
+          "Rework_sku",
+          "Rework_m_sku",
+        ],
+      },
+      {
+        id: "ncm",
+        name: "NCM_Hold",
+        agg: "SNAP",
+        drillType: "table",
+        drillTargets: ["NCM_Hold_sku"],
+      },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
+      {
+        id: "spc",
+        name: "Specific_Power",
+        unit: "kWh/MT",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Specific_Power_m"],
+      },
+      {
+        id: "scrc",
+        name: "Scrap_Cost",
+        unit: "₹L",
+        agg: "SUM",
+        drillType: null,
+        drillTargets: null,
+      },
+      {
+        id: "bud",
+        name: "Budget_Util",
+        unit: "%",
+        agg: "AVG",
+        drillType: "budget",
+        drillTargets: null,
+      },
     ],
     M: [
       // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
       // section's Morale tab. plantLevel flag tells the section filter to skip it.
-      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
-      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
-      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
-      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
+      {
+        id: "ab",
+        name: "Absenteeism",
+        unit: "%",
+        agg: "AVG",
+        plantLevel: true,
+        drillType: "table",
+        drillTargets: ["Absenteeism_section"],
+      },
+      {
+        id: "tq",
+        name: "TQM_Score",
+        unit: "/5",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["TQM_pillar"],
+      },
+      {
+        id: "sg",
+        name: "Suggestions",
+        unit: "/person",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Suggestions_category"],
+      },
+      {
+        id: "tr",
+        name: "Training",
+        unit: "hrs/m",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Training_area"],
+      },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
-      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
-      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
-      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
+      {
+        id: "ri",
+        name: "Reportable",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Reportable_log"],
+      },
+      {
+        id: "fa",
+        name: "First_Aid",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["First_Aid_log"],
+      },
+      {
+        id: "nm",
+        name: "Near_Miss",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Near_Miss_category"],
+      },
+      {
+        id: "sa",
+        name: "Safety_Audit",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Audit_area"],
+      },
     ],
   },
   Stock: {
     P: [
       // realdata.md §18.2/§19.4a: Stock has NO overall OEE_o — its OEE is
       // OEE_s per subsection, and OEE_s nests by sub_section → press (OEE_m).
-      { id: "oee", name: "OEE_s", agg: "AVG", drillType: "mixOEE", drillTargets: ["OEE_m", "Availability_s", "Performance_s", "Quality_s", "Availability_m", "Performance_m", "Quality_m", "Breakdown", "No Schedule", "Power Failure", "Preventive Maintenance", "Setup & Change", "Operations/Material/Manpower"] },
+      {
+        id: "oee",
+        name: "OEE_s",
+        agg: "AVG",
+        drillType: "mixOEE",
+        drillTargets: [
+          "OEE_m",
+          "Availability_s",
+          "Performance_s",
+          "Quality_s",
+          "Availability_m",
+          "Performance_m",
+          "Quality_m",
+          "Breakdown",
+          "No Schedule",
+          "Power Failure",
+          "Preventive Maintenance",
+          "Setup & Change",
+          "Operations/Material/Manpower",
+        ],
+      },
       // realdata.md §18.1: Stock has no overall Production — the card pins
       // sub_section + product. No Production_product/Production_s level. Unit
       // (M/NOS) read from data.
-      { id: "prod", name: "Production", agg: "SUM", drillType: "stkProd", drillTargets: ["Production_m", "Production_sku", "Production_m_sku"] },
-      { id: "comp", name: "Plan_Compliance", agg: "AVG", drillType: null, drillTargets: null },
+      {
+        id: "prod",
+        name: "Production",
+        agg: "SUM",
+        drillType: "stkProd",
+        drillTargets: ["Production_m", "Production_sku", "Production_m_sku"],
+      },
+      {
+        id: "comp",
+        name: "Plan_Compliance",
+        agg: "AVG",
+        drillType: null,
+        drillTargets: null,
+      },
     ],
     Q: [
       // realdata.md §15: FTQ has no data yet → null card. Units are read from
       // the data (realdata.md §7), not hardcoded — Scrap/Rework = NOS, NCM
       // follows the row (NOS/KG/M, or (unset)→blank).
-      { id: "ftq", name: "FTQ", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["FTQ_m"] },
-      { id: "scrap", name: "Scrap", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Scrap_s", "Scrap_reason", "Scrap_m", "Scrap_sku", "Scrap_m_sku"] },
-      { id: "rw", name: "Rework", agg: "SUM", drillType: "qScrapRework", drillTargets: ["Rework_s", "Rework_reason", "Rework_m", "Rework_sku", "Rework_m_sku"] },
-      { id: "ncm", name: "NCM_Hold", agg: "SNAP", drillType: "table", drillTargets: ["NCM_Hold_sku"] },
+      {
+        id: "ftq",
+        name: "FTQ",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["FTQ_m"],
+      },
+      {
+        id: "scrap",
+        name: "Scrap",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Scrap_s",
+          "Scrap_reason",
+          "Scrap_m",
+          "Scrap_sku",
+          "Scrap_m_sku",
+        ],
+      },
+      {
+        id: "rw",
+        name: "Rework",
+        agg: "SUM",
+        drillType: "qScrapRework",
+        drillTargets: [
+          "Rework_s",
+          "Rework_reason",
+          "Rework_m",
+          "Rework_sku",
+          "Rework_m_sku",
+        ],
+      },
+      {
+        id: "ncm",
+        name: "NCM_Hold",
+        agg: "SNAP",
+        drillType: "table",
+        drillTargets: ["NCM_Hold_sku"],
+      },
     ],
     C: [
-      { id: "spc", name: "Specific_Power", unit: "kWh/MT", agg: "AVG", drillType: "table", drillTargets: ["Specific_Power_m"] },
-      { id: "scrc", name: "Scrap_Cost", unit: "₹L", agg: "SUM", drillType: null, drillTargets: null },
-      { id: "bud", name: "Budget_Util", unit: "%", agg: "AVG", drillType: "budget", drillTargets: null },
+      {
+        id: "spc",
+        name: "Specific_Power",
+        unit: "kWh/MT",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Specific_Power_m"],
+      },
+      {
+        id: "scrc",
+        name: "Scrap_Cost",
+        unit: "₹L",
+        agg: "SUM",
+        drillType: null,
+        drillTargets: null,
+      },
+      {
+        id: "bud",
+        name: "Budget_Util",
+        unit: "%",
+        agg: "AVG",
+        drillType: "budget",
+        drillTargets: null,
+      },
     ],
     M: [
       // Absenteeism is plant-level (section=NULL/"nan") per spec §6 — shown on every
       // section's Morale tab. plantLevel flag tells the section filter to skip it.
-      { id: "ab", name: "Absenteeism", unit: "%", agg: "AVG", plantLevel: true, drillType: "table", drillTargets: ["Absenteeism_section"] },
-      { id: "tq", name: "TQM_Score", unit: "/5", agg: "AVG", drillType: "table", drillTargets: ["TQM_pillar"] },
-      { id: "sg", name: "Suggestions", unit: "/person", agg: "AVG", drillType: "table", drillTargets: ["Suggestions_category"] },
-      { id: "tr", name: "Training", unit: "hrs/m", agg: "AVG", drillType: "table", drillTargets: ["Training_area"] },
+      {
+        id: "ab",
+        name: "Absenteeism",
+        unit: "%",
+        agg: "AVG",
+        plantLevel: true,
+        drillType: "table",
+        drillTargets: ["Absenteeism_section"],
+      },
+      {
+        id: "tq",
+        name: "TQM_Score",
+        unit: "/5",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["TQM_pillar"],
+      },
+      {
+        id: "sg",
+        name: "Suggestions",
+        unit: "/person",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Suggestions_category"],
+      },
+      {
+        id: "tr",
+        name: "Training",
+        unit: "hrs/m",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Training_area"],
+      },
     ],
     S: [
-      { id: "ri", name: "Reportable", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Reportable_log"] },
-      { id: "fa", name: "First_Aid", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["First_Aid_log"] },
-      { id: "nm", name: "Near_Miss", unit: "nos", agg: "SUM", drillType: "table", drillTargets: ["Near_Miss_category"] },
-      { id: "sa", name: "Safety_Audit", unit: "%", agg: "AVG", drillType: "table", drillTargets: ["Audit_area"] },
+      {
+        id: "ri",
+        name: "Reportable",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Reportable_log"],
+      },
+      {
+        id: "fa",
+        name: "First_Aid",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["First_Aid_log"],
+      },
+      {
+        id: "nm",
+        name: "Near_Miss",
+        unit: "nos",
+        agg: "SUM",
+        drillType: "table",
+        drillTargets: ["Near_Miss_category"],
+      },
+      {
+        id: "sa",
+        name: "Safety_Audit",
+        unit: "%",
+        agg: "AVG",
+        drillType: "table",
+        drillTargets: ["Audit_area"],
+      },
     ],
   },
 };
@@ -423,6 +985,9 @@ export function toKpiGrid(
     granularity = "DAY",
     mode = "snapshot",
     productType = null,
+    // id of the card whose drill is currently open (null when none). Used
+    // to switch a multi-unit KPI's headline unit while it is drilled.
+    drilledKpiId = null,
   } = {},
 ) {
   if (!Array.isArray(rows) || rows.length === 0) return [];
@@ -511,6 +1076,28 @@ export function toKpiGrid(
       groupDesc = groupDesc.filter(
         (r) => r.unit_of_measurement === kpiDef.unit,
       );
+    }
+
+    // Production is recorded in BOTH a count unit ("Batch") and a mass unit
+    // ("KG"/"MT") as separate rows, and declares no canonical `unit`. Without
+    // a rule the headline shows whichever row sorts first — non-deterministic
+    // (it flips Batch↔KG between renders). Rule: show "Batch" on the card
+    // normally, and switch to the mass unit WHILE this card's drill is open
+    // (matches the drill table, which reads mass units). Applies only when the
+    // group actually carries a "Batch" row alongside another unit.
+    if (!kpiDef.unit) {
+      const units = new Set(groupDesc.map((r) => r.unit_of_measurement));
+      if (units.size > 1 && units.has("Batch")) {
+        const isDrilled = drilledKpiId != null && kpiDef.id === drilledKpiId;
+        const wantUnit = isDrilled
+          ? [...units].find((u) => u !== "Batch") // mass unit (KG / MT)
+          : "Batch";
+        if (wantUnit) {
+          groupDesc = groupDesc.filter(
+            (r) => r.unit_of_measurement === wantUnit,
+          );
+        }
+      }
     }
 
     // Snapshot path: pick the LATEST row at the active granularity
@@ -639,8 +1226,7 @@ export function toKpiGrid(
       const olderAgg = aggSlice(older);
       if (olderAgg !== 0) {
         trend =
-          Math.round(((recentAgg - olderAgg) / Math.abs(olderAgg)) * 1000) /
-          10;
+          Math.round(((recentAgg - olderAgg) / Math.abs(olderAgg)) * 1000) / 10;
       }
     }
 

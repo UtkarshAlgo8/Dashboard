@@ -61,10 +61,13 @@ export default function ShiftComparisonCard({
     limit: 10000,
   };
   const { data: qRows } = usePolledQuery(
-    () =>
-      client.post("/dashboard/fetch", qPayload).then((r) => r.data ?? r),
+    () => client.post("/dashboard/kpi-data", qPayload).then((r) => r.data ?? r),
     {
-      enabled: Boolean(section),
+      // Never call kpi-data without a date: this card pins `date: asOf`, so
+      // wait for the anchor to load. Firing on `section` alone sent a
+      // date-less request (and a second one once asOf arrived) — gating on
+      // asOf makes it a single, dated call.
+      enabled: Boolean(section) && Boolean(asOf),
       interval: 0,
       deps: [JSON.stringify(qPayload)],
     },
@@ -102,7 +105,11 @@ export default function ShiftComparisonCard({
       if (r.kpi_name !== "Production") return false;
       if (r.granularity !== g) return false;
       if (r.unit_of_measurement !== unit) return false;
-      if (subSection && canonicalizeSubSection(r.sub_section) !== canonicalizeSubSection(subSection))
+      if (
+        subSection &&
+        canonicalizeSubSection(r.sub_section) !==
+          canonicalizeSubSection(subSection)
+      )
         return false;
       const rowPt = canonicalizeProductType(r.product_type);
       if (usesOverallProduction) {
@@ -161,8 +168,8 @@ export default function ShiftComparisonCard({
       </Typography>
       {!periodIsDay && (
         <Typography sx={{ fontSize: 11, color: "text.disabled", mb: 1.5 }}>
-          Showing the latest day&rsquo;s shifts — shift totals exist only at
-          the daily level, so they cannot be compared to a month/year total.
+          Showing the latest day&rsquo;s shifts — shift totals exist only at the
+          daily level, so they cannot be compared to a month/year total.
         </Typography>
       )}
       <DrillTable
@@ -181,7 +188,8 @@ export default function ShiftComparisonCard({
  */
 function sumLatestDay(rows) {
   const dated = rows.filter(
-    (r) => typeof r.actual_value === "number" && Number.isFinite(r.actual_value),
+    (r) =>
+      typeof r.actual_value === "number" && Number.isFinite(r.actual_value),
   );
   if (dated.length === 0) return null;
   const latest = dated.reduce(

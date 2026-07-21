@@ -7,7 +7,7 @@ import {
 } from "../queries/dashboard-query.js";
 
 /**
- * POST /api/v1/dashboard/fetch — universal dashboard fetch.
+ * POST /api/v1/dashboard/kpi-data — universal dashboard KPI + drill fetch.
  * Returns raw gold_dummy rows as `{ data: [...] }`.
  */
 export async function postFetch(req, res, next) {
@@ -20,6 +20,8 @@ export async function postFetch(req, res, next) {
       drillKpis = null,
       parentFilters = {},
       limit,
+      offset,
+      drillOnly,
     } = req.body ?? {};
 
     if (typeof context !== "object" || context === null) {
@@ -31,7 +33,17 @@ export async function postFetch(req, res, next) {
 
     let sql;
     try {
-      sql = buildFetchQuery({ context, date, from, to, drillKpis, parentFilters, limit });
+      sql = buildFetchQuery({
+        context,
+        date,
+        from,
+        to,
+        drillKpis,
+        parentFilters,
+        limit,
+        offset,
+        drillOnly,
+      });
     } catch (err) {
       const status = err instanceof QueryValidationError ? 400 : 500;
       res.status(status).json({
@@ -44,9 +56,10 @@ export async function postFetch(req, res, next) {
         },
       });
       return;
+
     }
 
-    const cacheKey = buildCacheKey("/dashboard/fetch", {
+    const cacheKey = buildCacheKey("/dashboard/kpi-data", {
       context,
       date,
       from,
@@ -54,6 +67,8 @@ export async function postFetch(req, res, next) {
       drillKpis,
       parentFilters,
       limit,
+      offset,
+      drillOnly,
     });
     const rows = await cached(cacheKey, () => runQuery(sql));
     res.json({ data: rows });
