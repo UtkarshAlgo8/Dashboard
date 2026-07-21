@@ -36,6 +36,8 @@ import {
   canonicalizeProductType,
   canonicalizeSubSection,
   canonicalDimensionPredicate,
+  normalizeUnit,
+  unitPredicate,
 } from "../utils/normalize.js";
 
 export const ALLOWED_CONTEXT_KEYS = new Set([
@@ -78,6 +80,19 @@ export const ALLOWED_CATEGORIES = new Set([
 // stays in lock-step with the synonym map.
 export const ALLOWED_GRANULARITIES = allowedGranularities();
 export const ALLOWED_TYRE_TYPES = new Set(["PCR", "TBR", "LTR", "All"]);
+
+/**
+ * SQL predicate restricting rows to the four in-scope sections. The per-request
+ * builder gets this via the caller's `section` context; the aggregate helpers
+ * (anchors, shift coverage) have no such context and would otherwise report on
+ * Final Finish / TUO & DBM / UNKNOWN rows the dashboard can never display.
+ */
+function inScopeSectionPredicate(column = "section") {
+  const list = [...ALLOWED_SECTIONS]
+    .map((s) => `'${s.replaceAll("'", "''")}'`)
+    .join(", ");
+  return `${column} IN (${list})`;
+}
 
 /**
  * Equipment-level KPIs are recorded against the MACHINE/LINE, not a
@@ -141,6 +156,41 @@ const AGGREGATE_PRODUCT_CHILDREN = {
   "Cured Tyre": ["Passenger Radial", "LCV", "Unknown"],
 };
 
+/**
+ * new_change.md C4 — drill levels that store BOTH the aggregate row and its
+ * per-product children in the same kpi_name.
+ *
+ *   Curing Production_m, 2026-07-16:
+ *     Cured Tyre       22,300   <- the aggregate (equals the parent card)
+ *     Passenger Radial 14,785  ┐
+ *     LCV               3,869  ├─ the SAME production, split by product
+ *     Unknown           3,646  ┘
+ *     all rows summed  44,600  = exactly 2x the parent
+ *
+ * For these KPIs product_type must be pinned to EXACTLY ONE value — either
+ * the aggregate or one child — never left unpinned, never OR'd with the
+ * empty/children fallbacks that the generic predicate applies. Those
+ * fallbacks are correct for section-level KPIs but are precisely what
+ * doubles these ones.
+ */
+export const PRODUCT_SPLIT_KPIS = new Set([
+  "Production_m",
+  "Production_sku",
+  "Production_m_sku",
+  "Production_product",
+]);
+
+/** Pre-built SQL fragment: kpi_name IN ('Production_m', ...) for C4. */
+const PRODUCT_SPLIT_KPIS_SQL = `kpi_name IN (${[...PRODUCT_SPLIT_KPIS]
+  .map((k) => `'${k}'`)
+  .join(", ")})`;
+
+/** new_change.md C4/C7 — the aggregate ("overall") product per section. */
+export const AGGREGATE_PRODUCT = {
+  Curing: "Cured Tyre",
+  TBM: "Green Tyre",
+};
+
 // realdata.md §16: sub_section values are NOT uniform and differ from the
 // dummy (Stock: 4 Roll / 3 Roll / Three Roll / Extruder / Cutter / Slitter /
 // Bead; Curing: Trench1…Trench8 with no Trench3, plus the uppercase scrap
@@ -184,6 +234,92 @@ export const DATE_YYYYMMDD =
   `(CASE WHEN SUBSTRING(${DATE_STR}, 5, 1) = '-' ` +
   `THEN SUBSTRING(${DATE_STR}, 1, 4) || SUBSTRING(${DATE_STR}, 6, 2) || SUBSTRING(${DATE_STR}, 9, 2) ` +
   `ELSE SUBSTRING(${DATE_STR}, 7, 4) || SUBSTRING(${DATE_STR}, 4, 2) || SUBSTRING(${DATE_STR}, 1, 2) END)`;
+
+/**
+ * The gold table's 23 columns, in order. Listed explicitly because the
+ * de-duplication below wraps the scan in a sub-query with a ROW_NUMBER()
+ * helper column — selecting `*` from that sub-query would leak the helper
+ * into the API response.
+ */
+const GOLD_COLUMNS = [
+  "record_id",
+  "date",
+  "plant",
+  "department",
+  "section",
+  "sub_section",
+  "tyre_type",
+  "machine",
+  "product_type",
+  "itemcode",
+  "granularity",
+  "category",
+  "kpi_name",
+  "unit_of_measurement",
+  "production_ids",
+  "drill_down_attribute",
+  "drill_down_level",
+  "actual_value",
+  "previous_values",
+  "threshold_value",
+  "status",
+  "remarks",
+  "plot_data",
+];
+
+/**
+ * Rate / ratio KPIs — the C5 AVERAGE class.
+ *
+ * These are EXCLUDED from the de-duplication below. Additive rows duplicate
+ * with one true value and shadow copies (22,300 alongside a spurious 2,418),
+ * so MAX recovers the real figure exactly. Rate rows instead carry several
+ * genuinely DIFFERENT values for the same day (Curing OEE_o on 2026-07-08
+ * ranges 67.10 - 82.39), so no collapse rule is defensible: MAX biases high,
+ * MIN biases low, and none reproduce the spec's validated 82.45% average.
+ * Leaving them untouched keeps today's behaviour rather than silently
+ * shipping a rule we cannot prove. See the ETL note in the C5 docs.
+ */
+export const RATE_KPIS = new Set([
+  "OEE_o",
+  "OEE_s",
+  "OEE_m",
+  "OEE_p",
+  "Availability_o",
+  "Availability_s",
+  "Availability_m",
+  "Performance_o",
+  "Performance_s",
+  "Performance_m",
+  "Quality_o",
+  "Quality_s",
+  "Quality_m",
+  "FTQ",
+  "Plan_Compliance",
+]);
+
+const RATE_KPIS_SQL = `kpi_name IN (${[...RATE_KPIS]
+  .map((k) => `'${k}'`)
+  .join(", ")})`;
+
+/**
+ * Columns that together identify ONE logical measurement. Two rows agreeing
+ * on all of these are duplicates of the same fact, not separate production.
+ */
+const DEDUPE_PARTITION = [
+  "date",
+  "plant",
+  "department",
+  "section",
+  "sub_section",
+  "tyre_type",
+  "machine",
+  "product_type",
+  "itemcode",
+  "granularity",
+  "category",
+  "kpi_name",
+  "unit_of_measurement",
+];
 
 /** ISO yyyy-mm-dd → YYYYMMDD digit string for comparison literals. */
 function isoToYyyymmdd(iso) {
@@ -255,11 +391,249 @@ function toIsoDate(input) {
   if (typeof input !== "string") {
     throw new QueryValidationError("date must be a string");
   }
-  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
-  if (ymd) return input;
-  const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(input);
+  // new_change.md C1: pickers commonly emit a full ISO timestamp
+  // ("2026-07-01T00:00:00.000Z"). Strip the time component rather than
+  // rejecting the request — a bad-date-format error here blanks the card.
+  let value = input.trim();
+  const tIndex = value.indexOf("T");
+  if (tIndex > 0) value = value.slice(0, tIndex);
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (ymd) return value;
+  const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
   if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  // mm/dd/yyyy and dd-mm-yyyy with slashes — accepted so a locale-formatted
+  // picker value never silently fails.
+  const slash = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (slash) return `${slash[3]}-${slash[1]}-${slash[2]}`;
   throw new QueryValidationError(`Bad date format: ${input}`);
+}
+
+/**
+ * new_change.md C1 — resolve the time predicate.
+ *
+ * A range ALWAYS wins over a leftover single date. The previous logic was
+ * an either/or in which `date` took absolute priority, so the frontend's
+ * stale "today" value silently discarded every range the user picked and
+ * every request was pinned to the same day.
+ *
+ * @returns {{mode: 'SINGLE_DAY'|'RANGE', date?: string, from?: string, to?: string}}
+ */
+export function resolveDatePredicate({ date, from, to }) {
+  const hasFrom = from != null && from !== "";
+  const hasTo = to != null && to !== "";
+
+  if (hasFrom || hasTo) {
+    const isoFrom = hasFrom ? toIsoDate(from) : null;
+    const isoTo = hasTo ? toIsoDate(to) : null;
+    if (isoFrom && isoTo) {
+      if (isoFrom > isoTo) {
+        throw new QueryValidationError(
+          `from (${isoFrom}) must be <= to (${isoTo})`,
+        );
+      }
+      // from == to is a single day, not a range — no aggregation downstream.
+      if (isoFrom === isoTo) return { mode: "SINGLE_DAY", date: isoFrom };
+    }
+    // The single `date` is IGNORED entirely once a range is present.
+    return { mode: "RANGE", from: isoFrom, to: isoTo };
+  }
+
+  if (date != null && date !== "") {
+    return { mode: "SINGLE_DAY", date: toIsoDate(date) };
+  }
+
+  // Nothing supplied — the caller (controller) resolves a per-KPI anchor (C6).
+  return { mode: "SINGLE_DAY", date: null };
+}
+
+/**
+ * new_change.md C2 — sentinel meaning "this request must return no rows".
+ * Used when a disabled feature (Year, behind ENABLE_YEAR) is requested: a
+ * disabled feature must return EMPTY, never fall through to "no filter",
+ * which would union every zoom level and silently over-count.
+ */
+export const NO_DATA = Symbol("NO_DATA");
+
+export const DEFAULT_GRANULARITY = "DAY";
+
+/**
+ * new_change.md C2 — resolve exactly ONE granularity for every query.
+ *
+ * The previous behaviour skipped the predicate entirely whenever the value
+ * failed to normalize (empty, "all", or Year-with-the-flag-off), which
+ * returned DAY + SHIFT A/B/C + MONTH rows together. Because
+ * SHIFT A + SHIFT B + SHIFT C == DAY exactly, and MONTH is a third copy,
+ * that produced a 2.00x / 3.21x over-count that looked like a plausible
+ * number (Curing Production 1-16 Jul: 301,530 -> 603,060 -> 967,407).
+ *
+ * @param {string|null|undefined} rawValue  caller-supplied granularity
+ * @param {boolean} isRangeMode  true when a from/to window is active
+ * @returns {string|symbol} canonical granularity, or NO_DATA
+ */
+export function resolveGranularity(rawValue, isRangeMode = false) {
+  const trimmed = rawValue == null ? "" : String(rawValue).trim();
+  const key = trimmed.toLowerCase().replace(/\s+/g, " ");
+
+  // Rule 0.1 (a custom range reads DAY rows, never a MONTH/YEAR snapshot) is
+  // enforced by the CALLER, not here. An explicit granularity is always
+  // honoured over a range, because SHIFT A/B/C legitimately combine with one:
+  // shift rows exist only at DAY level, so a month-wise or custom-range shift
+  // total is obtained by SUMMING the daily SHIFT rows across the window (C11).
+  // Overriding those to DAY here would make every shift cell return the whole
+  // day's production instead of that shift's.
+  if (key === "" || key === "all") {
+    // With no explicit value, a range still resolves to DAY — which is both
+    // the general default and what Rule 0.1 requires.
+    void isRangeMode;
+    console.warn(
+      `[granularity] missing/"all" value -> defaulting to ${DEFAULT_GRANULARITY}`,
+    );
+    return DEFAULT_GRANULARITY;
+  }
+
+  if (key === "ytd" || key === "year" || key === "yearly") {
+    const gran = normalizeGranularity(trimmed);
+    if (gran != null) return gran;
+    console.warn("[granularity] Year/YTD requested while disabled -> no data");
+    return NO_DATA;
+  }
+
+  const gran = normalizeGranularity(trimmed);
+  if (gran == null || !ALLOWED_GRANULARITIES.has(gran)) {
+    console.warn(
+      `[granularity] unrecognized "${trimmed}" -> defaulting to ${DEFAULT_GRANULARITY}`,
+    );
+    return DEFAULT_GRANULARITY;
+  }
+  return gran;
+}
+
+/**
+ * new_change.md C6 — per-KPI latest-date anchors.
+ *
+ * KPIs land on different days: Production runs to 2026-07-20 but Curing OEE
+ * ends 2026-07-16 and Mixing/Stock/TBM OEE end 2026-07-17. A single global
+ * "latest date" taken from Production therefore matches ZERO OEE rows, so the
+ * OEE card blanks and its drill is dead in every section.
+ *
+ * This returns one row per (section, kpi_name) with that KPI's own newest DAY
+ * date, so each card can anchor itself and render an "as of <date>" label.
+ * One cheap grouped query replaces N per-card lookups.
+ */
+export function buildLatestDateQuery() {
+  const table = config.upstream.sqlTable || "gold.gold";
+  const where = [
+    plantDepartmentPredicate(),
+    excludeUnknownKpiPredicate(),
+    // Same section allow-list the rest of the API enforces — without it the
+    // anchors leak TUO & DBM, Final Finish, UNKNOWN and empty-section rows
+    // that no card can ever look up (realdata.md §4).
+    inScopeSectionPredicate(),
+    "granularity = 'DAY'",
+  ].join(" AND ");
+  return (
+    `SELECT section, kpi_name, MAX(${DATE_YYYYMMDD}) AS latest_date ` +
+    `FROM ${table} WHERE ${where} GROUP BY section, kpi_name`
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * new_change.md C14 / C15-Q3 — which days are still in progress.
+ *
+ * A day is PARTIAL when its three shift rows are not all present yet. On
+ * 2026-07-20 Curing has SHIFT A and SHIFT C but no SHIFT B, and the DAY total
+ * is 6,895 against ~19,000 for a complete day. Comparing that against a full
+ * previous day yields -75.3%, which reads as a catastrophic drop but is purely
+ * an artefact of the day still running.
+ *
+ * The frontend cannot derive this for a DAY-granularity card (it has no shift
+ * rows in hand), so the server reports it: any (section, date) with fewer than
+ * three distinct shifts is incomplete, and the UI suppresses the spike and
+ * labels the day rather than rendering the artefact.
+ */
+export function buildShiftCoverageQuery() {
+  const table = config.upstream.sqlTable || "gold.gold";
+  const where = [
+    plantDepartmentPredicate(),
+    excludeUnknownKpiPredicate(),
+    inScopeSectionPredicate(),
+    "granularity IN ('SHIFT A', 'SHIFT B', 'SHIFT C')",
+    "kpi_name = 'Production'",
+  ].join(" AND ");
+  return (
+    `SELECT section, ${DATE_YYYYMMDD} AS day, ` +
+    `COUNT(DISTINCT granularity) AS shift_count ` +
+    `FROM ${table} WHERE ${where} GROUP BY section, ${DATE_YYYYMMDD}`
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* ---------- new_change.md C15/C16/C17 — the spike baseline ---------- */
+
+/** Days between two ISO dates, inclusive. */
+function inclusiveDayCount(isoFrom, isoTo) {
+  const ms = Date.parse(`${isoTo}T00:00:00Z`) - Date.parse(`${isoFrom}T00:00:00Z`);
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+/** Shift an ISO date by whole days (negative shifts backwards). */
+function shiftIsoDays(iso, days) {
+  const d = new Date(Date.parse(`${iso}T00:00:00Z`));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * new_change.md C15 — the comparison window for the % spike indicator.
+ *
+ * The previous implementation used "the second row in the result set" as the
+ * baseline, which is only the previous period by accident: with rows grouped
+ * by kpi_name alone it could be an entirely different series (Master Compound
+ * against Final Compound), and over a custom range it silently degraded to
+ * day-over-day between the last two days inside the range.
+ *
+ * `previous_values` cannot help — the column is empty in all 389,512 rows —
+ * so the baseline has to be derived by re-querying the preceding window.
+ *
+ * @returns {{date?: string, from?: string, to?: string}|null}
+ *          null when no baseline is definable (open-ended range, or a MONTH
+ *          snapshot whose predecessor does not exist) — the caller renders
+ *          BLANK, never 0%, never -100%.
+ */
+export function previousWindow(timeScope, granularity) {
+  // MONTH/YEAR rows are point-dated snapshots: step the anchor back one whole
+  // period rather than subtracting days.
+  if (granularity === "MONTH") {
+    const anchor = timeScope.date ?? timeScope.from;
+    if (!anchor) return null;
+    const d = new Date(Date.parse(`${anchor.slice(0, 7)}-01T00:00:00Z`));
+    d.setUTCMonth(d.getUTCMonth() - 1);
+    const iso = d.toISOString().slice(0, 10);
+    // Snapshot rows are dated the 1st, so a whole-month window is safe for
+    // callers that send either a date or a range.
+    const end = new Date(Date.parse(`${iso}T00:00:00Z`));
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    end.setUTCDate(0);
+    return { from: iso, to: end.toISOString().slice(0, 10) };
+  }
+
+  if (timeScope.mode === "SINGLE_DAY") {
+    if (!timeScope.date) return null;
+    return { date: shiftIsoDays(timeScope.date, -1) };
+  }
+
+  // RANGE: the immediately preceding window of EQUAL length, ending the day
+  // before the range starts. 1-16 July (16 days) -> 15-30 June.
+  if (!timeScope.from || !timeScope.to) return null; // open-ended: undefinable
+  const n = inclusiveDayCount(timeScope.from, timeScope.to);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return {
+    from: shiftIsoDays(timeScope.from, -n),
+    to: shiftIsoDays(timeScope.from, -1),
+  };
 }
 
 /* ---------- Public builder ---------- */
@@ -286,6 +660,12 @@ export function buildFetchQuery({
   drillKpis = null,
   parentFilters = {},
   limit = 5000,
+  // Pagination + drill-only mode (used by the paginated Production drill).
+  // offset: rows to skip. drillOnly: when true, return ONLY the drill rows
+  // (kpi_name IN drillKpis) — NO landing band — so a page is exactly `limit`
+  // rows of that one lens for LIMIT/OFFSET paging.
+  offset = 0,
+  drillOnly = false,
 } = {}) {
   if (typeof context !== "object" || context === null) {
     throw new QueryValidationError("context must be an object");
@@ -315,21 +695,10 @@ export function buildFetchQuery({
 
     const value = safeStringValue(raw, key);
 
-    // granularity: normalize synonyms → canonical real value (DAY / MONTH /
-    // SHIFT A/B/C), then validate against the allowed set. A YTD/Year value
-    // with the Year flag OFF normalizes to null → no granularity predicate
-    // (realdata.md §3). Anything still unrecognized is rejected.
-    if (key === "granularity") {
-      const gran = normalizeGranularity(value);
-      if (gran == null) continue; // disabled (YTD) or "all" → no filter
-      if (!ALLOWED_GRANULARITIES.has(gran)) {
-        throw new QueryValidationError(
-          `Invalid granularity: ${value}. Allowed: ${[...ALLOWED_GRANULARITIES].join(", ")}`,
-        );
-      }
-      where.push(`granularity = ${escapeLiteral(gran)}`);
-      continue;
-    }
+    // granularity is resolved OUTSIDE this loop (new_change.md C2) so that a
+    // missing / empty / unrecognized value still produces a predicate. See
+    // the resolveGranularity call below — there is no code path that omits it.
+    if (key === "granularity") continue;
 
     const allow = CONTEXT_ALLOW_LISTS[key];
     if (allow && !allow.has(value)) {
@@ -346,6 +715,19 @@ export function buildFetchQuery({
         : key === "sub_section"
           ? canonicalizeSubSection(value)
           : value;
+    // new_change.md C9 — match every stored spelling of the same unit
+    // ("Meters" == "M", "NUM" == "NOS") so the filter doesn't silently miss
+    // half the rows. KG vs Batch are NOT aliased — they stay distinct.
+    if (key === "unit_of_measurement") {
+      const canonUnit = normalizeUnit(value);
+      if (canonUnit == null) {
+        where.push(emptyColumnPredicate(key));
+      } else {
+        where.push(unitPredicate(canonUnit, key));
+      }
+      continue;
+    }
+
     if (key === "section" || key === "sub_section" || key === "product_type") {
       // Filter to the requested value BUT also keep rows that carry no
       // value for this column (NULL / 'nan' / ''):
@@ -381,28 +763,64 @@ export function buildFetchQuery({
         key === "product_type" || key === "sub_section"
           ? canonicalDimensionPredicate(key, canonValue)
           : `${key} = ${escapeLiteral(canonValue)}`;
-      where.push(
-        `(${matchClause} OR ${emptyColumnPredicate(key)}${extra})`,
-      );
+      const lenient = `(${matchClause} OR ${emptyColumnPredicate(key)}${extra})`;
+
+      // new_change.md C4 — the lenient predicate above is correct for
+      // section-level rows (it keeps OEE and other product-agnostic KPIs alive
+      // when a product is selected), but it is exactly what doubles the
+      // product-split levels: those store the aggregate row AND its per-product
+      // children under the same kpi_name, so "match OR empty OR children"
+      // matches both halves and sums to 2x the parent card.
+      //
+      // Split the predicate by row type rather than by request shape: rows
+      // whose kpi_name is a product-split level must match ONE product exactly;
+      // every other row keeps the lenient fallbacks. This holds for landing
+      // rows, drill rows, and mixed responses alike.
+      if (key === "product_type") {
+        where.push(
+          `((${PRODUCT_SPLIT_KPIS_SQL} AND ${matchClause}) ` +
+            `OR (NOT ${PRODUCT_SPLIT_KPIS_SQL} AND ${lenient}))`,
+        );
+      } else {
+        where.push(lenient);
+      }
     } else {
       where.push(`${key} = ${escapeLiteral(value)}`);
     }
   }
 
-  // 2. Date predicate. Format-robust: compare the normalized YYYYMMDD
-  //    form of the stored `date` (ISO or DD-MM-YYYY) against the
-  //    YYYYMMDD form of the caller's ISO input.
-  //    - `date` (single value) → equality. Used for Today / single-day.
-  //    - `from` + `to` → BETWEEN range. Used for Month / Year / custom.
-  //    Either form, not both.
-  if (date != null && date !== "") {
-    where.push(`${DATE_YYYYMMDD} = '${isoToYyyymmdd(toIsoDate(date))}'`);
+  // 2. Date predicate (new_change.md C1). Format-robust: compare the
+  //    normalized YYYYMMDD form of the stored `date` against the YYYYMMDD
+  //    form of the caller's input. A range ALWAYS wins over a stale single
+  //    date — resolveDatePredicate enforces the priority and rejects from>to.
+  const timeScope = resolveDatePredicate({ date, from, to });
+
+  // 2b. Granularity predicate (new_change.md C2). ALWAYS emitted — an empty,
+  //     "all", or unrecognized value defaults to DAY rather than dropping the
+  //     predicate. Omitting it unions DAY + SHIFT A/B/C (+ MONTH), and since
+  //     SHIFT A+B+C == DAY exactly, the result is a silent 2x–3.21x over-count.
+  const granPredicate = resolveGranularity(
+    context.granularity,
+    timeScope.mode === "RANGE",
+  );
+  if (granPredicate === NO_DATA) {
+    // A disabled feature (Year with the flag off) must return NOTHING rather
+    // than wrong data. An always-false predicate keeps the response shape.
+    where.push("1 = 0");
   } else {
-    if (from != null && from !== "") {
-      where.push(`${DATE_YYYYMMDD} >= '${isoToYyyymmdd(toIsoDate(from))}'`);
+    where.push(`granularity = ${escapeLiteral(granPredicate)}`);
+  }
+
+  if (timeScope.mode === "SINGLE_DAY") {
+    if (timeScope.date) {
+      where.push(`${DATE_YYYYMMDD} = '${isoToYyyymmdd(timeScope.date)}'`);
     }
-    if (to != null && to !== "") {
-      where.push(`${DATE_YYYYMMDD} <= '${isoToYyyymmdd(toIsoDate(to))}'`);
+  } else {
+    if (timeScope.from) {
+      where.push(`${DATE_YYYYMMDD} >= '${isoToYyyymmdd(timeScope.from)}'`);
+    }
+    if (timeScope.to) {
+      where.push(`${DATE_YYYYMMDD} <= '${isoToYyyymmdd(timeScope.to)}'`);
     }
   }
 
@@ -450,16 +868,20 @@ export function buildFetchQuery({
     const escaped = drillKpis.map((k) =>
       escapeLiteral(safeStringValue(k, "drillKpis[]")),
     );
-    // Always include landing rows so the grid doesn't go empty during drill.
-    where.push(
-      `(${LANDING_PREDICATE} OR kpi_name IN (${escaped.join(", ")}))`,
-    );
+    if (drillOnly) {
+      // Paginated drill: ONLY the drill rows for this lens — no landing band
+      // — so a page is exactly `limit` rows of `kpi_name IN (...)`.
+      where.push(`kpi_name IN (${escaped.join(", ")})`);
+    } else {
+      // Always include landing rows so the grid doesn't go empty during drill.
+      where.push(`(${LANDING_PREDICATE} OR kpi_name IN (${escaped.join(", ")}))`);
+    }
   }
 
   // 5. Bound result size. Upstream Lambda has its own limit too.
-  const lim = Number.isInteger(limit) && limit > 0 && limit <= 10000
-    ? limit
-    : 5000;
+  const lim =
+    Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
+  const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
 
   const table = config.upstream.sqlTable || "gold.gold";
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -469,15 +891,56 @@ export function buildFetchQuery({
   // The EXCLUDE trick is only needed on the legacy databricks/DuckDB
   // path, whose Lambda 500s serializing a raw DATE column — there we
   // drop `date` and re-add it cast to VARCHAR.
-  const selectClause =
+  //
+  // DE-DUPLICATION (blocking data defect, found 2026-07-21).
+  //
+  // The gold table contains rows that are identical on EVERY dimension —
+  // same record_id, date, granularity and pins — so no amount of predicate
+  // tightening removes them:
+  //
+  //   Curing Production, DAY, 2026-07-16:
+  //     record_id 343598214367 -> 22,300   the real value
+  //     record_id 343598214367 ->  2,418   spurious shadow row
+  //   Curing Production, DAY, 2026-07-01:
+  //     record_id 17179953339  -> 16,907   x22 identical rows
+  //
+  // Raw, Curing Production 1-16 Jul reads 721,497 against a validated
+  // 301,530 (2.39x) — a third over-count cause on top of C2 and C4.
+  //
+  // Keeping the highest value per logical measurement reproduces every
+  // validated additive figure exactly (301,530 total; shifts 101,348 /
+  // 99,127 / 101,055, which re-sum to 301,530; 22,300 on 07-16), because the
+  // shadow rows are always partial. Rate KPIs are deliberately EXEMPT — see
+  // RATE_KPIS — as their duplicates hold genuinely different values and no
+  // collapse rule is provable. This is a query-layer compensation for an ETL
+  // defect; the real fix is de-duplicating the gold table upstream.
+  const dateCol =
     config.upstream.engine === "databricks"
-      ? "SELECT * EXCLUDE(date), CAST(date AS VARCHAR) AS date"
-      : "SELECT *";
+      ? "CAST(date AS VARCHAR) AS date"
+      : "date";
+  const innerCols = GOLD_COLUMNS.map((c) => (c === "date" ? dateCol : c)).join(
+    ", ",
+  );
+  const outerCols = GOLD_COLUMNS.join(", ");
+  const dedupedSource =
+    `(SELECT ${innerCols}, ROW_NUMBER() OVER (` +
+    `PARTITION BY ${DEDUPE_PARTITION.join(", ")} ` +
+    `ORDER BY actual_value DESC) AS __dedupe_rn ` +
+    `FROM ${table} ${whereSql})`;
+
   // ORDER BY newest-first BEFORE the LIMIT: if a wide window ever exceeds
   // the row cap, truncation drops the OLDEST rows, never the latest ones
-  // the cards/snapshots need. Without this the upstream returns an
-  // arbitrary slice and the current view can intermittently come up empty.
-  return `${selectClause} FROM ${table} ${whereSql} ORDER BY ${DATE_YYYYMMDD} DESC LIMIT ${lim}`
+  // the cards/snapshots need. A machine/itemcode/unit tiebreak makes the
+  // order fully deterministic so LIMIT/OFFSET paging is stable (no skipped or
+  // repeated rows between pages) and rows land in a readable grouping.
+  // Trino wants OFFSET before LIMIT; emit OFFSET only when non-zero so the
+  // first page stays a plain LIMIT.
+  const orderBy = `ORDER BY ${DATE_YYYYMMDD} DESC, machine, itemcode, unit_of_measurement, actual_value`;
+  const pageClause = off > 0 ? `OFFSET ${off} LIMIT ${lim}` : `LIMIT ${lim}`;
+  return (
+    `SELECT ${outerCols} FROM ${dedupedSource} ` +
+    `WHERE (__dedupe_rn = 1 OR ${RATE_KPIS_SQL}) ${orderBy} ${pageClause}`
+  )
     .replace(/\s+/g, " ")
     .trim();
 }

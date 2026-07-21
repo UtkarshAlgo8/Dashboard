@@ -69,6 +69,29 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
           }}
         >
           {kpi.name}
+          {/* new_change.md C6: this KPI lags the section's newest date, so
+              say which day the card is actually showing. Curing OEE ends
+              2026-07-16 while Production runs to 07-20 — without the label
+              the two cards look like they describe the same day. */}
+          {kpi.asOfDate && (
+            <Tooltip
+              title={`This KPI's own latest day is ${kpi.asOfDate}; it lags the newest data in this section.`}
+              arrow
+            >
+              <Box
+                component="span"
+                sx={{
+                  ml: 0.75,
+                  color: "text.secondary",
+                  fontWeight: 600,
+                  textTransform: "none",
+                  letterSpacing: 0,
+                }}
+              >
+                as of {fmtDay(kpi.asOfDate)}
+              </Box>
+            </Tooltip>
+          )}
         </Typography>
         <Stack direction="row" spacing={0.75} alignItems="center">
           <Tooltip title="Trend" arrow>
@@ -163,29 +186,100 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
         <Sparkline data={kpi.spark} color={sparkColor} />
       </Stack>
 
-      {/* Footer row: trend % */}
+      {/* Footer row: spike %. new_change.md C18 display rules — a missing
+          or zero baseline renders NOTHING here (the transformer sends
+          trend = null), never "0 %", "∞" or "−100 %". The baseline period
+          is named in the row and repeated on hover so the comparison is
+          auditable. */}
       {kpi.trend !== null && kpi.trend !== undefined && (
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={0.25}
-          sx={{ mt: 0.75 }}
+        <Tooltip title={kpi.trendBaseline ?? "vs the previous period"} arrow>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.25}
+            sx={{ mt: 0.75 }}
+          >
+            {trendUp ? (
+              <ArrowUpwardIcon sx={{ fontSize: 12, color: trendColor }} />
+            ) : (
+              <ArrowDownwardIcon sx={{ fontSize: 12, color: trendColor }} />
+            )}
+            <Typography
+              sx={{ fontSize: 12, fontWeight: 600, color: trendColor }}
+            >
+              {Math.abs(kpi.trend).toFixed(1)}%
+            </Typography>
+            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+              {kpi.trendBaseline ?? "vs prev"}
+            </Typography>
+          </Stack>
+        </Tooltip>
+      )}
+
+      {/* new_change.md C14 / spike defect S-3: the day is still running, so
+          the spike is suppressed rather than showing the ~−75 % artefact a
+          part-day-vs-full-day comparison produces. */}
+      {kpi.partialDay && (
+        <Tooltip
+          title="This day is still in progress — one or more shifts have no row yet, so a comparison against the previous full day would be an artefact."
+          arrow
         >
-          {trendUp ? (
-            <ArrowUpwardIcon sx={{ fontSize: 12, color: trendColor }} />
-          ) : (
-            <ArrowDownwardIcon sx={{ fontSize: 12, color: trendColor }} />
-          )}
-          <Typography sx={{ fontSize: 12, fontWeight: 600, color: trendColor }}>
-            {Math.abs(kpi.trend).toFixed(1)}%
+          <Typography
+            sx={{
+              mt: 0.75,
+              fontSize: 11,
+              fontWeight: 600,
+              color: "warning.main",
+            }}
+          >
+            in progress · partial day
           </Typography>
-          <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-            vs prev
+        </Tooltip>
+      )}
+
+      {/* new_change.md C10: the row cap was hit, so this total is INCOMPLETE
+          — never present it as if it were final. */}
+      {kpi.truncated && (
+        <Tooltip
+          title="The row cap was reached for this window, so the oldest days are missing from this total. Narrow the date range for a complete figure."
+          arrow
+        >
+          <Typography
+            sx={{
+              mt: 0.75,
+              fontSize: 11,
+              fontWeight: 600,
+              color: "error.main",
+            }}
+          >
+            partial data — range too wide
           </Typography>
-        </Stack>
+        </Tooltip>
       )}
     </Box>
   );
+}
+
+const MONTH_ABBR = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/** "2026-07-16" → "16 Jul" for the C6 "as of" label. */
+function fmtDay(iso) {
+  if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [, m, d] = iso.split("-");
+  return `${Number(d)} ${MONTH_ABBR[Number(m) - 1]}`;
 }
 
 export default KpiCard;

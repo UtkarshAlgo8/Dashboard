@@ -19,6 +19,8 @@
 import { useReducer, useCallback } from "react";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { toKpiGrid, toDrillRows } from "@/lib/kpi-transformer.js";
+import { buildDatePayload } from "@/lib/timeRange.js";
+import { getAnchors } from "@/api/dashboard.js";
 import client from "@/api/client.js";
 
 // ---------- state shape & actions ----------
@@ -27,6 +29,14 @@ const initialState = {
   section: "mix",
   subSection: null,
   productType: null,
+  // new_change.md C8/C9: the pinned unit_of_measurement. Multi-unit
+  // sub-sections (Stock Extruder / 3 Roll / Bead) and Mixing (KG vs Batch)
+  // MUST pin one — the two units are different measures of the same
+  // production and may never be combined. It is applied client-side (the
+  // transformer + shift box) rather than in the outgoing context, so that
+  // pinning a Production unit never filters away the unit-less OEE rows
+  // that share the same landing fetch.
+  unitOfMeasurement: null,
   category: "p",
   granularity: null, // null = no granularity filter (Lambda ignores category when granularity is set)
   // "snapshot" → transformer takes latest row's actual_value as the
@@ -37,8 +47,15 @@ const initialState = {
   date: null, // single-day equality (Today)
   from: null, // range start (Month / Year / custom)
   to: null, // range end
+  // new_change.md C6: true when the USER picked an explicit date / range.
+  // Per-KPI anchoring applies to the DEFAULT view only — an explicit window
+  // always wins, and a KPI with no rows inside it shows an empty state.
+  userWindow: false,
   drillKpis: null, // string[] — drill target kpi_names
   drillSourceKpiId: null, // string — the KPI that was originally clicked
+  // new_change.md C3/C6: the CARD's already-resolved date. The drill reuses
+  // it verbatim and never re-resolves a date of its own.
+  drillDate: null,
   parentFilters: {},
 };
 
@@ -55,6 +72,7 @@ function reducer(state, action) {
           ? {
               drillKpis: null,
               drillSourceKpiId: null,
+              drillDate: null,
               parentFilters: {},
             }
           : {}),
@@ -67,6 +85,8 @@ function reducer(state, action) {
         ...state,
         drillKpis: incoming.length > 0 ? incoming : null,
         drillSourceKpiId: action.payload.sourceKpiId,
+        // new_change.md C3: inherit the CARD's resolved date (C6 anchor).
+        drillDate: action.payload.cardDate ?? null,
         parentFilters: action.payload.parentFilters ?? {},
       };
     }
@@ -75,6 +95,7 @@ function reducer(state, action) {
         ...state,
         drillKpis: null,
         drillSourceKpiId: null,
+        drillDate: null,
         parentFilters: {},
       };
     case "RESET_ALL":
@@ -106,25 +127,13 @@ function buildContext(state) {
   // (Productivity / Quality). On Cost / Morale / Safety the KPIs carry a
   // DIFFERENT product_type (e.g. "Compound"), so sending the Productivity
   // product type would filter them all out.
-  if (
-    (state.category === "p" || state.category === "q") &&
-    state.productType
-  ) {
+  if ((state.category === "p" || state.category === "q") && state.productType) {
     ctx.product_type = state.productType;
   }
   if (state.granularity) ctx.granularity = state.granularity;
   // date / from / to are NOT in context — they are top-level payload
   // fields. The backend rejects them inside the context object.
   return ctx;
-}
-
-// Landing fetch wants ALL granularities; the shift filter (state.granularity)
-// only narrows the SHIFT-comparison consumption in the transformer, not
-// the backend query. This helper drops it from the outgoing context.
-function stripGranularity(ctx) {
-  // eslint-disable-next-line no-unused-vars
-  const { granularity, ...rest } = ctx;
-  return rest;
 }
 
 function sectionIdToName(id) {
@@ -134,14 +143,16 @@ function sectionIdToName(id) {
 
 function categoryIdToName(id) {
   // Tab IDs → gold_dummy category values.
-  return {
-    p: "Productivity",
-    q: "Quality",
-    c: "Cost",
-    m: "Morale",
-    s: "Safety",
-    i: "Inventory",
-  }[id] ?? id;
+  return (
+    {
+      p: "Productivity",
+      q: "Quality",
+      c: "Cost",
+      m: "Morale",
+      s: "Safety",
+      i: "Inventory",
+    }[id] ?? id
+  );
 }
 // ---------- API call ----------
 
@@ -169,10 +180,44 @@ function coerceMeasures(rows) {
   });
 }
 
+/**
+ * One kpi-data call, returning the WHOLE response envelope:
+ *   { rows, truncated, baseline, baselineWindow }
+ *
+ * new_change.md C10: `truncated` says the row cap was hit and the total is
+ * INCOMPLETE — the UI must never present it as final.
+ * new_change.md C15/C16: `baseline` holds the preceding comparison window,
+ * queried with the IDENTICAL pins (only the date window moved), and
+ * `baselineWindow` names it for the hover label.
+ * `rawEnvelope` keeps the client interceptor from unwrapping to `.data` and
+ * discarding those siblings.
+ */
 async function fetchDashboard(payload) {
-  return client
-    .post("/dashboard/fetch", payload)
-    .then((r) => coerceMeasures(r.data ?? r));
+  const body = await client.post("/dashboard/kpi-data", payload, {
+    rawEnvelope: true,
+  });
+  // Tolerate a bare array (older/unwrapped shape) so nothing hard-fails.
+  const envelope = Array.isArray(body) ? { data: body } : (body ?? {});
+  return {
+    rows: coerceMeasures(envelope.data ?? []),
+    truncated: Boolean(envelope.truncated),
+    baseline: Array.isArray(envelope.baseline)
+      ? coerceMeasures(envelope.baseline)
+      : null,
+    baselineWindow: envelope.baselineWindow ?? null,
+  };
+}
+
+/**
+ * new_change.md C15: which views need a server-side baseline.
+ * A day-wise / shift card derives its D−1 baseline from the rows already in
+ * the trailing window, so it costs nothing. A MONTH card (previous COMPLETE
+ * month) and a custom RANGE card (preceding equal-length window) read rows
+ * this fetch never asks for, so the backend must supply them.
+ */
+function needsBaseline(state) {
+  if (state.mode === "aggregate") return true;
+  return String(state.granularity ?? "").toUpperCase() === "MONTH";
 }
 
 // ---------- hook ----------
@@ -181,26 +226,48 @@ export function useDashboardFetch() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // Landing payload — always fetched. Carries the 4 KPI cards for every
-  // (section, category) combo plus the Shift Comparison rows.
+  // (section, category) combo.
   //
-  // No granularity filter: we want all 6 granularities (Daily / Shift A/B/C
-  // / MTD / YTD) for the chosen window so a single fetch feeds the
-  // headline value, the sparkline, AND the shift comparison. The
-  // transformer picks the right granularity per consumer:
-  //   - MTD/YTD presets → latest pre-aggregated row's actual_value
-  //   - Today preset    → latest Daily row's actual_value
-  //   - Shift selector  → aggregated Shift A/B/C rows
-  // The trailing 7–14 day window keeps row count safely under the
-  // upstream Lambda's 5000-row cap.
+  // new_change.md C2: the landing fetch USED to omit granularity so one
+  // call returned DAY + SHIFT A/B/C + MONTH together and each consumer
+  // picked its own. That is exactly the predicate the backend now refuses
+  // to drop — an absent granularity resolves to DAY, so a Shift A/B/C
+  // selection came back as DAY rows and the transformer (which filters to
+  // SHIFT A) blanked every card. Pin the ONE granularity the cards are
+  // rendered at; the shift-comparison box makes its own per-shift calls.
   const landingPayload = {
-    context: stripGranularity(buildContext(state)),
-    date: state.date,
-    from: state.from,
-    to: state.to,
-    drillKpis: null,
+    context: {
+      ...buildContext(state),
+      granularity: state.granularity ?? "DAY",
+    },
+    // new_change.md C1: from/to OR a single date — never both, and the ISO
+    // time component is stripped before it goes out.
+    ...buildDatePayload(state),
+    // new_change.md C7: the TBM/Curing Production CARD reads
+    // `Production_product` (the plain `Production` rows carry only the
+    // overall row, so every product selection shows the same number). That
+    // KPI is not part of the landing band, so it has to be requested by
+    // name — without `drillOnly` the landing rows still come back alongside
+    // it, and the backend pins product_type to exactly one value for the
+    // product-split levels (C4), so the aggregate is never summed with its
+    // children.
+    drillKpis:
+      state.section === "tbm" || state.section === "cur"
+        ? ["Production_product"]
+        : null,
     parentFilters: {},
     limit: 10000,
+    // new_change.md C15: ask for the preceding comparison window where the
+    // card cannot derive one from the rows it already has.
+    ...(needsBaseline(state) ? { withBaseline: true } : {}),
   };
+
+  // Never fetch without a resolved date window: a single day (Today) OR a
+  // from/to range (Month/Year/custom). On first mount the window is null
+  // until the page settles the as-of anchor + preset — gating here stops the
+  // redundant no-date landing fetch that used to fire before the range was
+  // known (and refetch again once it resolved).
+  const hasDateRange = Boolean((state.from && state.to) || state.date);
 
   // Drill payload — only fetched when a card is drilled. Returns drill
   // children for the active card. Lambda's 5000-row cap applies only to
@@ -223,42 +290,71 @@ export function useDashboardFetch() {
           // the drill children aligned with the aggregate DAY rows.
           granularity: state.granularity ?? "DAY",
         },
-        date: state.date,
-        from: state.from,
-        to: state.to,
+        // new_change.md C1/C3/C6: the drill inherits the card's EXACT
+        // window, built the same way — range only, or a single date only.
+        // When the card anchored itself to its OWN latest day (C6), the
+        // drill is pinned to that day rather than the whole trailing
+        // window, so card and drill always land on the same date.
+        ...buildDatePayload(
+          state.drillDate ? { date: state.drillDate } : state,
+        ),
         drillKpis: state.drillKpis,
         parentFilters: state.parentFilters,
         limit: 10000,
       }
     : null;
 
-  const { data: landingData, isLoading: landingLoading, error: landingError } =
-    usePolledQuery(() => fetchDashboard(landingPayload), {
-      enabled: true,
-      interval: 0,
-      deps: [JSON.stringify(landingPayload)],
-    });
+  const {
+    data: landingData,
+    isLoading: landingLoading,
+    error: landingError,
+  } = usePolledQuery(() => fetchDashboard(landingPayload), {
+    enabled: hasDateRange,
+    interval: 0,
+    deps: [JSON.stringify(landingPayload)],
+  });
 
-  const { data: drillData, isLoading: drillLoading, error: drillError } =
-    usePolledQuery(
-      () => (drillPayload ? fetchDashboard(drillPayload) : Promise.resolve([])),
-      {
-        enabled: Boolean(drillPayload),
-        interval: 0,
-        deps: [JSON.stringify(drillPayload)],
-      },
-    );
+  const {
+    data: drillData,
+    isLoading: drillLoading,
+    error: drillError,
+  } = usePolledQuery(
+    () => (drillPayload ? fetchDashboard(drillPayload) : Promise.resolve(null)),
+    {
+      enabled: Boolean(drillPayload),
+      interval: 0,
+      deps: [JSON.stringify(drillPayload)],
+    },
+  );
+
+  // new_change.md C6/C14: each KPI's own newest DAY date + the sections whose
+  // latest day is still in progress. Fetched once and memoized in the api
+  // module, so mounting this hook costs no extra request.
+  const { data: anchorData } = usePolledQuery(getAnchors, { interval: 0 });
+  const anchors = anchorData?.anchors ?? null;
+  const partialDays = anchorData?.partialDays ?? null;
 
   // Merge: landing always present; drill children appended when a card
   // is drilled. The transformer and panels both read from this combined
   // list — landing rows feed the 4 KPI cards, drill rows feed the panel.
-  const data =
-    landingData && Array.isArray(landingData)
-      ? state.drillKpis && Array.isArray(drillData)
-        ? [...landingData, ...drillData]
-        : landingData
-      : null;
-  const isLoading = landingLoading || (Boolean(drillPayload) && drillLoading);
+  const landingRows = Array.isArray(landingData?.rows)
+    ? landingData.rows
+    : null;
+  const drillDataRows = Array.isArray(drillData?.rows) ? drillData.rows : null;
+  const data = landingRows
+    ? state.drillKpis && drillDataRows
+      ? [...landingRows, ...drillDataRows]
+      : landingRows
+    : null;
+  // new_change.md C10: either fetch hitting the row cap makes the totals on
+  // screen incomplete — surface it rather than showing a partial sum as final.
+  const truncated =
+    Boolean(landingData?.truncated) || Boolean(drillData?.truncated);
+  // Treat "waiting for the date window" as loading too, so the grid shows a
+  // skeleton (not an empty "no data" state) while the range resolves and the
+  // gated landing fetch has not run yet.
+  const isLoading =
+    !hasDateRange || landingLoading || (Boolean(drillPayload) && drillLoading);
   // Drill-only loading flag so drill panels can render a skeleton while
   // their fetch is in flight, without confusing it with landing reload.
   const isDrillLoading = Boolean(drillPayload) && drillLoading;
@@ -274,6 +370,24 @@ export function useDashboardFetch() {
         // exemption); the transformer uses this to prefer the selected
         // product's row when it exists and fall back to the line value.
         productType: state.productType ?? null,
+        // new_change.md C8/C9: never combine two units of the same series.
+        unitOfMeasurement: state.unitOfMeasurement ?? null,
+        // The card whose drill is open — lets the transformer switch a
+        // multi-unit KPI (Production: Batch/KG) to its mass unit while
+        // drilled, and back to Batch when closed.
+        drilledKpiId: state.drillSourceKpiId ?? null,
+        // new_change.md C6: per-KPI anchors, applied to the DEFAULT view
+        // only — an explicit user date/range always wins (C1).
+        anchors,
+        useAnchors:
+          !state.userWindow && (state.mode ?? "snapshot") !== "aggregate",
+        // new_change.md C14/S-3: suppress the spike on an in-progress day.
+        partialDays,
+        // new_change.md C15/C16/C17: the real preceding window.
+        baselineRows: landingData?.baseline ?? null,
+        baselineWindow: landingData?.baselineWindow ?? null,
+        // new_change.md C10.
+        truncated,
       })
     : [];
   const drillRows = data && state.drillKpis !== null ? toDrillRows(data) : null;
@@ -287,12 +401,17 @@ export function useDashboardFetch() {
    * `sourceKpiId` is the original clicked KPI's id — used by the router
    * to pick the right panel (OEE → OeeDrillPanel, etc.).
    */
-  const drillInto = useCallback((kpiNames, sourceKpiId, parentFilters = {}) => {
-    dispatch({
-      type: "SET_DRILL",
-      payload: { kpiNames, sourceKpiId, parentFilters },
-    });
-  }, []);
+  const drillInto = useCallback(
+    (kpiNames, sourceKpiId, parentFilters = {}, cardDate = null) => {
+      dispatch({
+        type: "SET_DRILL",
+        // new_change.md C3/C6: `cardDate` is the card's ALREADY-resolved
+        // date — the drill inherits it instead of resolving its own.
+        payload: { kpiNames, sourceKpiId, parentFilters, cardDate },
+      });
+    },
+    [],
+  );
 
   const resetDrill = useCallback(() => {
     dispatch({ type: "RESET_DRILL" });
@@ -307,6 +426,9 @@ export function useDashboardFetch() {
     kpis,
     drillRows,
     rawRows: data ?? null,
+    // new_change.md C10 — true means the row cap was hit and any total on
+    // screen is INCOMPLETE.
+    truncated,
     isLoading,
     isDrillLoading,
     error,

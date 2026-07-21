@@ -316,13 +316,36 @@ function normalizeAttrArray(arr) {
 // Real units: %, KG, M, NOS, min, (unset). "(unset)" means missing — show
 // nothing, never print the literal. We DON'T hardcode a unit per KPI; the
 // label is read from the data and only normalized for display.
-const UNSET_UNIT_TOKENS = new Set(["(unset)", "unset", "nan", ""]);
+// new_change.md C9: "null" is the literal missing-value sentinel in the gold
+// layer (a STRING, not SQL NULL), so it belongs in the unset set alongside
+// "(unset)" and "nan".
+const UNSET_UNIT_TOKENS = new Set(["(unset)", "unset", "nan", "null", ""]);
+
+/**
+ * new_change.md C9 — unit alias map. Upper-casing alone never merges the
+ * duplicate spellings the source emits: "Meters" -> "METERS" never matches
+ * "M", and "NUM" never matches "NOS". Stock NCM_Hold carries both spellings
+ * of both units, so without this the same unit renders as two separate rows
+ * with two partial totals.
+ *
+ * Applied to BOTH the incoming filter value and the stored row value so the
+ * predicate matches and the display groups into one total.
+ */
+const UNIT_ALIASES = new Map([
+  ["METERS", "M"],
+  ["METER", "M"],
+  ["NUM", "NOS"],
+]);
 
 /**
  * Normalize a unit_of_measurement value for display.
- *   - "(unset)" / "nan" / "" / null → null (treated as "no unit")
+ *   - "(unset)" / "nan" / "null" / "" / null → null (treated as "no unit")
+ *   - alias-merged per UNIT_ALIASES (Meters → M, NUM → NOS)
  *   - everything else: trimmed, with known labels upper-cased for
  *     consistent casing (KG, NOS, M). "%" and "min" pass through.
+ *
+ * NOTE: KG and Batch (Mixing) are genuinely DIFFERENT measures of the same
+ * production and must never be aliased together — they stay a toggle.
  */
 export function normalizeUnit(raw) {
   if (raw == null) return null;
@@ -332,8 +355,27 @@ export function normalizeUnit(raw) {
   // Canonical casing for the unit-bearing labels. "min" and "%" are kept
   // verbatim; alphabetic codes (kg/nos/m) are upper-cased.
   if (trimmed === "%" || trimmed.toLowerCase() === "min") return trimmed;
-  if (/^[a-z]+$/i.test(trimmed)) return trimmed.toUpperCase();
+  if (/^[a-z]+$/i.test(trimmed)) {
+    const upper = trimmed.toUpperCase();
+    return UNIT_ALIASES.get(upper) ?? upper;
+  }
   return trimmed;
+}
+
+/**
+ * new_change.md C9 — SQL predicate matching a unit_of_measurement filter
+ * against every stored spelling that canonicalizes to the same unit.
+ * `M` also matches `Meters`; `NOS` also matches `NUM`.
+ */
+export function unitPredicate(canonicalUnit, column = "unit_of_measurement") {
+  const spellings = new Set([canonicalUnit]);
+  for (const [alias, canon] of UNIT_ALIASES) {
+    if (canon === canonicalUnit) spellings.add(alias);
+  }
+  const list = [...spellings]
+    .map((s) => `'${s.replaceAll("'", "''")}'`)
+    .join(", ");
+  return `UPPER(TRIM(${column})) IN (${list})`;
 }
 
 /* ----------------------------------------------------------------- *

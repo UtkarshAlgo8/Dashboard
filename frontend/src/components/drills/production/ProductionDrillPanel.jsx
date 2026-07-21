@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Box,
+  Button,
   Stack,
   Table,
   TableBody,
@@ -15,7 +16,15 @@ import {
 } from "@mui/material";
 import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
-import { snapshotLatest } from "@/lib/drillDate.js";
+import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import { aggregateForRange, canonicalUnit } from "@/lib/kpi-transformer.js";
+import client from "@/api/client.js";
+
+// Athena serializes measures as strings; coerce to number|null for display.
+function num(v) {
+  const n = typeof v === "number" ? v : Number.parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 /**
  * Production drill — derives from the raw gold rows already in hand via
@@ -66,8 +75,11 @@ function deriveUnitOptions(rows, sectionName, ptFilter) {
     if (r.section !== sectionName) continue;
     if (!String(r.kpi_name ?? "").startsWith("Production")) continue;
     if (!matchesProduct(r.product_type, ptFilter)) continue;
+    // new_change.md C9: "null"/"nan"/""/"(unset)" are all the missing-unit
+    // sentinel (4 Roll's Ply Mother Roll rows carry the literal "null") —
+    // they must never become a selectable unit.
     const u = r.unit_of_measurement;
-    if (u && u !== "nan" && u !== "(unset)") units.add(u);
+    if (canonicalUnit(u) != null) units.add(u);
   }
   return [...units]
     .sort((a, b) => a.localeCompare(b))
@@ -103,8 +115,12 @@ function ProductionDrillPanel({
   section,
   prodSub,
   rawRows,
-  mode = "snapshot",
   granularity = "DAY",
+  from = null,
+  to = null,
+  // new_change.md C3: the drill inherits the CARD's unit pin — a drill must
+  // never quietly read a different unit than the card above it.
+  unitPin = null,
   isLoading = false,
 }) {
   const [search, setSearch] = useState("");
@@ -128,10 +144,17 @@ function ProductionDrillPanel({
   // Pin a unit once the data arrives (first available); keep the user's pick
   // if it's still present. Single-unit KPIs just show that unit, multi-unit
   // KPIs get a real toggle — but we never combine units.
+  // new_change.md C3/C9: the card's pin arrives CANONICALIZED ("KG", "M",
+  // "NOS", "BATCH") while the options carry the row's own spelling
+  // ("Batch", "Meters"). Compare canonically, or the inheritance silently
+  // misses and the drill reads a different unit than the card above it.
+  const pinnedOption = unitPin
+    ? unitOptions.find((o) => canonicalUnit(o.value) === canonicalUnit(unitPin))
+    : null;
   const activeUnit =
     unit && unitOptions.some((o) => o.value === unit)
       ? unit
-      : unitOptions[0]?.value ?? null;
+      : (pinnedOption?.value ?? unitOptions[0]?.value ?? null);
   const unitLabel = activeUnit ?? "";
   const sectionTitle = SECTION_TITLE[section] ?? section;
 
@@ -143,147 +166,161 @@ function ProductionDrillPanel({
         ? "Production_sku"
         : "Production_m_sku";
 
-  // Subset rows: this section + this kpi_name + the active product-type
-  // pill. Each lens reads its own leaf kpi_name directly (Production_m /
-  // _sku / _m_sku) — all three carry the product_type column in the gold
-  // layer, so the active pill filters every lens the same way. We must
-  // NOT re-derive Production_m by summing Production_m_sku: the stored
-  // Production_m value differs from that sum, so doing so makes the
-  // machine lens show a different number when a pill is active vs not.
-  //
-  // Granularity / time: the drill inherits the card's granularity
-  // (journey.md §5) — Shift B card → Shift B rows, Month → MTD, Year →
-  // YTD, Today → Daily. The drill fetch pulls rows at that same
-  // granularity over the selected window (a trailing 7-day window for the
-  // "today" preset, so the sparkline has points). The headline card reads
-  // only the LATEST row's value (snapshot mode). The table must match it:
-  // in snapshot mode keep only the rows on the latest available date —
-  // otherwise we SUM every row in the window and the table overshoots the
-  // card. In aggregate mode (an explicit custom range) summing the window
-  // is the intended behaviour, so we keep all rows.
-  const scopedRows = useMemo(() => {
-    if (!Array.isArray(rawRows)) return [];
+  // ---- Server-side pagination -------------------------------------------
+  // Each lens (Machine / SKU / Machine+SKU) is its OWN paginated API call:
+  // 100 rows of that leaf kpi_name at a time, advancing OFFSET for Prev/Next.
+  // The server applies the section / product / granularity / unit / trench
+  // filters, so the panel just displays the page it gets back — raw rows,
+  // one machine/SKU each once the lake is deduped. No client aggregation,
+  // no fetching the whole 10k band.
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(0); // 0-indexed
 
-    // Empty-string prodSub (sections without product-type pills, e.g.
-    // Stock) means "no product-type filter" — same as null.
-    const ptFilter = prodSub ? prodSub : null;
+  // Reset to page 1 whenever the lens or any scope filter changes — done
+  // during render (React's "adjust state on prop change" pattern) so a stale
+  // deep page never shows for a different list.
+  const pageKey = `${kpiName}|${activeUnit}|${prodSub}|${granularity}|${selectedTredge}|${sectionName}|${from}|${to}`;
+  const [prevPageKey, setPrevPageKey] = useState(pageKey);
+  if (prevPageKey !== pageKey) {
+    setPrevPageKey(pageKey);
+    setPage(0);
+  }
 
-    const matched = rawRows.filter(
-      (r) =>
-        r.section === sectionName &&
-        r.kpi_name === kpiName &&
-        r.granularity === granularity &&
-        r.unit_of_measurement === activeUnit &&
-        matchesProduct(r.product_type, ptFilter) &&
-        // Curing trench drill (§7): once a Tredge is picked, the press/SKU
-        // table is scoped to that trench's sub_section.
-        (!isCuring || selectedTredge == null || r.sub_section === selectedTredge),
-    );
+  const pagePayload = {
+    context: {
+      section: sectionName,
+      category: "Productivity",
+      ...(granularity ? { granularity } : {}),
+      ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
+      ...(prodSub ? { product_type: prodSub } : {}),
+      // Curing trench drill (§7): scope the page to the picked Tredge.
+      ...(isCuring && selectedTredge ? { sub_section: selectedTredge } : {}),
+    },
+    from,
+    to,
+    drillKpis: [kpiName],
+    drillOnly: true,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  };
+  // Gate: no unit yet ⇒ the landing rows (which seed the unit toggle) haven't
+  // arrived; and never fetch without a date window.
+  const canFetch = Boolean(activeUnit) && Boolean(from || to);
+  const { data: pageData, isLoading: pageLoading } = usePolledQuery(
+    () =>
+      client.post("/dashboard/kpi-data", pagePayload).then((r) => r.data ?? r),
+    { enabled: canFetch, interval: 0, deps: [JSON.stringify(pagePayload)] },
+  );
 
-    // Snapshot mode collapses to the latest available date so the table
-    // reconciles with the card; aggregate mode keeps the full window.
-    return snapshotLatest(matched, mode);
-  }, [
-    rawRows,
-    sectionName,
-    kpiName,
-    prodSub,
-    activeUnit,
-    mode,
-    granularity,
-    isCuring,
-    selectedTredge,
-  ]);
-
-  // Curing trench rows (§7): Production_s, one row per Tredge. Backs the
-  // trench selector shown above the press/SKU table for Curing only.
-  const tredgeRows = useMemo(() => {
-    if (!isCuring || !Array.isArray(rawRows)) return [];
-    const ptFilter = prodSub ? prodSub : null;
-    const matched = rawRows.filter(
-      (r) =>
-        r.section === sectionName &&
-        r.kpi_name === "Production_s" &&
-        r.granularity === granularity &&
-        r.unit_of_measurement === activeUnit &&
-        matchesProduct(r.product_type, ptFilter) &&
-        r.sub_section &&
-        r.sub_section !== "nan",
-    );
-    const latest = snapshotLatest(matched, mode);
-    const byTredge = new Map();
-    for (const r of latest) {
-      const t = r.sub_section;
-      const cur = byTredge.get(t) ?? { tredge: t, planned: null, actual: null };
-      if (typeof r.threshold_value === "number") cur.planned = r.threshold_value;
-      if (typeof r.actual_value === "number") cur.actual = r.actual_value;
-      byTredge.set(t, cur);
+  // Map the raw page rows to the table shape. No dedup/aggregation — one row
+  // per stored (machine, itemcode) as returned (the raw LIMIT/OFFSET model:
+  // fully correct once the lake is deduped). itemCount/machineCount were
+  // artifacts of the old client grouping; raw rows don't carry them.
+  const rows = useMemo(() => {
+    if (!Array.isArray(pageData)) return [];
+    // new_change.md C5/C3: over a RANGE the page carries one row per
+    // (machine, sku, DAY), so the drill must aggregate day-wise exactly as
+    // the card does — SUM for the additive Production levels — otherwise a
+    // range card sits above a table of single-day rows. A single day
+    // (from == to) collapses to one row per key, so this is a no-op there.
+    const byKey = new Map();
+    for (const r of pageData) {
+      const machine = r.machine && r.machine !== "nan" ? r.machine : "—";
+      const itemcode = r.itemcode && r.itemcode !== "nan" ? r.itemcode : "—";
+      const key = `${machine}||${itemcode}`;
+      const cur = byKey.get(key) ?? {
+        machine,
+        itemcode,
+        planned: [],
+        actual: [],
+        itemCount: 0,
+        machineCount: 0,
+      };
+      const p = num(r.threshold_value);
+      const a = num(r.actual_value);
+      if (p != null) cur.planned.push(p);
+      if (a != null) cur.actual.push(a);
+      byKey.set(key, cur);
     }
-    return [...byTredge.values()].sort((a, b) =>
-      a.tredge.localeCompare(b.tredge, undefined, { numeric: true }),
-    );
-  }, [isCuring, rawRows, sectionName, prodSub, activeUnit, mode, granularity]);
-
-  // Group per the active lens. We show the ACTUAL stored value per row,
-  // never a sum: each leaf kpi already carries the pre-aggregated value
-  // for its (machine / sku / machine+sku) key on the snapshot date, so
-  // summing would double-count. When more than one row maps to the same
-  // key (e.g. machine view with no product pill, where the same machine
-  // appears once per product_type), we keep the latest row's value
-  // rather than adding them together.
-  const aggregated = useMemo(() => {
-    const groups = new Map();
-    const keyOf = (r) => {
-      if (viewBy === "machine") return r.machine ?? "—";
-      if (viewBy === "sku") return r.itemcode ?? "—";
-      return `${r.machine ?? "—"}||${r.itemcode ?? "—"}`;
-    };
-    for (const r of scopedRows) {
-      const k = keyOf(r);
-      if (!groups.has(k)) {
-        groups.set(k, {
-          machine: r.machine !== "nan" ? r.machine : "—",
-          itemcode: r.itemcode !== "nan" ? r.itemcode : "—",
-          planned: null,
-          actual: null,
-          itemSet: new Set(),
-          machineSet: new Set(),
-        });
-      }
-      const acc = groups.get(k);
-      // Actual stored values — take this row's value as-is (last write
-      // wins on a duplicate key), do NOT accumulate.
-      if (typeof r.threshold_value === "number")
-        acc.planned = r.threshold_value;
-      if (typeof r.actual_value === "number") acc.actual = r.actual_value;
-      if (r.itemcode && r.itemcode !== "nan") acc.itemSet.add(r.itemcode);
-      if (r.machine && r.machine !== "nan") acc.machineSet.add(r.machine);
-    }
-    return [...groups.values()].map((g) => ({
+    return [...byKey.values()].map((g) => ({
       ...g,
-      itemCount: g.itemSet.size,
-      machineCount: g.machineSet.size,
+      // Missing days are simply absent from the list — never counted as 0.
+      planned: aggregateForRange(g.planned, kpiName),
+      actual: aggregateForRange(g.actual, kpiName),
     }));
-  }, [scopedRows, viewBy]);
+  }, [pageData, kpiName]);
 
-  // Filter by machine search where applicable.
+  // Search narrows the CURRENT page only (machine lens). Cross-page search
+  // would need a server-side machine filter — out of scope for now.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return aggregated;
-    return aggregated.filter((r) =>
-      viewBy === "sku"
-        ? false // search is machine-scoped; sku view ignores it
-        : (r.machine ?? "").toLowerCase().includes(q),
+    if (!q) return rows;
+    return rows.filter((r) =>
+      viewBy === "sku" ? false : (r.machine ?? "").toLowerCase().includes(q),
     );
-  }, [aggregated, search, viewBy]);
+  }, [rows, search, viewBy]);
 
-  // Values are read verbatim from the row's own unit (scopedRows is
-  // already filtered to the selected unit_of_measurement) — never
-  // converted between units. Whole-count units render as integers;
-  // MT renders to one decimal under 1000 to keep small lots legible.
+  // Curing trench list (§7): one row per Tredge (Production_s). Its own small
+  // drillOnly fetch — trenches are few, so no pagination.
+  const trenchPayload = isCuring
+    ? {
+        context: {
+          section: sectionName,
+          category: "Productivity",
+          ...(granularity ? { granularity } : {}),
+          ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
+          ...(prodSub ? { product_type: prodSub } : {}),
+        },
+        from,
+        to,
+        drillKpis: ["Production_s"],
+        drillOnly: true,
+        limit: 100,
+        offset: 0,
+      }
+    : null;
+  const { data: trenchData } = usePolledQuery(
+    () =>
+      trenchPayload
+        ? client
+            .post("/dashboard/kpi-data", trenchPayload)
+            .then((r) => r.data ?? r)
+        : Promise.resolve([]),
+    {
+      enabled: Boolean(trenchPayload) && canFetch,
+      interval: 0,
+      deps: [JSON.stringify(trenchPayload)],
+    },
+  );
+  const tredgeRows = useMemo(() => {
+    if (!Array.isArray(trenchData)) return [];
+    const byTredge = new Map();
+    for (const r of trenchData) {
+      const t = r.sub_section;
+      if (!t || t === "nan" || t === "null") continue;
+      const cur = byTredge.get(t) ?? { tredge: t, planned: [], actual: [] };
+      const p = num(r.threshold_value);
+      const a = num(r.actual_value);
+      if (p != null) cur.planned.push(p);
+      if (a != null) cur.actual.push(a);
+      byTredge.set(t, cur);
+    }
+    // new_change.md C5: aggregate the trench rows over the range the same
+    // way the card does (Production_s is additive → summed day-wise), so
+    // the trench list reconciles with the Production card above it.
+    return [...byTredge.values()]
+      .map((g) => ({
+        tredge: g.tredge,
+        planned: aggregateForRange(g.planned, "Production_s"),
+        actual: aggregateForRange(g.actual, "Production_s"),
+      }))
+      .sort((x, y) =>
+        x.tredge.localeCompare(y.tredge, undefined, { numeric: true }),
+      );
+  }, [trenchData]);
+
   const fmt = (v) => {
     if (v == null) return "—";
-    // KG can be fractional for small lots; keep one decimal under 1000.
     if (activeUnit === "KG" && v < 1000) return v.toFixed(1);
     return Math.round(v).toLocaleString();
   };
@@ -292,13 +329,18 @@ function ProductionDrillPanel({
     ? `${sectionTitle} — ${prodSub} Production`
     : `${sectionTitle} Production`;
 
+  // A full page (100 rows) means there may be more; a short page is the last.
+  const hasMore = Array.isArray(pageData) && pageData.length === PAGE_SIZE;
+  const pageStart = page * PAGE_SIZE;
+  const loading = isLoading || pageLoading;
+
   // Curing trench tier (§7): until a Tredge is selected, show the
   // trench-wise list (Production_s). Selecting one reveals its press/SKU
   // table below. Other sections skip this and go straight to the table.
   const showTrenchPicker = isCuring && tredgeRows.length > 0;
 
   if (filtered.length === 0 && !showTrenchPicker) {
-    if (isLoading) {
+    if (loading) {
       return <DrillSkeleton title rows={5} cols={5} />;
     }
     return (
@@ -331,9 +373,7 @@ function ProductionDrillPanel({
         <TrenchPicker
           rows={tredgeRows}
           selected={selectedTredge}
-          onSelect={(t) =>
-            setSelectedTredge((cur) => (cur === t ? null : t))
-          }
+          onSelect={(t) => setSelectedTredge((cur) => (cur === t ? null : t))}
           unit={unitLabel}
           fmt={fmt}
         />
@@ -342,7 +382,12 @@ function ProductionDrillPanel({
       {/* Press/SKU breakdown — for Curing, only after a Tredge is picked. */}
       {(!showTrenchPicker || selectedTredge) && (
         <>
-          <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={3}
+            alignItems="center"
+            flexWrap="wrap"
+          >
             <ToggleGroup
               label="View by"
               value={viewBy}
@@ -370,19 +415,33 @@ function ProductionDrillPanel({
             <MachineSearch value={search} onChange={setSearch} />
             <Box sx={{ flex: 1 }} />
             <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-              {filtered.length} of {aggregated.length} rows
+              {filtered.length === 0
+                ? "0 rows"
+                : `${pageStart + 1}–${pageStart + filtered.length} · page ${page + 1}`}
               {selectedTredge ? ` in ${selectedTredge}` : ""}
               {prodSub ? ` · ${prodSub}` : ""}
             </Typography>
           </Stack>
 
-          {filtered.length > 0 ? (
-            <ResultTable
-              rows={filtered}
-              viewBy={viewBy}
-              unit={unitLabel}
-              fmt={fmt}
-            />
+          {loading && filtered.length === 0 ? (
+            <DrillSkeleton rows={6} cols={5} />
+          ) : filtered.length > 0 ? (
+            <>
+              <ResultTable
+                rows={filtered}
+                viewBy={viewBy}
+                unit={unitLabel}
+                fmt={fmt}
+              />
+              {(page > 0 || hasMore) && (
+                <Pager
+                  page={page}
+                  hasMore={hasMore}
+                  onPrev={() => setPage((p) => Math.max(0, p - 1))}
+                  onNext={() => setPage((p) => p + 1)}
+                />
+              )}
+            </>
           ) : (
             <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
               <Typography sx={{ fontSize: 13 }}>
@@ -393,6 +452,50 @@ function ProductionDrillPanel({
           )}
         </>
       )}
+    </Stack>
+  );
+}
+
+/**
+ * Page toggle for the SKU / machine table — 100 rows per page, fetched
+ * server-side. Prev/Next; Next is disabled when the last page returned fewer
+ * than a full 100 rows (no total count in the raw LIMIT/OFFSET model).
+ */
+function Pager({ page, hasMore, onPrev, onNext }) {
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="flex-end"
+      spacing={1.5}
+      sx={{ pt: 0.5 }}
+    >
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={onPrev}
+        disabled={page <= 0}
+      >
+        Prev
+      </Button>
+      <Typography
+        sx={{
+          fontSize: 12,
+          color: "text.secondary",
+          minWidth: 90,
+          textAlign: "center",
+        }}
+      >
+        Page {page + 1}
+      </Typography>
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={onNext}
+        disabled={!hasMore}
+      >
+        Next
+      </Button>
     </Stack>
   );
 }
@@ -430,8 +533,7 @@ function TrenchPicker({ rows, selected, onSelect, unit, fmt }) {
           </TableHead>
           <TableBody>
             {rows.map((r) => {
-              const ach =
-                r.planned > 0 ? (r.actual / r.planned) * 100 : null;
+              const ach = r.planned > 0 ? (r.actual / r.planned) * 100 : null;
               const achColor =
                 ach == null
                   ? theme.palette.text.disabled

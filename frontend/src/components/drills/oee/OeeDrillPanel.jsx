@@ -17,7 +17,7 @@ import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
 import { thresholdTier } from "./thresholds.js";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
-import { snapshotLatest } from "@/lib/drillDate.js";
+import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
 
 /**
  * OEE drill panel — derives its data straight from the gold rows the
@@ -65,6 +65,11 @@ function OeeDrillPanel({
   rawRows,
   mode = "snapshot",
   granularity = "DAY",
+  // new_change.md C3/C6: the CARD's resolved date. The drill inherits it and
+  // never resolves its own — `rawRows` also carries Production rows that run
+  // days ahead of OEE, so a bare "latest date" collapse would drop every OEE
+  // row and render an empty drill.
+  cardDate = null,
   isLoading = false,
   trench = false,
 }) {
@@ -90,10 +95,15 @@ function OeeDrillPanel({
   // OEE is machine-scoped only (§15.5): use the rows as-is, no product
   // filtering. Collapse to the latest available date in snapshot mode so
   // the drill reconciles with the card and we never average a week.
-  const scopedRows = useMemo(
-    () => snapshotLatest(rawRows ?? [], mode),
-    [rawRows, mode],
-  );
+  const scopedRows = useMemo(() => {
+    const rows = rawRows ?? [];
+    if (cardDate) {
+      // C3/C6: pinned to the card's day — no "latest date" resolution at all.
+      const want = dateKey(cardDate);
+      return rows.filter((r) => dateKey(r?.date) === want);
+    }
+    return snapshotLatest(rows, mode);
+  }, [rawRows, mode, cardDate]);
 
   // Read the stored value for one kpi_name VERBATIM (optionally
   // machine-scoped). scopedRows is already collapsed to the snapshot day,
@@ -192,7 +202,9 @@ function OeeDrillPanel({
             r.granularity === granularity &&
             // Curing trench drill (§6): once a Tredge is picked, scope the
             // press table to that trench's sub_section.
-            (!trench || selectedTredge == null || r.sub_section === selectedTredge) &&
+            (!trench ||
+              selectedTredge == null ||
+              r.sub_section === selectedTredge) &&
             r.machine &&
             r.machine !== "nan",
         )
@@ -364,75 +376,76 @@ function OeeDrillPanel({
 
       {/* Machine-wise breakdown — for Curing, only after a Tredge is picked. */}
       {(!showTrench || selectedTredge) && (
-      <Stack spacing={1.5}>
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          spacing={1}
-        >
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: "primary.main",
-              textTransform: "uppercase",
-              letterSpacing: 0.5,
-            }}
+        <Stack spacing={1.5}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            spacing={1}
           >
-            Machine-wise breakdown
-          </Typography>
-          {machines.length > 0 && (
-            <MachineSearch value={search} onChange={setSearch} />
-          )}
-        </Stack>
-
-        {machines.length === 0 ? (
-          isLoading ? (
-            <DrillSkeleton title={false} rows={5} cols={5} />
-          ) : (
-            <Box
+            <Typography
               sx={{
-                p: 2,
-                border: 1,
-                borderColor: "divider",
-                borderRadius: 1.25,
-                textAlign: "center",
-                color: "text.disabled",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "primary.main",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
               }}
             >
-              <Typography sx={{ fontSize: 13 }}>
-                Machine-level rows for {sectionName} weren&rsquo;t in this fetch
-                (Lambda 5000-row cap). Pick a narrower date range to see them.
-              </Typography>
-            </Box>
-          )
-        ) : (
-          <>
-            <MachineTable
-              machines={filteredMachines.map((m) => ({
-                id: m.id,
-                name: m.name,
-                availability: m.availability ?? 0,
-                performance: m.performance ?? 0,
-                quality: m.quality ?? 0,
-              }))}
-              selectedCell={selectedCell}
-              onSelectCell={handleSelectCell}
-            />
-            {selectedMachine && selectedCell && subCategory && (
-              <SubDrill
-                machine={selectedMachine}
-                component={selectedCell.component}
-                subCategory={subCategory}
-                onSelectSubCategory={setSubCategory}
-                rows={subRows}
-                accentTier={selectedTier}
-              />
+              Machine-wise breakdown
+            </Typography>
+            {machines.length > 0 && (
+              <MachineSearch value={search} onChange={setSearch} />
             )}
-          </>
-        )}
-      </Stack>
+          </Stack>
+
+          {machines.length === 0 ? (
+            isLoading ? (
+              <DrillSkeleton title={false} rows={5} cols={5} />
+            ) : (
+              <Box
+                sx={{
+                  p: 2,
+                  border: 1,
+                  borderColor: "divider",
+                  borderRadius: 1.25,
+                  textAlign: "center",
+                  color: "text.disabled",
+                }}
+              >
+                <Typography sx={{ fontSize: 13 }}>
+                  Machine-level rows for {sectionName} weren&rsquo;t in this
+                  fetch (Lambda 5000-row cap). Pick a narrower date range to see
+                  them.
+                </Typography>
+              </Box>
+            )
+          ) : (
+            <>
+              <MachineTable
+                machines={filteredMachines.map((m) => ({
+                  id: m.id,
+                  name: m.name,
+                  availability: m.availability ?? 0,
+                  performance: m.performance ?? 0,
+                  quality: m.quality ?? 0,
+                }))}
+                selectedCell={selectedCell}
+                onSelectCell={handleSelectCell}
+              />
+              {selectedMachine && selectedCell && subCategory && (
+                <SubDrill
+                  machine={selectedMachine}
+                  component={selectedCell.component}
+                  subCategory={subCategory}
+                  onSelectSubCategory={setSubCategory}
+                  rows={subRows}
+                  accentTier={selectedTier}
+                />
+              )}
+            </>
+          )}
+        </Stack>
       )}
     </Stack>
   );
