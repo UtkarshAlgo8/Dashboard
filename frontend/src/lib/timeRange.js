@@ -40,6 +40,41 @@ const DAY_GRAN = "DAY";
 const MONTH_GRAN = "MONTH";
 const YEAR_GRANULARITY = "YTD";
 
+/**
+ * new_change.md C1: normalize an incoming date to the ISO `yyyy-mm-dd` the
+ * gold `date` column stores. The picker can emit a full ISO timestamp
+ * ("2026-07-01T00:00:00.000Z"), which the backend rejects as a bad date
+ * format — strip the time component before it ever reaches the payload.
+ * Also accepts dd-mm-yyyy. Anything else → null (send no date at all
+ * rather than a value that fails validation).
+ */
+export function normalizeDateInput(value) {
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  if (!t) return null;
+  const base = t.includes("T") ? t.slice(0, t.indexOf("T")) : t;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(base)) return base;
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(base);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+/**
+ * new_change.md C1: build the date part of a kpi-data payload. When a
+ * range is active the payload carries from/to and MUST NOT also carry a
+ * single `date` — the backend gives the single date absolute priority and
+ * would silently discard the range. Send one or the other, never both.
+ */
+export function buildDatePayload({ date = null, from = null, to = null } = {}) {
+  const f = normalizeDateInput(from);
+  const t = normalizeDateInput(to);
+  if (f || t) {
+    // Range wins; the stale single date is dropped entirely.
+    return { ...(f ? { from: f } : {}), ...(t ? { to: t } : {}) };
+  }
+  const d = normalizeDateInput(date);
+  return d ? { date: d } : {};
+}
+
 export function presetToDateRange(timeRange, asOf = null) {
   if (!timeRange) {
     return { granularity: null, from: null, to: null, mode: "snapshot" };
@@ -48,7 +83,16 @@ export function presetToDateRange(timeRange, asOf = null) {
 
   // Explicit custom range wins — aggregate DAY rows per spec.
   if (from && to) {
-    return { granularity: DAY_GRAN, from, to, mode: "aggregate" };
+    const f = normalizeDateInput(from) ?? from;
+    const t = normalizeDateInput(to) ?? to;
+    // new_change.md C5: from == to is a SINGLE DAY — that day's value
+    // verbatim, no aggregation, for every KPI class.
+    return {
+      granularity: DAY_GRAN,
+      from: f,
+      to: t,
+      mode: f === t ? "snapshot" : "aggregate",
+    };
   }
 
   // Anchor to the as-of date when known; otherwise the system clock.
@@ -79,8 +123,10 @@ export function presetToDateRange(timeRange, asOf = null) {
   if (preset === "year") {
     // Year/YTD is disabled (realdata.md §3) — no yearly data yet. When
     // ENABLE_YEAR is on it behaves like Month at the yearly granularity;
-    // until then it falls through to "no granularity" so nothing breaks if
-    // a stale Year selection survives.
+    // until then a stale Year selection resolves to a null granularity, which
+    // the backend now defaults to DAY (new_change.md C2). It used to mean "no
+    // granularity predicate", i.e. every zoom level at once — a silent
+    // 2x-3.21x over-count. Defaulting to DAY is the safe fallback.
     if (ENABLE_YEAR) {
       return {
         granularity: YEAR_GRANULARITY,

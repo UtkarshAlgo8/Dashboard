@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { postFetch, getVocab } from "../controllers/dashboard.controller.js";
+import {
+  postFetch,
+  getVocab,
+  getAnchors,
+} from "../controllers/dashboard.controller.js";
 
 /** Mount at /api/v1/dashboard. */
 export const router = Router();
@@ -8,3 +12,6 @@ export const router = Router();
 // `fetch`) so the endpoint is self-describing in the browser network tab.
 router.post("/kpi-data", postFetch);
 router.get("/vocab", getVocab);
+// new_change.md C6: per-KPI latest DAY date, so each card anchors to its own
+// newest data instead of one global date that blanks the lagging OEE cards.
+router.get("/anchors", getAnchors);

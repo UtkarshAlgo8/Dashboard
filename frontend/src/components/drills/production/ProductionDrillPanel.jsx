@@ -17,6 +17,7 @@ import {
 import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import { aggregateForRange, canonicalUnit } from "@/lib/kpi-transformer.js";
 import client from "@/api/client.js";
 
 // Athena serializes measures as strings; coerce to number|null for display.
@@ -74,8 +75,11 @@ function deriveUnitOptions(rows, sectionName, ptFilter) {
     if (r.section !== sectionName) continue;
     if (!String(r.kpi_name ?? "").startsWith("Production")) continue;
     if (!matchesProduct(r.product_type, ptFilter)) continue;
+    // new_change.md C9: "null"/"nan"/""/"(unset)" are all the missing-unit
+    // sentinel (4 Roll's Ply Mother Roll rows carry the literal "null") —
+    // they must never become a selectable unit.
     const u = r.unit_of_measurement;
-    if (u && u !== "nan" && u !== "(unset)") units.add(u);
+    if (canonicalUnit(u) != null) units.add(u);
   }
   return [...units]
     .sort((a, b) => a.localeCompare(b))
@@ -114,6 +118,9 @@ function ProductionDrillPanel({
   granularity = "DAY",
   from = null,
   to = null,
+  // new_change.md C3: the drill inherits the CARD's unit pin — a drill must
+  // never quietly read a different unit than the card above it.
+  unitPin = null,
   isLoading = false,
 }) {
   const [search, setSearch] = useState("");
@@ -137,10 +144,17 @@ function ProductionDrillPanel({
   // Pin a unit once the data arrives (first available); keep the user's pick
   // if it's still present. Single-unit KPIs just show that unit, multi-unit
   // KPIs get a real toggle — but we never combine units.
+  // new_change.md C3/C9: the card's pin arrives CANONICALIZED ("KG", "M",
+  // "NOS", "BATCH") while the options carry the row's own spelling
+  // ("Batch", "Meters"). Compare canonically, or the inheritance silently
+  // misses and the drill reads a different unit than the card above it.
+  const pinnedOption = unitPin
+    ? unitOptions.find((o) => canonicalUnit(o.value) === canonicalUnit(unitPin))
+    : null;
   const activeUnit =
     unit && unitOptions.some((o) => o.value === unit)
       ? unit
-      : (unitOptions[0]?.value ?? null);
+      : (pinnedOption?.value ?? unitOptions[0]?.value ?? null);
   const unitLabel = activeUnit ?? "";
   const sectionTitle = SECTION_TITLE[section] ?? section;
 
@@ -204,15 +218,37 @@ function ProductionDrillPanel({
   // artifacts of the old client grouping; raw rows don't carry them.
   const rows = useMemo(() => {
     if (!Array.isArray(pageData)) return [];
-    return pageData.map((r) => ({
-      machine: r.machine && r.machine !== "nan" ? r.machine : "—",
-      itemcode: r.itemcode && r.itemcode !== "nan" ? r.itemcode : "—",
-      planned: num(r.threshold_value),
-      actual: num(r.actual_value),
-      itemCount: 0,
-      machineCount: 0,
+    // new_change.md C5/C3: over a RANGE the page carries one row per
+    // (machine, sku, DAY), so the drill must aggregate day-wise exactly as
+    // the card does — SUM for the additive Production levels — otherwise a
+    // range card sits above a table of single-day rows. A single day
+    // (from == to) collapses to one row per key, so this is a no-op there.
+    const byKey = new Map();
+    for (const r of pageData) {
+      const machine = r.machine && r.machine !== "nan" ? r.machine : "—";
+      const itemcode = r.itemcode && r.itemcode !== "nan" ? r.itemcode : "—";
+      const key = `${machine}||${itemcode}`;
+      const cur = byKey.get(key) ?? {
+        machine,
+        itemcode,
+        planned: [],
+        actual: [],
+        itemCount: 0,
+        machineCount: 0,
+      };
+      const p = num(r.threshold_value);
+      const a = num(r.actual_value);
+      if (p != null) cur.planned.push(p);
+      if (a != null) cur.actual.push(a);
+      byKey.set(key, cur);
+    }
+    return [...byKey.values()].map((g) => ({
+      ...g,
+      // Missing days are simply absent from the list — never counted as 0.
+      planned: aggregateForRange(g.planned, kpiName),
+      actual: aggregateForRange(g.actual, kpiName),
     }));
-  }, [pageData]);
+  }, [pageData, kpiName]);
 
   // Search narrows the CURRENT page only (machine lens). Cross-page search
   // would need a server-side machine filter — out of scope for now.
@@ -261,17 +297,26 @@ function ProductionDrillPanel({
     const byTredge = new Map();
     for (const r of trenchData) {
       const t = r.sub_section;
-      if (!t || t === "nan") continue;
-      const cur = byTredge.get(t) ?? { tredge: t, planned: null, actual: null };
+      if (!t || t === "nan" || t === "null") continue;
+      const cur = byTredge.get(t) ?? { tredge: t, planned: [], actual: [] };
       const p = num(r.threshold_value);
       const a = num(r.actual_value);
-      if (p != null) cur.planned = p;
-      if (a != null) cur.actual = a;
+      if (p != null) cur.planned.push(p);
+      if (a != null) cur.actual.push(a);
       byTredge.set(t, cur);
     }
-    return [...byTredge.values()].sort((x, y) =>
-      x.tredge.localeCompare(y.tredge, undefined, { numeric: true }),
-    );
+    // new_change.md C5: aggregate the trench rows over the range the same
+    // way the card does (Production_s is additive → summed day-wise), so
+    // the trench list reconciles with the Production card above it.
+    return [...byTredge.values()]
+      .map((g) => ({
+        tredge: g.tredge,
+        planned: aggregateForRange(g.planned, "Production_s"),
+        actual: aggregateForRange(g.actual, "Production_s"),
+      }))
+      .sort((x, y) =>
+        x.tredge.localeCompare(y.tredge, undefined, { numeric: true }),
+      );
   }, [trenchData]);
 
   const fmt = (v) => {

@@ -22,6 +22,12 @@ const client = axios.create({
 
 client.interceptors.response.use(
   (response) => {
+    // new_change.md C10/C15: /dashboard/kpi-data now answers with SIBLINGS of
+    // the row array — `truncated` (the row cap was hit, so the total is
+    // incomplete) and `baseline` / `baselineWindow` (the preceding comparison
+    // window). Unwrapping to `.data` throws those away, so a caller that needs
+    // them passes `{ rawEnvelope: true }` and receives the whole body.
+    if (response.config?.rawEnvelope) return response.data;
     if (
       response.data &&
       Object.prototype.hasOwnProperty.call(response.data, "data")

@@ -26,13 +26,43 @@ import {
   getSectionOee,
 } from "@/api/plants.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
-import { presetToDateRange } from "@/lib/timeRange.js";
+import { presetToDateRange, buildDatePayload } from "@/lib/timeRange.js";
+import { canonicalUnit } from "@/lib/kpi-transformer.js";
+import client from "@/api/client.js";
 import { exportElementToPdf } from "@/lib/exportPdf.js";
 
 // Production drill types render ProductionDrillPanel, which owns its own
 // paginated per-lens fetch — so drilling them must NOT kick off the generic
 // 10k-row drill fetch in useDashboardFetch.
 const PROD_DRILL_TYPES = new Set(["mixProd", "tbmProd", "stkProd", "curProd"]);
+
+/**
+ * new_change.md C8: the distinct (product_type, unit_of_measurement) pairs
+ * the Production rows actually carry for the fetched scope. Drives the Stock
+ * product pills and the unit pin — never a hardcoded list, and `Belt Mother
+ * Roll` is kept as-is (never aliased to `Belt`).
+ */
+function deriveProductionOptions(rows, sectionName) {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Map();
+  for (const r of rows) {
+    if (r.section !== sectionName) continue;
+    if (r.kpi_name !== "Production") continue;
+    const pt =
+      r.product_type == null ||
+      ["", "nan", "null"].includes(String(r.product_type).trim().toLowerCase())
+        ? null
+        : String(r.product_type).trim();
+    const unit = canonicalUnit(r.unit_of_measurement);
+    const key = `${pt ?? ""}||${unit ?? ""}`;
+    if (!seen.has(key)) seen.set(key, { productType: pt, unit });
+  }
+  return [...seen.values()].sort(
+    (a, b) =>
+      (a.productType ?? "").localeCompare(b.productType ?? "") ||
+      (a.unit ?? "").localeCompare(b.unit ?? ""),
+  );
+}
 
 /**
  * Banmore Production dashboard — Phase 1 ships Banmore plant + Production.
@@ -149,10 +179,14 @@ function BanmoreProduction() {
   // default (the section-level "overall" where one exists). Selecting one
   // sends product_type to the backend — a real, server-side-filtered API
   // call (no client-side fallback).
+  // new_change.md C7: the real per-product children of the TBM/Curing
+  // aggregate are Passenger Radial / LCV / Unknown (there is no LT or SUV
+  // Radial in the data). The first entry is the section AGGREGATE, i.e.
+  // "Overall" — the Production card reads Production_product pinned to it.
   const PROD_SUB_OPTIONS = {
     mix: ["Master Compound", "Final Compound"],
-    tbm: ["Green Tyre", "Passenger Radial", "LT Radial", "SUV Radial"],
-    cur: ["Cured Tyre", "Passenger Radial", "LT Radial", "SUV Radial"],
+    tbm: ["Green Tyre", "Passenger Radial", "LCV", "Unknown"],
+    cur: ["Cured Tyre", "Passenger Radial", "LCV", "Unknown"],
     stk: [], // Stock uses the sub-section selector + its own product types.
   };
   const SECTION_DEFAULT_PRODUCT = {
@@ -165,22 +199,21 @@ function BanmoreProduction() {
   };
   const prodSubOptions = PROD_SUB_OPTIONS[dashboard.section] ?? [];
 
-  // Stock sub-sections (BRD §13.2) and the product types each one carries
-  // (BRD §13.3). The first sub-section is the default on entering Stock.
+  // Stock sub-sections (BRD §13.2). The first is the default on entering
+  // Stock. new_change.md C8: the PRODUCT list is NOT hardcoded — every
+  // sub-section makes different products under different names (4 Roll makes
+  // "Belt Mother Roll", Cutter makes "Belt"), so a shared list matches
+  // nothing for some of them and the card blanks. The options are derived
+  // from the data below (and `Belt Mother Roll` is never aliased to `Belt` —
+  // a mother roll is a genuinely different intermediate product).
   const STOCK_SUBSECTIONS = [
     "4 Roll",
     "Extruder",
     "3 Roll",
     "Cutter",
     "Slitter",
+    "Bead",
   ];
-  const STOCK_PRODUCT_TYPES = {
-    "4 Roll": ["Rubberised Ply", "Rubberised Belt"],
-    Extruder: ["Sidewall", "Tread"],
-    "3 Roll": ["Inner Liner"],
-    Cutter: ["Belt", "Ply"],
-    Slitter: ["Cap Strip", "Chafer"],
-  };
   const isStock = dashboard.section === "stk";
   const activeSubSection = dashboard.subSection ?? STOCK_SUBSECTIONS[0];
   // dashboard_doc.md §3/§8: OEE is disambiguated by sub_section. Stock OEE
@@ -190,27 +223,94 @@ function BanmoreProduction() {
   // defaults to the first one before the user picks). Other sections have a
   // single section-level OEE_o row (sub_section empty), so they stay null.
   const pinnedSubSection = isStock ? activeSubSection : dashboard.subSection;
-  // changes.md §4: Stock has NO synthetic "Overall" product in the real
-  // data — the drill must show only the real product/category rows for the
-  // sub-section. We no longer inject an "Overall" option or default to it;
-  // the first real product of the active sub-section is the default.
-  const stockProductOptions = STOCK_PRODUCT_TYPES[activeSubSection] ?? [];
+  // new_change.md C8: read the DISTINCT (product_type, unit_of_measurement)
+  // pairs the data actually holds for this sub-section. Its own small fetch,
+  // deliberately WITHOUT a product_type pin (the landing fetch carries one,
+  // so it can only ever return the already-selected product).
+  const optionsPayload = {
+    context: {
+      section: sectionName,
+      category: "Productivity",
+      ...(isStock ? { sub_section: activeSubSection } : {}),
+    },
+    ...buildDatePayload({ from: dashboard.from, to: dashboard.to }),
+    drillKpis: null,
+    parentFilters: {},
+    limit: 5000,
+  };
+  const { data: optionRows } = usePolledQuery(
+    () =>
+      client
+        .post("/dashboard/kpi-data", optionsPayload)
+        .then((r) => r.data ?? r),
+    {
+      enabled: hasDateRange && dashboard.category === "p",
+      interval: 0,
+      deps: [JSON.stringify(optionsPayload)],
+    },
+  );
+  const productionOptions = deriveProductionOptions(optionRows, sectionName);
+  // changes.md §4: Stock has NO synthetic "Overall" product — only the real
+  // product rows of the sub-section, in the data's own spelling.
+  const stockProductOptions = [
+    ...new Set(productionOptions.map((o) => o.productType).filter(Boolean)),
+  ];
   // The active product type (sent to the backend). Falls back to the
   // section default; for Stock that is the sub-section's first real product.
   const activeProductType =
     dashboard.productType ??
     (isStock
-      ? stockProductOptions[0]
+      ? (stockProductOptions[0] ?? null)
       : SECTION_DEFAULT_PRODUCT[dashboard.section]);
 
+  // new_change.md C8/C9: multi-unit series (Stock Extruder / 3 Roll / Bead,
+  // Mixing KG vs Batch) must pin a unit as well as the product — the two
+  // units measure the same production and may never be combined.
+  const unitOptionsForProduct = [
+    ...new Set(
+      productionOptions
+        .filter(
+          (o) => !activeProductType || o.productType === activeProductType,
+        )
+        .map((o) => o.unit)
+        .filter(Boolean),
+    ),
+  ];
+  const activeUnit =
+    dashboard.unitOfMeasurement &&
+    unitOptionsForProduct.includes(dashboard.unitOfMeasurement)
+      ? dashboard.unitOfMeasurement
+      : (unitOptionsForProduct[0] ?? null);
+
+  // Keep the pinned unit valid whenever the section / sub-section / product
+  // changes under it (a stale unit would silently match no rows).
+  useEffect(() => {
+    if (activeUnit !== dashboard.unitOfMeasurement) {
+      setFilter({ unitOfMeasurement: activeUnit }, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUnit]);
+
+  // Stock has no product list until its options fetch lands; seed the first
+  // REAL product of the sub-section once it does.
+  useEffect(() => {
+    if (isStock && dashboard.productType == null && stockProductOptions[0]) {
+      setFilter({ productType: stockProductOptions[0] }, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStock, dashboard.productType, stockProductOptions[0]]);
+
   const onStockSubChange = (next) => {
-    // Switching sub-section resets the product type to the new sub-section's
-    // first real product — the previous product may not exist under it.
-    const firstProduct = (STOCK_PRODUCT_TYPES[next] ?? [])[0] ?? null;
-    setFilter({ subSection: next, productType: firstProduct }, false);
+    // Switching sub-section clears the product + unit: the previous product
+    // very likely does not exist under the new sub-section (C8), and the
+    // options fetch reseeds both from the data.
+    setFilter(
+      { subSection: next, productType: null, unitOfMeasurement: null },
+      false,
+    );
   };
   const onStockProductChange = (next) => {
-    setFilter({ productType: next }, false);
+    setFilter({ productType: next, unitOfMeasurement: null }, false);
   };
 
   const ready =
@@ -285,6 +385,10 @@ function BanmoreProduction() {
         to: resolved.to,
         granularity: effectiveGranularity(timeRange.preset, effShift),
         mode: resolved.mode,
+        // new_change.md C6: only a preset window is "no explicit date" —
+        // a picked from/to is the user's own intent and must NOT be
+        // re-anchored per KPI.
+        userWindow: Boolean(timeRange.from && timeRange.to),
       },
       false,
     );
@@ -298,13 +402,14 @@ function BanmoreProduction() {
     // (changes.md §4: no synthetic "Overall"); leaving Stock clears both so
     // other sections aren't accidentally scoped to a stale sub-section.
     if (id === "stk") {
-      const firstSub = STOCK_SUBSECTIONS[0];
-      const firstProduct = (STOCK_PRODUCT_TYPES[firstSub] ?? [])[0] ?? null;
+      // new_change.md C8: the product is left unset — the sub-section's
+      // options fetch seeds it with a REAL product from the data.
       setFilter(
         {
           section: id,
-          subSection: firstSub,
-          productType: firstProduct,
+          subSection: STOCK_SUBSECTIONS[0],
+          productType: null,
+          unitOfMeasurement: null,
         },
         true,
       );
@@ -314,6 +419,7 @@ function BanmoreProduction() {
           section: id,
           subSection: null,
           productType: SECTION_DEFAULT_PRODUCT[id] ?? null,
+          unitOfMeasurement: null,
         },
         true,
       );
@@ -324,10 +430,9 @@ function BanmoreProduction() {
   // Ensure the active section always has a product type set (covers the
   // initial mount, where the default section has no product type yet).
   useEffect(() => {
-    if (dashboard.productType == null) {
-      const def = isStock
-        ? ((STOCK_PRODUCT_TYPES[activeSubSection] ?? [])[0] ?? null)
-        : SECTION_DEFAULT_PRODUCT[dashboard.section];
+    // Stock is seeded from its data-driven options (C8) in the effect above.
+    if (dashboard.productType == null && !isStock) {
+      const def = SECTION_DEFAULT_PRODUCT[dashboard.section];
       if (def) setFilter({ productType: def }, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -349,14 +454,19 @@ function BanmoreProduction() {
 
     // Different card (or first open) — switch.
     setOpenDrillKpiId(kpi.id);
+    // new_change.md C3/C6: hand the CARD's resolved date to the drill so it
+    // never re-resolves its own. Curing OEE anchors to 2026-07-16 while
+    // Production runs to 07-20 — a drill that re-resolved would land on an
+    // empty day and render dead.
+    const cardDate = kpi.resolvedDate ?? null;
     if (PROD_DRILL_TYPES.has(kpi.drillType)) {
       // Production drills self-fetch (paginated, 100 rows per lens), so DON'T
       // trigger the generic 10k drill fetch. Pass an empty target list: the
       // reducer leaves drillKpis null (no fetch) but records drillSourceKpiId,
       // which drives the card's Batch→KG unit switch while drilled.
-      drillInto([], kpi.id);
+      drillInto([], kpi.id, {}, cardDate);
     } else if (kpi.drillTargets) {
-      drillInto(kpi.drillTargets, kpi.id);
+      drillInto(kpi.drillTargets, kpi.id, {}, cardDate);
     } else {
       resetDrill();
     }
@@ -530,26 +640,50 @@ function BanmoreProduction() {
                 {/* Stock product-type pills — second row (BRD §13.3 two-step:
                     sub-section first, then product type). changes.md §4: only
                     the real products of the sub-section, no synthetic Overall. */}
-                {isStock && (
-                  <Box
-                    sx={{
-                      px: 2,
-                      py: 1.25,
-                      borderBottom: 1,
-                      borderColor: "divider",
-                    }}
-                  >
-                    <NavTabs
-                      items={stockProductOptions.map((o) => ({
-                        id: o,
-                        label: o,
-                      }))}
-                      value={activeProductType}
-                      onChange={onStockProductChange}
-                      layoutId="stockProdFill"
-                    />
-                  </Box>
-                )}
+                {(isStock || unitOptionsForProduct.length > 1) &&
+                  dashboard.category === "p" && (
+                    <Box
+                      sx={{
+                        px: 2,
+                        py: 1.25,
+                        borderBottom: 1,
+                        borderColor: "divider",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 2,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {isStock && (
+                        <NavTabs
+                          items={stockProductOptions.map((o) => ({
+                            id: o,
+                            label: o,
+                          }))}
+                          value={activeProductType}
+                          onChange={onStockProductChange}
+                          layoutId="stockProdFill"
+                        />
+                      )}
+                      {/* new_change.md C8/C9: multi-unit series must pin a
+                          unit — KG and Batch (Mixing), M and NOS (Stock
+                          Extruder / 3 Roll / Bead) are different measures of
+                          the same production and are never combined. */}
+                      {unitOptionsForProduct.length > 1 && (
+                        <NavTabs
+                          items={unitOptionsForProduct.map((u) => ({
+                            id: u,
+                            label: u,
+                          }))}
+                          value={activeUnit}
+                          onChange={(u) =>
+                            setFilter({ unitOfMeasurement: u }, false)
+                          }
+                          layoutId="prodUnitFill"
+                        />
+                      )}
+                    </Box>
+                  )}
 
                 <KpiGrid
                   kpis={kpis}
@@ -568,6 +702,10 @@ function BanmoreProduction() {
                       (k) => k.id === openDrillKpiId && k.drillable,
                     );
                     if (!kpi) return null;
+                    // new_change.md C3/C6: the drill window IS the card's
+                    // resolved day when the card anchored itself (C6);
+                    // otherwise it is the card's from/to window verbatim.
+                    const cardDate = kpi.resolvedDate ?? null;
                     return (
                       <Box sx={{ px: 2, pb: 2 }}>
                         <DrillPanelRouter
@@ -575,12 +713,14 @@ function BanmoreProduction() {
                           plantId="banmore"
                           section={dashboard.section}
                           sectionName={sectionName}
-                          from={from}
-                          to={to}
+                          cardDate={cardDate}
+                          from={cardDate ?? from}
+                          to={cardDate ?? to}
                           shift={dashboard.granularity}
                           allDrillRows={drillRows}
                           rawRows={rawRows}
                           prodSub={activeProductType}
+                          unitPin={activeUnit}
                           mode={dashboard.mode}
                           isLoading={isDrillLoading}
                         />
@@ -592,13 +732,21 @@ function BanmoreProduction() {
                     at the bottom regardless of which card is drilled. */}
                 {dashboard.category === "p" && (
                   <Box sx={{ px: 2, pb: 2 }}>
+                    {/* new_change.md C11/C12: the shift box follows the
+                        active time filter (Today/day-wise → the three
+                        SHIFT rows for that date; Month-wise / custom range
+                        → the daily shift rows SUMMED) and the full
+                        dashboard scope (section, sub-section, product,
+                        unit). */}
                     <ShiftComparisonCard
                       section={sectionName}
-                      rows={rawRows ?? []}
                       subSection={pinnedSubSection}
-                      productType={dashboard.productType}
-                      asOf={asOf}
-                      periodIsDay={timeRange.preset === "today"}
+                      productType={activeProductType}
+                      unit={activeUnit}
+                      mode={timeRange.preset === "today" ? "day" : "range"}
+                      date={timeRange.preset === "today" ? to : null}
+                      from={timeRange.preset === "today" ? null : from}
+                      to={timeRange.preset === "today" ? null : to}
                     />
                   </Box>
                 )}
@@ -635,12 +783,16 @@ function DrillPanelRouter({
   plantId,
   section,
   sectionName,
+  // new_change.md C3/C6: the card's own resolved date, or null when the
+  // card is showing an explicit range.
+  cardDate = null,
   from,
   to,
   shift,
   allDrillRows,
   rawRows,
   prodSub,
+  unitPin,
   mode,
   isLoading,
 }) {
@@ -671,6 +823,11 @@ function DrillPanelRouter({
           rawRows={rawRows}
           mode={mode}
           granularity={granularity}
+          // new_change.md C3/C6: OEE reads the rows already in hand, which
+          // also carry the (newer) Production rows. Without the card's date
+          // the panel's "latest date" collapses to Production's 07-20 and
+          // drops every OEE row — the dead drill this change removes.
+          cardDate={cardDate}
           isLoading={isLoading}
           // dashboard_doc.md §6: Curing inserts a trench (OEE_s) tier above
           // the press table. curOEE turns it on; mixOEE keeps the flat flow.
@@ -685,6 +842,7 @@ function DrillPanelRouter({
         <ProductionDrillPanel
           section={section}
           prodSub={prodSub}
+          unitPin={unitPin}
           // rawRows only seeds the unit toggle; the table rows come from the
           // panel's own paginated per-lens fetch (from/to drive its window).
           rawRows={rawRows}
