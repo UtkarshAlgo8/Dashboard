@@ -849,8 +849,15 @@ export function buildFetchQuery({
   // drill_down_level is stored as a VARCHAR in the real gold table
   // ("1", not 1), so compare against a string literal — Athena rejects
   // `varchar = integer` with a TYPE_MISMATCH.
+  //
+  // The value is NOT stored consistently: the Production family uses the
+  // clean integer string "1", but the OEE family (OEE_o / Availability_o /
+  // Performance_o / Quality_o) is stored FLOAT-formatted as "1.0". A bare
+  // `= '1'` string match therefore silently drops every overall-OEE landing
+  // card (found 2026-07-23: OEE blank in Mixing/Curing Productivity). Accept
+  // both spellings so the landing gate is level-based, not format-based.
   const LANDING_PREDICATE =
-    "(drill_down_level = '1' OR (drill_down_level IS NULL " +
+    "(drill_down_level IN ('1', '1.0') OR (drill_down_level IS NULL " +
     `AND ${emptyColumnPredicate("machine")} ` +
     `AND ${emptyColumnPredicate("itemcode")} ` +
     `AND ${emptyColumnPredicate("sub_section")}))`;
