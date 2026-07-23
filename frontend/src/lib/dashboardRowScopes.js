@@ -33,6 +33,15 @@ const PRODUCT_AGNOSTIC_KPIS = new Set([
   "Availability_o",
   "Performance_o",
   "Quality_o",
+  // Sub-section OEE family (Stock records OEE per sub_section as *_s, not
+  // overall *_o). These are equipment-level and carry product_type NULL, so
+  // they must be product-agnostic — the backend PRODUCT_AGNOSTIC_KPIS already
+  // lists them. Their absence here blanked the Stock OEE trend whenever a
+  // product pill (Belt/Ply Mother Roll) was selected (found 2026-07-23).
+  "OEE_s",
+  "Availability_s",
+  "Performance_s",
+  "Quality_s",
   "OEE_m",
   "Availability_m",
   "Performance_m",
