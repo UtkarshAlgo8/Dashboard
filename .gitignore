@@ -24,3 +24,7 @@ dist-ssr/
 # Environment overrides
 .env.local
 **/.env.local
+
+# Local reference data (large gold-table exports — never commit to the repo)
+backend/data/
+*.xlsx
