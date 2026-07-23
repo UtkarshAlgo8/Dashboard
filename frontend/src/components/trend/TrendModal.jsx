@@ -82,9 +82,15 @@ function TrendModal({
 
   /**
    * v2 fetch: use kpi.rawName (actual gold_dummy kpi_name like "OEE_o")
-   * so we bypass the stale KPI_NAME_BY_ID map in getTrend. We drop the
-   * drillKpis flag — it OR-joins with drill_down_level=1 and pollutes the
-   * series with mixed KPIs.
+   * so we bypass the stale KPI_NAME_BY_ID map in getTrend.
+   *
+   * Request the card's rawName as a drillKpi. Some cards read a DRILL-LEVEL
+   * kpi_name (TBM/Curing Production reads `Production_product`, drill_down_level
+   * '3', C7) that a landing-only fetch (drillKpis:null) never returns — the
+   * series came back empty ("No trend data" for Curing Production, found
+   * 2026-07-23). The backend OR-joins it with the landing band, and the
+   * client-side filter below (r.kpi_name === kpi.rawName) already isolates the
+   * single series, so the extra landing rows never reach the chart.
    */
   // Narrow the fetch with section/category/granularity — the table is far
   // too large to fetch unfiltered (the row cap would truncate the series).
@@ -121,7 +127,7 @@ function TrendModal({
             ? monthlyFrom
             : resolved.from,
         to: isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to,
-        drillKpis: null,
+        drillKpis: [kpi.rawName],
         limit: 10000,
       }
     : null;
