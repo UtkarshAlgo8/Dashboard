@@ -1521,6 +1521,11 @@ export function toDrillRows(rows) {
     date: r.date,
     granularity: r.granularity,
     status: mapStatus(denan(r.status)),
+    // Raw status text, preserved verbatim. `status` above is the RAG
+    // traffic-light value (Green/Red/Yellow) used for colour coding; some
+    // KPIs instead carry a business status here (NCM_Hold_sku = Finish/Hold)
+    // that a panel needs to DISPLAY, which mapStatus would null out.
+    statusRaw: denan(r.status),
     remarks: denan(r.remarks),
     drillDown: parseDrillAttribute(r.drill_down_attribute),
     drillLevel: r.drill_down_level,

@@ -31,7 +31,9 @@ export default function NcmDrillPanel({ drillRows, granularity = "DAY" }) {
         reason,
         date: r.date,
         actual: typeof r.actual === "number" ? r.actual : null,
-        status: r.status ?? "—",
+        // Final Status is the raw business status (Finish / Hold), not the
+        // RAG colour (r.status) which is null for these values.
+        status: r.statusRaw ?? "—",
       });
     }
   }
