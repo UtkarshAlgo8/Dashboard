@@ -22,23 +22,6 @@ import { EmptyState } from "@/components/common";
  * show the "Trace ▸" UI — spec 08 adds the traceability column.
  */
 
-const SUB_CATEGORIES = {
-  availability: [
-    { id: "breakdown", name: "Breakdown" },
-    { id: "setupAdjustment", name: "Setup & Adjustment" },
-    { id: "startup", name: "Startup" },
-    { id: "toolChange", name: "Tool Change" },
-  ],
-  performance: [
-    { id: "minorStoppage", name: "Minor Stoppage" },
-    { id: "reducedSpeed", name: "Reduced Speed" },
-  ],
-  quality: [
-    { id: "defect", name: "Defect" },
-    { id: "scrap", name: "Scrap" },
-  ],
-};
-
 const COMPONENT_NAMES = {
   availability: "Availability",
   performance: "Performance",
@@ -55,6 +38,7 @@ function SubDrill({
   machine,
   component,
   subCategory,
+  subCategories,
   onSelectSubCategory,
   rows,
   activeTraceItemCode,
@@ -68,7 +52,10 @@ function SubDrill({
   const accent = accentTier
     ? theme.custom.brand[accentTier]
     : theme.custom.brand[ACCENT_COLOR_KEY[component]];
-  const subCats = SUB_CATEGORIES[component] ?? [];
+  // Sub-categories are the OEE-loss reason leaves read from the data
+  // (drill_down_attribute), passed in by OeeDrillPanel — no longer a frozen
+  // per-component list. Each leaf's kpi_name is both id and label.
+  const subCats = subCategories ?? [];
   const activeSub = subCats.find((s) => s.id === subCategory) ?? null;
 
   return (
@@ -168,9 +155,11 @@ function DetailTable({
   activeTraceItemCode,
   onTraceRowClick,
 }) {
-  // Column shape varies by (component, subCategory)
-  const columns = COLUMNS[`${component}/${subCategory}`] ?? COLUMNS.default;
-  const isScrap = component === "quality" && subCategory === "scrap";
+  // Column shape varies by component (availability/performance leaves share
+  // the reason/events/duration shape; quality leaves show item-code detail,
+  // with the scrap leaf adding the Trace column).
+  const columns = columnsFor(component, subCategory);
+  const isScrap = component === "quality" && /scrap/i.test(subCategory ?? "");
 
   return (
     <TableContainer
@@ -253,79 +242,70 @@ function DetailTable({
   );
 }
 
-const COLUMNS = {
-  "availability/breakdown": [
-    { key: "reasonCategory", label: "Category", align: "center" },
-    { key: "reason", label: "Reason", align: "center" },
-    { key: "events", label: "Events" },
-    { key: "durationMin", label: "Duration (min)" },
-  ],
-  "availability/setupAdjustment": [
-    { key: "reason", label: "Reason", align: "center" },
-    { key: "events", label: "Events" },
-    { key: "durationMin", label: "Duration (min)" },
-  ],
-  "availability/startup": [
-    { key: "reason", label: "Reason", align: "center" },
-    { key: "events", label: "Events" },
-    { key: "durationMin", label: "Duration (min)" },
-  ],
-  "availability/toolChange": [
-    { key: "reason", label: "Reason", align: "center" },
-    { key: "events", label: "Events" },
-    { key: "durationMin", label: "Duration (min)" },
-  ],
-  "performance/minorStoppage": [
-    { key: "reason", label: "Reason", align: "center" },
-    { key: "events", label: "Events" },
-    { key: "durationMin", label: "Duration (min)" },
-  ],
-  "performance/reducedSpeed": [
-    { key: "reason", label: "Reason", align: "center" },
-    { key: "events", label: "Events" },
-    { key: "durationMin", label: "Duration (min)" },
-  ],
-  "quality/defect": [
-    { key: "itemCode", label: "Item Code", align: "center" },
-    { key: "defectType", label: "Defect Type", align: "center" },
-    { key: "qty", label: "Defect Qty" },
-    { key: "totalProduced", label: "Total Produced" },
-    {
-      key: "rate",
-      label: "Rate %",
-      render: (r) => ((r.qty / r.totalProduced) * 100).toFixed(2),
-    },
-  ],
-  "quality/scrap": [
-    { key: "itemCode", label: "Item Code", align: "center" },
-    { key: "qty", label: "Scrap Qty (kg)" },
-    {
-      key: "traceable",
-      label: "Trace",
-      render: (r) =>
-        r.traceable ? (
-          <Box
-            component="span"
-            sx={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 0.25,
-              color: "text.disabled",
-            }}
-          >
-            Trace
-            <ChevronRightIcon sx={{ fontSize: 14 }} />
-          </Box>
-        ) : (
-          "—"
-        ),
-    },
-  ],
-  default: [
-    { key: "reason", label: "Reason", align: "center" },
-    { key: "events", label: "Events" },
-    { key: "durationMin", label: "Duration (min)" },
-  ],
-};
+// Availability loss-reason leaves: Category (inferred) + Reason + Events +
+// Duration. Performance leaves drop the Category column.
+const AVAILABILITY_COLUMNS = [
+  { key: "reasonCategory", label: "Category", align: "center" },
+  { key: "reason", label: "Reason", align: "center" },
+  { key: "events", label: "Events" },
+  { key: "durationMin", label: "Duration (min)" },
+];
+
+const PERFORMANCE_COLUMNS = [
+  { key: "reason", label: "Reason", align: "center" },
+  { key: "events", label: "Events" },
+  { key: "durationMin", label: "Duration (min)" },
+];
+
+const DEFECT_COLUMNS = [
+  { key: "itemCode", label: "Item Code", align: "center" },
+  { key: "defectType", label: "Defect Type", align: "center" },
+  { key: "qty", label: "Defect Qty" },
+  { key: "totalProduced", label: "Total Produced" },
+  {
+    key: "rate",
+    label: "Rate %",
+    render: (r) => ((r.qty / r.totalProduced) * 100).toFixed(2),
+  },
+];
+
+const SCRAP_COLUMNS = [
+  { key: "itemCode", label: "Item Code", align: "center" },
+  { key: "qty", label: "Scrap Qty (kg)" },
+  {
+    key: "traceable",
+    label: "Trace",
+    render: (r) =>
+      r.traceable ? (
+        <Box
+          component="span"
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.25,
+            color: "text.disabled",
+          }}
+        >
+          Trace
+          <ChevronRightIcon sx={{ fontSize: 14 }} />
+        </Box>
+      ) : (
+        "—"
+      ),
+  },
+];
+
+/**
+ * Resolve the detail-table columns for a component + leaf kpi_name. Leaf
+ * names are read from the data, so we key off the component (and, for
+ * quality, whether the leaf is a scrap leaf) rather than a frozen id.
+ */
+function columnsFor(component, subCategory) {
+  if (component === "availability") return AVAILABILITY_COLUMNS;
+  if (component === "quality") {
+    return /scrap/i.test(subCategory ?? "") ? SCRAP_COLUMNS : DEFECT_COLUMNS;
+  }
+  return PERFORMANCE_COLUMNS;
+}
 
 export default SubDrill;

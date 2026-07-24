@@ -18,6 +18,7 @@ import SubDrill from "./SubDrill.jsx";
 import { thresholdTier } from "./thresholds.js";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
+import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
 
 /**
  * OEE drill panel — derives its data straight from the gold rows the
@@ -35,29 +36,18 @@ import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
  *     `Availability_m` / `Performance_m` / `Quality_m`. OEE_m =
  *     A_m × P_m × Q_m display-side per §9.2.
  */
-// Sub-category leaf kpi_names per spec §3 — for each (machine, A/P/Q
-// component), the row click drills into one of these gold_dummy kpis.
-const SUB_KPI_NAMES = {
-  availability: {
-    breakdown: "Breakdown",
-    setupAdjustment: "Setup",
-    startup: "Startup",
-    toolChange: "ToolChange",
-  },
-  performance: {
-    minorStoppage: "MinorStoppage",
-    reducedSpeed: "ReducedSpeed",
-  },
-  quality: {
-    defect: "Defect",
-    scrap: "Scrap",
-  },
-};
-
-const FIRST_SUB = {
-  availability: "breakdown",
-  performance: "minorStoppage",
-  quality: "defect",
+// Each A/P/Q machine component drills into its own set of OEE-loss reason
+// leaves. The real gold data (realdata.md §19) stores those leaf kpi_names
+// on the parent {component}_m row's drill_down_attribute — e.g.
+// Availability_m → ["Breakdown", "No Schedule", "Operations/Material/
+// Manpower", "Power Failure", "Preventive Maintenance", "Setup & Change"].
+// We read them from the data rather than hardcode the (now-removed) dummy
+// names Setup/Startup/ToolChange, which matched zero real rows and blanked
+// every sub-category but Breakdown (realdata.md §9/§15).
+const COMPONENT_PARENT_KPI = {
+  availability: "Availability_m",
+  performance: "Performance_m",
+  quality: "Quality_m",
 };
 
 function OeeDrillPanel({
@@ -241,18 +231,48 @@ function OeeDrillPanel({
         setSubCategory(null);
         return null;
       }
-      setSubCategory(FIRST_SUB[component]);
+      // Clear the pill; activeSubCategory (below) defaults it to the first
+      // leaf once the leaf list resolves from drill_down_attribute.
+      setSubCategory(null);
       return { machineId, component };
     });
   };
 
+  // OEE-loss reason leaves for the selected (machine, component), read
+  // VERBATIM from the parent {component}_m row's drill_down_attribute
+  // (realdata.md §19). Each leaf is one pill; its kpi_name is both the id
+  // and the display label ("Breakdown", "Setup & Change", …).
+  const subLeaves = useMemo(() => {
+    if (!selectedCell || !Array.isArray(scopedRows)) return [];
+    const parentKpi = COMPONENT_PARENT_KPI[selectedCell.component];
+    if (!parentKpi) return [];
+    const parentRow = scopedRows.find(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === parentKpi &&
+        r.granularity === granularity &&
+        r.machine === selectedCell.machineId,
+    );
+    const leaves = parseDrillAttribute(parentRow?.drill_down_attribute) ?? [];
+    return leaves.map((name) => ({ id: name, name }));
+  }, [selectedCell, scopedRows, sectionName, granularity]);
+
+  // The effective pill: the user's pick when it still exists in the current
+  // leaf set, otherwise the first leaf. Derived in render (no effect) so a
+  // stale sub-category from a previous cell never leaks through.
+  const activeSubCategory =
+    subCategory && subLeaves.some((s) => s.id === subCategory)
+      ? subCategory
+      : (subLeaves[0]?.id ?? null);
+
   // Build SubDrill rows for the currently-selected (machine, component,
-  // subCategory) tuple. Group Daily rows by `remarks` (the reason text),
-  // count events, sum minutes per spec §11.
+  // subCategory) tuple. Group rows by `remarks` (the reason text), count
+  // events, sum minutes per spec §11.
   const subRows = useMemo(() => {
-    if (!selectedCell || !subCategory || !Array.isArray(scopedRows)) return [];
-    const leafKpi = SUB_KPI_NAMES[selectedCell.component]?.[subCategory];
-    if (!leafKpi) return [];
+    if (!selectedCell || !activeSubCategory || !Array.isArray(scopedRows))
+      return [];
+    // The active pill IS the leaf kpi_name (e.g. "Breakdown", "Setup & Change").
+    const leafKpi = activeSubCategory;
     const matching = scopedRows.filter(
       (r) =>
         r.section === sectionName &&
@@ -271,7 +291,7 @@ function OeeDrillPanel({
           defectType: r.remarks && r.remarks !== "nan" ? r.remarks : "—",
           qty: 0,
           totalProduced: 0,
-          traceable: subCategory === "scrap",
+          traceable: /scrap/i.test(activeSubCategory),
         };
         if (typeof r.actual_value === "number") cur.qty += r.actual_value;
         if (typeof r.threshold_value === "number")
@@ -305,7 +325,7 @@ function OeeDrillPanel({
       .filter((r) => r.durationMin > 0)
       .sort((a, b) => b.durationMin - a.durationMin)
       .map((r) => ({ ...r, durationMin: Math.round(r.durationMin) }));
-  }, [selectedCell, subCategory, scopedRows, sectionName, granularity]);
+  }, [selectedCell, activeSubCategory, scopedRows, sectionName, granularity]);
 
   const selectedMachine = selectedCell
     ? { id: selectedCell.machineId, name: selectedCell.machineId }
@@ -433,11 +453,12 @@ function OeeDrillPanel({
                 selectedCell={selectedCell}
                 onSelectCell={handleSelectCell}
               />
-              {selectedMachine && selectedCell && subCategory && (
+              {selectedMachine && selectedCell && activeSubCategory && (
                 <SubDrill
                   machine={selectedMachine}
                   component={selectedCell.component}
-                  subCategory={subCategory}
+                  subCategory={activeSubCategory}
+                  subCategories={subLeaves}
                   onSelectSubCategory={setSubCategory}
                   rows={subRows}
                   accentTier={selectedTier}
