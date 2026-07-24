@@ -9,6 +9,12 @@
  */
 import { useState, useRef, useEffect, Fragment } from "react";
 import jkLogo from "@/assets/jk-logo.png";
+import { getProcessKpiValues, PROCESS_KPI_NAME } from "@/api/quality.js";
+
+// The gold workbook covers 2026-04-01 → 2026-06-30, so the live view opens on
+// the FRD base date (real "today" is outside the data range). The header date
+// picker drives which snapshot the Process cards read.
+const QUALITY_DATA_DATE = "2026-06-10";
 
 /* ─── LOGO ─── */
 const LOGO = jkLogo;
@@ -835,7 +841,7 @@ function QKpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
   return(<div onClick={onToggle} style={{background:C.cd,borderRadius:C.r,border:"1px solid "+(isOpen?C.ac+"88":C.bd),boxShadow:isOpen?"0 0 0 1px "+C.ac+"40, "+C.sh:C.sh,cursor:kpi.drill?"pointer":"default",overflow:"hidden",transition:"border-color .2s",borderLeft:"3px solid "+stCol}}>
     <div style={{padding:"10px 12px"}}>
       <div style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
-        <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kpi.n}{kpi.manual&&<span style={{marginLeft:4,fontSize:11,padding:"1px 4px",background:"#9CA3AF22",color:"#6B7280",borderRadius:3}}>MANUAL</span>}</span>
+        <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kpi.n}{kpi.manual&&<span style={{marginLeft:4,fontSize:11,padding:"1px 4px",background:"#9CA3AF22",color:"#6B7280",borderRadius:3}}>MANUAL</span>}{kpi.live&&<span title="Live from the gold Excel workbook" style={{marginLeft:4,fontSize:10,padding:"1px 4px",background:C.gn+"22",color:C.gn,borderRadius:3,fontWeight:700}}>EXCEL</span>}</span>
         <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
           <button onClick={trendClick} title="View Trend (Daily / Monthly / Yearly)" style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.bd,background:C.c2,color:C.mu,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><TrendIcon size={11}/></button>
           {kpi.drill&&<span title="Click card to drill down" style={{color:isOpen?C.ac:C.mu,transform:isOpen?"rotate(180deg)":"",transition:"transform .2s",fontSize:13}}>{"▼"}</span>}
@@ -2538,16 +2544,36 @@ export default function QualityDashboard({plant,onBack}){
   const [tab,setTab]=useState("process");
   const [openKpi,setOpenKpi]=useState(null);
   const [sub,setSub]=useState("");
-  const [tf,setTf]=useState("Today");
+  const [tf,setTf]=useState("");
   const [shift,setShift]=useState("All");
-  const _r0q=_rangeFromPreset("Today");
-  const [tfFrom,setTfFrom]=useState(_r0q.from);
-  const [tfTo,setTfTo]=useState(_r0q.to);
+  const [tfFrom,setTfFrom]=useState(QUALITY_DATA_DATE);
+  const [tfTo,setTfTo]=useState(QUALITY_DATA_DATE);
   const [tyreType,setTyreType]=useState(isBanmorePlant(plant)?"PCR":"All");
   const [trendKpi,setTrendKpi]=useState(null);
   const [spcSel,setSpcSel]=useState(null);
+  // Live Process values from the Excel-backed backend (FRD §1). null until the
+  // first fetch; {} on error → cards fall back to their mock values.
+  const [liveProcess,setLiveProcess]=useState(null);
 
-  const kpis=tab==="spc"?[]:tab==="process"?PROCESS_KPIS:tab==="product"?PRODUCT_KPIS:COMPLAINT_KPIS;
+  useEffect(()=>{
+    if(tab!=="process")return;
+    let cancelled=false;
+    getProcessKpiValues({date:tfTo,shift})
+      .then(res=>{if(cancelled)return;const vals=(res&&res.values)||{};const out={};
+        for(const [id,name] of Object.entries(PROCESS_KPI_NAME)){out[id]={value:vals[name]===undefined?null:vals[name]};}
+        setLiveProcess(out);})
+      .catch(()=>{if(!cancelled)setLiveProcess({});});
+    return()=>{cancelled=true;};
+  },[tab,tfTo,shift]);
+
+  // Merge live overall values onto the supported Process cards; the rest stay
+  // on mock (FTQ / Audit Deviation / Critical Param / SPR are not_available).
+  const processCards=PROCESS_KPIS.map(k=>{
+    const live=liveProcess&&liveProcess[k.id];
+    if(!live)return k;
+    return {...k,v:live.value==null?"—":String(live.value),live:true};
+  });
+  const kpis=tab==="spc"?[]:tab==="process"?processCards:tab==="product"?PRODUCT_KPIS:COMPLAINT_KPIS;
   const openObj=openKpi?kpis.find(k=>k.id===openKpi):null;
   const tabAccent=tab==="process"?C.bl:tab==="product"?C.tl:C.rd;
 
