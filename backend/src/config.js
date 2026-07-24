@@ -58,5 +58,31 @@ export const config = {
     sqlTable: optional("AWS_DATA_SQL_TABLE", "gold.gold"),
     timeoutMs: asInt("AWS_DATA_TIMEOUT_MS", 30_000),
   },
+  // Quality Dashboard data layer (Backend FRD §A/§B). Additive and fully
+  // decoupled from Production above.
+  //
+  // `dataSource` is THE switch the FRD calls for: "excel" reads the
+  // reference gold workbook in-process (dev / until the Quality gold table
+  // ships); "upstream" runs the identical SQL against the same remote data
+  // API Production uses. Everything else — SQL builders, transformers,
+  // controllers — is unchanged across the switch.
+  quality: {
+    dataSource: optional("QUALITY_DATA_SOURCE", "excel"), // "excel" | "upstream"
+    // Reference workbook (FRD §B): sheet `result`, 23 columns.
+    excelPath: optional(
+      "QUALITY_EXCEL_PATH",
+      path.join(projectRoot, "data", "Quality_Dashboard_Gold_Layer_3Months.xlsx"),
+    ),
+    excelSheet: optional("QUALITY_EXCEL_SHEET", "result"),
+    // Parsed-workbook disk cache so `node --watch` restarts don't re-parse
+    // the 50 MB xlsx every save. Rebuilt automatically when the xlsx is newer.
+    excelCachePath: optional(
+      "QUALITY_EXCEL_CACHE_PATH",
+      path.join(projectRoot, "data", ".quality_gold.cache.json"),
+    ),
+    // SQL FROM target. For the excel source this is the in-memory alasql
+    // table name; for upstream it becomes the Quality gold table path.
+    sqlTable: optional("QUALITY_SQL_TABLE", "quality_gold"),
+  },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),
 };

@@ -17,6 +17,7 @@ import { router as trendsRouter } from "./routes/trends.js";
 import { router as inventoryRouter } from "./routes/inventory.js";
 import { router as anomaliesRouter } from "./routes/anomalies.js";
 import { router as dashboardRouter } from "./routes/dashboard.js";
+import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
 
 const app = express();
 
@@ -47,6 +48,10 @@ app.use("/api/v1/plants/:plantId/production/drills", drillsRouter);
 app.use("/api/v1/plants/:plantId/inventory", inventoryRouter);
 app.use("/api/v1/plants/:plantId/anomalies", anomaliesRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
+
+// Quality Dashboard (additive; separate data family — FRD §A).
+//   /api/v1/quality/process/{kpi-value,kpi-value-batch,kpi-children,kpi-history}
+app.use("/api/v1/quality/process", qualityProcessRouter);
 
 app.use(notFound);
 app.use(errorHandler);
