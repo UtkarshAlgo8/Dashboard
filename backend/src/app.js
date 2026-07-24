@@ -18,6 +18,7 @@ import { router as inventoryRouter } from "./routes/inventory.js";
 import { router as anomaliesRouter } from "./routes/anomalies.js";
 import { router as dashboardRouter } from "./routes/dashboard.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
+import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
 
 const app = express();
 
@@ -51,7 +52,9 @@ app.use("/api/v1/dashboard", dashboardRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
 //   /api/v1/quality/process/{kpi-value,kpi-value-batch,kpi-children,kpi-history}
+//   /api/v1/quality/spc/{summary,filter-options,widgets,detail,*-observations}
 app.use("/api/v1/quality/process", qualityProcessRouter);
+app.use("/api/v1/quality/spc", qualitySpcRouter);
 
 app.use(notFound);
 app.use(errorHandler);
