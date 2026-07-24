@@ -17,7 +17,9 @@ import { getPlants, getFunctions } from "@/api/plants.js";
  * Engineering).
  */
 const PHASE_1_ACTIVE_PLANTS = new Set(["banmore"]);
-const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod"]);
+// Production and Quality are both navigable (Banmore only). Quality opens the
+// Quality Head dashboard; the remaining functions stay "SOON".
+const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
 
 function LandingPage() {
   const navigate = useNavigate();
@@ -49,6 +51,8 @@ function LandingPage() {
     if (!modalPlant) return;
     if (fn.id === "prod" && modalPlant.id === "banmore") {
       navigate("/banmore/production");
+    } else if (fn.id === "qual" && modalPlant.id === "banmore") {
+      navigate("/banmore/quality");
     }
     // Inactive rows can't be clicked (PlantFunctionModal guards
     // onClick), so this handler only fires for the navigable case.
