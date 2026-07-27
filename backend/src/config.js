@@ -41,7 +41,7 @@ function asInt(key, fallback) {
 
 export const config = {
   port: asInt("PORT", 3001),
-  frontendOrigin: optional("FRONTEND_ORIGIN", "http://localhost:5173"),
+  frontendOrigin: optional("FRONTEND_ORIGIN", "http://136.112.107.154:3014"),
   upstream: {
     url: required("AWS_DATA_URL"),
     apiKey: required("AWS_DATA_API_KEY"),
