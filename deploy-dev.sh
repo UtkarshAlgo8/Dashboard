@@ -10,15 +10,17 @@
 #
 #   Backend : jk-dashboard-backend   -> port 8814
 #   Frontend: jk-dashboard-frontend  -> port 3014
+#   API URL : http://136.112.107.154:8814/api/v1
 #
 # Usage:
-#   ./deploy-dev.sh                 # pull origin/main, deploy both
+#   ./deploy-dev.sh                 # pull origin/dev-quality, deploy both
 #   DEPLOY_BRANCH=utkarsh/dev ./deploy-dev.sh   # deploy a different branch
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BRANCH="${DEPLOY_BRANCH:-main}"
+BRANCH="${DEPLOY_BRANCH:-dev-quality}"
+API_BASE_URL="${VITE_API_BASE_URL:-http://136.112.107.154:8814/api/v1}"
 
 log() { printf '\033[1;36m[deploy-dev]\033[0m %s\n' "$*"; }
 
@@ -42,7 +44,11 @@ deploy_service() {
   sudo docker ps -a -q --filter "name=${name}" | grep -q . && sudo docker rm   "${name}" || true
   sudo docker images -q "${name}"              | grep -q . && sudo docker rmi  "${name}" || true
 
-  sudo docker build -t "${name}" .
+  if [[ "${dir}" == "frontend" ]]; then
+    sudo docker build --build-arg "VITE_API_BASE_URL=${API_BASE_URL}" -t "${name}" .
+  else
+    sudo docker build -t "${name}" .
+  fi
   sudo docker run --restart always -p "${port}:${port}" --name "${name}" -d "${name}"
   log "${name} is up."
 }
@@ -50,4 +56,4 @@ deploy_service() {
 deploy_service backend  jk-dashboard-backend  8814
 deploy_service frontend jk-dashboard-frontend 3014
 
-log "Both services deployed (branch: ${BRANCH})."
+log "Both services deployed (branch: ${BRANCH}, api: ${API_BASE_URL})."

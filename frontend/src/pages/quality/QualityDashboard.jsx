@@ -8,13 +8,36 @@
  * the shared asset.
  */
 import { useState, useRef, useEffect, Fragment } from "react";
+import { IconButton, Tooltip } from "@mui/material";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import jkLogo from "@/assets/jk-logo.png";
-import { getProcessKpiValues, PROCESS_KPI_NAME } from "@/api/quality.js";
+import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
+import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
+import { MOCK_USER } from "@/lib/mockData.js";
+import {
+  getProcessKpiChildren,
+  getProcessKpiValues,
+  getSpcDetail,
+  getSpcFilterOptions,
+  getSpcSummary,
+  getSpcWidgets,
+  PROCESS_KPI_NAME,
+} from "@/api/quality.js";
 
 // The gold workbook covers 2026-04-01 → 2026-06-30, so the live view opens on
 // the FRD base date (real "today" is outside the data range). The header date
 // picker drives which snapshot the Process cards read.
 const QUALITY_DATA_DATE = "2026-06-10";
+const QUALITY_MONTH_FROM = "2026-06-01";
+const QUALITY_MONTH_TO = "2026-06-30";
+const QUALITY_USER = {
+  ...MOCK_USER,
+  name: "Quality Head",
+  role: "Quality Head",
+  email: "quality.head@jktyre.example",
+  employeeId: "JK-QH-00142",
+  avatarInitials: "QH",
+};
 
 /* ─── LOGO ─── */
 const LOGO = jkLogo;
@@ -581,7 +604,9 @@ function _svgToPNG(svg,scale,onDone){try{const bbox=svg.getBoundingClientRect();
 function _printPage(){window.print();}
 
 /* ─── EXPORT (PRINT) BUTTON FOR HEADERS ─── */
-function ExportButton(){return(<button onClick={_printPage} title="Print / Save as PDF" className="no-print" style={{padding:"5px 10px",fontSize:13,fontWeight:600,border:"1px solid "+C.bd,borderRadius:6,background:C.c2,color:C.md,cursor:"pointer"}}>{"⤓"} Export PDF</button>);}
+function ExportButton(){return(<Tooltip title="Download as PDF" arrow><span className="no-print" style={{display:"inline-flex"}}><IconButton size="small" onClick={_printPage} aria-label="Download as PDF" sx={{width:34,height:34,borderRadius:"16px",border:1,borderColor:"primary.main",backgroundColor:"primary.main",color:"primary.contrastText",boxShadow:"0 1px 3px rgba(0,0,0,.12)","&:hover":{backgroundColor:"primary.main",borderColor:"primary.main"}}}><FileDownloadOutlinedIcon sx={{fontSize:20}}/></IconButton></span></Tooltip>);}
+
+function PcrOnlyBadge(){return(<Tooltip title="Banmore plant produces PCR only" arrow><span style={{fontSize:11,fontWeight:700,letterSpacing:.6,color:C.tl,border:"1px solid "+C.tl,background:C.c2,padding:"4px 8px",borderRadius:8,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",height:22}}>PCR ONLY</span></Tooltip>);}
 
 /* ─── USER MENU (avatar dropdown + sub-modals) ─── */
 const USER_PROFILES={
@@ -841,7 +866,7 @@ function QKpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
   return(<div onClick={onToggle} style={{background:C.cd,borderRadius:C.r,border:"1px solid "+(isOpen?C.ac+"88":C.bd),boxShadow:isOpen?"0 0 0 1px "+C.ac+"40, "+C.sh:C.sh,cursor:kpi.drill?"pointer":"default",overflow:"hidden",transition:"border-color .2s",borderLeft:"3px solid "+stCol}}>
     <div style={{padding:"10px 12px"}}>
       <div style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
-        <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kpi.n}{kpi.manual&&<span style={{marginLeft:4,fontSize:11,padding:"1px 4px",background:"#9CA3AF22",color:"#6B7280",borderRadius:3}}>MANUAL</span>}{kpi.live&&<span title="Live from the gold Excel workbook" style={{marginLeft:4,fontSize:10,padding:"1px 4px",background:C.gn+"22",color:C.gn,borderRadius:3,fontWeight:700}}>EXCEL</span>}</span>
+        <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kpi.n}{kpi.manual&&<span style={{marginLeft:4,fontSize:11,padding:"1px 4px",background:"#9CA3AF22",color:"#6B7280",borderRadius:3}}>MANUAL</span>}</span>
         <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
           <button onClick={trendClick} title="View Trend (Daily / Monthly / Yearly)" style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.bd,background:C.c2,color:C.mu,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><TrendIcon size={11}/></button>
           {kpi.drill&&<span title="Click card to drill down" style={{color:isOpen?C.ac:C.mu,transform:isOpen?"rotate(180deg)":"",transition:"transform .2s",fontSize:13}}>{"▼"}</span>}
@@ -872,8 +897,131 @@ const PROCESS_KPIS=[
   {id:"spr",n:"SPR (Straight Pass Ratio)",v:"98.2",u:"%",target:"99%",status:"Yellow",sp:[98.5,98.3,98.2,98,98.2],drill:"spr"}
 ];
 
-function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC}){
+const LIVE_PROCESS_DRILLS={
+  pqr:{
+    title:"Process-wise Audit Rating",
+    accent:C.ac,
+    path:["Process","PQR Rating"],
+    sectionKpis:["Plant_quality_rating_s","Total_Violations_s"],
+    machineKpis:["Plant_quality_rating_m","Total_Violations_m"],
+    columns:["Process","Rating %","Violations","Status"],
+    row:r=>[
+      r.section,
+      r.Plant_quality_rating_s==null?"—":r.Plant_quality_rating_s,
+      r.Total_Violations_s??0,
+      <StatusPill status={(r.Plant_quality_rating_s??0)<80?"Red":(r.Plant_quality_rating_s??0)<88?"Yellow":"Green"}/>,
+    ],
+    machineColumns:["Machine","Rating %","Violations","Status"],
+    machineRow:r=>[
+      r.machine,
+      r.Plant_quality_rating_m==null?"—":r.Plant_quality_rating_m,
+      r.Total_Violations_m??0,
+      <StatusPill status={(r.Plant_quality_rating_m??0)<80?"Red":(r.Plant_quality_rating_m??0)<88?"Yellow":"Green"}/>,
+    ],
+  },
+  audit:{
+    title:"Audit Compliance — Section-wise",
+    accent:C.bl,
+    path:["Process","Audit Compliance"],
+    sectionKpis:["Plan_Compliance_s"],
+    machineKpis:["Plan_Compliance_m"],
+    columns:["Process","Compliance %","Status"],
+    row:r=>[
+      r.section,
+      r.Plan_Compliance_s==null?"—":r.Plan_Compliance_s,
+      <StatusPill status={(r.Plan_Compliance_s??0)<80?"Red":(r.Plan_Compliance_s??0)<95?"Yellow":"Green"}/>,
+    ],
+    machineColumns:["Machine","Compliance %","Status"],
+    machineRow:r=>[
+      r.machine,
+      r.Plan_Compliance_m==null?"—":r.Plan_Compliance_m,
+      <StatusPill status={(r.Plan_Compliance_m??0)<80?"Red":(r.Plan_Compliance_m??0)<95?"Yellow":"Green"}/>,
+    ],
+  },
+  mqv:{
+    title:"MQV — Violation Breakdown",
+    accent:C.rd,
+    path:["Process","MQV"],
+    sectionKpis:["Total_Violations_s","Open_Violations_s","Closed_Violation_s","Violation_Closure_Rate_s"],
+    machineKpis:["Total_Violations_m","Open_Violations_m","Closed_Violation_m","Violation_Closure_Rate_m"],
+    columns:["Process","Total","Open","Closed","Closure %"],
+    row:r=>[
+      r.section,
+      r.Total_Violations_s??0,
+      r.Open_Violations_s??0,
+      r.Closed_Violation_s??0,
+      r.Violation_Closure_Rate_s==null?"—":r.Violation_Closure_Rate_s,
+    ],
+    machineColumns:["Machine","Total","Open","Closed","Closure %"],
+    machineRow:r=>[
+      r.machine,
+      r.Total_Violations_m??0,
+      r.Open_Violations_m??0,
+      r.Closed_Violation_m??0,
+      r.Violation_Closure_Rate_m==null?"—":r.Violation_Closure_Rate_m,
+    ],
+  },
+};
+
+function LiveProcessDrillPanel({kpi,date,shift}){
+  const cfg=LIVE_PROCESS_DRILLS[kpi?.drill];
+  const [sectionRows,setSectionRows]=useState([]);
+  const [machineRows,setMachineRows]=useState([]);
+  const [selectedSection,setSelectedSection]=useState("");
+  const [loading,setLoading]=useState(true);
+  const [machineLoading,setMachineLoading]=useState(false);
+  const [error,setError]=useState(null);
+  useEffect(()=>{
+    if(!cfg)return;
+    let cancelled=false;
+    setLoading(true);setError(null);setSelectedSection("");setMachineRows([]);
+    getProcessKpiChildren({kpiNames:cfg.sectionKpis,date,shift})
+      .then(res=>{if(!cancelled)setSectionRows(Array.isArray(res?.rows)?res.rows:[]);})
+      .catch(err=>{if(!cancelled)setError(err);})
+      .finally(()=>{if(!cancelled)setLoading(false);});
+    return()=>{cancelled=true;};
+  },[cfg,date,shift]);
+  useEffect(()=>{
+    if(!cfg||!selectedSection){setMachineRows([]);return;}
+    let cancelled=false;
+    setMachineLoading(true);
+    getProcessKpiChildren({kpiNames:cfg.machineKpis,date,shift,section:selectedSection})
+      .then(res=>{if(!cancelled)setMachineRows(Array.isArray(res?.rows)?res.rows:[]);})
+      .catch(err=>{if(!cancelled)setError(err);})
+      .finally(()=>{if(!cancelled)setMachineLoading(false);});
+    return()=>{cancelled=true;};
+  },[cfg,date,shift,selectedSection]);
+  if(!cfg)return null;
+  if(error)return <Card title={cfg.title} accent={cfg.accent}><div style={{padding:14,color:C.rd,fontSize:13}}>Drill fetch failed: {error.message||"Request failed"}</div></Card>;
+  const rowStyle=(active,i)=>({background:active?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"});
+  return(<div style={{display:"grid",gap:10}}>
+    <Card title={cfg.title} accent={cfg.accent}>
+      <Breadcrumb path={cfg.path}/>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+        <a href="http://192.168.225.62:3000/process-audit-logbook" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:6,border:"1px solid "+cfg.accent,background:cfg.accent+"12",color:cfg.accent,fontSize:12.5,fontWeight:700,textDecoration:"none"}}>{"↗"} Open Process Audit Logbook</a>
+      </div>
+      {loading?<div style={{padding:18,textAlign:"center",fontSize:13,color:C.mu}}>Fetching drill rows...</div>:<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
+        <thead><tr>{cfg.columns.map((h,i)=><th key={h} style={{textAlign:i===0?"left":"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>{h}</th>)}</tr></thead>
+        <tbody>{sectionRows.map((r,i)=>{const active=selectedSection===r.section;return(<tr key={r.section||i} onClick={()=>setSelectedSection(active?"":r.section)} style={rowStyle(active,i)}>
+          {cfg.row(r).map((cell,ci)=><td key={ci} style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:ci===0?"left":"right",fontWeight:active&&ci===0?700:400,color:active&&ci===0?cfg.accent:C.tx}}>{cell}</td>)}
+        </tr>);})}</tbody>
+      </table></div>}
+      {!loading&&!sectionRows.length&&<div style={{padding:12,textAlign:"center",color:C.mu,fontSize:13}}>No rows for this date / shift.</div>}
+      <div style={{fontSize:12,color:C.mu,marginTop:6}}>Click a process to view its machine-level rows.</div>
+    </Card>
+    {selectedSection&&<Card title={`${selectedSection} — Machine Level`} accent={cfg.accent}>
+      <Breadcrumb path={[...cfg.path,selectedSection,"Machines"]}/>
+      {machineLoading?<div style={{padding:18,textAlign:"center",fontSize:13,color:C.mu}}>Fetching machine rows...</div>:<DTable cols={cfg.machineColumns} rows={machineRows.map(cfg.machineRow)}/>}
+      {!machineLoading&&!machineRows.length&&<div style={{padding:12,textAlign:"center",color:C.mu,fontSize:13}}>No machine-level rows for {selectedSection}.</div>}
+    </Card>}
+  </div>);
+}
+
+function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift}){
   if(!kpi) return null;
+  if(LIVE_PROCESS_DRILLS[kpi.drill]){
+    return <LiveProcessDrillPanel kpi={kpi} date={date} shift={shift}/>;
+  }
 
   if(kpi.drill==="pqr"){
     const procs=[
@@ -2535,16 +2683,172 @@ function SPCDetail({p,onBack}){
   </div>);
 }
 
-function SPCTab({spcSel,setSpcSel}){
-  const p=spcSel&&SPC_PARAMS.find(x=>x.key===spcSel);
-  return p?<SPCDetail p={p} onBack={()=>setSpcSel(null)}/>:<SPCOverview onSelect={setSpcSel}/>;
+function LiveSpcMini({chart}){
+  const values=Array.isArray(chart?.values)?chart.values:[];
+  if(!values.length)return <div style={{height:58,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:C.mu}}>No chart data</div>;
+  const W=280,H=64,padL=6,padR=6,padT=6,padB=6;
+  const pw=W-padL-padR,ph=H-padT-padB;
+  const lo=Math.min(chart.lcl??Infinity,...values),hi=Math.max(chart.ucl??-Infinity,...values),pad=(hi-lo)*0.15||1;
+  const X=i=>padL+(values.length<=1?pw/2:i*(pw/(values.length-1)));
+  const Y=v=>padT+ph-((v-(lo-pad))/((hi+pad)-(lo-pad)))*ph;
+  return(<svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",marginTop:6}}>
+    {chart.ucl!=null&&<line x1={padL} y1={Y(chart.ucl)} x2={W-padR} y2={Y(chart.ucl)} stroke={C.rd} strokeWidth="0.8" strokeDasharray="3 2" opacity="0.7"/>}
+    {chart.lcl!=null&&<line x1={padL} y1={Y(chart.lcl)} x2={W-padR} y2={Y(chart.lcl)} stroke={C.rd} strokeWidth="0.8" strokeDasharray="3 2" opacity="0.7"/>}
+    {chart.cl!=null&&<line x1={padL} y1={Y(chart.cl)} x2={W-padR} y2={Y(chart.cl)} stroke={C.gn} strokeWidth="0.8" opacity="0.7"/>}
+    <polyline points={values.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.bl} strokeWidth="1.4"/>
+    {values.map((v,i)=><circle key={i} cx={X(i)} cy={Y(v)} r="1.8" fill={C.bl}/>)}
+  </svg>);
+}
+
+function LiveSpcChart({title,chart,accent}){
+  const points=Array.isArray(chart?.points)?chart.points:[];
+  const values=points.map(p=>p.value).filter(v=>typeof v==="number");
+  if(!values.length)return <Card title={title} accent={accent}><div style={{padding:18,textAlign:"center",color:C.mu,fontSize:13}}>No chart data for this selection.</div></Card>;
+  const W=720,H=230,padL=48,padR=70,padT=18,padB=28;
+  const pw=W-padL-padR,ph=H-padT-padB;
+  const lo0=Math.min(chart.lcl??Infinity,...values),hi0=Math.max(chart.ucl??-Infinity,...values),pad=(hi0-lo0)*0.14||1,lo=lo0-pad,hi=hi0+pad;
+  const X=i=>padL+(values.length<=1?pw/2:i*(pw/(values.length-1)));
+  const Y=v=>padT+ph-((v-lo)/(hi-lo))*ph;
+  const flagged=new Set(points.filter(p=>p.rules?.length).map(p=>p.index));
+  return(<Card title={title} accent={accent}>
+    <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
+      {chart.ucl!=null&&<line x1={padL} y1={Y(chart.ucl)} x2={padL+pw} y2={Y(chart.ucl)} stroke={C.rd} strokeWidth="1.3" strokeDasharray="6 3"/>}
+      {chart.cl!=null&&<line x1={padL} y1={Y(chart.cl)} x2={padL+pw} y2={Y(chart.cl)} stroke={C.gn} strokeWidth="1.3"/>}
+      {chart.lcl!=null&&<line x1={padL} y1={Y(chart.lcl)} x2={padL+pw} y2={Y(chart.lcl)} stroke={C.rd} strokeWidth="1.3" strokeDasharray="6 3"/>}
+      <polyline points={values.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.bl} strokeWidth="2"/>
+      {points.map((p,i)=><circle key={p.index} cx={X(i)} cy={Y(p.value)} r={flagged.has(p.index)?4.4:3} fill={flagged.has(p.index)?C.rd:C.bl} stroke="#fff" strokeWidth={flagged.has(p.index)?1.3:0}/>)}
+      {points.map((p,i)=>(i%2===0?<text key={"t"+p.index} x={X(i)} y={H-8} fontSize="8.5" fill={C.mu} textAnchor="middle">{p.index}</text>:null))}
+      {chart.ucl!=null&&<text x={padL+pw+5} y={Y(chart.ucl)+3} fontSize="10" fill={C.rd}>{"UCL "+_spcFmt(chart.ucl)}</text>}
+      {chart.cl!=null&&<text x={padL+pw+5} y={Y(chart.cl)+3} fontSize="10" fill={C.gn}>{"CL "+_spcFmt(chart.cl)}</text>}
+      {chart.lcl!=null&&<text x={padL+pw+5} y={Y(chart.lcl)+3} fontSize="10" fill={C.rd}>{"LCL "+_spcFmt(chart.lcl)}</text>}
+    </svg>
+    <div style={{fontSize:11.5,color:C.mu,marginTop:6}}>{points.filter(p=>p.rules?.length).length} points with active Nelson-rule markers.</div>
+  </Card>);
+}
+
+function LiveHistogram({histogram}){
+  const bins=Array.isArray(histogram?.bins)?histogram.bins:[];
+  if(!bins.length)return null;
+  const max=Math.max(...bins.map(b=>b.count||0),1);
+  return(<Card title="Process Capability — distribution vs specification" accent={C.pp}>
+    <div style={{height:180,display:"flex",alignItems:"flex-end",gap:4,padding:"10px 8px",background:C.c2,border:"1px solid "+C.bd,borderRadius:8}}>
+      {bins.map((b,i)=><div key={i} title={`${_spcFmt(b.from)} - ${_spcFmt(b.to)}: ${b.count}`} style={{flex:1,height:Math.max(2,((b.count||0)/max)*150),background:b.out_of_spec?C.rd:C.bl,opacity:b.out_of_spec?0.9:0.55,borderRadius:"3px 3px 0 0"}}/>)}
+    </div>
+    <div style={{fontSize:11.5,color:C.mu,marginTop:6}}>Sample size {histogram.sample_size ?? "—"} · Mean {histogram.mean!=null?_spcFmt(histogram.mean):"—"} · Std {histogram.std!=null?_spcFmt(histogram.std):"—"}</div>
+  </Card>);
+}
+
+function LiveSPCOverview({date,shift,onSelect}){
+  const [machine,setMachine]=useState("All");
+  const [recipe,setRecipe]=useState("All");
+  const [headline,setHeadline]=useState("All");
+  const [summary,setSummary]=useState(null);
+  const [options,setOptions]=useState({machines:[],recipes:[]});
+  const [widgets,setWidgets]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+  useEffect(()=>{
+    let cancelled=false;
+    setLoading(true);setError(null);
+    Promise.all([
+      getSpcSummary({date,machine}),
+      getSpcFilterOptions({date}),
+      getSpcWidgets({date,machine,recipe,headlineStatus:headline})
+    ]).then(([sum,opt,board])=>{
+      if(cancelled)return;
+      setSummary(sum||null);
+      setOptions(opt||{machines:[],recipes:[]});
+      setWidgets(Array.isArray(board?.widgets)?board.widgets:[]);
+    }).catch(err=>{if(!cancelled)setError(err);})
+      .finally(()=>{if(!cancelled)setLoading(false);});
+    return()=>{cancelled=true;};
+  },[date,shift,machine,recipe,headline]);
+  const tiles=[
+    ["Processes",summary?.total_parameters??0,C.tx,"All"],
+    ["Out of specification",summary?.out_of_specification??0,C.rd,"Critical"],
+    ["Not capable",summary?.not_capable??0,C.am,"Warning"],
+    ["Capable",summary?.capable??0,C.gn,"Healthy"],
+    ["Insufficient",summary?.insufficient_data??0,C.mu,"Insufficient Data"],
+  ];
+  const sel={padding:"5px 10px",borderRadius:6,border:"1px solid "+C.bd,background:C.cd,color:C.tx,fontSize:12.5,fontWeight:600,cursor:"pointer",maxWidth:260};
+  if(error)return <div style={{padding:"22px 16px",background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.rd}}>SPC fetch failed: {error.message||"Request failed"}</div>;
+  return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {tiles.map(([label,val,col,key])=><_SpcTile key={label} label={label} val={loading?"...":val} sub={key==="All"?"under SPC":""} col={col} onClick={()=>setHeadline(headline===key?"All":key)} active={headline===key}/>)}
+    </div>
+    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",padding:"8px 10px",background:C.c2,borderRadius:8,border:"1px solid "+C.bd}}>
+      <span style={{fontSize:11,color:C.mu,fontWeight:700,textTransform:"uppercase",letterSpacing:".3px"}}>Filter</span>
+      <label style={{fontSize:12,color:C.mu,display:"flex",alignItems:"center",gap:5}}>Machine
+        <select value={machine} onChange={e=>setMachine(e.target.value)} style={sel}><option>All</option>{(options.machines||[]).map(m=><option key={m} value={m}>{m}</option>)}</select>
+      </label>
+      <label style={{fontSize:12,color:C.mu,display:"flex",alignItems:"center",gap:5}}>Recipe
+        <select value={recipe} onChange={e=>setRecipe(e.target.value)} style={sel}><option>All</option>{(options.recipes||[]).map(r=><option key={r} value={r}>{r}</option>)}</select>
+      </label>
+      {(machine!=="All"||recipe!=="All"||headline!=="All")&&<button onClick={()=>{setMachine("All");setRecipe("All");setHeadline("All");}} style={{...sel,color:C.pp,fontWeight:700}}>Clear</button>}
+      <span style={{marginLeft:"auto",fontSize:11.5,color:C.mu}}>{loading?"Fetching SPC...":`Showing ${widgets.length} charts`}</span>
+    </div>
+    {!loading&&widgets.length===0?<div style={{padding:"28px 16px",textAlign:"center",color:C.mu,fontSize:13,background:C.cd,border:"1px dashed "+C.bd,borderRadius:10}}>No SPC rows for this selection.</div>:null}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
+      {widgets.map((w,i)=>{const col=w.headline_status==="Critical"?C.rd:w.headline_status==="Warning"?C.am:w.headline_status==="Healthy"?C.gn:C.mu;return(
+        <div key={`${w.machine}|${w.recipe}|${w.parameter}|${i}`} onClick={()=>onSelect({machine:w.machine,recipe:w.recipe,parameter:w.parameter})} style={{cursor:"pointer",background:C.cd,border:"1px solid "+C.bd,borderLeft:"3px solid "+col,borderRadius:8,padding:"12px 14px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div style={{minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{w.parameter}</div><div style={{fontSize:11.5,color:C.mu,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{w.machine+" · "+w.recipe}</div></div>
+            <StatusPill status={w.headline_status==="Critical"?"Red":w.headline_status==="Warning"?"Yellow":w.headline_status==="Healthy"?"Green":"Insufficient"}/>
+          </div>
+          {w.control_chart?<LiveSpcMini chart={w.control_chart}/>:<div style={{height:58,display:"flex",alignItems:"center",fontSize:12,color:C.mu}}>Insufficient sample size {w.insufficient?.sample_size??"—"}</div>}
+          <div style={{display:"flex",gap:10,marginTop:6,fontSize:11.5,alignItems:"center"}}>
+            <span style={{color:C.mu}}>Cp <b style={{color:col}}>{w.cp??"—"}</b></span>
+            <span style={{color:C.mu}}>Cpk <b style={{color:col}}>{w.cpk??"—"}</b></span>
+          </div>
+        </div>);})}
+    </div>
+  </div>);
+}
+
+function LiveSPCDetail({selection,date,shift,onBack}){
+  const [detail,setDetail]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+  useEffect(()=>{
+    let cancelled=false;
+    setLoading(true);setError(null);
+    getSpcDetail({date,shift,...selection})
+      .then(res=>{if(!cancelled)setDetail(res);})
+      .catch(err=>{if(!cancelled)setError(err);})
+      .finally(()=>{if(!cancelled)setLoading(false);});
+    return()=>{cancelled=true;};
+  },[date,shift,selection?.machine,selection?.recipe,selection?.parameter]);
+  if(error)return <div style={{padding:"22px 16px",background:C.cd,border:"1px solid "+C.bd,borderRadius:8,color:C.rd}}>SPC detail fetch failed: {error.message||"Request failed"}</div>;
+  const cap=detail?.capability||{};
+  const capCol=v=>v==null?C.mu:v<1?C.rd:v<1.33?C.am:C.gn;
+  return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <button onClick={onBack} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+C.bd,background:C.c2,color:C.pp,fontSize:12,fontWeight:600,cursor:"pointer"}}>{"‹ All processes"}</button>
+      <div><div style={{fontSize:16,fontWeight:700,color:C.tx}}>{selection.parameter}</div><div style={{fontSize:12,color:C.mu}}>{selection.machine+" · "+selection.recipe}</div></div>
+      <span style={{marginLeft:"auto"}}>{loading?"Fetching...":<StatusPill status={cap.headline_status==="Critical"?"Red":cap.headline_status==="Warning"?"Yellow":cap.headline_status==="Healthy"?"Green":"Insufficient"}/>}</span>
+    </div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {["cp","cpk","pp","ppk"].map(k=>{const cell=cap[k]||{};return <_SpcTile key={k} label={k.toUpperCase()} val={loading?"...":cell.value??"—"} sub={cell.status||""} col={capCol(cell.value)}/>;})}
+      <_SpcTile label="Sample" val={loading?"...":cap.sample_size??"—"} sub="observations" col={C.tx}/>
+    </div>
+    {detail?.insufficient?<Card title="Insufficient Data" accent={C.am}><div style={{fontSize:13,color:C.md}}>Sample size {detail.insufficient.sample_size ?? "—"} is below the capability gate for live SPC charts.</div></Card>:null}
+    {detail?.x_chart&&<LiveSpcChart title="Interactive Process Control — X Chart with Nelson Rules" chart={detail.x_chart} accent={C.pp}/>}
+    {detail?.r_chart&&<LiveSpcChart title="R Chart — subgroup range" chart={detail.r_chart} accent={C.pp}/>}
+    {detail?.histogram&&<LiveHistogram histogram={detail.histogram}/>}
+  </div>);
+}
+
+function SPCTab({spcSel,setSpcSel,date,shift}){
+  return spcSel
+    ? <LiveSPCDetail selection={spcSel} date={date} shift={shift} onBack={()=>setSpcSel(null)}/>
+    : <LiveSPCOverview date={date} shift={shift} onSelect={setSpcSel}/>;
 }
 
 export default function QualityDashboard({plant,onBack}){
   const [tab,setTab]=useState("process");
   const [openKpi,setOpenKpi]=useState(null);
   const [sub,setSub]=useState("");
-  const [tf,setTf]=useState("");
+  const [tf,setTf]=useState("today");
   const [shift,setShift]=useState("All");
   const [tfFrom,setTfFrom]=useState(QUALITY_DATA_DATE);
   const [tfTo,setTfTo]=useState(QUALITY_DATA_DATE);
@@ -2578,15 +2882,24 @@ export default function QualityDashboard({plant,onBack}){
   const tabAccent=tab==="process"?C.bl:tab==="product"?C.tl:C.rd;
 
   const toggle=id=>{setOpenKpi(openKpi===id?null:id);setSub("");};
+  const onHeaderPresetChange=preset=>{
+    setTf(preset);
+    if(preset==="today"){setTfFrom(QUALITY_DATA_DATE);setTfTo(QUALITY_DATA_DATE);}
+    else if(preset==="month"){setTfFrom(QUALITY_MONTH_FROM);setTfTo(QUALITY_MONTH_TO);setShift("All");}
+    else if(preset==="year"){setTfFrom("2026-01-01");setTfTo("2026-12-31");setShift("All");}
+  };
+  const onHeaderFromChange=value=>{setTf(null);setTfFrom(value);setShift("All");};
+  const onHeaderToChange=value=>{setTf(null);setTfTo(value);setShift("All");};
+  const onHeaderShiftChange=value=>setShift(value==="all"?"All":String(value).toUpperCase());
 
   return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:"'IBM Plex Sans',system-ui,sans-serif",color:C.tx,fontSize:16}}>
     <PrintStyles/>
     <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
     {/* Header */}
-    <div style={{background:C.cd,borderBottom:"1px solid "+C.bd,padding:"0 20px",height:90,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+    <div style={{background:C.cd,borderBottom:"1px solid "+C.bd,padding:"0 20px",height:64,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
         <button onClick={onBack} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.bd,background:C.c2,color:C.mu,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{"←"}</button>
-        <img src={LOGO} alt="JK Tyre" style={{height:80,objectFit:"contain"}}/>
+        <img src={LOGO} alt="JK Tyre" style={{height:28,width:"auto",objectFit:"contain",display:"block"}}/>
         <div style={{width:1,height:40,background:C.bd}}/>
         <div>
           <div style={{fontSize:18,fontWeight:700}}>One Factory</div>
@@ -2595,18 +2908,15 @@ export default function QualityDashboard({plant,onBack}){
         <span style={{fontSize:13,color:C.tl,fontWeight:700,background:C.tl+"18",padding:"3px 10px",borderRadius:8,marginLeft:4}}>{plant?plant.name.split(" ")[0].toUpperCase():"BTP"}</span>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <select value={shift} onChange={e=>setShift(e.target.value)} style={{padding:"5px 8px",fontSize:13,border:"1px solid "+C.bd,borderRadius:6,background:C.cd,color:C.tx,cursor:"pointer"}}>
-          <option>All Shifts</option><option>A</option><option>B</option><option>C</option>
-        </select>
-        <TimeRangeSelect preset={tf} setPreset={setTf} from={tfFrom} to={tfTo} setFrom={setTfFrom} setTo={setTfTo} shift={shift} setShift={setShift}/>
-        <TyreTypeFilter value={tyreType} onChange={setTyreType} plant={plant}/>
+        <ProductionTimeRangeSelect preset={tf} onPresetChange={onHeaderPresetChange} from={tfFrom} to={tfTo} onFromChange={onHeaderFromChange} onToChange={onHeaderToChange} shift={shift==="All"?"all":shift.toLowerCase()} onShiftChange={onHeaderShiftChange}/>
+        <PcrOnlyBadge/>
         <ExportButton/>
-        <UserMenu plant={plant} role="QH" onLogout={onBack}/>
+        <SharedUserMenu user={QUALITY_USER} size={32}/>
       </div>
     </div>
 
     {/* Tab Navigation */}
-    <div style={{background:C.cd,borderBottom:"1px solid "+C.bd,padding:"0 16px",display:"flex",alignItems:"center",position:"sticky",top:90,zIndex:99}}>
+    <div style={{background:C.cd,borderBottom:"1px solid "+C.bd,padding:"0 16px",display:"flex",alignItems:"center",position:"sticky",top:64,zIndex:99}}>
       {[{id:"process",n:"Process",i:"⚙"},{id:"product",n:"Product",i:"◆"},{id:"complaint",n:"Customer Complaint",i:"⚠"},{id:"spc",n:"SPC",i:"∿"}].map(t=>{const a=tab===t.id;const tc=t.id==="process"?C.bl:t.id==="product"?C.tl:t.id==="complaint"?C.rd:C.pp;return(<button key={t.id} onClick={()=>{setTab(t.id);setOpenKpi(null);setSub("");}} style={{padding:"12px 18px",border:"none",borderBottom:a?"2px solid "+tc:"2px solid transparent",background:"transparent",fontSize:14,fontWeight:a?700:500,color:a?tc:C.mu,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
         {t.n}
       </button>);})}
@@ -2622,11 +2932,11 @@ export default function QualityDashboard({plant,onBack}){
       </div>
 
       {/* SPC tab */}
-      {tab==="spc"&&<SPCTab spcSel={spcSel} setSpcSel={setSpcSel}/>}
+      {tab==="spc"&&<SPCTab spcSel={spcSel} setSpcSel={setSpcSel} date={tfTo} shift={shift}/>}
 
       {/* Drill panel */}
       {openObj&&<div style={{animation:"fadeIn .2s ease"}}>
-        {tab==="process"&&<ProcessDrillPanel kpi={openObj} sub={sub} setSub={setSub} onOpenSPC={(mc)=>{setTab("spc");setSpcSel(mc);setOpenKpi(null);setSub("");}}/>}
+        {tab==="process"&&<ProcessDrillPanel kpi={openObj} sub={sub} setSub={setSub} date={tfTo} shift={shift} onOpenSPC={(mc)=>{setTab("spc");setSpcSel(mc);setOpenKpi(null);setSub("");}}/>}
         {tab==="product"&&<ProductDrillPanel kpi={openObj} sub={sub} setSub={setSub} tyreType={tyreType} plant={plant}/>}
         {tab==="complaint"&&<ComplaintDrillPanel kpi={openObj} sub={sub} setSub={setSub}/>}
       </div>}

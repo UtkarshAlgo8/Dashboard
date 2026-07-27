@@ -63,11 +63,11 @@ export const config = {
   //
   // `dataSource` is THE switch the FRD calls for: "excel" reads the
   // reference gold workbook in-process (dev / until the Quality gold table
-  // ships); "upstream" runs the identical SQL against the same remote data
+  // ships); "db" runs the identical SQL against the same remote data
   // API Production uses. Everything else — SQL builders, transformers,
   // controllers — is unchanged across the switch.
   quality: {
-    dataSource: optional("QUALITY_DATA_SOURCE", "excel"), // "excel" | "upstream"
+    dataSource: optional("QUALITY_DATA_SOURCE", "excel"), // "excel" | "db"
     // Reference workbook (FRD §B): sheet `result`, 23 columns.
     excelPath: optional(
       "QUALITY_EXCEL_PATH",

@@ -169,7 +169,7 @@ test("integration: PQR_o base-date row via alasql over the workbook", async (t) 
   const rows = await runQuery(sql);
   assert.equal(rows.length, 1, "exactly one overall PQR row on the base date");
   const out = toKpiValue(rows);
-  assert.equal(typeof out.actual_value, "number");
+  assert.equal(out.actual_value, 78.45);
   assert.equal(out.drill_down.is_leaf, false);
   assert.deepEqual(out.drill_down.children, ["Plant_quality_rating_s"]);
 });

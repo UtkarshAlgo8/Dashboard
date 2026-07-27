@@ -25,6 +25,10 @@ dist-ssr/
 .env.local
 **/.env.local
 
-# Local reference data (large gold-table exports — never commit to the repo)
+# Local reference data. Commit only the Quality workbook needed by the
+# dev-quality Excel-backed backend; keep generated caches and other exports out.
 backend/data/
 *.xlsx
+!backend/data/
+backend/data/*
+!backend/data/Quality_Dashboard_Gold_Layer_3Months.xlsx

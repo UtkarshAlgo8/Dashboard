@@ -25,6 +25,9 @@ import * as XLSX from "xlsx";
 
 import { config } from "../../config.js";
 
+const CACHE_VERSION = 2;
+const XLSX_SSF = XLSX.SSF ?? XLSX.default?.SSF;
+
 /** The 23 gold columns, in sheet order (FRD §B, data_dictionary). */
 export const QUALITY_COLUMNS = [
   "record_id",
@@ -70,7 +73,7 @@ function toIsoDate(value) {
     return `${y}-${m}-${d}`;
   }
   if (typeof value === "number") {
-    const parsed = XLSX.SSF.parse_date_code(value);
+    const parsed = XLSX_SSF?.parse_date_code(value);
     if (!parsed) return null;
     const m = String(parsed.m).padStart(2, "0");
     const d = String(parsed.d).padStart(2, "0");
@@ -97,10 +100,12 @@ function normalizeRow(raw) {
 
 function parseWorkbook() {
   // Read via fs + XLSX.read (SheetJS `readFile` isn't fs-wired under pure
-  // ESM). cellDates so date serials arrive as JS Date objects we format
-  // deterministically (independent of the cell's display number format).
+  // ESM). Keep Excel dates as serial numbers and convert with SSF below:
+  // `cellDates:true` materializes local-midnight Excel dates as timezone-
+  // shifted JS Date objects, which moved the base 2026-06-10 rows to
+  // 2026-06-09 in Asia/Kolkata.
   const buf = fs.readFileSync(config.quality.excelPath);
-  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
+  const wb = XLSX.read(buf, { type: "buffer", cellDates: false });
   const sheet = wb.Sheets[config.quality.excelSheet];
   if (!sheet) {
     throw new Error(
@@ -134,15 +139,22 @@ export function loadQualityRows() {
   if (cacheIsFresh()) {
     try {
       const json = fs.readFileSync(config.quality.excelCachePath, "utf8");
-      const rows = JSON.parse(json);
-      if (Array.isArray(rows) && rows.length > 0) return rows;
+      const cached = JSON.parse(json);
+      const rows =
+        cached && cached.version === CACHE_VERSION && Array.isArray(cached.rows)
+          ? cached.rows
+          : null;
+      if (rows && rows.length > 0) return rows;
     } catch {
       // Corrupt/partial cache — fall through and rebuild.
     }
   }
   const rows = parseWorkbook();
   try {
-    fs.writeFileSync(config.quality.excelCachePath, JSON.stringify(rows));
+    fs.writeFileSync(
+      config.quality.excelCachePath,
+      JSON.stringify({ version: CACHE_VERSION, rows }),
+    );
   } catch {
     // Read-only data dir is fine; we just re-parse next boot.
   }
