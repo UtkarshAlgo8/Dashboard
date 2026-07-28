@@ -214,7 +214,7 @@ function TrendChart({labels,series,target,color,bestIdx,worstIdx}){
     <text x={padL+cw-4} y={y(target)-5} fontSize="9" fill={C.am} fontWeight="700" textAnchor="end">Target {fmt2(target)}</text>
     <polyline points={pts} fill="none" stroke={color} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"/>
     {series.map((v,i)=>{const isBest=i===bestIdx,isWorst=i===worstIdx;return(<g key={i}>
-      <circle cx={x(i)} cy={y(v)} r={isBest||isWorst?4.5:3} fill={isBest?C.gn:isWorst?C.rd:color} stroke="#fff" strokeWidth="1.5"/>
+      <circle cx={x(i)} cy={y(v)} r={isBest||isWorst?4.5:3} fill={isBest?C.gn:isWorst?C.rd:color} stroke="#fff" strokeWidth="1.5"><title>{`${labels[i]||"Point "+(i+1)}: ${fmt2(v)}`}</title></circle>
       {(isBest||isWorst)&&<text x={x(i)} y={y(v)-9} fontSize="8" fill={isBest?C.gn:C.rd} fontWeight="700" textAnchor="middle">{isBest?"BEST":"WORST"}</text>}
     </g>);})}
     {labels.map((l,i)=>(<text key={i} x={x(i)} y={h-padB+14} fontSize="9" fill={C.mu} textAnchor="middle">{l}</text>))}
@@ -255,7 +255,7 @@ function TrendBar({labels,series,target,color,bestIdx,worstIdx}){
       const bh=Math.max(0,(padT+ch)-yPos(v));
       const fill=isBest?C.gn:isWorst?C.rd:color;
       return(<g key={i}>
-        <rect x={xPos(i)} y={yPos(v)} width={barW} height={bh} fill={fill} opacity={isBest||isWorst?1:0.85} rx="2.5"/>
+        <rect x={xPos(i)} y={yPos(v)} width={barW} height={bh} fill={fill} opacity={isBest||isWorst?1:0.85} rx="2.5"><title>{`${labels[i]||"Period "+(i+1)}: ${fmt2(v)}`}</title></rect>
         <text x={xPos(i)+barW/2} y={yPos(v)-4} fontSize="8" fill={isBest?C.gn:isWorst?C.rd:C.tx} fontWeight="700" textAnchor="middle">{fmt2(v)}</text>
       </g>);
     })}
@@ -289,7 +289,7 @@ function TrendProgress({current,target,unit,color,series,labels}){
     <div style={{fontSize:12,color:C.mu,fontWeight:600,textTransform:"uppercase",marginTop:14,marginBottom:2}}>Trajectory</div>
     <svg width="100%" viewBox={"0 0 "+w+" "+h} style={{display:"block",maxHeight:90}}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round"/>
-      {series.map((v,i)=>(<circle key={i} cx={padL+i*xStep} cy={padT+ch-((v-mn)/rn)*ch} r="2.5" fill={color}/>))}
+      {series.map((v,i)=>(<circle key={i} cx={padL+i*xStep} cy={padT+ch-((v-mn)/rn)*ch} r="2.5" fill={color}><title>{`${labels[i]||"Point "+(i+1)}: ${v} ${unit||""}`}</title></circle>))}
       {labels.map((l,i)=>(<text key={i} x={padL+i*xStep} y={h-padB+13} fontSize="9" fill={C.mu} textAnchor="middle">{l}</text>))}
     </svg>
   </div>);
@@ -312,7 +312,7 @@ function HBarChart({items,unit,target,hb}){
       return(<g key={i}>
         <text x={padL-8} y={y0+rowH/2+4} fontSize="11.5" fill={C.tx} textAnchor="end">{it.l}</text>
         <rect x={padL} y={y0+8} width={w-padL-padR} height={rowH-18} rx="4" fill={C.bd} opacity="0.35"/>
-        <rect x={padL} y={y0+8} width={Math.max(x(it.v)-padL,2)} height={rowH-18} rx="4" fill={col} opacity="0.85"/>
+        <rect x={padL} y={y0+8} width={Math.max(x(it.v)-padL,2)} height={rowH-18} rx="4" fill={col} opacity="0.85"><title>{`${it.l}: ${it.v}${unit?" "+unit:""}`}</title></rect>
         {t!=null&&<line x1={x(t)} y1={y0+4} x2={x(t)} y2={y0+rowH-6} stroke={C.am} strokeWidth="2" strokeDasharray="3 2"/>}
         <text x={x(it.v)+6} y={y0+rowH/2+4} fontSize="11" fontWeight="700" fill={C.tx}>{it.v}</text>
       </g>);
@@ -337,7 +337,7 @@ function DonutChart({items,unit}){
   });
   return(<div style={{display:"flex",gap:18,alignItems:"center",flexWrap:"wrap",padding:"6px 4px 10px"}}>
     <svg viewBox="0 0 220 200" style={{width:220,flexShrink:0}}>
-      {segs.map((s,i)=>(<path key={i} d={s.d} fill={s.col} stroke={C.cd} strokeWidth="1.5"/>))}
+      {segs.map((s,i)=>(<path key={i} d={s.d} fill={s.col} stroke={C.cd} strokeWidth="1.5"><title>{`${s.it.l}: ${s.it.v}${unit?" "+unit:""} (${s.pct}%)`}</title></path>))}
       <text x={cx} y={cy-2} fontSize="15" fontWeight="700" fill={C.tx} textAnchor="middle">{total>=1000?Math.round(total).toLocaleString("en-IN"):Math.round(total*100)/100}</text>
       <text x={cx} y={cy+14} fontSize="9.5" fill={C.mu} textAnchor="middle">{unit||""}</text>
     </svg>
@@ -368,7 +368,7 @@ function MultiLineChart({series,target}){
       {target!=null&&<g><line x1={padL} y1={y(target)} x2={padL+cw} y2={y(target)} stroke={C.am} strokeWidth="1.5" strokeDasharray="5 4"/><text x={padL+cw-4} y={y(target)-5} fontSize="9" fill={C.am} fontWeight="700" textAnchor="end">{"Target "+target}</text></g>}
       {series.map((s,si)=>{const col=_cres(s.c);const pts=s.sp.map((v,i)=>x(i)+","+y(v)).join(" ");return(<g key={si}>
         <polyline points={pts} fill="none" stroke={col} strokeWidth="2.2" strokeLinejoin="round"/>
-        {s.sp.map((v,i)=>(<circle key={i} cx={x(i)} cy={y(v)} r="3" fill={col} stroke="#fff" strokeWidth="1.2"/>))}
+        {s.sp.map((v,i)=>(<circle key={i} cx={x(i)} cy={y(v)} r="3" fill={col} stroke="#fff" strokeWidth="1.2"><title>{`${s.l} · ${labels[i]||"Point "+(i+1)}: ${v}`}</title></circle>))}
       </g>);})}
       {labels.map((l,i)=>(<text key={i} x={x(i)} y={h-padB+16} fontSize="9" fill={C.mu} textAnchor="middle">{l}</text>))}
     </svg>
@@ -389,7 +389,7 @@ function CatChartBlock({kpi,chartType}){
 function TrendIcon({size}){const s=size||13;return(<svg width={s} height={s*0.85} viewBox="0 0 13 11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="1,8.5 4,5.5 7,7 10,3 12,4"/></svg>);}
 
 /* ─── COMPONENTS ─── */
-function Spark({data,color,w=70,h=20}){const mn=Math.min(...data),mx=Math.max(...data),rn=mx-mn||1;const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-2-((v-mn)/rn)*(h-4)}`).join(" ");return <svg width={w} height={h}><polyline points={pts} fill="none" stroke={color||C.tl} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" opacity={0.8}/></svg>;}
+function Spark({data,color,w=70,h=20}){const mn=Math.min(...data),mx=Math.max(...data),rn=mx-mn||1;const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-2-((v-mn)/rn)*(h-4)}`).join(" ");return <svg width={w} height={h}><polyline points={pts} fill="none" stroke={color||C.tl} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" opacity={0.8}/>{data.map((v,i)=><circle key={i} cx={(i/(data.length-1))*w} cy={h-2-((v-mn)/rn)*(h-4)} r="3" fill="transparent"><title>{`Point ${i+1}: ${v}`}</title></circle>)}</svg>;}
 
 /* TechTrendPanel — analytical MP/CP trend. inv=true => lower is better. */
 function TechTrendPanel({kpi,onClose,initialRange}){
@@ -514,7 +514,7 @@ function TechTrendPanel({kpi,onClose,initialRange}){
           <text x={padL+4} y={yT-5} fontSize="10" fill={C.am} fontWeight="700">{"Target "+fmt2(target)+su}</text></g>}
           <path d={aArea} fill={"url(#"+gradId+")"}/>
           <path d={aPath} fill="none" stroke={stCol} strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round"/>
-          {a.map((p,i)=>((range==="Daily"&&i!==nowI)?null:<circle key={i} cx={X(i)} cy={Y(p.v)} r={i===nowI?4.5:3} fill={i===nowI?stCol:C.cd} stroke={stCol} strokeWidth="1.8"/>))}
+          {a.map((p,i)=>((range==="Daily"&&i!==nowI)?null:<circle key={i} cx={X(i)} cy={Y(p.v)} r={i===nowI?4.5:3} fill={i===nowI?stCol:C.cd} stroke={stCol} strokeWidth="1.8"><title>{`${p.l||"Point "+(i+1)}: ${fmt2(p.v)}${su}`}</title></circle>))}
           {all.map((p,i)=>(p.l?<text key={i} x={X(i)} y={padT+ph+16} fontSize="8.5" fill={C.md} textAnchor="middle">{p.l}</text>:null))}
           <text x={X(nowI)} y={padT-9} fontSize="9" fill={stCol} fontWeight="700" textAnchor="middle">Now</text>
         </svg>
@@ -931,7 +931,7 @@ function ControlChart({data,ucl,lcl,target,w=240,h=80}){
     <text x={w-8} y={yScale(ucl)-2} fontSize="7" fill={C.rd} textAnchor="end">UCL {ucl}</text>
     <text x={w-8} y={yScale(lcl)+8} fontSize="7" fill={C.rd} textAnchor="end">LCL {lcl}</text>
     <polyline points={pts} fill="none" stroke={C.bl} strokeWidth="1.5"/>
-    {data.map((v,i)=>{const oob=v>ucl||v<lcl;return <circle key={i} cx={10+(i/(data.length-1))*(w-20)} cy={yScale(v)} r="2.5" fill={oob?C.rd:C.bl}/>;})}
+    {data.map((v,i)=>{const oob=v>ucl||v<lcl;return <circle key={i} cx={10+(i/(data.length-1))*(w-20)} cy={yScale(v)} r="2.5" fill={oob?C.rd:C.bl}><title>{`Point ${i+1}: ${v}`}</title></circle>;})}
   </svg>);
 }
 
@@ -2452,7 +2452,7 @@ function _SpcMini({s}){
     <line x1={padL} y1={Y(s.lclX)} x2={W-padR} y2={Y(s.lclX)} stroke={C.rd} strokeWidth="0.8" strokeDasharray="3 2" opacity="0.7"/>
     <line x1={padL} y1={Y(s.Xbb)} x2={W-padR} y2={Y(s.Xbb)} stroke={C.gn} strokeWidth="0.8" opacity="0.7"/>
     <polyline points={s.xbar.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.bl} strokeWidth="1.4"/>
-    {s.xbar.map((v,i)=>{const bad=fl.has(i);return(<circle key={i} cx={X(i)} cy={Y(v)} r={bad?2.6:1.6} fill={bad?C.rd:C.bl}/>);})}
+    {s.xbar.map((v,i)=>{const bad=fl.has(i);return(<circle key={i} cx={X(i)} cy={Y(v)} r={bad?2.6:1.6} fill={bad?C.rd:C.bl}><title>{`Xbar #${i+1}: ${_spcFmt(v)}`}</title></circle>);})}
   </svg>);
 }
 
@@ -2543,7 +2543,7 @@ function _XbarChart({s,p}){
     <text x={padL+pw+4} y={Y(s.lclX)+3} fontSize="9.5" fill={C.rd}>{"LCL "+_spcFmt(s.lclX)}</text>
     {[-3,-2,-1,1,2,3].map((k,i)=>(<text key={i} x={padL-6} y={zy(k)+3} fontSize="8" fill={C.mu} textAnchor="end">{(k>0?"+":"")+k+"σ"}</text>))}
     <polyline points={s.xbar.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.bl} strokeWidth="2" strokeLinejoin="round"/>
-    {s.xbar.map((v,i)=>{const bad=fl.has(i);return(<circle key={i} cx={X(i)} cy={Y(v)} r={bad?4.5:3} fill={bad?C.rd:C.bl} stroke={bad?"#fff":"none"} strokeWidth={bad?1.4:0}/>);})}
+    {s.xbar.map((v,i)=>{const bad=fl.has(i);return(<circle key={i} cx={X(i)} cy={Y(v)} r={bad?4.5:3} fill={bad?C.rd:C.bl} stroke={bad?"#fff":"none"} strokeWidth={bad?1.4:0}><title>{`Xbar #${i+1}: ${_spcFmt(v)}`}</title></circle>);})}
     {s.xbar.map((v,i)=>(i%2===0?<text key={i} x={X(i)} y={H-8} fontSize="8.5" fill={C.mu} textAnchor="middle">{i+1}</text>:null))}
   </svg>);
 }
@@ -2559,7 +2559,7 @@ function _RChart({s}){
     <text x={padL+pw+4} y={Y(s.uclR)+3} fontSize="9.5" fill={C.rd}>{"UCL "+_spcFmt(s.uclR)}</text>
     <text x={padL+pw+4} y={Y(s.Rbar)+3} fontSize="9.5" fill={C.gn}>{"R̄ "+_spcFmt(s.Rbar)}</text>
     <polyline points={s.R.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.pp} strokeWidth="2" strokeLinejoin="round"/>
-    {s.R.map((v,i)=>{const bad=v>s.uclR||v<s.lclR;return(<circle key={i} cx={X(i)} cy={Y(v)} r={bad?4.5:3} fill={bad?C.rd:C.pp} stroke={bad?"#fff":"none"} strokeWidth={bad?1.4:0}/>);})}
+    {s.R.map((v,i)=>{const bad=v>s.uclR||v<s.lclR;return(<circle key={i} cx={X(i)} cy={Y(v)} r={bad?4.5:3} fill={bad?C.rd:C.pp} stroke={bad?"#fff":"none"} strokeWidth={bad?1.4:0}><title>{`R #${i+1}: ${_spcFmt(v)}`}</title></circle>);})}
     {s.R.map((v,i)=>(i%2===0?<text key={i} x={X(i)} y={H-8} fontSize="8.5" fill={C.mu} textAnchor="middle">{i+1}</text>:null))}
   </svg>);
 }
@@ -2572,7 +2572,7 @@ function _CapHist({s,p}){
   const X=v=>padL+((v-h.lo)/(h.hi-h.lo))*pw,Y=c=>padT+ph-(c/maxC)*ph;
   const curve=[];for(let i=0;i<=60;i++){const x=h.lo+(h.hi-h.lo)*i/60;curve.push(X(x)+","+Y(expAt(x)));}
   return(<svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto"}}>
-    {h.bins.map((b,i)=>{const oos=b.x1<=h.lsl||b.x0>=h.usl;const x=X(b.x0),bw=X(b.x1)-X(b.x0);return(<rect key={i} x={x+0.5} y={Y(b.c)} width={Math.max(bw-1,1)} height={padT+ph-Y(b.c)} fill={oos?C.rd:C.bl} opacity={oos?0.8:0.5}/>);})}
+    {h.bins.map((b,i)=>{const oos=b.x1<=h.lsl||b.x0>=h.usl;const x=X(b.x0),bw=X(b.x1)-X(b.x0);return(<rect key={i} x={x+0.5} y={Y(b.c)} width={Math.max(bw-1,1)} height={padT+ph-Y(b.c)} fill={oos?C.rd:C.bl} opacity={oos?0.8:0.5}><title>{`${_spcFmt(b.x0)} - ${_spcFmt(b.x1)}: ${b.c}`}</title></rect>);})}
     <polyline points={curve.join(" ")} fill="none" stroke={C.tx} strokeWidth="1.6"/>
     <line x1={X(h.lsl)} y1={padT} x2={X(h.lsl)} y2={padT+ph} stroke={C.rd} strokeWidth="1.6"/>
     <line x1={X(h.usl)} y1={padT} x2={X(h.usl)} y2={padT+ph} stroke={C.rd} strokeWidth="1.6"/>
@@ -2787,7 +2787,7 @@ function LiveSpcMini({chart}){
     {chart.lcl!=null&&<line x1={padL} y1={Y(chart.lcl)} x2={W-padR} y2={Y(chart.lcl)} stroke={C.rd} strokeWidth="0.8" strokeDasharray="3 2" opacity="0.7"/>}
     {chart.cl!=null&&<line x1={padL} y1={Y(chart.cl)} x2={W-padR} y2={Y(chart.cl)} stroke={C.gn} strokeWidth="0.8" opacity="0.7"/>}
     <polyline points={values.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.bl} strokeWidth="1.4"/>
-    {values.map((v,i)=><circle key={i} cx={X(i)} cy={Y(v)} r="1.8" fill={C.bl}/>)}
+    {values.map((v,i)=><circle key={i} cx={X(i)} cy={Y(v)} r="1.8" fill={C.bl}><title>{`${chart.time?.[i]||"Point "+(i+1)}: ${_spcFmt(v)}`}</title></circle>)}
   </svg>);
 }
 
