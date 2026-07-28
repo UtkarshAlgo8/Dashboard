@@ -50,6 +50,19 @@ export function getProcessKpiChildren({ kpiNames, date, shift = "All", section }
   return client.get(`/quality/process/kpi-children?${params.toString()}`);
 }
 
+export function getProcessKpiHistory({ kpiName, dateFrom, dateTo, shift = "All", section, machine }) {
+  const params = new URLSearchParams({
+    plant: "BANMORE",
+    kpi_name: kpiName,
+    date_from: dateFrom,
+    date_to: dateTo,
+    shift,
+  });
+  if (section) params.set("section", section);
+  if (machine) params.set("machine", machine);
+  return client.get(`/quality/process/kpi-history?${params.toString()}`);
+}
+
 export function getSpcSummary({ date, machine } = {}) {
   const params = new URLSearchParams({ plant: "BANMORE" });
   if (date) params.set("date", date);

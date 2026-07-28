@@ -16,6 +16,7 @@ import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import {
   getProcessKpiChildren,
+  getProcessKpiHistory,
   getProcessKpiValues,
   getSpcDetail,
   getSpcFilterOptions,
@@ -596,6 +597,57 @@ function TrendPanel({kpi,onClose,tyreType,plant}){
   </div>);
 }
 
+function LiveProcessTrendPanel({kpi,onClose,dateFrom,dateTo,shift}){
+  const [points,setPoints]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+  useEffect(()=>{const h=e=>{if(e.key==="Escape")onClose();};window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[onClose]);
+  useEffect(()=>{
+    if(!kpi?.trendKpiName)return;
+    let cancelled=false;
+    setLoading(true);setError(null);setPoints([]);
+    getProcessKpiHistory({kpiName:kpi.trendKpiName,dateFrom,dateTo,shift})
+      .then(res=>{if(!cancelled)setPoints(Array.isArray(res?.points)?res.points.filter(p=>p.value!=null):[]);})
+      .catch(err=>{if(!cancelled)setError(err);})
+      .finally(()=>{if(!cancelled)setLoading(false);});
+    return()=>{cancelled=true;};
+  },[kpi?.trendKpiName,dateFrom,dateTo,shift]);
+  if(!kpi)return null;
+  const labels=points.map(p=>String(p.date||"").slice(5));
+  const series=points.map(p=>Number(p.value));
+  const targetNum=kpi.target!=null?parseFloat(String(kpi.target).replace(/[^0-9.\-]/g,"")):NaN;
+  const current=series.length?series[series.length-1]:parseFloat(String(kpi.v).replace(/,/g,""));
+  const target=!isNaN(targetNum)?targetNum:current;
+  const inv=/Violation|Scrap|Reject|Loss|Absent|First|Downtime|NCM|Defect|Reduced|Stoppage|Repeat|Hold|Breakdown/i.test(kpi.n);
+  const stCol=kpi.id==="mqv"?C.rd:kpi.id==="audit"?C.bl:C.ac;
+  const ins=series.length?_genInsight(series,target,current,inv,kpi.n):{bestIdx:-1,worstIdx:-1};
+  return(<div onClick={onClose} className="no-print" style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn .15s ease"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.cd,borderRadius:12,maxWidth:740,width:"100%",maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,.25)",border:"1px solid "+C.bd}}>
+      <div style={{padding:"14px 18px",borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+        <div>
+          <div style={{fontSize:12,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px"}}>KPI Trend Analysis</div>
+          <div style={{fontSize:19,fontWeight:700,color:C.tx,marginTop:2}}>{kpi.n}</div>
+          <div style={{fontSize:12,color:C.mu,marginTop:2}}>{dateFrom} to {dateTo} · {shift==="All"?"DAY":`SHIFT ${shift}`}</div>
+        </div>
+        <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:C.c2,color:C.mu,fontSize:19,cursor:"pointer",lineHeight:1}}>{"✕"}</button>
+      </div>
+      <div style={{padding:"14px 18px"}}>
+        <div style={{background:C.c2,borderRadius:8,border:"1px solid "+C.bd,padding:"10px 12px 4px"}}>
+          <div style={{fontSize:12,color:C.mu,fontWeight:600,textTransform:"uppercase",marginBottom:4,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <span>Actual vs Target — fetched from API</span>
+            <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:14,height:2,background:stCol,display:"inline-block"}}/>Actual</span>
+            {!isNaN(targetNum)&&<span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:14,height:0,borderTop:"1.5px dashed "+C.am,display:"inline-block"}}/>Target</span>}
+          </div>
+          {loading&&<div style={{padding:24,textAlign:"center",fontSize:13,color:C.mu}}>Fetching trend points...</div>}
+          {error&&<div style={{padding:24,textAlign:"center",fontSize:13,color:C.rd}}>Trend fetch failed: {error.message||"Request failed"}</div>}
+          {!loading&&!error&&!series.length&&<div style={{padding:24,textAlign:"center",fontSize:13,color:C.mu}}>No trend points returned for this date range.</div>}
+          {!loading&&!error&&series.length>0&&<TrendChart labels={labels} series={series} target={target} color={stCol} bestIdx={ins.bestIdx} worstIdx={ins.worstIdx}/>}
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+
 /* ─── DOWNLOAD HELPERS ─── */
 function _safeName(s){return (s||"export").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60)||"export";}
 function _dl(blob,filename){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},0);}
@@ -862,7 +914,7 @@ function ControlChart({data,ucl,lcl,target,w=240,h=80}){
 function QKpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
   const stCol=kpi.status==="Red"?C.rd:kpi.status==="Yellow"?C.am:kpi.status==="Green"?C.gn:"#9CA3AF";
   const v=tAdjust(kpi.v,kpi.n,tyreType,plant);
-  const canTrend=!kpi.na&&Array.isArray(kpi.sp)&&kpi.sp.length>1&&typeof onTrend==="function";
+  const canTrend=!kpi.na&&kpi.trendApi&&typeof onTrend==="function";
   const trendClick=e=>{e.stopPropagation();if(onTrend)onTrend(kpi);};
   return(<div onClick={onToggle} style={{background:C.cd,borderRadius:C.r,border:"1px solid "+(isOpen?C.ac+"88":C.bd),boxShadow:isOpen?"0 0 0 1px "+C.ac+"40, "+C.sh:C.sh,cursor:kpi.drill?"pointer":"default",overflow:"hidden",transition:"border-color .2s",borderLeft:"3px solid "+stCol}}>
     <div style={{padding:"10px 12px"}}>
@@ -900,7 +952,7 @@ const PROCESS_KPIS=[
 
 const LIVE_PROCESS_KPI_IDS=new Set(Object.keys(PROCESS_KPI_NAME));
 const toNaKpi=kpi=>({...kpi,v:"NA",u:"",target:null,status:null,sp:null,drill:null,manual:false,live:false,na:true});
-const toPendingLiveKpi=kpi=>({...kpi,v:"—",status:null,sp:null,live:false,na:false});
+const toPendingLiveKpi=kpi=>({...kpi,v:"—",status:null,sp:null,live:false,na:false,trendApi:true,trendKpiName:PROCESS_KPI_NAME[kpi.id]});
 
 const LIVE_PROCESS_DRILLS={
   pqr:{
@@ -2657,9 +2709,7 @@ function SpcRuleWorkstation({s,p}){
 
 function SPCDetail({p,onBack}){
   const s=_spcCompute(p);
-  const [capTrend,setCapTrend]=useState(null);
   const capCol=v=>v<1.0?C.rd:v<1.33?C.am:C.gn;
-  const capKpi=(name,val,unit,target)=>({n:name+" — "+p.pm,v:String(val),u:unit||"",target:String(target),sp:_capSp(_spcSeed(p.key+name),Number(val))});
   return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <button onClick={onBack} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+C.bd,background:C.c2,color:C.pp,fontSize:12,fontWeight:600,cursor:"pointer"}}>{"‹ All processes"}</button>
@@ -2672,11 +2722,11 @@ function SPCDetail({p,onBack}){
         : "⚠ Capability provisional — N="+p.covN+", shifts "+p.shifts.join("/")+". Below the N≥300 / 3-shift gate; treat Cp/Cpk as indicative until coverage is met."}
     </div>
     <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-      {_SpcTile({label:"Cp",val:s.cp.toFixed(2),sub:"potential (within)",col:capCol(s.cp),onTrend:()=>setCapTrend(capKpi("Cp",s.cp.toFixed(2),"",1.33))})}
-      {_SpcTile({label:"Cpk",val:s.cpk.toFixed(2),sub:"actual (centred)",col:capCol(s.cpk),onTrend:()=>setCapTrend(capKpi("Cpk",s.cpk.toFixed(2),"",1.33))})}
-      {_SpcTile({label:"Pp",val:s.pp.toFixed(2),sub:"overall",col:capCol(s.pp),onTrend:()=>setCapTrend(capKpi("Pp",s.pp.toFixed(2),"",1.33))})}
-      {_SpcTile({label:"Ppk",val:s.ppk.toFixed(2),sub:"overall (centred)",col:capCol(s.ppk),onTrend:()=>setCapTrend(capKpi("Ppk",s.ppk.toFixed(2),"",1.33))})}
-      {_SpcTile({label:"Sigma level",val:s.sigmaLevel.toFixed(1)+"σ",sub:"process",col:capCol(s.cpk),onTrend:()=>setCapTrend(capKpi("Sigma level",s.sigmaLevel.toFixed(1),"σ",4.0))})}
+      {_SpcTile({label:"Cp",val:s.cp.toFixed(2),sub:"potential (within)",col:capCol(s.cp)})}
+      {_SpcTile({label:"Cpk",val:s.cpk.toFixed(2),sub:"actual (centred)",col:capCol(s.cpk)})}
+      {_SpcTile({label:"Pp",val:s.pp.toFixed(2),sub:"overall",col:capCol(s.pp)})}
+      {_SpcTile({label:"Ppk",val:s.ppk.toFixed(2),sub:"overall (centred)",col:capCol(s.ppk)})}
+      {_SpcTile({label:"Sigma level",val:s.sigmaLevel.toFixed(1)+"σ",sub:"process",col:capCol(s.cpk)})}
     </div>
     <SpcRuleWorkstation s={s} p={p}/>
     <Card title={"R Chart — subgroup range ("+p.unit+")"} accent={C.pp}>
@@ -2687,7 +2737,6 @@ function SPCDetail({p,onBack}){
       <div style={{background:C.c2,borderRadius:8,border:"1px solid "+C.bd,padding:"8px 6px"}}>{_CapHist({s,p})}</div>
       <div style={{fontSize:11.5,color:C.mu,marginTop:6}}>{"Spread of individual readings against USL/LSL with the fitted normal curve. Red bars/tails fall outside spec. Cp compares spec width to process width; Cpk penalises off-centring."}</div>
     </Card>
-    {capTrend&&<TechTrendPanel kpi={capTrend} initialRange="Daily" onClose={()=>setCapTrend(null)}/>}
   </div>);
 }
 
@@ -2885,7 +2934,7 @@ export default function QualityDashboard({plant,onBack}){
     if(!LIVE_PROCESS_KPI_IDS.has(k.id))return toNaKpi(k);
     const live=liveProcess&&liveProcess[k.id];
     if(!live)return toPendingLiveKpi(k);
-    return {...k,v:live.value==null?"—":String(live.value),status:null,sp:null,live:true,na:false};
+    return {...k,v:live.value==null?"—":String(live.value),status:null,sp:null,live:true,na:false,trendApi:true,trendKpiName:PROCESS_KPI_NAME[k.id]};
   });
   const productCards=PRODUCT_KPIS.map(toNaKpi);
   const complaintCards=COMPLAINT_KPIS.map(toNaKpi);
@@ -2953,6 +3002,6 @@ export default function QualityDashboard({plant,onBack}){
         {tab==="complaint"&&<ComplaintDrillPanel kpi={openObj} sub={sub} setSub={setSub}/>}
       </div>}
     </div>
-    {trendKpi&&<TrendPanel kpi={trendKpi} onClose={()=>setTrendKpi(null)} tyreType={tyreType} plant={plant}/>}
+    {trendKpi&&trendKpi.trendApi&&<LiveProcessTrendPanel kpi={trendKpi} onClose={()=>setTrendKpi(null)} dateFrom={tfFrom} dateTo={tfTo} shift={shift}/>}
   </div>);
 }
