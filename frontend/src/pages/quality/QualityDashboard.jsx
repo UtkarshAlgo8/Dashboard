@@ -936,7 +936,9 @@ function ControlChart({data,ucl,lcl,target,w=240,h=80}){
 }
 
 function QKpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
-  const stCol=kpi.status==="Red"?C.rd:kpi.status==="Yellow"?C.am:kpi.status==="Green"?C.gn:"#9CA3AF";
+  const stCol=kpi.accentColor||(
+    kpi.status==="Red"?C.rd:kpi.status==="Yellow"?C.am:kpi.status==="Green"?C.gn:"#9CA3AF"
+  );
   const v=tAdjust(kpi.v,kpi.n,tyreType,plant);
   const canTrend=!kpi.na&&kpi.trendApi&&typeof onTrend==="function";
   const trendClick=e=>{e.stopPropagation();if(onTrend)onTrend(kpi);};
@@ -977,6 +979,14 @@ const PROCESS_KPIS=[
 const LIVE_PROCESS_KPI_IDS=new Set(Object.keys(PROCESS_KPI_NAME));
 const toNaKpi=kpi=>({...kpi,v:"NA",u:"",target:null,status:null,sp:null,drill:null,manual:false,live:false,na:true});
 const toPendingLiveKpi=kpi=>({...kpi,v:"—",status:null,sp:null,live:false,na:false,trendApi:true,trendKpiName:PROCESS_KPI_NAME[kpi.id]});
+function processAccentColor(id,value){
+  const n=typeof value==="number"?value:parseFloat(String(value));
+  if(isNaN(n))return "#9CA3AF";
+  if(id==="mqv")return n<5?C.gn:n<=7?C.am:C.rd;
+  if(id==="audit")return n>=95?C.gn:n>=80?C.am:C.rd;
+  if(id==="pqr")return n>=90?C.gn:n>=80?C.am:C.rd;
+  return "#9CA3AF";
+}
 
 const LIVE_PROCESS_DRILLS={
   pqr:{
@@ -2958,7 +2968,7 @@ export default function QualityDashboard({plant,onBack}){
     if(!LIVE_PROCESS_KPI_IDS.has(k.id))return toNaKpi(k);
     const live=liveProcess&&liveProcess[k.id];
     if(!live)return toPendingLiveKpi(k);
-    return {...k,v:live.value==null?"—":String(live.value),status:null,sp:null,live:true,na:false,trendApi:true,trendKpiName:PROCESS_KPI_NAME[k.id]};
+    return {...k,v:live.value==null?"—":String(live.value),status:null,sp:null,live:true,na:false,trendApi:true,trendKpiName:PROCESS_KPI_NAME[k.id],accentColor:processAccentColor(k.id,live.value)};
   });
   const productCards=PRODUCT_KPIS.map(toNaKpi);
   const complaintCards=COMPLAINT_KPIS.map(toNaKpi);
