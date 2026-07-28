@@ -1027,6 +1027,9 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift}){
   if(LIVE_PROCESS_DRILLS[kpi.drill]){
     return <LiveProcessDrillPanel kpi={kpi} date={date} shift={shift}/>;
   }
+  return <Card title={`${kpi.n} — Drilldown`} accent={C.mu}>
+    <div style={{padding:14,color:C.mu,fontSize:13}}>Drilldown is not available because this KPI is not API-backed.</div>
+  </Card>;
 
   if(kpi.drill==="pqr"){
     const procs=[

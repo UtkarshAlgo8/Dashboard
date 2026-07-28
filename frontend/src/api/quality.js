@@ -11,7 +11,7 @@ import client from "./client.js";
 
 // Frontend Process card id → gold `kpi_name` (overall level). Only these
 // three are backed by the gold layer; FTQ / Audit Deviation / Critical
-// Parameter / SPR are "not_available" in the FRD (§1.6) and stay on mock.
+// Parameter / SPR are "not_available" in the FRD (§1.6) and render as NA.
 export const PROCESS_KPI_NAME = {
   pqr: "Plant_quality_rating_o",
   audit: "Plan_Compliance_o",
