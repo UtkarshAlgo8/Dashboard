@@ -860,15 +860,16 @@ function ControlChart({data,ucl,lcl,target,w=240,h=80}){
 }
 
 function QKpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
-  const stCol=kpi.status==="Red"?C.rd:kpi.status==="Yellow"?C.am:kpi.status==="Grey"?"#6B7280":C.gn;
+  const stCol=kpi.status==="Red"?C.rd:kpi.status==="Yellow"?C.am:kpi.status==="Green"?C.gn:"#9CA3AF";
   const v=tAdjust(kpi.v,kpi.n,tyreType,plant);
+  const canTrend=!kpi.na&&Array.isArray(kpi.sp)&&kpi.sp.length>1&&typeof onTrend==="function";
   const trendClick=e=>{e.stopPropagation();if(onTrend)onTrend(kpi);};
   return(<div onClick={onToggle} style={{background:C.cd,borderRadius:C.r,border:"1px solid "+(isOpen?C.ac+"88":C.bd),boxShadow:isOpen?"0 0 0 1px "+C.ac+"40, "+C.sh:C.sh,cursor:kpi.drill?"pointer":"default",overflow:"hidden",transition:"border-color .2s",borderLeft:"3px solid "+stCol}}>
     <div style={{padding:"10px 12px"}}>
       <div style={{fontSize:11,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
         <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kpi.n}{kpi.manual&&<span style={{marginLeft:4,fontSize:11,padding:"1px 4px",background:"#9CA3AF22",color:"#6B7280",borderRadius:3}}>MANUAL</span>}</span>
         <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
-          <button onClick={trendClick} title="View Trend (Daily / Monthly / Yearly)" style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.bd,background:C.c2,color:C.mu,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><TrendIcon size={11}/></button>
+          {canTrend&&<button onClick={trendClick} title="View Trend (Daily / Monthly / Yearly)" style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.bd,background:C.c2,color:C.mu,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><TrendIcon size={11}/></button>}
           {kpi.drill&&<span title="Click card to drill down" style={{color:isOpen?C.ac:C.mu,transform:isOpen?"rotate(180deg)":"",transition:"transform .2s",fontSize:13}}>{"▼"}</span>}
         </div>
       </div>
@@ -896,6 +897,10 @@ const PROCESS_KPIS=[
   {id:"ftq",n:"FTQ",v:"95.1",u:"%",target:"99%",status:"Red",sp:[96.2,95.9,95.6,95.3,95.1],drill:"ftq"},
   {id:"spr",n:"SPR (Straight Pass Ratio)",v:"98.2",u:"%",target:"99%",status:"Yellow",sp:[98.5,98.3,98.2,98,98.2],drill:"spr"}
 ];
+
+const LIVE_PROCESS_KPI_IDS=new Set(Object.keys(PROCESS_KPI_NAME));
+const toNaKpi=kpi=>({...kpi,v:"NA",u:"",target:null,status:null,sp:null,drill:null,manual:false,live:false,na:true});
+const toPendingLiveKpi=kpi=>({...kpi,v:"—",status:null,sp:null,live:false,na:false});
 
 const LIVE_PROCESS_DRILLS={
   pqr:{
@@ -2856,7 +2861,7 @@ export default function QualityDashboard({plant,onBack}){
   const [trendKpi,setTrendKpi]=useState(null);
   const [spcSel,setSpcSel]=useState(null);
   // Live Process values from the Excel-backed backend (FRD §1). null until the
-  // first fetch; {} on error → cards fall back to their mock values.
+  // first fetch; {} on error keeps cards neutral instead of showing mock data.
   const [liveProcess,setLiveProcess]=useState(null);
 
   useEffect(()=>{
@@ -2870,14 +2875,18 @@ export default function QualityDashboard({plant,onBack}){
     return()=>{cancelled=true;};
   },[tab,tfTo,shift]);
 
-  // Merge live overall values onto the supported Process cards; the rest stay
-  // on mock (FTQ / Audit Deviation / Critical Param / SPR are not_available).
+  // Merge live overall values onto supported Process cards. KPI cards without
+  // an API-backed value render as NA so the quality dashboard never shows dummy
+  // KPI data as production data.
   const processCards=PROCESS_KPIS.map(k=>{
+    if(!LIVE_PROCESS_KPI_IDS.has(k.id))return toNaKpi(k);
     const live=liveProcess&&liveProcess[k.id];
-    if(!live)return k;
-    return {...k,v:live.value==null?"—":String(live.value),live:true};
+    if(!live)return toPendingLiveKpi(k);
+    return {...k,v:live.value==null?"—":String(live.value),status:null,sp:null,live:true,na:false};
   });
-  const kpis=tab==="spc"?[]:tab==="process"?processCards:tab==="product"?PRODUCT_KPIS:COMPLAINT_KPIS;
+  const productCards=PRODUCT_KPIS.map(toNaKpi);
+  const complaintCards=COMPLAINT_KPIS.map(toNaKpi);
+  const kpis=tab==="spc"?[]:tab==="process"?processCards:tab==="product"?productCards:complaintCards;
   const openObj=openKpi?kpis.find(k=>k.id===openKpi):null;
   const tabAccent=tab==="process"?C.bl:tab==="product"?C.tl:C.rd;
 
