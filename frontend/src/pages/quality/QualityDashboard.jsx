@@ -2808,7 +2808,8 @@ function LiveSpcChart({title,chart,accent}){
   const plotPoints=points.filter(p=>typeof p.value==="number");
   const values=plotPoints.map(p=>p.value);
   if(!values.length)return <Card title={title} accent={accent}><div style={{padding:18,textAlign:"center",color:C.mu,fontSize:13}}>No chart data for this selection.</div></Card>;
-  const W=720,H=230,padL=48,padR=70,padT=18,padB=28;
+  const timeAxis=/\bX\b|X Chart|X Control/i.test(title||"");
+  const W=720,H=timeAxis?250:230,padL=48,padR=70,padT=18,padB=timeAxis?48:28;
   const pw=W-padL-padR,ph=H-padT-padB;
   const lo0=Math.min(chart.lcl??Infinity,...values),hi0=Math.max(chart.ucl??-Infinity,...values),pad=(hi0-lo0)*0.14||1,lo=lo0-pad,hi=hi0+pad;
   const X=i=>padL+(values.length<=1?pw/2:i*(pw/(values.length-1)));
@@ -2826,7 +2827,9 @@ function LiveSpcChart({title,chart,accent}){
       <polyline points={values.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.bl} strokeWidth="2"/>
       {plotPoints.map((p,i)=>{const pc=spcPointClass(p.rules);const flagged=Boolean(p.rules?.length);return <circle key={p.index} cx={X(i)} cy={Y(p.value)} r={flagged?4.6:3} fill={flagged?pc.color:C.bl} stroke="#fff" strokeWidth={flagged?1.3:0}/>;})}
       {plotPoints.map((p,i)=><circle key={"hit"+p.index} cx={X(i)} cy={Y(p.value)} r="9" fill="transparent" style={{cursor:"crosshair"}} onMouseEnter={()=>setHover(i)}/>)}
-      {plotPoints.map((p,i)=>(i%2===0?<text key={"t"+p.index} x={X(i)} y={H-8} fontSize="8.5" fill={C.mu} textAnchor="middle">{p.index}</text>:null))}
+      {plotPoints.map((p,i)=>{const every=timeAxis?Math.max(1,Math.ceil(plotPoints.length/10)):2;if(i%every!==0&&i!==plotPoints.length-1)return null;const label=timeAxis?(p.time||p.index):p.index;return(
+        <text key={"t"+p.index} x={X(i)} y={H-10} fontSize="8.5" fill={C.mu} textAnchor={timeAxis?"end":"middle"} transform={timeAxis?`rotate(-35 ${X(i)} ${H-10})`:undefined}>{label}</text>
+      );})}
       {chart.ucl!=null&&<text x={padL+pw+5} y={Y(chart.ucl)+3} fontSize="10" fill={C.rd}>{"UCL "+_spcFmt(chart.ucl)}</text>}
       {chart.cl!=null&&<text x={padL+pw+5} y={Y(chart.cl)+3} fontSize="10" fill={C.gn}>{"CL "+_spcFmt(chart.cl)}</text>}
       {chart.lcl!=null&&<text x={padL+pw+5} y={Y(chart.lcl)+3} fontSize="10" fill={C.rd}>{"LCL "+_spcFmt(chart.lcl)}</text>}
@@ -2841,6 +2844,7 @@ function LiveSpcChart({title,chart,accent}){
     </svg>
     <div style={{fontSize:11.5,color:C.mu,marginTop:6,display:"flex",gap:12,flexWrap:"wrap"}}>
       <span>{plotPoints.filter(p=>p.rules?.length).length} points with Nelson-rule markers.</span>
+      {timeAxis&&<span>X-axis: sampling time</span>}
       <span style={{color:C.rd}}>R1 Out of Control</span>
       <span style={{color:C.am}}>R5/R6/R8 Warning</span>
       <span style={{color:C.bl}}>R2/R3/R4/R7 Run / Trend</span>
@@ -2852,11 +2856,33 @@ function LiveHistogram({histogram}){
   const bins=Array.isArray(histogram?.bins)?histogram.bins:[];
   if(!bins.length)return null;
   const max=Math.max(...bins.map(b=>b.count||0),1);
+  const refs=[
+    {key:"lsl",label:"LSL",value:histogram.lsl,color:C.rd},
+    {key:"median",label:"Median",value:histogram.median,color:C.gn},
+    {key:"usl",label:"USL",value:histogram.usl,color:C.rd},
+  ].filter(r=>typeof r.value==="number");
+  const lo=Math.min(...bins.map(b=>b.from),...refs.map(r=>r.value));
+  const hi=Math.max(...bins.map(b=>b.to),...refs.map(r=>r.value));
+  const W=760,H=205,padL=36,padR=22,padT=24,padB=24;
+  const pw=W-padL-padR,ph=H-padT-padB;
+  const X=v=>padL+((v-lo)/((hi-lo)||1))*pw;
+  const Y=c=>padT+ph-(c/max)*ph;
   return(<Card title="Process Capability — distribution vs specification" accent={C.pp}>
-    <div style={{height:180,display:"flex",alignItems:"flex-end",gap:4,padding:"10px 8px",background:C.c2,border:"1px solid "+C.bd,borderRadius:8}}>
-      {bins.map((b,i)=><div key={i} title={`${_spcFmt(b.from)} - ${_spcFmt(b.to)}: ${b.count}`} style={{flex:1,height:Math.max(2,((b.count||0)/max)*150),background:b.out_of_spec?C.rd:C.bl,opacity:b.out_of_spec?0.9:0.55,borderRadius:"3px 3px 0 0"}}/>)}
+    <div style={{background:C.c2,border:"1px solid "+C.bd,borderRadius:8,padding:"8px 6px"}}>
+      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
+        <line x1={padL} y1={padT+ph} x2={padL+pw} y2={padT+ph} stroke={C.bd} strokeWidth="1"/>
+        {bins.map((b,i)=>{const x=X(b.from),w=Math.max(1,X(b.to)-X(b.from)-1),y=Y(b.count||0);return(
+          <rect key={i} x={x} y={y} width={w} height={padT+ph-y} fill={b.out_of_spec?C.rd:C.bl} opacity={b.out_of_spec?0.9:0.58} rx="2">
+            <title>{`${_spcFmt(b.from)} - ${_spcFmt(b.to)}: ${b.count}`}</title>
+          </rect>
+        );})}
+        {refs.map((r,i)=>{const x=X(r.value);return(<g key={r.key}>
+          <line x1={x} y1={padT} x2={x} y2={padT+ph} stroke={r.color} strokeWidth={r.key==="median"?"1.5":"1.8"} strokeDasharray={r.key==="median"?"4 3":undefined}/>
+          <text x={x} y={padT-7+(i%2)*11} fontSize="9.5" fill={r.color} fontWeight="700" textAnchor="middle">{r.label+" "+_spcFmt(r.value)}</text>
+        </g>);})}
+      </svg>
     </div>
-    <div style={{fontSize:11.5,color:C.mu,marginTop:6}}>Sample size {histogram.sample_size ?? "—"} · Mean {histogram.mean!=null?_spcFmt(histogram.mean):"—"} · Std {histogram.std!=null?_spcFmt(histogram.std):"—"}</div>
+    <div style={{fontSize:11.5,color:C.mu,marginTop:6}}>Sample size {histogram.sample_size ?? "—"} · Mean {histogram.mean!=null?_spcFmt(histogram.mean):"—"} · Median {histogram.median!=null?_spcFmt(histogram.median):"—"} · Std {histogram.std!=null?_spcFmt(histogram.std):"—"}</div>
   </Card>);
 }
 

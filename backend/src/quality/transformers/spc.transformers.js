@@ -175,6 +175,19 @@ function buildHistogram(plot, capability) {
   const half = width != null ? width / 2 : 0;
   const lsl = h.lsl ?? null;
   const usl = h.usl ?? null;
+  const total = counts.reduce((a, c) => a + (Number(c) || 0), 0);
+  let weightedMedian = null;
+  if (total > 0) {
+    let seen = 0;
+    const midpoint = total / 2;
+    for (let i = 0; i < centers.length; i += 1) {
+      seen += Number(counts[i]) || 0;
+      if (seen >= midpoint) {
+        weightedMedian = centers[i];
+        break;
+      }
+    }
+  }
   const bins = centers.map((c, i) => {
     const from = width != null ? Math.round((c - half) * 1e4) / 1e4 : c;
     const to = width != null ? Math.round((c + half) * 1e4) / 1e4 : c;
@@ -194,6 +207,7 @@ function buildHistogram(plot, capability) {
       y: Array.isArray(h.curve_y) ? h.curve_y : [],
     },
     mean: h.mean ?? null,
+    median: h.median ?? weightedMedian,
     usl,
     lsl,
     std: h.std ?? null,
