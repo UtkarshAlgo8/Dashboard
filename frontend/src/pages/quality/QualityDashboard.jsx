@@ -2791,29 +2791,60 @@ function LiveSpcMini({chart}){
   </svg>);
 }
 
+function spcRuleClass(rule){
+  if(rule===1)return {label:"Out of Control",color:C.rd,rank:0};
+  if([5,6,8].includes(rule))return {label:"Warning",color:C.am,rank:1};
+  if([2,3,4,7].includes(rule))return {label:"Run / Trend",color:C.bl,rank:2};
+  return {label:"Rule",color:C.mu,rank:3};
+}
+function spcPointClass(rules=[]){
+  if(!rules.length)return {label:"No Nelson violation",color:C.bl,rank:9};
+  return rules.map(spcRuleClass).sort((a,b)=>a.rank-b.rank)[0];
+}
+
 function LiveSpcChart({title,chart,accent}){
   const points=Array.isArray(chart?.points)?chart.points:[];
-  const values=points.map(p=>p.value).filter(v=>typeof v==="number");
+  const [hover,setHover]=useState(null);
+  const plotPoints=points.filter(p=>typeof p.value==="number");
+  const values=plotPoints.map(p=>p.value);
   if(!values.length)return <Card title={title} accent={accent}><div style={{padding:18,textAlign:"center",color:C.mu,fontSize:13}}>No chart data for this selection.</div></Card>;
   const W=720,H=230,padL=48,padR=70,padT=18,padB=28;
   const pw=W-padL-padR,ph=H-padT-padB;
   const lo0=Math.min(chart.lcl??Infinity,...values),hi0=Math.max(chart.ucl??-Infinity,...values),pad=(hi0-lo0)*0.14||1,lo=lo0-pad,hi=hi0+pad;
   const X=i=>padL+(values.length<=1?pw/2:i*(pw/(values.length-1)));
   const Y=v=>padT+ph-((v-lo)/(hi-lo))*ph;
-  const flagged=new Set(points.filter(p=>p.rules?.length).map(p=>p.index));
+  const hoverPoint=hover!=null?plotPoints[hover]:null;
+  const hoverRules=hoverPoint?.rules||[];
+  const hoverClass=spcPointClass(hoverRules);
+  const tx=hover!=null?Math.min(Math.max(X(hover)-82,padL),padL+pw-164):0;
+  const ty=hoverPoint?Math.max(Y(hoverPoint.value)-82,padT+4):0;
   return(<Card title={title} accent={accent}>
-    <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
+    <svg viewBox={"0 0 "+W+" "+H} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:"auto",display:"block"}}>
       {chart.ucl!=null&&<line x1={padL} y1={Y(chart.ucl)} x2={padL+pw} y2={Y(chart.ucl)} stroke={C.rd} strokeWidth="1.3" strokeDasharray="6 3"/>}
       {chart.cl!=null&&<line x1={padL} y1={Y(chart.cl)} x2={padL+pw} y2={Y(chart.cl)} stroke={C.gn} strokeWidth="1.3"/>}
       {chart.lcl!=null&&<line x1={padL} y1={Y(chart.lcl)} x2={padL+pw} y2={Y(chart.lcl)} stroke={C.rd} strokeWidth="1.3" strokeDasharray="6 3"/>}
       <polyline points={values.map((v,i)=>X(i)+","+Y(v)).join(" ")} fill="none" stroke={C.bl} strokeWidth="2"/>
-      {points.map((p,i)=><circle key={p.index} cx={X(i)} cy={Y(p.value)} r={flagged.has(p.index)?4.4:3} fill={flagged.has(p.index)?C.rd:C.bl} stroke="#fff" strokeWidth={flagged.has(p.index)?1.3:0}/>)}
-      {points.map((p,i)=>(i%2===0?<text key={"t"+p.index} x={X(i)} y={H-8} fontSize="8.5" fill={C.mu} textAnchor="middle">{p.index}</text>:null))}
+      {plotPoints.map((p,i)=>{const pc=spcPointClass(p.rules);const flagged=Boolean(p.rules?.length);return <circle key={p.index} cx={X(i)} cy={Y(p.value)} r={flagged?4.6:3} fill={flagged?pc.color:C.bl} stroke="#fff" strokeWidth={flagged?1.3:0}/>;})}
+      {plotPoints.map((p,i)=><circle key={"hit"+p.index} cx={X(i)} cy={Y(p.value)} r="9" fill="transparent" style={{cursor:"crosshair"}} onMouseEnter={()=>setHover(i)}/>)}
+      {plotPoints.map((p,i)=>(i%2===0?<text key={"t"+p.index} x={X(i)} y={H-8} fontSize="8.5" fill={C.mu} textAnchor="middle">{p.index}</text>:null))}
       {chart.ucl!=null&&<text x={padL+pw+5} y={Y(chart.ucl)+3} fontSize="10" fill={C.rd}>{"UCL "+_spcFmt(chart.ucl)}</text>}
       {chart.cl!=null&&<text x={padL+pw+5} y={Y(chart.cl)+3} fontSize="10" fill={C.gn}>{"CL "+_spcFmt(chart.cl)}</text>}
       {chart.lcl!=null&&<text x={padL+pw+5} y={Y(chart.lcl)+3} fontSize="10" fill={C.rd}>{"LCL "+_spcFmt(chart.lcl)}</text>}
+      {hoverPoint&&<g pointerEvents="none">
+        <line x1={X(hover)} y1={padT} x2={X(hover)} y2={padT+ph} stroke={C.mu} strokeWidth="0.8" strokeDasharray="3 3" opacity="0.55"/>
+        <rect x={tx} y={ty} width="164" height={hoverRules.length?76:58} rx="6" fill="#fff" stroke={hoverClass.color} strokeWidth="1.2"/>
+        <text x={tx+9} y={ty+15} fontSize="10" fill={C.mu}>{"Point #"+hoverPoint.index+(hoverPoint.time?" · "+hoverPoint.time:"")}</text>
+        <text x={tx+9} y={ty+31} fontSize="11" fontWeight="800" fill={C.tx}>{"Value: "+_spcFmt(hoverPoint.value)}</text>
+        <text x={tx+9} y={ty+47} fontSize="10.5" fill={hoverClass.color} fontWeight="700">{hoverRules.length?hoverClass.label:"No Nelson violation"}</text>
+        {hoverRules.length>0&&<text x={tx+9} y={ty+63} fontSize="10" fill={C.md}>{"Rules: "+hoverRules.map(r=>"R"+r).join(", ")+" · z "+_spcFmt(hoverPoint.z)}</text>}
+      </g>}
     </svg>
-    <div style={{fontSize:11.5,color:C.mu,marginTop:6}}>{points.filter(p=>p.rules?.length).length} points with active Nelson-rule markers.</div>
+    <div style={{fontSize:11.5,color:C.mu,marginTop:6,display:"flex",gap:12,flexWrap:"wrap"}}>
+      <span>{plotPoints.filter(p=>p.rules?.length).length} points with Nelson-rule markers.</span>
+      <span style={{color:C.rd}}>R1 Out of Control</span>
+      <span style={{color:C.am}}>R5/R6/R8 Warning</span>
+      <span style={{color:C.bl}}>R2/R3/R4/R7 Run / Trend</span>
+    </div>
   </Card>);
 }
 
