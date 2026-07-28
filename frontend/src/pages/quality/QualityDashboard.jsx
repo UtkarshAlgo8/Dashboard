@@ -598,20 +598,32 @@ function TrendPanel({kpi,onClose,tyreType,plant}){
 }
 
 function LiveProcessTrendPanel({kpi,onClose,dateFrom,dateTo,shift}){
+  const initialPreset=dateFrom===dateTo?"day":dateFrom===QUALITY_MONTH_FROM&&dateTo===QUALITY_MONTH_TO?"month":dateFrom==="2026-01-01"&&dateTo==="2026-12-31"?"year":"";
+  const [rangePreset,setRangePreset]=useState(initialPreset);
+  const [trendFrom,setTrendFrom]=useState(dateFrom||QUALITY_DATA_DATE);
+  const [trendTo,setTrendTo]=useState(dateTo||QUALITY_DATA_DATE);
   const [points,setPoints]=useState([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState(null);
   useEffect(()=>{const h=e=>{if(e.key==="Escape")onClose();};window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[onClose]);
+  const applyTrendPreset=preset=>{
+    setRangePreset(preset);
+    if(preset==="day"){setTrendFrom(QUALITY_DATA_DATE);setTrendTo(QUALITY_DATA_DATE);}
+    else if(preset==="month"){setTrendFrom(QUALITY_MONTH_FROM);setTrendTo(QUALITY_MONTH_TO);}
+    else if(preset==="year"){setTrendFrom("2026-01-01");setTrendTo("2026-12-31");}
+  };
+  const onTrendFromChange=e=>{setRangePreset("");setTrendFrom(e.target.value);};
+  const onTrendToChange=e=>{setRangePreset("");setTrendTo(e.target.value);};
   useEffect(()=>{
     if(!kpi?.trendKpiName)return;
     let cancelled=false;
     setLoading(true);setError(null);setPoints([]);
-    getProcessKpiHistory({kpiName:kpi.trendKpiName,dateFrom,dateTo,shift})
+    getProcessKpiHistory({kpiName:kpi.trendKpiName,dateFrom:trendFrom,dateTo:trendTo,shift})
       .then(res=>{if(!cancelled)setPoints(Array.isArray(res?.points)?res.points.filter(p=>p.value!=null):[]);})
       .catch(err=>{if(!cancelled)setError(err);})
       .finally(()=>{if(!cancelled)setLoading(false);});
     return()=>{cancelled=true;};
-  },[kpi?.trendKpiName,dateFrom,dateTo,shift]);
+  },[kpi?.trendKpiName,trendFrom,trendTo,shift]);
   if(!kpi)return null;
   const labels=points.map(p=>String(p.date||"").slice(5));
   const series=points.map(p=>Number(p.value));
@@ -627,9 +639,21 @@ function LiveProcessTrendPanel({kpi,onClose,dateFrom,dateTo,shift}){
         <div>
           <div style={{fontSize:12,color:C.mu,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px"}}>KPI Trend Analysis</div>
           <div style={{fontSize:19,fontWeight:700,color:C.tx,marginTop:2}}>{kpi.n}</div>
-          <div style={{fontSize:12,color:C.mu,marginTop:2}}>{dateFrom} to {dateTo} · {shift==="All"?"DAY":`SHIFT ${shift}`}</div>
+          <div style={{fontSize:12,color:C.mu,marginTop:2}}>{trendFrom} to {trendTo} · {shift==="All"?"DAY":`SHIFT ${shift}`}</div>
         </div>
         <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.bd,background:C.c2,color:C.mu,fontSize:19,cursor:"pointer",lineHeight:1}}>{"✕"}</button>
+      </div>
+      <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.bd,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:1,background:C.bg,borderRadius:10,padding:2}}>
+          {[["day","Day"],["month","Month"],["year","Year"]].map(([id,label])=>{const active=rangePreset===id;return(
+            <button key={id} onClick={()=>applyTrendPreset(id)} style={{padding:"4px 12px",borderRadius:8,border:"none",background:active?C.cd:"transparent",color:active?C.tx:C.mu,fontSize:12,fontWeight:active?700:500,cursor:"pointer"}}>{label}</button>
+          );})}
+        </div>
+        <div title="Trend date range" style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",border:"1px solid "+C.bd,borderRadius:8,background:C.cd}}>
+          <input type="date" value={trendFrom} onChange={onTrendFromChange} style={{border:"none",outline:"none",background:"transparent",fontSize:12,fontFamily:"inherit",color:C.tx,padding:"2px 0",width:116}}/>
+          <span style={{color:C.bd,fontSize:12}}>{"–"}</span>
+          <input type="date" value={trendTo} onChange={onTrendToChange} style={{border:"none",outline:"none",background:"transparent",fontSize:12,fontFamily:"inherit",color:C.tx,padding:"2px 0",width:116}}/>
+        </div>
       </div>
       <div style={{padding:"14px 18px"}}>
         <div style={{background:C.c2,borderRadius:8,border:"1px solid "+C.bd,padding:"10px 12px 4px"}}>
