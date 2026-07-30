@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import {
   Box,
+  Button,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -49,6 +52,21 @@ const COMPONENT_PARENT_KPI = {
   performance: "Performance_m",
   quality: "Quality_m",
 };
+const MACHINE_PAGE_SIZE = 10;
+const OEE_CORE_KPIS = new Set([
+  "OEE_o",
+  "OEE_s",
+  "OEE_m",
+  "Availability_o",
+  "Availability_s",
+  "Availability_m",
+  "Performance_o",
+  "Performance_s",
+  "Performance_m",
+  "Quality_o",
+  "Quality_s",
+  "Quality_m",
+]);
 
 function OeeDrillPanel({
   section,
@@ -64,6 +82,7 @@ function OeeDrillPanel({
   trench = false,
 }) {
   const [search, setSearch] = useState("");
+  const [machinePage, setMachinePage] = useState(0);
   const [selectedCell, setSelectedCell] = useState(null);
   const [subCategory, setSubCategory] = useState(null);
   // dashboard_doc.md §6: Curing only — a trench (Tredge) tier sits ABOVE the
@@ -81,19 +100,29 @@ function OeeDrillPanel({
       section,
     [section],
   );
+  const machinePageKey = `${search}|${sectionName}|${selectedTredge ?? ""}`;
+  const [prevMachinePageKey, setPrevMachinePageKey] = useState(machinePageKey);
+  if (prevMachinePageKey !== machinePageKey) {
+    setPrevMachinePageKey(machinePageKey);
+    setMachinePage(0);
+  }
 
   // OEE is machine-scoped only (§15.5): use the rows as-is, no product
   // filtering. Collapse to the latest available date in snapshot mode so
   // the drill reconciles with the card and we never average a week.
   const scopedRows = useMemo(() => {
-    const rows = rawRows ?? [];
+    const rows = (rawRows ?? []).filter((r) => {
+      if (r?.section !== sectionName) return false;
+      if (OEE_CORE_KPIS.has(r.kpi_name)) return true;
+      return Boolean(r.machine && r.machine !== "nan");
+    });
     if (cardDate) {
       // C3/C6: pinned to the card's day — no "latest date" resolution at all.
       const want = dateKey(cardDate);
       return rows.filter((r) => dateKey(r?.date) === want);
     }
     return snapshotLatest(rows, mode);
-  }, [rawRows, mode, cardDate]);
+  }, [rawRows, sectionName, mode, cardDate]);
 
   // Read the stored value for one kpi_name VERBATIM (optionally
   // machine-scoped). scopedRows is already collapsed to the snapshot day,
@@ -221,6 +250,15 @@ function OeeDrillPanel({
     if (!q) return machines;
     return machines.filter((m) => m.name.toLowerCase().includes(q));
   }, [machines, search]);
+  const machinePageCount = Math.max(
+    1,
+    Math.ceil(filteredMachines.length / MACHINE_PAGE_SIZE),
+  );
+  const activeMachinePage = Math.min(machinePage, machinePageCount - 1);
+  const visibleMachines = useMemo(() => {
+    const start = activeMachinePage * MACHINE_PAGE_SIZE;
+    return filteredMachines.slice(start, start + MACHINE_PAGE_SIZE);
+  }, [filteredMachines, activeMachinePage]);
 
   const handleSelectCell = (machineId, component) => {
     setSelectedCell((current) => {
@@ -434,16 +472,15 @@ function OeeDrillPanel({
                 }}
               >
                 <Typography sx={{ fontSize: 13 }}>
-                  Machine-level rows for {sectionName} weren&rsquo;t in this
-                  fetch (Lambda 5000-row cap). Pick a narrower date range to see
-                  them.
+                  Machine-level rows for {sectionName} are not available for
+                  this selection.
                 </Typography>
               </Box>
             )
           ) : (
             <>
               <MachineTable
-                machines={filteredMachines.map((m) => ({
+                machines={visibleMachines.map((m) => ({
                   id: m.id,
                   name: m.name,
                   availability: m.availability ?? 0,
@@ -453,6 +490,13 @@ function OeeDrillPanel({
                 selectedCell={selectedCell}
                 onSelectCell={handleSelectCell}
               />
+              {filteredMachines.length > MACHINE_PAGE_SIZE && (
+                <TablePager
+                  page={activeMachinePage}
+                  pageCount={machinePageCount}
+                  onPage={setMachinePage}
+                />
+              )}
               {selectedMachine && selectedCell && activeSubCategory && (
                 <SubDrill
                   machine={selectedMachine}
@@ -564,6 +608,50 @@ function TrenchTh({ children, align = "center" }) {
     >
       {children}
     </TableCell>
+  );
+}
+
+function TablePager({ page, pageCount, onPage }) {
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="flex-end"
+      spacing={1.25}
+      sx={{ pt: 0.5 }}
+    >
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={() => onPage(Math.max(0, page - 1))}
+        disabled={page <= 0}
+      >
+        Prev
+      </Button>
+      <Select
+        size="small"
+        value={page}
+        onChange={(e) => onPage(Number(e.target.value))}
+        sx={{
+          minWidth: 104,
+          "& .MuiSelect-select": { py: 0.55, fontSize: 12 },
+        }}
+      >
+        {Array.from({ length: pageCount }, (_, i) => (
+          <MenuItem key={i} value={i}>
+            Page {i + 1}
+          </MenuItem>
+        ))}
+      </Select>
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={() => onPage(Math.min(pageCount - 1, page + 1))}
+        disabled={page >= pageCount - 1}
+      >
+        Next
+      </Button>
+    </Stack>
   );
 }
 

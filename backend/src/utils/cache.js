@@ -7,6 +7,7 @@ import { config } from "../config.js";
  */
 
 const store = new Map();
+const pending = new Map();
 
 export function cacheGet(key) {
   const entry = store.get(key);
@@ -25,9 +26,18 @@ export function cacheSet(key, value, ttlMs = config.cacheTtlMs) {
 export async function cached(key, loader, ttlMs) {
   const hit = cacheGet(key);
   if (hit !== null) return hit;
-  const value = await loader();
-  cacheSet(key, value, ttlMs);
-  return value;
+  const inflight = pending.get(key);
+  if (inflight) return inflight;
+  const promise = loader()
+    .then((value) => {
+      cacheSet(key, value, ttlMs);
+      return value;
+    })
+    .finally(() => {
+      pending.delete(key);
+    });
+  pending.set(key, promise);
+  return promise;
 }
 
 export function buildCacheKey(route, query = {}) {
@@ -50,4 +60,5 @@ export function buildCacheKey(route, query = {}) {
 
 export function _clear() {
   store.clear();
+  pending.clear();
 }

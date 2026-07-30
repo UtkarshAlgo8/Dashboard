@@ -25,6 +25,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *   useEffect deps array.
  * @param {boolean} [options.enabled=true] - When false, the hook
  *   does not fetch and returns null data.
+ * @param {boolean} [options.keepPreviousData=false] - When true, dependency
+ *   changes refetch in place instead of clearing the last successful result.
  * @returns {{
  *   data: T | null,
  *   error: Error | null,
@@ -33,7 +35,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * }}
  */
 export function usePolledQuery(fetcher, options = {}) {
-  const { interval = 60000, deps = [], enabled = true } = options;
+  const {
+    interval = 60000,
+    deps = [],
+    enabled = true,
+    keepPreviousData = false,
+  } = options;
 
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -78,12 +85,12 @@ export function usePolledQuery(fetcher, options = {}) {
     // assumes synchronous setState cascading is a problem, but here
     // setIsLoading(true) + a deferred setData on resolution is the
     // canonical pattern.
-    /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
     // Drop the previous slice on deps-change so consumers can show a
     // skeleton instead of stale data from the prior selection.
     // Background polls (the setInterval below) call run() directly
     // without resetting data — so polled refreshes stay seamless.
-    setData(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!keepPreviousData) setData(null);
     run();
     if (interval <= 0) return undefined;
     const handle = setInterval(run, interval);
@@ -91,8 +98,10 @@ export function usePolledQuery(fetcher, options = {}) {
       clearInterval(handle);
       tokenRef.current += 1;
     };
-    /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
-  }, [enabled, interval, ...deps]);
+    // `deps` is the caller-owned list of fetch inputs; spreading it here is
+    // the API this hook exposes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, interval, keepPreviousData, run, ...deps]);
 
   return { data, error, isLoading, refetch };
 }

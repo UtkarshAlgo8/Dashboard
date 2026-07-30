@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import {
   Box,
   Button,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -437,6 +439,7 @@ function ProductionDrillPanel({
                 <Pager
                   page={page}
                   hasMore={hasMore}
+                  onPage={setPage}
                   onPrev={() => setPage((p) => Math.max(0, p - 1))}
                   onNext={() => setPage((p) => p + 1)}
                 />
@@ -461,7 +464,7 @@ function ProductionDrillPanel({
  * server-side. Prev/Next; Next is disabled when the last page returned fewer
  * than a full 100 rows (no total count in the raw LIMIT/OFFSET model).
  */
-function Pager({ page, hasMore, onPrev, onNext }) {
+function Pager({ page, hasMore, onPage, onPrev, onNext }) {
   return (
     <Stack
       direction="row"
@@ -479,15 +482,26 @@ function Pager({ page, hasMore, onPrev, onNext }) {
         Prev
       </Button>
       <Typography
+        component="span"
+        sx={{ fontSize: 12, color: "text.secondary" }}
+      >
+        Page
+      </Typography>
+      <Select
+        size="small"
+        value={page}
+        onChange={(e) => onPage(Number(e.target.value))}
         sx={{
-          fontSize: 12,
-          color: "text.secondary",
-          minWidth: 90,
-          textAlign: "center",
+          minWidth: 96,
+          "& .MuiSelect-select": { py: 0.55, fontSize: 12 },
         }}
       >
-        Page {page + 1}
-      </Typography>
+        {Array.from({ length: page + (hasMore ? 2 : 1) }, (_, i) => (
+          <MenuItem key={i} value={i}>
+            {i + 1}
+          </MenuItem>
+        ))}
+      </Select>
       <Button
         size="small"
         variant="outlined"

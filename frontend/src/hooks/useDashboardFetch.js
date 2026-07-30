@@ -23,6 +23,12 @@ import { buildDatePayload } from "@/lib/timeRange.js";
 import { getAnchors } from "@/api/dashboard.js";
 import client from "@/api/client.js";
 
+const DASHBOARD_CACHE_TTL_MS = 2 * 60 * 1000;
+const DASHBOARD_CACHE_MAX_ENTRIES = 80;
+const DASHBOARD_PAGE_SIZE = 4500;
+const dashboardCache = new Map();
+const dashboardPending = new Map();
+
 // ---------- state shape & actions ----------
 
 const initialState = {
@@ -180,6 +186,55 @@ function coerceMeasures(rows) {
   });
 }
 
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function pruneDashboardCache() {
+  const now = Date.now();
+  for (const [key, entry] of dashboardCache) {
+    if (entry.expiresAt <= now) dashboardCache.delete(key);
+  }
+  while (dashboardCache.size > DASHBOARD_CACHE_MAX_ENTRIES) {
+    const oldestKey = dashboardCache.keys().next().value;
+    dashboardCache.delete(oldestKey);
+  }
+}
+
+async function fetchCachedDashboard(payload) {
+  const key = stableStringify(payload);
+  const now = Date.now();
+  const cached = dashboardCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const inflight = dashboardPending.get(key);
+  if (inflight) return inflight;
+
+  const promise = fetchPagedDashboard(payload)
+    .then((value) => {
+      dashboardCache.set(key, {
+        value,
+        expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+      });
+      pruneDashboardCache();
+      return value;
+    })
+    .finally(() => {
+      dashboardPending.delete(key);
+    });
+  dashboardPending.set(key, promise);
+  return promise;
+}
+
 /**
  * One kpi-data call, returning the WHOLE response envelope:
  *   { rows, truncated, baseline, baselineWindow }
@@ -205,6 +260,37 @@ async function fetchDashboard(payload) {
       ? coerceMeasures(envelope.baseline)
       : null,
     baselineWindow: envelope.baselineWindow ?? null,
+  };
+}
+
+async function fetchPagedDashboard(payload) {
+  if (!payload?.drillOnly) return fetchDashboard(payload);
+
+  const pageLimit =
+    Number.isInteger(payload.limit) && payload.limit > 0
+      ? Math.min(payload.limit, DASHBOARD_PAGE_SIZE)
+      : DASHBOARD_PAGE_SIZE;
+  let offset =
+    Number.isInteger(payload.offset) && payload.offset > 0 ? payload.offset : 0;
+  const rows = [];
+  let lastEnvelope = null;
+
+  for (let page = 0; page < 20; page += 1) {
+    const envelope = await fetchDashboard({
+      ...payload,
+      limit: pageLimit,
+      offset,
+    });
+    lastEnvelope = envelope;
+    rows.push(...(envelope.rows ?? []));
+    if (!envelope.truncated || !envelope.rows?.length) break;
+    offset += envelope.rows.length;
+  }
+
+  return {
+    ...(lastEnvelope ?? {}),
+    rows,
+    truncated: Boolean(lastEnvelope?.truncated),
   };
 }
 
@@ -279,6 +365,17 @@ export function useDashboardFetch() {
   // card's effective granularity (state.granularity), falling back to
   // Daily only when no granularity is active (All-Shifts Today / custom
   // range, where the panels aggregate Daily rows over the window).
+  const drillGranularity =
+    state.category === "p" && state.granularity === "MONTH"
+      ? "DAY"
+      : (state.granularity ?? "DAY");
+  const drillDateSource =
+    state.category === "p" && state.granularity === "MONTH" && state.from && state.to
+      ? state
+      : state.drillDate
+        ? { date: state.drillDate }
+        : state;
+
   const drillPayload = state.drillKpis
     ? {
         context: {
@@ -288,19 +385,18 @@ export function useDashboardFetch() {
           // shift/preset granularity is active (All-Shifts Today / custom
           // range). The backend synonym map accepts either, but DAY keeps
           // the drill children aligned with the aggregate DAY rows.
-          granularity: state.granularity ?? "DAY",
+          granularity: drillGranularity,
         },
         // new_change.md C1/C3/C6: the drill inherits the card's EXACT
         // window, built the same way — range only, or a single date only.
         // When the card anchored itself to its OWN latest day (C6), the
         // drill is pinned to that day rather than the whole trailing
         // window, so card and drill always land on the same date.
-        ...buildDatePayload(
-          state.drillDate ? { date: state.drillDate } : state,
-        ),
+        ...buildDatePayload(drillDateSource),
         drillKpis: state.drillKpis,
         parentFilters: state.parentFilters,
         limit: 10000,
+        drillOnly: true,
       }
     : null;
 
@@ -308,9 +404,10 @@ export function useDashboardFetch() {
     data: landingData,
     isLoading: landingLoading,
     error: landingError,
-  } = usePolledQuery(() => fetchDashboard(landingPayload), {
+  } = usePolledQuery(() => fetchCachedDashboard(landingPayload), {
     enabled: hasDateRange,
     interval: 0,
+    keepPreviousData: true,
     deps: [JSON.stringify(landingPayload)],
   });
 
@@ -319,7 +416,8 @@ export function useDashboardFetch() {
     isLoading: drillLoading,
     error: drillError,
   } = usePolledQuery(
-    () => (drillPayload ? fetchDashboard(drillPayload) : Promise.resolve(null)),
+    () =>
+      drillPayload ? fetchCachedDashboard(drillPayload) : Promise.resolve(null),
     {
       enabled: Boolean(drillPayload),
       interval: 0,

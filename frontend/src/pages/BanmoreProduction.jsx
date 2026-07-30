@@ -706,6 +706,17 @@ function BanmoreProduction() {
                     // resolved day when the card anchored itself (C6);
                     // otherwise it is the card's from/to window verbatim.
                     const cardDate = kpi.resolvedDate ?? null;
+                    const useMonthRange =
+                      dashboard.category === "p" &&
+                      dashboard.granularity === "MONTH" &&
+                      [
+                        "mixOEE",
+                        "curOEE",
+                        "mixProd",
+                        "tbmProd",
+                        "stkProd",
+                        "curProd",
+                      ].includes(kpi.drillType);
                     return (
                       <Box sx={{ px: 2, pb: 2 }}>
                         <DrillPanelRouter
@@ -714,8 +725,8 @@ function BanmoreProduction() {
                           section={dashboard.section}
                           sectionName={sectionName}
                           cardDate={cardDate}
-                          from={cardDate ?? from}
-                          to={cardDate ?? to}
+                          from={useMonthRange ? from : (cardDate ?? from)}
+                          to={useMonthRange ? to : (cardDate ?? to)}
                           shift={dashboard.granularity}
                           allDrillRows={drillRows}
                           rawRows={rawRows}
@@ -804,6 +815,13 @@ function DrillPanelRouter({
   // (DAY / SHIFT A-C / MONTH); fall back to DAY when none is set
   // (All-Shifts Today / custom range) — realdata.md §3.
   const granularity = shift ?? "DAY";
+  const productivityDrillGranularity =
+    granularity === "MONTH" &&
+    ["mixOEE", "curOEE", "mixProd", "tbmProd", "stkProd", "curProd"].includes(
+      kpi.drillType,
+    )
+      ? "DAY"
+      : granularity;
 
   // Filter drill rows to this KPI's drill TARGET kpi_names (children),
   // not the landing kpi_name itself. drillTargets is the list of child
@@ -822,12 +840,12 @@ function DrillPanelRouter({
           section={section}
           rawRows={rawRows}
           mode={mode}
-          granularity={granularity}
+          granularity={productivityDrillGranularity}
           // new_change.md C3/C6: OEE reads the rows already in hand, which
           // also carry the (newer) Production rows. Without the card's date
           // the panel's "latest date" collapses to Production's 07-20 and
           // drops every OEE row — the dead drill this change removes.
-          cardDate={cardDate}
+          cardDate={granularity === "MONTH" ? null : cardDate}
           isLoading={isLoading}
           // dashboard_doc.md §6: Curing inserts a trench (OEE_s) tier above
           // the press table. curOEE turns it on; mixOEE keeps the flat flow.
@@ -846,7 +864,7 @@ function DrillPanelRouter({
           // rawRows only seeds the unit toggle; the table rows come from the
           // panel's own paginated per-lens fetch (from/to drive its window).
           rawRows={rawRows}
-          granularity={granularity}
+          granularity={productivityDrillGranularity}
           from={from}
           to={to}
           isLoading={isLoading}

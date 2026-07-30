@@ -942,7 +942,28 @@ export function buildFetchQuery({
   // repeated rows between pages) and rows land in a readable grouping.
   // Trino wants OFFSET before LIMIT; emit OFFSET only when non-zero so the
   // first page stays a plain LIMIT.
-  const orderBy = `ORDER BY ${DATE_YYYYMMDD} DESC, machine, itemcode, unit_of_measurement, actual_value`;
+  const drillPriority =
+    "CASE WHEN kpi_name IN (" +
+    [
+      "OEE_o",
+      "OEE_s",
+      "OEE_m",
+      "Availability_o",
+      "Availability_s",
+      "Availability_m",
+      "Performance_o",
+      "Performance_s",
+      "Performance_m",
+      "Quality_o",
+      "Quality_s",
+      "Quality_m",
+    ]
+      .map(escapeLiteral)
+      .join(", ") +
+    ") THEN 0 ELSE 1 END";
+  const orderBy =
+    `ORDER BY ${DATE_YYYYMMDD} DESC, ${drillPriority}, ` +
+    `machine, kpi_name, itemcode, unit_of_measurement, actual_value`;
   const pageClause = off > 0 ? `OFFSET ${off} LIMIT ${lim}` : `LIMIT ${lim}`;
   return (
     `SELECT ${outerCols} FROM ${dedupedSource} ` +

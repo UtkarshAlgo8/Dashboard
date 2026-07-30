@@ -69,29 +69,6 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
           }}
         >
           {kpi.name}
-          {/* new_change.md C6: this KPI lags the section's newest date, so
-              say which day the card is actually showing. Curing OEE ends
-              2026-07-16 while Production runs to 07-20 — without the label
-              the two cards look like they describe the same day. */}
-          {kpi.asOfDate && (
-            <Tooltip
-              title={`This KPI's own latest day is ${kpi.asOfDate}; it lags the newest data in this section.`}
-              arrow
-            >
-              <Box
-                component="span"
-                sx={{
-                  ml: 0.75,
-                  color: "text.secondary",
-                  fontWeight: 600,
-                  textTransform: "none",
-                  letterSpacing: 0,
-                }}
-              >
-                as of {fmtDay(kpi.asOfDate)}
-              </Box>
-            </Tooltip>
-          )}
         </Typography>
         <Stack direction="row" spacing={0.75} alignItems="center">
           <Tooltip title="Trend" arrow>
@@ -258,28 +235,6 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
       )}
     </Box>
   );
-}
-
-const MONTH_ABBR = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-/** "2026-07-16" → "16 Jul" for the C6 "as of" label. */
-function fmtDay(iso) {
-  if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
-  const [, m, d] = iso.split("-");
-  return `${Number(d)} ${MONTH_ABBR[Number(m) - 1]}`;
 }
 
 export default KpiCard;
