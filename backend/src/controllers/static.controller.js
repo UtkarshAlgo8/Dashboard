@@ -34,7 +34,7 @@ export const PLANTS = [
     oe: 94.2,
     otif: 96.8,
     yield: 98.5,
-    enabled: false,
+    enabled: true,
   },
   {
     id: "laksar",

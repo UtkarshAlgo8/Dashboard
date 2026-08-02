@@ -308,7 +308,7 @@ function needsBaseline(state) {
 
 // ---------- hook ----------
 
-export function useDashboardFetch() {
+export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // Landing payload — always fetched. Carries the 4 KPI cards for every
@@ -322,6 +322,7 @@ export function useDashboardFetch() {
   // SHIFT A) blanked every card. Pin the ONE granularity the cards are
   // rendered at; the shift-comparison box makes its own per-shift calls.
   const landingPayload = {
+    plantId,
     context: {
       ...buildContext(state),
       granularity: state.granularity ?? "DAY",
@@ -378,6 +379,7 @@ export function useDashboardFetch() {
 
   const drillPayload = state.drillKpis
     ? {
+        plantId,
         context: {
           ...buildContext(state),
           // changes.md §8: fall back to the real "DAY" granularity (not the
@@ -428,7 +430,10 @@ export function useDashboardFetch() {
   // new_change.md C6/C14: each KPI's own newest DAY date + the sections whose
   // latest day is still in progress. Fetched once and memoized in the api
   // module, so mounting this hook costs no extra request.
-  const { data: anchorData } = usePolledQuery(getAnchors, { interval: 0 });
+  const { data: anchorData } = usePolledQuery(() => getAnchors(plantId), {
+    interval: 0,
+    deps: [plantId],
+  });
   const anchors = anchorData?.anchors ?? null;
   const partialDays = anchorData?.partialDays ?? null;
 

@@ -48,7 +48,7 @@ export async function getOeeDrill(req, res, next) {
     );
     const data = await cached(key, async () => {
       const sql = oeeDrillQuery({
-        plant: "Banmore",
+        plant: req.params.plantId,
         section: req.query.section,
         granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
@@ -73,7 +73,7 @@ export async function getProductionDrill(req, res, next) {
     );
     const data = await cached(key, async () => {
       const sql = productionDrillQuery({
-        plant: "Banmore",
+        plant: req.params.plantId,
         section: req.query.section,
         granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
@@ -101,7 +101,7 @@ export async function getDowntimeDrill(req, res, next) {
     );
     const data = await cached(key, async () => {
       const sql = downtimeDrillQuery({
-        plant: "Banmore",
+        plant: req.params.plantId,
         section: req.query.section,
         granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
@@ -126,7 +126,7 @@ export async function getPlanComplianceDrill(req, res, next) {
     );
     const data = await cached(key, async () => {
       const sql = planComplianceDrillQuery({
-        plant: "Banmore",
+        plant: req.params.plantId,
         section: req.query.section,
         granularity: req.query.granularity,
         tyreType: req.query.tyreType ?? null,
@@ -167,7 +167,7 @@ export async function getScrapTraceability(req, res, next) {
     const offset = clampInt(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
     const data = await cached(key, async () => {
       const sql = scrapTraceQuery({
-        plant: "Banmore",
+        plant: req.params.plantId,
         section: req.query.section,
         machine: req.query.machine,
         itemcode,

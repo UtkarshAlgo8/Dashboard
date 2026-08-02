@@ -47,7 +47,7 @@ export async function getTrends(req, res, next) {
     );
     const data = await cached(key, async () => {
       const sql = trendQuery({
-        plant: "Banmore",
+        plant: req.params.plantId,
         section,
         category,
         kpiName,

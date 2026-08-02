@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
@@ -48,6 +49,8 @@ function deriveProductionOptions(rows, sectionName) {
   for (const r of rows) {
     if (r.section !== sectionName) continue;
     if (r.kpi_name !== "Production") continue;
+    const actual = Number.parseFloat(r.actual_value);
+    if (!Number.isFinite(actual)) continue;
     const pt =
       r.product_type == null ||
       ["", "nan", "null"].includes(String(r.product_type).trim().toLowerCase())
@@ -74,6 +77,8 @@ function deriveProductionOptions(rows, sectionName) {
  */
 function BanmoreProduction() {
   const theme = useTheme();
+  const { plantId: routePlantId } = useParams();
+  const plantId = routePlantId ?? "banmore";
   const [trendKpi, setTrendKpi] = useState(null);
   // Whole-page PDF export. `exporting` temporarily releases the static
   // 100vh layout (height auto / overflow visible) so the FULL page +
@@ -88,7 +93,7 @@ function BanmoreProduction() {
     );
     try {
       await exportElementToPdf(rootRef.current, {
-        filename: "banmore-production.pdf",
+        filename: `${plantId}-production.pdf`,
         backgroundColor: theme.palette.background.default,
       });
     } finally {
@@ -97,19 +102,20 @@ function BanmoreProduction() {
   };
 
   const { data: plant, isLoading: plantLoading } = usePolledQuery(
-    () => getPlant("banmore"),
-    { interval: 0 },
+    () => getPlant(plantId),
+    { interval: 0, deps: [plantId] },
   );
   const { data: sections } = usePolledQuery(getSections, { interval: 0 });
   const { data: tabs } = usePolledQuery(getCategoryTabs, { interval: 0 });
-  const { data: summary } = usePolledQuery(() => getPlantSummary("banmore"), {
+  const { data: summary } = usePolledQuery(() => getPlantSummary(plantId), {
     interval: 0,
+    deps: [plantId],
   });
   // As-of date (BRD §13.5) — anchor for all time-range windows so values
   // render even when the calendar runs ahead of the available data.
   const { data: asOfData, isLoading: asOfLoading } = usePolledQuery(
-    () => getAsOf("banmore"),
-    { interval: 0 },
+    () => getAsOf(plantId),
+    { interval: 0, deps: [plantId] },
   );
   const asOf = asOfData?.asOf ?? null;
 
@@ -125,7 +131,12 @@ function BanmoreProduction() {
     setFilter,
     drillInto,
     resetDrill,
-  } = useDashboardFetch();
+    resetAll,
+  } = useDashboardFetch({ plantId });
+
+  useEffect(() => {
+    resetAll();
+  }, [plantId, resetAll]);
 
   const sectionName =
     { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[
@@ -141,11 +152,11 @@ function BanmoreProduction() {
     (dashboard.from && dashboard.to) || dashboard.date,
   );
   const { data: sectionOeeData } = usePolledQuery(
-    () => getSectionOee("banmore", dashboard.granularity ?? "MONTH"),
+    () => getSectionOee(plantId, dashboard.granularity ?? "MONTH"),
     {
       interval: 0,
       enabled: hasDateRange,
-      deps: [dashboard.granularity, hasDateRange],
+      deps: [plantId, dashboard.granularity, hasDateRange],
     },
   );
   const sectionOeeById = {
@@ -228,9 +239,11 @@ function BanmoreProduction() {
   // deliberately WITHOUT a product_type pin (the landing fetch carries one,
   // so it can only ever return the already-selected product).
   const optionsPayload = {
+    plantId,
     context: {
       section: sectionName,
       category: "Productivity",
+      ...(dashboard.granularity ? { granularity: dashboard.granularity } : {}),
       ...(isStock ? { sub_section: activeSubSection } : {}),
     },
     ...buildDatePayload({ from: dashboard.from, to: dashboard.to }),
@@ -250,18 +263,26 @@ function BanmoreProduction() {
     },
   );
   const productionOptions = deriveProductionOptions(optionRows, sectionName);
+  const nonStockProductOptions = [
+    ...new Set(productionOptions.map((o) => o.productType).filter(Boolean)),
+  ];
   // changes.md §4: Stock has NO synthetic "Overall" product — only the real
   // product rows of the sub-section, in the data's own spelling.
   const stockProductOptions = [
-    ...new Set(productionOptions.map((o) => o.productType).filter(Boolean)),
+    ...nonStockProductOptions,
   ];
+  const navProductOptions = isStock
+    ? stockProductOptions
+    : nonStockProductOptions.length > 0
+      ? nonStockProductOptions
+      : prodSubOptions;
   // The active product type (sent to the backend). Falls back to the
   // section default; for Stock that is the sub-section's first real product.
   const activeProductType =
     dashboard.productType ??
     (isStock
       ? (stockProductOptions[0] ?? null)
-      : SECTION_DEFAULT_PRODUCT[dashboard.section]);
+      : (navProductOptions[0] ?? SECTION_DEFAULT_PRODUCT[dashboard.section]));
 
   // new_change.md C8/C9: multi-unit series (Stock Extruder / 3 Roll / Bead,
   // Mixing KG vs Batch) must pin a unit as well as the product — the two
@@ -299,6 +320,17 @@ function BanmoreProduction() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStock, dashboard.productType, stockProductOptions[0]]);
+
+  useEffect(() => {
+    if (isStock || navProductOptions.length === 0) return;
+    if (!dashboard.productType || !navProductOptions.includes(dashboard.productType)) {
+      setFilter(
+        { productType: navProductOptions[0], unitOfMeasurement: null },
+        false,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStock, dashboard.productType, navProductOptions.join("|")]);
 
   const onStockSubChange = (next) => {
     // Switching sub-section clears the product + unit: the previous product
@@ -568,7 +600,7 @@ function BanmoreProduction() {
             }}
           >
             {dashboard.category === "i" ? (
-              <InventoryPage plantId="banmore" />
+              <InventoryPage plantId={plantId} />
             ) : (
               <>
                 {/* Section header row — title (left) + nav controls (right)
@@ -620,9 +652,9 @@ function BanmoreProduction() {
                     ) : (
                       (dashboard.category === "p" ||
                         dashboard.category === "q") &&
-                      prodSubOptions.length > 0 && (
+                        navProductOptions.length > 0 && (
                         <NavTabs
-                          items={prodSubOptions.map((o) => ({
+                          items={navProductOptions.map((o) => ({
                             id: o,
                             label: o,
                           }))}
@@ -721,7 +753,7 @@ function BanmoreProduction() {
                       <Box sx={{ px: 2, pb: 2 }}>
                         <DrillPanelRouter
                           kpi={kpi}
-                          plantId="banmore"
+                          plantId={plantId}
                           section={dashboard.section}
                           sectionName={sectionName}
                           cardDate={cardDate}
@@ -750,6 +782,7 @@ function BanmoreProduction() {
                         dashboard scope (section, sub-section, product,
                         unit). */}
                     <ShiftComparisonCard
+                      plantId={plantId}
                       section={sectionName}
                       subSection={pinnedSubSection}
                       productType={activeProductType}
@@ -770,7 +803,7 @@ function BanmoreProduction() {
       <TrendModal
         open={Boolean(trendKpi)}
         onClose={() => setTrendKpi(null)}
-        plantId="banmore"
+        plantId={plantId}
         kpi={trendKpi}
         section={dashboard.section}
         category={dashboard.category}
@@ -858,6 +891,7 @@ function DrillPanelRouter({
     case "curProd":
       return (
         <ProductionDrillPanel
+          plantId={plantId}
           section={section}
           prodSub={prodSub}
           unitPin={unitPin}

@@ -19,14 +19,16 @@ import client from "./client.js";
  * ONCE and the promise memoized. A failed fetch clears the cache so a later
  * render can retry.
  */
-let anchorsPromise = null;
+const anchorsPromises = new Map();
 
-export function getAnchors() {
-  if (!anchorsPromise) {
-    anchorsPromise = client.get("/dashboard/anchors").catch((err) => {
-      anchorsPromise = null;
+export function getAnchors(plantId = "banmore") {
+  if (!anchorsPromises.has(plantId)) {
+    const query = new URLSearchParams({ plantId });
+    const promise = client.get(`/dashboard/anchors?${query.toString()}`).catch((err) => {
+      anchorsPromises.delete(plantId);
       throw err;
     });
+    anchorsPromises.set(plantId, promise);
   }
-  return anchorsPromise;
+  return anchorsPromises.get(plantId);
 }

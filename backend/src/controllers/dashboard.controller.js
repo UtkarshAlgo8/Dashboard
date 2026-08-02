@@ -31,6 +31,7 @@ export async function postFetch(req, res, next) {
       // the current one, so the spike % has a real baseline instead of
       // "whatever row came second".
       withBaseline = false,
+      plantId = "banmore",
     } = req.body ?? {};
 
     if (typeof context !== "object" || context === null) {
@@ -57,6 +58,7 @@ export async function postFetch(req, res, next) {
     let sql;
     try {
       sql = buildFetchQuery({
+        plantId,
         context,
         date,
         from,
@@ -84,6 +86,7 @@ export async function postFetch(req, res, next) {
 
     const cacheKey = buildCacheKey("/dashboard/kpi-data", {
       context,
+      plantId,
       date,
       from,
       to,
@@ -129,6 +132,7 @@ export async function postFetch(req, res, next) {
 
       if (window) {
         const baselineSql = buildFetchQuery({
+          plantId,
           context,
           ...window,
           drillKpis,
@@ -138,7 +142,7 @@ export async function postFetch(req, res, next) {
           drillOnly,
         });
         const baselineRows = await cached(
-          buildCacheKey("/dashboard/kpi-data:baseline", { context, window, drillKpis, parentFilters, limit, offset, drillOnly }),
+          buildCacheKey("/dashboard/kpi-data:baseline", { context, plantId, window, drillKpis, parentFilters, limit, offset, drillOnly }),
           () => runQuery(baselineSql),
         );
         payload.baseline = baselineRows.slice(0, effectiveLimit);
@@ -163,9 +167,10 @@ export async function postFetch(req, res, next) {
  * one global "latest" (which comes from Production and blanks every OEE card,
  * since OEE lags by one to four days depending on section).
  */
-export async function getAnchors(_req, res, next) {
+export async function getAnchors(req, res, next) {
   try {
-    const payload = await cached("dashboard:anchors", async () => {
+    const plantId = req.query.plantId ?? "banmore";
+    const payload = await cached(`dashboard:anchors:${plantId}`, async () => {
       const toIso = (raw) => {
         const s = String(raw ?? "");
         return /^\d{8}$/.test(s)
@@ -174,8 +179,8 @@ export async function getAnchors(_req, res, next) {
       };
 
       const [anchorRows, coverageRows] = await Promise.all([
-        runQuery(buildLatestDateQuery()),
-        runQuery(buildShiftCoverageQuery()),
+        runQuery(buildLatestDateQuery({ plantId })),
+        runQuery(buildShiftCoverageQuery({ plantId })),
       ]);
 
       // Keyed "section|kpi_name" for O(1) lookup by the card renderer.

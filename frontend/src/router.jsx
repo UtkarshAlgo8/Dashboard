@@ -5,6 +5,7 @@ import BanmoreQuality from "@/pages/BanmoreQuality.jsx";
 
 const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
+  { path: "/:plantId/production", element: <BanmoreProduction /> },
   { path: "/banmore/production", element: <BanmoreProduction /> },
   { path: "/banmore/quality", element: <BanmoreQuality /> },
 ]);

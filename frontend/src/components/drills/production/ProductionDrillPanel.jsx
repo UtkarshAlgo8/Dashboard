@@ -114,6 +114,7 @@ function matchesProduct(rowPt, selected) {
 }
 
 function ProductionDrillPanel({
+  plantId = "banmore",
   section,
   prodSub,
   rawRows,
@@ -189,6 +190,7 @@ function ProductionDrillPanel({
   }
 
   const pagePayload = {
+    plantId,
     context: {
       section: sectionName,
       category: "Productivity",
@@ -266,6 +268,7 @@ function ProductionDrillPanel({
   // drillOnly fetch — trenches are few, so no pagination.
   const trenchPayload = isCuring
     ? {
+        plantId,
         context: {
           section: sectionName,
           category: "Productivity",
