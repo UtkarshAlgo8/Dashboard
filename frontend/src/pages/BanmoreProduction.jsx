@@ -893,6 +893,7 @@ function DrillPanelRouter({
         <ProductionDrillPanel
           plantId={plantId}
           section={section}
+          subSection={section === "stk" ? pinnedSubSection : null}
           prodSub={prodSub}
           unitPin={unitPin}
           // rawRows only seeds the unit toggle; the table rows come from the
