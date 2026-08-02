@@ -1,3 +1,5 @@
+import { config } from "../config.js";
+
 /**
  * Shared normalization layer — realdata.md §0 ("normalize on read, stop
  * hardcoding").
@@ -51,6 +53,54 @@ export function emptyColumnPredicate(column) {
 // excluded by always applying this filter. Stored uppercase in the real
 // data; we compare case-insensitively (UPPER(plant) = 'BANMORE').
 export const PLANT_BANMORE = "BANMORE";
+export const PLANT_CHENNAI = "CHENNAI";
+
+const PLANT_SCOPES = {
+  banmore: {
+    id: "banmore",
+    code: PLANT_BANMORE,
+    name: "Banmore Plant",
+    tyreType: "PCR",
+    sqlTable: null,
+  },
+  chennai: {
+    id: "chennai",
+    code: PLANT_CHENNAI,
+    name: "Chennai Plant",
+    tyreType: "PCR",
+    sqlTable: "ctp_gold.ctp_gold",
+  },
+};
+
+const PLANT_ALIASES = new Map([
+  ["banmore", "banmore"],
+  ["banmore plant", "banmore"],
+  ["btp", "banmore"],
+  ["chennai", "chennai"],
+  ["chennai plant", "chennai"],
+  ["ctp", "chennai"],
+]);
+
+export function normalizePlantId(value = "banmore") {
+  const key = String(value ?? "banmore").trim().toLowerCase();
+  return PLANT_ALIASES.get(key) ?? null;
+}
+
+export function plantScope(value = "banmore") {
+  const id = normalizePlantId(value);
+  if (!id || !PLANT_SCOPES[id]) {
+    throw new Error(`Unknown plant: ${value}`);
+  }
+  const scope = PLANT_SCOPES[id];
+  return {
+    ...scope,
+    sqlTable: scope.sqlTable ?? config.upstream.sqlTable,
+  };
+}
+
+export function plantSqlTable(value = "banmore") {
+  return plantScope(value).sqlTable;
+}
 
 // realdata.md §2: the ONLY department. Real data has both "Production"
 // (Banmore) and "production" (BTP) — match case-insensitively
@@ -59,8 +109,8 @@ export const PLANT_BANMORE = "BANMORE";
 export const DEPARTMENT_PRODUCTION = "production";
 
 /** SQL predicate fragment: plant filter (case-insensitive). Always applied. */
-export function plantPredicate(column = "plant") {
-  return `UPPER(${column}) = '${PLANT_BANMORE}'`;
+export function plantPredicate(column = "plant", plantId = "banmore") {
+  return `UPPER(${column}) = '${plantScope(plantId).code}'`;
 }
 
 /** SQL predicate fragment: department filter (case-insensitive). */
@@ -69,8 +119,8 @@ export function departmentPredicate(column = "department") {
 }
 
 /** Both core filters joined — every endpoint applies these. */
-export function plantDepartmentPredicate() {
-  return `${plantPredicate()} AND ${departmentPredicate()}`;
+export function plantDepartmentPredicate(plantId = "banmore") {
+  return `${plantPredicate("plant", plantId)} AND ${departmentPredicate()}`;
 }
 
 /* ----------------------------------------------------------------- *

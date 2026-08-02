@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import {
   plantDepartmentPredicate,
+  plantSqlTable,
   normalizeGranularity,
   allowedGranularities,
   excludeUnknownKpiPredicate,
@@ -48,7 +49,8 @@ import {
  * via `dateRangeFilter` below.
  */
 
-const TABLE = () => config.upstream.sqlTable;
+const TABLE = (plantId = "banmore") =>
+  plantSqlTable(plantId) ?? config.upstream.sqlTable;
 
 /**
  * Format-robust YYYYMMDD ordering key over the real `date` DATE column
@@ -68,8 +70,8 @@ const DATE_KEY =
  * stray UNKNOWN kpi_name excluded. Every legacy query AND-prepends this so
  * BTP / the Quality department (SPC) can never appear.
  */
-const CORE_FILTER =
-  `${plantDepartmentPredicate()} AND ${excludeUnknownKpiPredicate()}`;
+const coreFilter = (plantId = "banmore") =>
+  `${plantDepartmentPredicate(plantId)} AND ${excludeUnknownKpiPredicate()}`;
 
 export function escapeLiteral(value) {
   if (value == null) return "NULL";
@@ -94,8 +96,8 @@ export function escapeLiteral(value) {
  * keys are IGNORED here — they're forced case-insensitively by CORE_FILTER,
  * so passing the old mixed-case "Banmore"/"Production" literals is harmless.
  */
-function whereClause(filters) {
-  const parts = [CORE_FILTER];
+function whereClause(filters, plantId = filters?.plant ?? "banmore") {
+  const parts = [coreFilter(plantId)];
   for (const [col, val] of Object.entries(filters)) {
     if (val === undefined || val === null) continue;
     if (col === "plant" || col === "department") continue; // forced by CORE_FILTER
@@ -251,7 +253,7 @@ export function kpiGridQuery({
     category: requireAllowed(category, ALLOWED_CATEGORIES, "category"),
     tyre_type: tyreType,
     granularity: normGran(granularity),
-  });
+  }, plant);
   return `
     SELECT kpi_name, unit_of_measurement, actual_value, drill_down_attribute
     FROM (
@@ -260,7 +262,7 @@ export function kpiGridQuery({
                PARTITION BY kpi_name
                ORDER BY ${DATE_KEY} DESC
              ) AS rn
-      FROM ${TABLE()}
+      FROM ${TABLE(plant)}
       ${innerWhere}
         AND ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
@@ -284,7 +286,7 @@ export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to 
     kpi_name: "OEE",
     tyre_type: tyreType,
     granularity: normGran(granularity),
-  });
+  }, plant);
   return `
     SELECT machine, drill_down_attribute, actual_value
     FROM (
@@ -293,7 +295,7 @@ export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to 
                PARTITION BY machine, drill_down_attribute
                ORDER BY ${DATE_KEY} DESC
              ) AS rn
-      FROM ${TABLE()}
+      FROM ${TABLE(plant)}
       ${innerWhere}
         AND NOT ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
@@ -326,7 +328,7 @@ export function productionDrillQuery({
     category: "Productivity",
     tyre_type: tyreType,
     granularity: normGran(granularity),
-  });
+  }, plant);
   return `
     SELECT kpi_name, machine, itemcode, product_type, drill_down_attribute, actual_value
     FROM (
@@ -335,7 +337,7 @@ export function productionDrillQuery({
                PARTITION BY kpi_name, machine, itemcode, product_type
                ORDER BY ${dateExpr} DESC
              ) AS rn
-      FROM ${TABLE()}
+      FROM ${TABLE(plant)}
       ${innerWhere}
         AND kpi_name IN (
           ${escapeLiteral("Production_m")},
@@ -363,7 +365,7 @@ export function downtimeDrillQuery({
 }) {
   return `
     SELECT machine, drill_down_attribute, actual_value, CAST(date AS VARCHAR) AS date
-    FROM ${TABLE()}
+    FROM ${TABLE(plant)}
     ${whereClause({
       plant,
       department: "Production",
@@ -372,7 +374,7 @@ export function downtimeDrillQuery({
       kpi_name: "Downtime",
       tyre_type: tyreType,
       granularity: normGran(granularity),
-    })}
+    }, plant)}
       AND NOT ${emptyColumnPredicate("machine")}
       ${dateRangeFilter(from, to)}
     ORDER BY ${DATE_KEY} DESC, machine
@@ -389,7 +391,7 @@ export function planComplianceDrillQuery({
 }) {
   return `
     SELECT machine, itemcode, drill_down_attribute, actual_value
-    FROM ${TABLE()}
+    FROM ${TABLE(plant)}
     ${whereClause({
       plant,
       department: "Production",
@@ -398,7 +400,7 @@ export function planComplianceDrillQuery({
       kpi_name: "Plan Compliance",
       tyre_type: tyreType,
       granularity: normGran(granularity),
-    })}
+    }, plant)}
       AND NOT ${emptyColumnPredicate("machine")}
       ${dateRangeFilter(from, to)}
     ORDER BY machine, itemcode
@@ -432,7 +434,7 @@ export function scrapTraceQuery({
   return `
     SELECT production_ids, machine, itemcode, drill_down_attribute,
            actual_value, CAST(date AS VARCHAR) AS date
-    FROM ${TABLE()}
+    FROM ${TABLE(plant)}
     ${whereClause({
       plant,
       department: "Production",
@@ -442,7 +444,7 @@ export function scrapTraceQuery({
       machine,
       itemcode,
       tyre_type: tyreType,
-    })}
+    }, plant)}
       AND NOT ${emptyColumnPredicate("production_ids")}
       ${dateRangeFilter(from, to)}
     ORDER BY ${DATE_KEY} DESC
@@ -494,7 +496,7 @@ export function trendQuery({
     tyre_type: tyreType,
     product_type: productType,
     sub_section: subSection,
-  }) + ` AND ${emptyColumnPredicate("machine")}`;
+  }, plant) + ` AND ${emptyColumnPredicate("machine")}`;
 
   // Format-robust YYYYMMDD: CAST to VARCHAR (date is a DATE type in the
   // live gold_dummy; a string in CSV-backed envs) then handle ISO or
@@ -517,7 +519,7 @@ export function trendQuery({
       tyre_type: tyreType,
       product_type: productType,
       sub_section: subSection,
-    }) + ` AND ${emptyColumnPredicate("machine")}`;
+    }, plant) + ` AND ${emptyColumnPredicate("machine")}`;
 
   // The upstream Lambda 500s on a raw DATE column — always cast to VARCHAR.
   if (range === "month") {
@@ -531,7 +533,7 @@ export function trendQuery({
                  PARTITION BY SUBSTRING(${dateExpr}, 1, 6)
                  ORDER BY ${dateExpr} DESC
                ) AS rn
-        FROM ${TABLE()}
+        FROM ${TABLE(plant)}
         ${pinnedFilters(GRAN_MONTH)}
       ) ranked
       WHERE rn = 1
@@ -550,7 +552,7 @@ export function trendQuery({
                  PARTITION BY SUBSTRING(${dateExpr}, 1, 4)
                  ORDER BY ${dateExpr} DESC
                ) AS rn
-        FROM ${TABLE()}
+        FROM ${TABLE(plant)}
         ${pinnedFilters(YEAR_GRANULARITY)}
       ) ranked
       WHERE rn = 1
@@ -574,7 +576,7 @@ export function trendQuery({
 
   return `
     SELECT CAST(date AS VARCHAR) AS date, actual_value
-    FROM ${TABLE()}
+    FROM ${TABLE(plant)}
     ${baseFilters}
       ${dateRangeFilter(effectiveFrom, effectiveTo)}
     ORDER BY ${DATE_KEY}

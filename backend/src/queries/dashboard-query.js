@@ -29,6 +29,7 @@
 import { config } from "../config.js";
 import {
   plantDepartmentPredicate,
+  plantSqlTable,
   normalizeGranularity,
   allowedGranularities,
   excludeUnknownKpiPredicate,
@@ -520,10 +521,10 @@ export function resolveGranularity(rawValue, isRangeMode = false) {
  * date, so each card can anchor itself and render an "as of <date>" label.
  * One cheap grouped query replaces N per-card lookups.
  */
-export function buildLatestDateQuery() {
-  const table = config.upstream.sqlTable || "gold.gold";
+export function buildLatestDateQuery({ plantId = "banmore" } = {}) {
+  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
   const where = [
-    plantDepartmentPredicate(),
+    plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
     // Same section allow-list the rest of the API enforces — without it the
     // anchors leak TUO & DBM, Final Finish, UNKNOWN and empty-section rows
@@ -553,10 +554,10 @@ export function buildLatestDateQuery() {
  * three distinct shifts is incomplete, and the UI suppresses the spike and
  * labels the day rather than rendering the artefact.
  */
-export function buildShiftCoverageQuery() {
-  const table = config.upstream.sqlTable || "gold.gold";
+export function buildShiftCoverageQuery({ plantId = "banmore" } = {}) {
+  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
   const where = [
-    plantDepartmentPredicate(),
+    plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
     inScopeSectionPredicate(),
     "granularity IN ('SHIFT A', 'SHIFT B', 'SHIFT C')",
@@ -653,6 +654,7 @@ export function previousWindow(timeScope, granularity) {
  * @returns {string} SQL
  */
 export function buildFetchQuery({
+  plantId = "banmore",
   context = {},
   date,
   from,
@@ -681,7 +683,7 @@ export function buildFetchQuery({
   //    the Quality department (SPC), and the stray UNKNOWN kpi_name can
   //    never reach the dashboard. Plant is matched uppercase, department
   //    lowercase — case-insensitive against the real data's casing.
-  where.push(plantDepartmentPredicate());
+  where.push(plantDepartmentPredicate(plantId));
   where.push(excludeUnknownKpiPredicate());
 
   // 1. Context filters. Keys outside ALLOWED_CONTEXT_KEYS are
@@ -890,7 +892,7 @@ export function buildFetchQuery({
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
 
-  const table = config.upstream.sqlTable || "gold.gold";
+  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   // Athena (Trino) has no `* EXCLUDE(...)` syntax and serializes a DATE
   // column to an ISO yyyy-mm-dd string natively, so a plain `SELECT *`

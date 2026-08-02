@@ -114,7 +114,9 @@ function matchesProduct(rowPt, selected) {
 }
 
 function ProductionDrillPanel({
+  plantId = "banmore",
   section,
+  subSection = null,
   prodSub,
   rawRows,
   granularity = "DAY",
@@ -181,7 +183,7 @@ function ProductionDrillPanel({
   // Reset to page 1 whenever the lens or any scope filter changes — done
   // during render (React's "adjust state on prop change" pattern) so a stale
   // deep page never shows for a different list.
-  const pageKey = `${kpiName}|${activeUnit}|${prodSub}|${granularity}|${selectedTredge}|${sectionName}|${from}|${to}`;
+  const pageKey = `${kpiName}|${activeUnit}|${prodSub}|${granularity}|${selectedTredge}|${sectionName}|${subSection}|${from}|${to}`;
   const [prevPageKey, setPrevPageKey] = useState(pageKey);
   if (prevPageKey !== pageKey) {
     setPrevPageKey(pageKey);
@@ -189,12 +191,14 @@ function ProductionDrillPanel({
   }
 
   const pagePayload = {
+    plantId,
     context: {
       section: sectionName,
       category: "Productivity",
       ...(granularity ? { granularity } : {}),
       ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
       ...(prodSub ? { product_type: prodSub } : {}),
+      ...(!isCuring && subSection ? { sub_section: subSection } : {}),
       // Curing trench drill (§7): scope the page to the picked Tredge.
       ...(isCuring && selectedTredge ? { sub_section: selectedTredge } : {}),
     },
@@ -266,12 +270,14 @@ function ProductionDrillPanel({
   // drillOnly fetch — trenches are few, so no pagination.
   const trenchPayload = isCuring
     ? {
+        plantId,
         context: {
           section: sectionName,
           category: "Productivity",
           ...(granularity ? { granularity } : {}),
           ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
           ...(prodSub ? { product_type: prodSub } : {}),
+          ...(!isCuring && subSection ? { sub_section: subSection } : {}),
         },
         from,
         to,

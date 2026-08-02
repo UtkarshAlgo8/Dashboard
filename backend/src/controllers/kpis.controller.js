@@ -33,7 +33,7 @@ export async function getKpis(req, res, next) {
     );
     const data = await cached(key, async () => {
       const sql = kpiGridQuery({
-        plant: "Banmore",
+        plant: req.params.plantId,
         section,
         category,
         granularity,

@@ -153,7 +153,7 @@ function KpiPill({ label, value }) {
             lineHeight: 1,
           }}
         >
-          {hasValue ? value : "—"}
+          {hasValue ? value : "NA"}
         </Typography>
         {hasValue && (
           <Typography sx={{ fontSize: 12, color: "success.main" }}>%</Typography>

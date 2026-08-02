@@ -16,10 +16,11 @@ import { getPlants, getFunctions } from "@/api/plants.js";
  * deferrals plus the Phase-1 Q-NAV-01 deferral for Quality and
  * Engineering).
  */
-const PHASE_1_ACTIVE_PLANTS = new Set(["banmore"]);
+const PHASE_1_ACTIVE_PLANTS = new Set(["banmore", "chennai"]);
 // Production and Quality are both navigable (Banmore only). Quality opens the
 // Quality Head dashboard; the remaining functions stay "SOON".
 const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
+const PRODUCTION_ONLY_FUNCTIONS = new Set(["prod"]);
 
 function LandingPage() {
   const navigate = useNavigate();
@@ -40,7 +41,10 @@ function LandingPage() {
 
   // Functions that render in the "active" style in the modal. Phase 1
   // only ships Production; Quality / Engineering join in Phase 2.
-  const modalActiveIds = PHASE_1_NAVIGABLE_FUNCTIONS;
+  const modalActiveIds =
+    modalPlant?.id === "banmore"
+      ? PHASE_1_NAVIGABLE_FUNCTIONS
+      : PRODUCTION_ONLY_FUNCTIONS;
 
   const openModalFor = (plantId) => {
     if (!PHASE_1_ACTIVE_PLANTS.has(plantId)) return;
@@ -49,8 +53,8 @@ function LandingPage() {
 
   const handleFunctionSelect = (fn) => {
     if (!modalPlant) return;
-    if (fn.id === "prod" && modalPlant.id === "banmore") {
-      navigate("/banmore/production");
+    if (fn.id === "prod" && PHASE_1_ACTIVE_PLANTS.has(modalPlant.id)) {
+      navigate(`/${modalPlant.id}/production`);
     } else if (fn.id === "qual" && modalPlant.id === "banmore") {
       navigate("/banmore/quality");
     }

@@ -5,9 +5,10 @@ import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
 import { toInventory } from "../utils/transformers.js";
 import {
   plantDepartmentPredicate,
+  normalizePlantId,
+  plantSqlTable,
   excludeUnknownKpiPredicate,
 } from "../utils/normalize.js";
-import { config } from "../config.js";
 
 // changes.md §8.5: Inventory is a STOCK LEVEL, not a flow — never summed or
 // averaged over a range. When a custom range is supplied we clamp the data
@@ -31,7 +32,7 @@ function isoToYyyymmdd(iso) {
  * Compound groups + a 7-day history table.
  */
 export async function getInventory(req, res, next) {
-  const plantId = req.params.plantId ?? "banmore";
+  const plantId = normalizePlantId(req.params.plantId) ?? "banmore";
   // Optional custom-range clamp (§8.5). `to` = range end = the "as-of" day
   // whose balance we want; `from` bounds the window fetched. Only DAY-level
   // Inventory rows exist, so no granularity handling is needed here.
@@ -46,8 +47,8 @@ export async function getInventory(req, res, next) {
       const sql = `
         SELECT CAST(date AS VARCHAR) AS date, section, product_type, itemcode,
                kpi_name, unit_of_measurement, actual_value, drill_down_level
-        FROM ${config.upstream.sqlTable}
-        WHERE ${plantDepartmentPredicate()}
+        FROM ${plantSqlTable(plantId)}
+        WHERE ${plantDepartmentPredicate(plantId)}
           AND ${excludeUnknownKpiPredicate()}
           AND category = ${escapeLiteral("Inventory")}
           ${rangeClauses.join("\n          ")}

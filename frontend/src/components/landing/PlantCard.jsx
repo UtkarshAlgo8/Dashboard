@@ -141,7 +141,7 @@ function PlantCard({
 }
 
 function KpiCell({ label, value, color }) {
-  // Phase-2 plants have no data — show a dash, not "null%".
+  // Missing live DB value: show NA, never a fabricated number.
   const hasValue = typeof value === "number" && Number.isFinite(value);
   return (
     <Box
@@ -161,7 +161,7 @@ function KpiCell({ label, value, color }) {
           color: hasValue ? color : "text.disabled",
         }}
       >
-        {hasValue ? value : "—"}
+        {hasValue ? value : "NA"}
         {hasValue && (
           <Typography
             component="span"

@@ -4,27 +4,33 @@ import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
 import {
   plantDepartmentPredicate,
+  normalizePlantId,
+  plantScope,
+  plantSqlTable,
   excludeUnknownKpiPredicate,
   normalizeGranularity,
   DEFAULT_GRANULARITY,
   emptyColumnPredicate,
   isEmptyValue,
 } from "../utils/normalize.js";
-import { config } from "../config.js";
 
 // Always-on core filter (realdata.md §1/§2/§9).
-const CORE_FILTER =
-  `${plantDepartmentPredicate()} AND ${excludeUnknownKpiPredicate()}`;
+const coreFilter = (plantId) =>
+  `${plantDepartmentPredicate(plantId)} AND ${excludeUnknownKpiPredicate()}`;
 
 /**
  * Plant-scoped controllers: one plant, summary, as-of date, per-section OEE.
  */
 
-export const PHASE_1_PLANT = "banmore";
+export const ENABLED_PLANTS = new Set(["banmore", "chennai"]);
 
 // Returns true (and sends a 404) when the plant isn't the Phase-1 plant.
 function notPhase1Plant(req, res, message) {
-  if (req.params.plantId === PHASE_1_PLANT) return false;
+  const plantId = normalizePlantId(req.params.plantId);
+  if (plantId && ENABLED_PLANTS.has(plantId)) {
+    req.plantId = plantId;
+    return false;
+  }
   res.status(404).json({
     error: {
       code: "PLANT_NOT_AVAILABLE",
@@ -36,9 +42,8 @@ function notPhase1Plant(req, res, message) {
 
 export function getPlant(req, res) {
   if (notPhase1Plant(req, res)) return;
-  res.json({
-    data: { id: "banmore", name: "Banmore Plant", tyreType: "PCR" },
-  });
+  const scope = plantScope(req.plantId);
+  res.json({ data: { id: scope.id, name: scope.name, tyreType: scope.tyreType } });
 }
 
 /**
@@ -65,8 +70,8 @@ export async function getSummary(req, res, next) {
                    PARTITION BY kpi_name
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
-          FROM ${config.upstream.sqlTable}
-          WHERE ${CORE_FILTER}
+          FROM ${plantSqlTable(req.plantId)}
+          WHERE ${coreFilter(req.plantId)}
             AND (machine IS NULL OR machine = 'nan')
             AND kpi_name IN (
               ${escapeLiteral("OEE_o")},
@@ -107,8 +112,8 @@ export async function getAsOf(req, res, next) {
     const data = await cached(key, async () => {
       const sql = `
         SELECT MAX(${DATE_YYYYMMDD}) AS d
-        FROM ${config.upstream.sqlTable}
-        WHERE ${CORE_FILTER}
+        FROM ${plantSqlTable(req.plantId)}
+        WHERE ${coreFilter(req.plantId)}
       `.trim();
       const rows = await runQuery(sql);
       const raw = rows?.[0] ? Object.values(rows[0])[0] : null;
@@ -155,8 +160,8 @@ export async function getSectionOee(req, res, next) {
                    PARTITION BY section
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
-          FROM ${config.upstream.sqlTable}
-          WHERE ${CORE_FILTER}
+          FROM ${plantSqlTable(req.plantId)}
+          WHERE ${coreFilter(req.plantId)}
             AND kpi_name = ${escapeLiteral("OEE_o")}
             AND ${emptyColumnPredicate("machine")}
             AND ${emptyColumnPredicate("product_type")}

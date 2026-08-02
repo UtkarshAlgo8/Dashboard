@@ -110,6 +110,7 @@ function TrendModal({
       category === "Q");
   const v2Payload = useV2
     ? {
+        plantId,
         context: {
           section: sectionName,
           category: categoryIdToName(category),

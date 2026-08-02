@@ -48,6 +48,7 @@ import { buildDatePayload } from "@/lib/timeRange.js";
  * request per shift is the only way to read `granularity = 'SHIFT x'`.
  */
 function useShiftBand({
+  plantId = "banmore",
   shift,
   category,
   section,
@@ -59,6 +60,7 @@ function useShiftBand({
   extraKpis = null,
 }) {
   const payload = {
+    plantId,
     context: {
       section,
       category,
@@ -101,6 +103,7 @@ function useShiftBand({
  * @param {string|null} [to] - range end in "range" mode
  */
 export default function ShiftComparisonCard({
+  plantId = "banmore",
   section,
   subSection = null,
   productType = null,
@@ -123,7 +126,7 @@ export default function ShiftComparisonCard({
   // One band per shift. Production sits under category='Productivity';
   // Scrap / Rework under category='Quality' — the pin is required because a
   // Productivity "Scrap" OEE-loss leaf ALSO exists (quality-change.md §7).
-  const bandArgs = { section, subSection, isRange, date, from, to };
+  const bandArgs = { plantId, section, subSection, isRange, date, from, to };
   const prodArgs = {
     ...bandArgs,
     category: "Productivity",

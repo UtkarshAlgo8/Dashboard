@@ -304,7 +304,7 @@ function KpiMini({ label, value }) {
           lineHeight: 1,
         }}
       >
-        {hasValue ? value : "—"}
+        {hasValue ? value : "NA"}
         {hasValue && (
           <Typography
             component="span"

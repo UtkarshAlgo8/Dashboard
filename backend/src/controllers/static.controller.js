@@ -1,6 +1,16 @@
+import { cached, buildCacheKey } from "../utils/cache.js";
+import { runQuery } from "../utils/upstream.js";
+import { escapeLiteral } from "../queries/queries.js";
+import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
+import {
+  normalizePlantId,
+  plantDepartmentPredicate,
+  plantSqlTable,
+} from "../utils/normalize.js";
+
 /**
- * Static lookup data + handlers — small lists the frontend renders for
- * its chrome. Same shape regardless of plant; no upstream calls.
+ * Lookup data + handlers. Labels/coordinates are app configuration; KPI
+ * values shown on live plant cards are read from the gold DB.
  */
 
 // sx / sy are SVG coordinates for the India map markers (viewBox
@@ -17,9 +27,9 @@ export const PLANTS = [
     tyreType: "PCR",
     sx: 169.7,
     sy: 228.6,
-    oe: 91.5,
-    otif: 94.3,
-    yield: 97.8,
+    oe: null,
+    otif: null,
+    yield: null,
     enabled: true,
   },
   {
@@ -31,10 +41,10 @@ export const PLANTS = [
     tyreType: "PCR/TBR",
     sx: 202.0,
     sy: 446.6,
-    oe: 94.2,
-    otif: 96.8,
-    yield: 98.5,
-    enabled: false,
+    oe: null,
+    otif: null,
+    yield: null,
+    enabled: true,
   },
   {
     id: "laksar",
@@ -45,9 +55,9 @@ export const PLANTS = [
     tyreType: "PCR/TBR",
     sx: 167.6,
     sy: 170.2,
-    oe: 93.1,
-    otif: 95.6,
-    yield: 98.1,
+    oe: null,
+    otif: null,
+    yield: null,
     enabled: false,
   },
   {
@@ -59,9 +69,9 @@ export const PLANTS = [
     tyreType: "PCR/TBR",
     sx: 163.0,
     sy: 441.0,
-    oe: 92.6,
-    otif: 95.1,
-    yield: 98.0,
+    oe: null,
+    otif: null,
+    yield: null,
     enabled: false,
   },
 ];
@@ -94,15 +104,78 @@ export const CATEGORY_TABS = [
   { id: "i", code: "I", name: "Inventory", enabled: true },
 ];
 
-export function getPlants(_req, res) {
-  // Only Banmore has real data (Phase 1). The oe/otif/yield numbers on the
-  // other plants were placeholder constants — do NOT surface fabricated KPI
-  // values for a plant we have no data for. Null them out for disabled
-  // plants so the card/map render a blank ("—") instead of a fake number.
-  const data = PLANTS.map((p) =>
-    p.enabled ? p : { ...p, oe: null, otif: null, yield: null },
-  );
-  res.json({ data });
+const LANDING_KPIS = {
+  oe: "OEE_o",
+  otif: "OTIF",
+  yield: "Yield",
+};
+
+function percentOrNull(v) {
+  const n = typeof v === "number" ? v : Number.parseFloat(v);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+  return Math.round(n * 10) / 10;
+}
+
+async function landingKpisForPlant(plantId) {
+  const sql = `
+    SELECT metric, actual_value
+    FROM (
+      SELECT
+        CASE
+          WHEN kpi_name = ${escapeLiteral(LANDING_KPIS.oe)} THEN 'oe'
+          WHEN kpi_name = ${escapeLiteral(LANDING_KPIS.otif)} THEN 'otif'
+          WHEN kpi_name = ${escapeLiteral(LANDING_KPIS.yield)} THEN 'yield'
+        END AS metric,
+        actual_value,
+        ROW_NUMBER() OVER (
+          PARTITION BY kpi_name
+          ORDER BY ${DATE_YYYYMMDD} DESC
+        ) AS rn
+      FROM ${plantSqlTable(plantId)}
+      WHERE ${plantDepartmentPredicate(plantId)}
+        AND kpi_name IN (
+          ${escapeLiteral(LANDING_KPIS.oe)},
+          ${escapeLiteral(LANDING_KPIS.otif)},
+          ${escapeLiteral(LANDING_KPIS.yield)}
+        )
+        AND (machine IS NULL OR LOWER(machine) IN ('', 'nan', 'null'))
+    ) ranked
+    WHERE rn = 1
+  `.trim();
+  const rows = await runQuery(sql);
+  const out = { oe: null, otif: null, yield: null };
+  for (const row of rows) {
+    if (row.metric && Object.hasOwn(out, row.metric)) {
+      out[row.metric] = percentOrNull(row.actual_value);
+    }
+  }
+  return out;
+}
+
+export async function getPlants(_req, res, next) {
+  try {
+    const summaries = await cached(
+      buildCacheKey("/plants:landing-live-kpis", {}),
+      async () => {
+        const enabled = PLANTS.filter((p) => p.enabled);
+        const entries = await Promise.all(
+          enabled.map(async (p) => {
+            const plantId = normalizePlantId(p.id);
+            if (!plantId) return [p.id, { oe: null, otif: null, yield: null }];
+            return [p.id, await landingKpisForPlant(plantId)];
+          }),
+        );
+        return Object.fromEntries(entries);
+      },
+    );
+    const data = PLANTS.map((p) => ({
+      ...p,
+      ...(summaries[p.id] ?? { oe: null, otif: null, yield: null }),
+    }));
+    res.json({ data });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export function getFunctions(_req, res) {
