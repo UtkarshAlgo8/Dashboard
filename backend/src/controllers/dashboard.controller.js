@@ -1,9 +1,11 @@
-import { cached, buildCacheKey } from "../utils/cache.js";
+import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { config } from "../config.js";
 import { runQuery } from "../utils/upstream.js";
 import {
   buildFetchQuery,
   buildLatestDateQuery,
+  buildProductOptionsQuery,
+  buildShiftComparisonQuery,
   buildShiftCoverageQuery,
   previousWindow,
   resolveDatePredicate,
@@ -96,7 +98,7 @@ export async function postFetch(req, res, next) {
       offset,
       drillOnly,
     });
-    const rows = await cached(cacheKey, () => runQuery(sql));
+    const rows = await cached(cacheKey, () => runQuery(sql), CACHE_TTL.KPI_ROWS);
 
     // C10: we asked for one row beyond the cap. If it came back, the result is
     // incomplete — trim the probe row and flag it so the UI can refuse to show
@@ -144,6 +146,7 @@ export async function postFetch(req, res, next) {
         const baselineRows = await cached(
           buildCacheKey("/dashboard/kpi-data:baseline", { context, plantId, window, drillKpis, parentFilters, limit, offset, drillOnly }),
           () => runQuery(baselineSql),
+          CACHE_TTL.KPI_ROWS,
         );
         payload.baseline = baselineRows.slice(0, effectiveLimit);
         payload.baselineWindow = window;
@@ -155,6 +158,108 @@ export async function postFetch(req, res, next) {
 
     res.json(payload);
   } catch (err) {
+    next(err);
+  }
+}
+
+export async function postProductOptions(req, res, next) {
+  try {
+    const {
+      context = {},
+      date,
+      from,
+      to,
+      limit,
+      plantId = "banmore",
+    } = req.body ?? {};
+
+    const sql = buildProductOptionsQuery({
+      plantId,
+      context,
+      date,
+      from,
+      to,
+      limit,
+    });
+    const rows = await cached(
+      buildCacheKey("/dashboard/product-options", {
+        context,
+        plantId,
+        date,
+        from,
+        to,
+        limit,
+      }),
+      () => runQuery(sql),
+      CACHE_TTL.PRODUCT_OPTIONS,
+    );
+
+    res.json({
+      data: rows.map((row) => ({
+        productType: row.product_type ?? null,
+        unit: row.unit_of_measurement ?? null,
+      })),
+    });
+  } catch (err) {
+    if (err instanceof QueryValidationError) {
+      res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: err.message },
+      });
+      return;
+    }
+    next(err);
+  }
+}
+
+export async function postShiftComparison(req, res, next) {
+  try {
+    const {
+      section,
+      subSection = null,
+      category,
+      date,
+      from,
+      to,
+      extraKpis = null,
+      limit,
+      plantId = "banmore",
+    } = req.body ?? {};
+
+    const sql = buildShiftComparisonQuery({
+      plantId,
+      section,
+      subSection,
+      category,
+      date,
+      from,
+      to,
+      extraKpis,
+      limit,
+    });
+    const rows = await cached(
+      buildCacheKey("/dashboard/shift-comparison", {
+        plantId,
+        section,
+        subSection,
+        category,
+        date,
+        from,
+        to,
+        extraKpis,
+        limit,
+      }),
+      () => runQuery(sql),
+      CACHE_TTL.KPI_ROWS,
+    );
+
+    res.json({ data: rows });
+  } catch (err) {
+    if (err instanceof QueryValidationError) {
+      res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: err.message },
+      });
+      return;
+    }
     next(err);
   }
 }
@@ -207,7 +312,7 @@ export async function getAnchors(req, res, next) {
       }
 
       return { anchors, partialDays };
-    });
+    }, CACHE_TTL.ANCHORS);
     res.json({ data: payload });
   } catch (err) {
     next(err);
@@ -233,7 +338,7 @@ export async function getVocab(_req, res, next) {
       ]);
 
       return { sections, categories, granularities, tyreTypes };
-    });
+    }, CACHE_TTL.STATIC_LOOKUPS);
     res.json({ data: vocab });
   } catch (err) {
     next(err);

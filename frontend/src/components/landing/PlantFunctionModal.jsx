@@ -125,7 +125,8 @@ function PlantFunctionModal({
 }
 
 function KpiPill({ label, value }) {
-  const hasValue = typeof value === "number" && Number.isFinite(value);
+  const displayValue = numericPercent(value);
+  const hasValue = displayValue != null;
   return (
     <Box sx={{ textAlign: "center" }}>
       <Typography
@@ -153,7 +154,7 @@ function KpiPill({ label, value }) {
             lineHeight: 1,
           }}
         >
-          {hasValue ? value : "NA"}
+          {hasValue ? displayValue : "NA"}
         </Typography>
         {hasValue && (
           <Typography sx={{ fontSize: 12, color: "success.main" }}>%</Typography>
@@ -161,6 +162,11 @@ function KpiPill({ label, value }) {
       </Stack>
     </Box>
   );
+}
+
+function numericPercent(value) {
+  const n = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function FunctionRow({ fn, active, onClick }) {

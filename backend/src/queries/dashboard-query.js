@@ -974,3 +974,178 @@ export function buildFetchQuery({
     .replace(/\s+/g, " ")
     .trim();
 }
+
+function dateWhereParts({ date, from, to }) {
+  const timeScope = resolveDatePredicate({ date, from, to });
+  const parts = [];
+  if (timeScope.mode === "SINGLE_DAY") {
+    if (timeScope.date) {
+      parts.push(`${DATE_YYYYMMDD} = '${isoToYyyymmdd(timeScope.date)}'`);
+    }
+  } else {
+    if (timeScope.from) {
+      parts.push(`${DATE_YYYYMMDD} >= '${isoToYyyymmdd(timeScope.from)}'`);
+    }
+    if (timeScope.to) {
+      parts.push(`${DATE_YYYYMMDD} <= '${isoToYyyymmdd(timeScope.to)}'`);
+    }
+  }
+  return { parts, timeScope };
+}
+
+function cleanedColumn(column) {
+  return (
+    `CASE WHEN ${column} IS NULL OR LOWER(TRIM(CAST(${column} AS VARCHAR))) ` +
+    `IN ('', 'nan', 'null') THEN NULL ELSE TRIM(CAST(${column} AS VARCHAR)) END`
+  );
+}
+
+export function buildProductOptionsQuery({
+  plantId = "banmore",
+  context = {},
+  date,
+  from,
+  to,
+  limit = 1000,
+} = {}) {
+  if (typeof context !== "object" || context === null) {
+    throw new QueryValidationError("context must be an object");
+  }
+  const section = safeStringValue(context.section ?? "", "section");
+  if (!ALLOWED_SECTIONS.has(section)) {
+    throw new QueryValidationError(
+      `Invalid section: ${section}. Allowed: ${[...ALLOWED_SECTIONS].join(", ")}`,
+    );
+  }
+
+  const where = [
+    plantDepartmentPredicate(plantId),
+    excludeUnknownKpiPredicate(),
+    `section = ${escapeLiteral(section)}`,
+    `category = ${escapeLiteral("Productivity")}`,
+    `kpi_name = ${escapeLiteral("Production")}`,
+    "TRY_CAST(actual_value AS DOUBLE) IS NOT NULL",
+  ];
+
+  if (context.sub_section) {
+    const subSection = canonicalizeSubSection(
+      safeStringValue(context.sub_section, "sub_section"),
+    );
+    where.push(canonicalDimensionPredicate("sub_section", subSection));
+  }
+
+  const { parts: dateParts, timeScope } = dateWhereParts({ date, from, to });
+  where.push(...dateParts);
+
+  const gran = resolveGranularity(
+    context.granularity,
+    timeScope.mode === "RANGE",
+  );
+  if (gran === NO_DATA) {
+    where.push("1 = 0");
+  } else {
+    where.push(`granularity = ${escapeLiteral(gran)}`);
+  }
+
+  const lim =
+    Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 1000;
+  const productType = cleanedColumn("product_type");
+  const unit = cleanedColumn("unit_of_measurement");
+  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+
+  return (
+    `SELECT DISTINCT ${productType} AS product_type, ${unit} AS unit_of_measurement ` +
+    `FROM ${table} WHERE ${where.join(" AND ")} ` +
+    `ORDER BY product_type, unit_of_measurement LIMIT ${lim}`
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function buildShiftComparisonQuery({
+  plantId = "banmore",
+  section,
+  subSection = null,
+  category,
+  date,
+  from,
+  to,
+  extraKpis = null,
+  limit = 10000,
+} = {}) {
+  const safeSection = safeStringValue(section ?? "", "section");
+  if (!ALLOWED_SECTIONS.has(safeSection)) {
+    throw new QueryValidationError(
+      `Invalid section: ${safeSection}. Allowed: ${[...ALLOWED_SECTIONS].join(", ")}`,
+    );
+  }
+  const safeCategory = safeStringValue(category ?? "", "category");
+  if (!ALLOWED_CATEGORIES.has(safeCategory)) {
+    throw new QueryValidationError(
+      `Invalid category: ${safeCategory}. Allowed: ${[...ALLOWED_CATEGORIES].join(", ")}`,
+    );
+  }
+
+  const LANDING_PREDICATE =
+    "(drill_down_level IN ('1', '1.0') OR (drill_down_level IS NULL " +
+    `AND ${emptyColumnPredicate("machine")} ` +
+    `AND ${emptyColumnPredicate("itemcode")} ` +
+    `AND ${emptyColumnPredicate("sub_section")}))`;
+  const where = [
+    plantDepartmentPredicate(plantId),
+    excludeUnknownKpiPredicate(),
+    `section = ${escapeLiteral(safeSection)}`,
+    `category = ${escapeLiteral(safeCategory)}`,
+    "granularity IN ('SHIFT A', 'SHIFT B', 'SHIFT C')",
+  ];
+
+  const safeExtraKpis = Array.isArray(extraKpis)
+    ? [...new Set(extraKpis.map((k) => safeStringValue(k, "extraKpis[]")))]
+    : [];
+  if (safeExtraKpis.length > 0) {
+    where.push(
+      `(${LANDING_PREDICATE} OR kpi_name IN (${safeExtraKpis
+        .map(escapeLiteral)
+        .join(", ")}))`,
+    );
+  } else {
+    where.push(LANDING_PREDICATE);
+  }
+
+  if (subSection) {
+    const safeSubSection = canonicalizeSubSection(
+      safeStringValue(subSection, "subSection"),
+    );
+    where.push(canonicalDimensionPredicate("sub_section", safeSubSection));
+  }
+
+  const { parts: dateParts } = dateWhereParts({ date, from, to });
+  where.push(...dateParts);
+
+  const lim =
+    Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 10000;
+  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const dateCol =
+    config.upstream.engine === "databricks"
+      ? "CAST(date AS VARCHAR) AS date"
+      : "date";
+  const innerCols = GOLD_COLUMNS.map((c) => (c === "date" ? dateCol : c)).join(
+    ", ",
+  );
+  const outerCols = GOLD_COLUMNS.join(", ");
+  const whereSql = `WHERE ${where.join(" AND ")}`;
+  const dedupedSource =
+    `(SELECT ${innerCols}, ROW_NUMBER() OVER (` +
+    `PARTITION BY ${DEDUPE_PARTITION.join(", ")} ` +
+    `ORDER BY actual_value DESC) AS __dedupe_rn ` +
+    `FROM ${table} ${whereSql})`;
+
+  return (
+    `SELECT ${outerCols} FROM ${dedupedSource} ` +
+    `WHERE (__dedupe_rn = 1 OR ${RATE_KPIS_SQL}) ` +
+    `ORDER BY ${DATE_YYYYMMDD} DESC, granularity, machine, kpi_name, ` +
+    `itemcode, unit_of_measurement, actual_value LIMIT ${lim}`
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}

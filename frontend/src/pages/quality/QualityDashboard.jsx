@@ -17,7 +17,7 @@ import { MOCK_USER } from "@/lib/mockData.js";
 import {
   getProcessKpiChildren,
   getProcessKpiHistory,
-  getProcessKpiValues,
+  getProcessSummary,
   getSpcDetail,
   getSpcFilterOptions,
   getSpcSummary,
@@ -1054,7 +1054,7 @@ const LIVE_PROCESS_DRILLS={
   },
 };
 
-function LiveProcessDrillPanel({kpi,date,shift}){
+function LiveProcessDrillPanel({kpi,date,shift,summaryRows}){
   const cfg=LIVE_PROCESS_DRILLS[kpi?.drill];
   const [sectionRows,setSectionRows]=useState([]);
   const [machineRows,setMachineRows]=useState([]);
@@ -1065,13 +1065,15 @@ function LiveProcessDrillPanel({kpi,date,shift}){
   useEffect(()=>{
     if(!cfg)return;
     let cancelled=false;
-    setLoading(true);setError(null);setSelectedSection("");setMachineRows([]);
+    setError(null);setSelectedSection("");setMachineRows([]);
+    if(Array.isArray(summaryRows)){setSectionRows(summaryRows);setLoading(false);return;}
+    setLoading(true);
     getProcessKpiChildren({kpiNames:cfg.sectionKpis,date,shift})
       .then(res=>{if(!cancelled)setSectionRows(Array.isArray(res?.rows)?res.rows:[]);})
       .catch(err=>{if(!cancelled)setError(err);})
       .finally(()=>{if(!cancelled)setLoading(false);});
     return()=>{cancelled=true;};
-  },[cfg,date,shift]);
+  },[cfg,date,shift,summaryRows]);
   useEffect(()=>{
     if(!cfg||!selectedSection){setMachineRows([]);return;}
     let cancelled=false;
@@ -1108,10 +1110,10 @@ function LiveProcessDrillPanel({kpi,date,shift}){
   </div>);
 }
 
-function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift}){
+function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary}){
   if(!kpi) return null;
   if(LIVE_PROCESS_DRILLS[kpi.drill]){
-    return <LiveProcessDrillPanel kpi={kpi} date={date} shift={shift}/>;
+    return <LiveProcessDrillPanel kpi={kpi} date={date} shift={shift} summaryRows={processSummary?.children?.[kpi.drill]?.rows}/>;
   }
   return <Card title={`${kpi.n} — Drilldown`} accent={C.mu}>
     <div style={{padding:14,color:C.mu,fontSize:13}}>Drilldown is not available because this KPI is not API-backed.</div>
@@ -3006,15 +3008,16 @@ export default function QualityDashboard({plant,onBack}){
   // Live Process values from the Excel-backed backend (FRD §1). null until the
   // first fetch; {} on error keeps cards neutral instead of showing mock data.
   const [liveProcess,setLiveProcess]=useState(null);
+  const [processSummary,setProcessSummary]=useState(null);
 
   useEffect(()=>{
     if(tab!=="process")return;
     let cancelled=false;
-    getProcessKpiValues({date:tfTo,shift})
-      .then(res=>{if(cancelled)return;const vals=(res&&res.values)||{};const out={};
+    getProcessSummary({date:tfTo,shift})
+      .then(res=>{if(cancelled)return;setProcessSummary(res||null);const vals=(res&&res.values)||{};const out={};
         for(const [id,name] of Object.entries(PROCESS_KPI_NAME)){out[id]={value:vals[name]===undefined?null:vals[name]};}
         setLiveProcess(out);})
-      .catch(()=>{if(!cancelled)setLiveProcess({});});
+      .catch(()=>{if(!cancelled){setProcessSummary(null);setLiveProcess({});}});
     return()=>{cancelled=true;};
   },[tab,tfTo,shift]);
 
@@ -3088,7 +3091,7 @@ export default function QualityDashboard({plant,onBack}){
 
       {/* Drill panel */}
       {openObj&&<div style={{animation:"fadeIn .2s ease"}}>
-        {tab==="process"&&<ProcessDrillPanel kpi={openObj} sub={sub} setSub={setSub} date={tfTo} shift={shift} onOpenSPC={(mc)=>{setTab("spc");setSpcSel(mc);setOpenKpi(null);setSub("");}}/>}
+        {tab==="process"&&<ProcessDrillPanel kpi={openObj} sub={sub} setSub={setSub} date={tfTo} shift={shift} processSummary={processSummary} onOpenSPC={(mc)=>{setTab("spc");setSpcSel(mc);setOpenKpi(null);setSub("");}}/>}
         {tab==="product"&&<ProductDrillPanel kpi={openObj} sub={sub} setSub={setSub} tyreType={tyreType} plant={plant}/>}
         {tab==="complaint"&&<ComplaintDrillPanel kpi={openObj} sub={sub} setSub={setSub}/>}
       </div>}

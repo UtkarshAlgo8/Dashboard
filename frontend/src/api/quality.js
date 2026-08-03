@@ -1,5 +1,30 @@
 import client from "./client.js";
 
+const QUALITY_CACHE_TTL_MS = 5 * 60 * 1000;
+const qualityCache = new Map();
+const qualityPending = new Map();
+
+function cachedQualityGet(url, ttlMs = QUALITY_CACHE_TTL_MS) {
+  const now = Date.now();
+  const hit = qualityCache.get(url);
+  if (hit && hit.expiresAt > now) return Promise.resolve(hit.data);
+
+  const pending = qualityPending.get(url);
+  if (pending) return pending;
+
+  const promise = client
+    .get(url)
+    .then((data) => {
+      qualityCache.set(url, { data, expiresAt: Date.now() + ttlMs });
+      return data;
+    })
+    .finally(() => {
+      qualityPending.delete(url);
+    });
+  qualityPending.set(url, promise);
+  return promise;
+}
+
 /**
  * Quality Dashboard API client (Backend FRD §1). Uses the shared axios
  * instance, so the base URL is VITE_API_BASE_URL and the response envelope
@@ -31,7 +56,16 @@ export function getProcessKpiValues({ date, shift = "All" }) {
     shift,
     kpi_names: Object.values(PROCESS_KPI_NAME).join(","),
   });
-  return client.get(`/quality/process/kpi-value-batch?${params.toString()}`);
+  return cachedQualityGet(`/quality/process/kpi-value-batch?${params.toString()}`);
+}
+
+export function getProcessSummary({ date, shift = "All" }) {
+  const params = new URLSearchParams({
+    plant: "BANMORE",
+    date,
+    shift,
+  });
+  return cachedQualityGet(`/quality/process/summary?${params.toString()}`);
 }
 
 /**
@@ -47,7 +81,7 @@ export function getProcessKpiChildren({ kpiNames, date, shift = "All", section }
     kpi_names: kpiNames.join(","),
   });
   if (section) params.set("section", section);
-  return client.get(`/quality/process/kpi-children?${params.toString()}`);
+  return cachedQualityGet(`/quality/process/kpi-children?${params.toString()}`);
 }
 
 export function getProcessKpiHistory({ kpiName, dateFrom, dateTo, shift = "All", section, machine }) {
@@ -60,20 +94,20 @@ export function getProcessKpiHistory({ kpiName, dateFrom, dateTo, shift = "All",
   });
   if (section) params.set("section", section);
   if (machine) params.set("machine", machine);
-  return client.get(`/quality/process/kpi-history?${params.toString()}`);
+  return cachedQualityGet(`/quality/process/kpi-history?${params.toString()}`);
 }
 
 export function getSpcSummary({ date, machine } = {}) {
   const params = new URLSearchParams({ plant: "BANMORE" });
   if (date) params.set("date", date);
   if (machine && machine !== "All") params.set("machine", machine);
-  return client.get(`/quality/spc/summary?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/summary?${params.toString()}`);
 }
 
 export function getSpcFilterOptions({ date } = {}) {
   const params = new URLSearchParams({ plant: "BANMORE" });
   if (date) params.set("date", date);
-  return client.get(`/quality/spc/filter-options?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/filter-options?${params.toString()}`);
 }
 
 export function getSpcWidgets({ date, machine, recipe, headlineStatus } = {}) {
@@ -84,7 +118,7 @@ export function getSpcWidgets({ date, machine, recipe, headlineStatus } = {}) {
   if (headlineStatus && headlineStatus !== "All") {
     params.set("headline_status", headlineStatus);
   }
-  return client.get(`/quality/spc/widgets?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/widgets?${params.toString()}`);
 }
 
 export function getSpcDetail({ date, shift = "All", machine, recipe, parameter }) {
@@ -96,5 +130,5 @@ export function getSpcDetail({ date, shift = "All", machine, recipe, parameter }
     recipe,
     parameter,
   });
-  return client.get(`/quality/spc/detail?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/detail?${params.toString()}`);
 }

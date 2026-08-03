@@ -1,4 +1,4 @@
-import { cached, buildCacheKey } from "../utils/cache.js";
+import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
@@ -6,6 +6,7 @@ import {
   normalizePlantId,
   plantDepartmentPredicate,
   plantSqlTable,
+  emptyColumnPredicate,
 } from "../utils/normalize.js";
 
 /**
@@ -104,11 +105,15 @@ export const CATEGORY_TABS = [
   { id: "i", code: "I", name: "Inventory", enabled: true },
 ];
 
-const LANDING_KPIS = {
-  oe: "OEE_o",
-  otif: "OTIF",
-  yield: "Yield",
+const LANDING_KPI_ALIASES = {
+  oe: ["oe", "oee", "oee_o"],
+  otif: ["otif"],
+  yield: ["yield", "yield_%", "yield_pct"],
 };
+
+function aliasList(names) {
+  return names.map(escapeLiteral).join(", ");
+}
 
 function percentOrNull(v) {
   const n = typeof v === "number" ? v : Number.parseFloat(v);
@@ -122,23 +127,30 @@ async function landingKpisForPlant(plantId) {
     FROM (
       SELECT
         CASE
-          WHEN kpi_name = ${escapeLiteral(LANDING_KPIS.oe)} THEN 'oe'
-          WHEN kpi_name = ${escapeLiteral(LANDING_KPIS.otif)} THEN 'otif'
-          WHEN kpi_name = ${escapeLiteral(LANDING_KPIS.yield)} THEN 'yield'
+          WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.oe)}) THEN 'oe'
+          WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.otif)}) THEN 'otif'
+          WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.yield)}) THEN 'yield'
         END AS metric,
         actual_value,
         ROW_NUMBER() OVER (
-          PARTITION BY kpi_name
+          PARTITION BY
+            CASE
+              WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.oe)}) THEN 'oe'
+              WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.otif)}) THEN 'otif'
+              WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.yield)}) THEN 'yield'
+            END
           ORDER BY ${DATE_YYYYMMDD} DESC
         ) AS rn
       FROM ${plantSqlTable(plantId)}
       WHERE ${plantDepartmentPredicate(plantId)}
-        AND kpi_name IN (
-          ${escapeLiteral(LANDING_KPIS.oe)},
-          ${escapeLiteral(LANDING_KPIS.otif)},
-          ${escapeLiteral(LANDING_KPIS.yield)}
+        AND LOWER(kpi_name) IN (
+          ${aliasList([
+            ...LANDING_KPI_ALIASES.oe,
+            ...LANDING_KPI_ALIASES.otif,
+            ...LANDING_KPI_ALIASES.yield,
+          ])}
         )
-        AND (machine IS NULL OR LOWER(machine) IN ('', 'nan', 'null'))
+        AND ${emptyColumnPredicate("machine")}
     ) ranked
     WHERE rn = 1
   `.trim();
@@ -167,6 +179,7 @@ export async function getPlants(_req, res, next) {
         );
         return Object.fromEntries(entries);
       },
+      CACHE_TTL.STATIC_LOOKUPS,
     );
     const data = PLANTS.map((p) => ({
       ...p,

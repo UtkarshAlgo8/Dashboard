@@ -1,4 +1,4 @@
-import { cached, buildCacheKey } from "../utils/cache.js";
+import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
@@ -93,7 +93,7 @@ export async function getSummary(req, res, next) {
         return { value: row.actual_value, date };
       };
       return { oee: pick("OEE_o"), ftq: pick("FTQ"), scrap: pick("Scrap") };
-    });
+    }, CACHE_TTL.KPI_ROWS);
     res.json({ data });
   } catch (err) {
     next(err);
@@ -123,7 +123,7 @@ export async function getAsOf(req, res, next) {
         ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
         : null;
       return { asOf };
-    });
+    }, CACHE_TTL.AS_OF);
     res.json({ data });
   } catch (err) {
     next(err);
@@ -183,7 +183,7 @@ export async function getSectionOee(req, res, next) {
       // Sections with no overall OEE_o row (Stock / TBM, and Mixing at MONTH)
       // are simply absent from `out` → the frontend renders NULL for them.
       return out; // e.g. { Mixing: 18.8, Curing: 31.7 } (Stock/TBM null)
-    });
+    }, CACHE_TTL.KPI_ROWS);
     res.json({ data });
   } catch (err) {
     next(err);

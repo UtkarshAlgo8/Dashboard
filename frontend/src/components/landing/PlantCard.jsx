@@ -6,10 +6,16 @@ import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
  * (Q-NAV-01). A left stripe + KPI pills are colour-coded by OE health.
  */
 function statusColor(theme, v) {
-  if (typeof v !== "number") return theme.custom.text.muted;
-  if (v >= 90) return theme.custom.brand.green;
-  if (v >= 80) return theme.custom.brand.amber;
+  const value = numericPercent(v);
+  if (value == null) return theme.custom.text.muted;
+  if (value >= 90) return theme.custom.brand.green;
+  if (value >= 80) return theme.custom.brand.amber;
   return theme.custom.brand.red;
+}
+
+function numericPercent(value) {
+  const n = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function PlantCard({
@@ -142,7 +148,8 @@ function PlantCard({
 
 function KpiCell({ label, value, color }) {
   // Missing live DB value: show NA, never a fabricated number.
-  const hasValue = typeof value === "number" && Number.isFinite(value);
+  const displayValue = numericPercent(value);
+  const hasValue = displayValue != null;
   return (
     <Box
       sx={{
@@ -161,7 +168,7 @@ function KpiCell({ label, value, color }) {
           color: hasValue ? color : "text.disabled",
         }}
       >
-        {hasValue ? value : "NA"}
+        {hasValue ? displayValue : "NA"}
         {hasValue && (
           <Typography
             component="span"
