@@ -16,7 +16,7 @@
  * Returns { kpis, drillRows, isLoading, error, state, setFilter,
  *          drillInto, resetDrill, resetAll }.
  */
-import { useReducer, useCallback } from "react";
+import { useEffect, useReducer, useCallback } from "react";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { toKpiGrid, toDrillRows } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
@@ -494,6 +494,51 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
       })
     : [];
   const drillRows = data && state.drillKpis !== null ? toDrillRows(data) : null;
+
+  useEffect(() => {
+    if (!hasDateRange || isLoading || !Array.isArray(kpis) || kpis.length === 0) {
+      return;
+    }
+    const candidates = kpis
+      .filter(
+        (kpi) =>
+          kpi?.drillable &&
+          Array.isArray(kpi.drillTargets) &&
+          kpi.drillTargets.length > 0,
+      )
+      .slice(0, 3);
+
+    for (const kpi of candidates) {
+      const source =
+        kpi.resolvedDate && state.granularity !== "MONTH"
+          ? { date: kpi.resolvedDate }
+          : state;
+      const gran =
+        state.category === "p" && state.granularity === "MONTH"
+          ? "DAY"
+          : (state.granularity ?? "DAY");
+      fetchCachedDashboard({
+        plantId,
+        context: {
+          ...buildContext(state),
+          granularity: gran,
+        },
+        ...buildDatePayload(source),
+        drillKpis: kpi.drillTargets,
+        parentFilters: {},
+        limit: 3000,
+        drillOnly: true,
+      }).catch(() => {
+        // Prefetch is opportunistic; the foreground drill fetch still owns UX.
+      });
+    }
+  }, [
+    hasDateRange,
+    isLoading,
+    kpis,
+    plantId,
+    state,
+  ]);
 
   const setFilter = useCallback((payload, resetDrill = false) => {
     dispatch({ type: "SET_FILTER", payload, resetDrill });

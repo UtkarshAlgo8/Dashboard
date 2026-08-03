@@ -9,6 +9,7 @@ import {
   getKpiValueBatch,
   getKpiChildren,
   getKpiHistory,
+  getProcessSummary,
 } from "../controllers/process.controller.js";
 
 export const router = Router();
@@ -17,3 +18,4 @@ router.get("/kpi-value", getKpiValue);
 router.get("/kpi-value-batch", getKpiValueBatch);
 router.get("/kpi-children", getKpiChildren);
 router.get("/kpi-history", getKpiHistory);
+router.get("/summary", getProcessSummary);

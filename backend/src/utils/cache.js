@@ -9,6 +9,15 @@ import { config } from "../config.js";
 const store = new Map();
 const pending = new Map();
 
+export const CACHE_TTL = {
+  KPI_ROWS: 2 * 60 * 1000,
+  PRODUCT_OPTIONS: 15 * 60 * 1000,
+  ANCHORS: 15 * 60 * 1000,
+  AS_OF: 15 * 60 * 1000,
+  STATIC_LOOKUPS: 30 * 60 * 1000,
+  QUALITY_PROCESS: 5 * 60 * 1000,
+};
+
 export function cacheGet(key) {
   const entry = store.get(key);
   if (!entry) return null;

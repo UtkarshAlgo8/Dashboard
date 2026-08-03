@@ -26,6 +26,7 @@ import {
   getAsOf,
   getSectionOee,
 } from "@/api/plants.js";
+import { getAnchors } from "@/api/dashboard.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange, buildDatePayload } from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
@@ -37,33 +38,24 @@ import { exportElementToPdf } from "@/lib/exportPdf.js";
 // 10k-row drill fetch in useDashboardFetch.
 const PROD_DRILL_TYPES = new Set(["mixProd", "tbmProd", "stkProd", "curProd"]);
 
-/**
- * new_change.md C8: the distinct (product_type, unit_of_measurement) pairs
- * the Production rows actually carry for the fetched scope. Drives the Stock
- * product pills and the unit pin — never a hardcoded list, and `Belt Mother
- * Roll` is kept as-is (never aliased to `Belt`).
- */
-function deriveProductionOptions(rows, sectionName) {
-  if (!Array.isArray(rows)) return [];
-  const seen = new Map();
-  for (const r of rows) {
-    if (r.section !== sectionName) continue;
-    if (r.kpi_name !== "Production") continue;
-    const actual = Number.parseFloat(r.actual_value);
-    if (!Number.isFinite(actual)) continue;
-    const pt =
-      r.product_type == null ||
-      ["", "nan", "null"].includes(String(r.product_type).trim().toLowerCase())
-        ? null
-        : String(r.product_type).trim();
-    const unit = canonicalUnit(r.unit_of_measurement);
-    const key = `${pt ?? ""}||${unit ?? ""}`;
-    if (!seen.has(key)) seen.set(key, { productType: pt, unit });
+function stableOptionsKey(value) {
+  if (Array.isArray(value)) return `[${value.map(stableOptionsKey).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableOptionsKey(value[key])}`)
+      .join(",")}}`;
   }
-  return [...seen.values()].sort(
-    (a, b) =>
-      (a.productType ?? "").localeCompare(b.productType ?? "") ||
-      (a.unit ?? "").localeCompare(b.unit ?? ""),
+  return JSON.stringify(value);
+}
+
+function latestIsoDate(values) {
+  if (!Array.isArray(values)) return null;
+  return (
+    values
+      .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+      .sort()
+      .at(-1) ?? null
   );
 }
 
@@ -105,19 +97,48 @@ function BanmoreProduction() {
     () => getPlant(plantId),
     { interval: 0, deps: [plantId] },
   );
-  const { data: sections } = usePolledQuery(getSections, { interval: 0 });
-  const { data: tabs } = usePolledQuery(getCategoryTabs, { interval: 0 });
+  const { data: sections } = usePolledQuery(getSections, {
+    interval: 0,
+    cacheKey: "production:sections",
+    staleTime: 30 * 60 * 1000,
+  });
+  const { data: tabs } = usePolledQuery(getCategoryTabs, {
+    interval: 0,
+    cacheKey: "production:category-tabs",
+    staleTime: 30 * 60 * 1000,
+  });
   const { data: summary } = usePolledQuery(() => getPlantSummary(plantId), {
     interval: 0,
     deps: [plantId],
+    keepPreviousData: true,
+    cacheKey: `production:${plantId}:summary`,
+    staleTime: 2 * 60 * 1000,
   });
   // As-of date (BRD §13.5) — anchor for all time-range windows so values
   // render even when the calendar runs ahead of the available data.
   const { data: asOfData, isLoading: asOfLoading } = usePolledQuery(
     () => getAsOf(plantId),
-    { interval: 0, deps: [plantId] },
+    {
+      interval: 0,
+      deps: [plantId],
+      keepPreviousData: true,
+      cacheKey: `production:${plantId}:as-of`,
+      staleTime: 15 * 60 * 1000,
+    },
   );
   const asOf = asOfData?.asOf ?? null;
+  const { data: anchorData, isLoading: anchorsLoading } = usePolledQuery(
+    () => getAnchors(plantId),
+    {
+      interval: 0,
+      deps: [plantId],
+      keepPreviousData: true,
+      cacheKey: `production:${plantId}:anchors`,
+      staleTime: 15 * 60 * 1000,
+    },
+  );
+  const fallbackAsOf = latestIsoDate(Object.values(anchorData?.anchors ?? {}));
+  const effectiveAsOf = asOf ?? fallbackAsOf;
 
   // CR-08: v2 dashboard fetch — owns section/category/granularity/date/drill state.
   const {
@@ -157,6 +178,9 @@ function BanmoreProduction() {
       interval: 0,
       enabled: hasDateRange,
       deps: [plantId, dashboard.granularity, hasDateRange],
+      keepPreviousData: true,
+      cacheKey: `production:${plantId}:section-oee:${dashboard.granularity ?? "MONTH"}`,
+      staleTime: 2 * 60 * 1000,
     },
   );
   const sectionOeeById = {
@@ -247,22 +271,38 @@ function BanmoreProduction() {
       ...(isStock ? { sub_section: activeSubSection } : {}),
     },
     ...buildDatePayload({ from: dashboard.from, to: dashboard.to }),
-    drillKpis: null,
-    parentFilters: {},
-    limit: 5000,
+    limit: 1000,
   };
-  const { data: optionRows } = usePolledQuery(
+  const { data: productionOptionsData } = usePolledQuery(
     () =>
       client
-        .post("/dashboard/kpi-data", optionsPayload)
-        .then((r) => r.data ?? r),
+        .post("/dashboard/product-options", optionsPayload)
+        .then((rows) =>
+          Array.isArray(rows)
+            ? rows
+                .map((row) => ({
+                  productType: row.productType ?? null,
+                  unit: canonicalUnit(row.unit),
+                }))
+                .sort(
+                  (a, b) =>
+                    (a.productType ?? "").localeCompare(b.productType ?? "") ||
+                    (a.unit ?? "").localeCompare(b.unit ?? ""),
+                )
+            : [],
+        ),
     {
       enabled: hasDateRange && dashboard.category === "p",
       interval: 0,
+      keepPreviousData: true,
+      cacheKey: `production:${stableOptionsKey(optionsPayload)}:product-options`,
+      staleTime: 15 * 60 * 1000,
       deps: [JSON.stringify(optionsPayload)],
     },
   );
-  const productionOptions = deriveProductionOptions(optionRows, sectionName);
+  const productionOptions = Array.isArray(productionOptionsData)
+    ? productionOptionsData
+    : [];
   const nonStockProductOptions = [
     ...new Set(productionOptions.map((o) => o.productType).filter(Boolean)),
   ];
@@ -377,7 +417,7 @@ function BanmoreProduction() {
     // presetToDateRange returns granularity="DAY" for a custom range; a
     // bare {preset} would drop the range and yield null → the "Daily"
     // fallback that never matches the real "DAY" rows.
-    return presetToDateRange({ ...timeRange, preset }, asOf).granularity;
+    return presetToDateRange({ ...timeRange, preset }, effectiveAsOf).granularity;
   };
 
   // Handlers ONLY update the UI state (pure functional updater so the
@@ -401,15 +441,14 @@ function BanmoreProduction() {
   // The shift only applies to Today, so it's ignored for Month/Year even
   // if a stale value lingers.
   useEffect(() => {
-    // Wait for the as-of query to SETTLE before resolving the window. The
-    // window depends on the as-of anchor, so firing before it loads sets a
-    // system-clock range, then a corrected range once as-of arrives — two
-    // landing fetches. Gating on !asOfLoading collapses that to one. (On
-    // as-of error, asOf is null and presetToDateRange falls back to the
-    // system clock, so this never stalls.)
-    if (asOfLoading) return;
+    // Wait for a real data anchor before resolving the window. Falling back
+    // to the system clock can query the current calendar month even when the
+    // dataset ends earlier, which makes the main panel blank while sidebar
+    // latest-OEE values still render.
+    if ((asOfLoading || anchorsLoading) && !effectiveAsOf) return;
+    if (!effectiveAsOf) return;
     const effShift = timeRange.preset === "today" ? shiftKey : "all";
-    const resolved = presetToDateRange(timeRange, asOf);
+    const resolved = presetToDateRange(timeRange, effectiveAsOf);
     setFilter(
       {
         date: null,
@@ -425,9 +464,9 @@ function BanmoreProduction() {
       false,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeRange, shiftKey, asOf, asOfLoading]);
+  }, [timeRange, shiftKey, effectiveAsOf, asOfLoading, anchorsLoading]);
 
-  const { from, to } = presetToDateRange(timeRange, asOf);
+  const { from, to } = presetToDateRange(timeRange, effectiveAsOf);
 
   const onSectionSelect = (id) => {
     // Entering Stock seeds the default sub-section + its first REAL product
@@ -554,8 +593,8 @@ function BanmoreProduction() {
               dashboard.category === "i"
                 ? "1fr"
                 : { xs: "1fr", md: "220px 1fr" },
-            gap: 2,
-            p: 2,
+            gap: dashboard.category === "i" ? 0 : 2,
+            p: dashboard.category === "i" ? 0 : 2,
           }}
         >
           {dashboard.category !== "i" && (
@@ -589,14 +628,19 @@ function BanmoreProduction() {
           <Box
             sx={{
               backgroundColor: "background.paper",
-              border: 1,
+              border: dashboard.category === "i" ? 0 : 1,
               borderColor: "divider",
-              borderRadius: 1.25,
-              boxShadow: theme.custom.shadow,
+              borderRadius: dashboard.category === "i" ? 0 : 1.25,
+              boxShadow:
+                dashboard.category === "i" ? "none" : theme.custom.shadow,
               display: "flex",
               flexDirection: "column",
               minHeight: 0,
-              overflowY: exporting ? "visible" : "auto",
+              overflow: exporting
+                ? "visible"
+                : dashboard.category === "i"
+                  ? "hidden"
+                  : "auto",
             }}
           >
             {dashboard.category === "i" ? (
@@ -809,7 +853,7 @@ function BanmoreProduction() {
         category={dashboard.category}
         subSection={pinnedSubSection}
         productType={dashboard.productType}
-        asOf={asOf}
+        asOf={effectiveAsOf}
       />
     </Box>
   );

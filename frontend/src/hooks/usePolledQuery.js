@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const queryCache = new Map();
+const pendingQueries = new Map();
+
 /**
  * Polled-fetch hook. Calls `fetcher` on mount and every `interval`
  * ms thereafter. Drops stale results if the component unmounts or
@@ -27,6 +30,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *   does not fetch and returns null data.
  * @param {boolean} [options.keepPreviousData=false] - When true, dependency
  *   changes refetch in place instead of clearing the last successful result.
+ * @param {string} [options.cacheKey] - Optional key for stale-while-revalidate
+ *   cache and in-flight request dedupe.
+ * @param {number} [options.staleTime=0] - Milliseconds a cached result can be
+ *   shown immediately before the background refresh completes.
  * @returns {{
  *   data: T | null,
  *   error: Error | null,
@@ -40,11 +47,18 @@ export function usePolledQuery(fetcher, options = {}) {
     deps = [],
     enabled = true,
     keepPreviousData = false,
+    cacheKey = null,
+    staleTime = 0,
   } = options;
 
-  const [data, setData] = useState(null);
+  const cachedEntry =
+    cacheKey && staleTime > 0 ? queryCache.get(cacheKey) : null;
+  const initialData =
+    cachedEntry && cachedEntry.expiresAt > Date.now() ? cachedEntry.data : null;
+
+  const [data, setData] = useState(initialData);
   const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(enabled);
+  const [isLoading, setIsLoading] = useState(enabled && initialData == null);
 
   const tokenRef = useRef(0);
   const fetcherRef = useRef(fetcher);
@@ -58,9 +72,40 @@ export function usePolledQuery(fetcher, options = {}) {
 
   const run = useCallback(() => {
     const myToken = ++tokenRef.current;
-    setIsLoading(true);
-    fetcherRef
-      .current()
+    const hit =
+      cacheKey && staleTime > 0 ? queryCache.get(cacheKey) : null;
+    const freshHit = hit && hit.expiresAt > Date.now();
+    if (freshHit) {
+      setData(hit.data);
+      setError(null);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
+    const pending =
+      cacheKey && staleTime > 0 ? pendingQueries.get(cacheKey) : null;
+    const promise =
+      pending ??
+      fetcherRef
+        .current()
+        .then((result) => {
+          if (cacheKey && staleTime > 0) {
+            queryCache.set(cacheKey, {
+              data: result,
+              expiresAt: Date.now() + staleTime,
+            });
+          }
+          return result;
+        })
+        .finally(() => {
+          if (cacheKey && staleTime > 0) pendingQueries.delete(cacheKey);
+        });
+    if (!pending && cacheKey && staleTime > 0) {
+      pendingQueries.set(cacheKey, promise);
+    }
+
+    promise
       .then((result) => {
         if (tokenRef.current !== myToken) return;
         setData(result);
@@ -72,7 +117,7 @@ export function usePolledQuery(fetcher, options = {}) {
         setError(err);
         setIsLoading(false);
       });
-  }, []);
+  }, [cacheKey, staleTime]);
 
   const refetch = useCallback(() => {
     if (!enabled) return;

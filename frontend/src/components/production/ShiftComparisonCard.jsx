@@ -38,18 +38,17 @@ import { buildDatePayload } from "@/lib/timeRange.js";
  */
 
 /**
- * One shift band: the rows for ONE `granularity` (SHIFT A/B/C) over the
- * active window, for ONE category.
+ * Shift bands for ONE category over the active window. The backend returns
+ * all three shift granularities in one response, so the browser makes two
+ * calls total here: Productivity and Quality.
  *
  * new_change.md C2/C11: the granularity predicate is ALWAYS pinned. This
  * card used to read the shift rows out of the granularity-less landing
  * fetch, but an absent granularity now resolves to DAY server-side — that
- * fetch carries no SHIFT row at all, so every cell rendered "—". One
- * request per shift is the only way to read `granularity = 'SHIFT x'`.
+ * fetch carries no SHIFT row at all, so every cell rendered "—".
  */
-function useShiftBand({
+function useShiftBands({
   plantId = "banmore",
-  shift,
   category,
   section,
   subSection,
@@ -61,12 +60,9 @@ function useShiftBand({
 }) {
   const payload = {
     plantId,
-    context: {
-      section,
-      category,
-      granularity: shift,
-      ...(subSection ? { sub_section: subSection } : {}),
-    },
+    section,
+    category,
+    ...(subSection ? { subSection } : {}),
     // new_change.md C1: range OR single date, never both.
     ...buildDatePayload(isRange ? { from, to } : { date }),
     // new_change.md C7/C12: Production_product is NOT a landing-level row,
@@ -80,7 +76,7 @@ function useShiftBand({
   };
   const hasWindow = isRange ? Boolean(from || to) : Boolean(date);
   const { data } = usePolledQuery(
-    () => client.post("/dashboard/kpi-data", payload).then((r) => r.data ?? r),
+    () => client.post("/dashboard/shift-comparison", payload),
     {
       // Never call kpi-data without a resolved window.
       enabled: Boolean(section) && hasWindow,
@@ -133,16 +129,12 @@ export default function ShiftComparisonCard({
     extraKpis:
       section === "TBM" || section === "Curing" ? ["Production_product"] : null,
   };
-  const prodBands = [
-    useShiftBand({ ...prodArgs, shift: "SHIFT A" }),
-    useShiftBand({ ...prodArgs, shift: "SHIFT B" }),
-    useShiftBand({ ...prodArgs, shift: "SHIFT C" }),
-  ];
-  const qualBands = [
-    useShiftBand({ ...bandArgs, shift: "SHIFT A", category: "Quality" }),
-    useShiftBand({ ...bandArgs, shift: "SHIFT B", category: "Quality" }),
-    useShiftBand({ ...bandArgs, shift: "SHIFT C", category: "Quality" }),
-  ];
+  const prodRows = useShiftBands(prodArgs);
+  const qualRows = useShiftBands({ ...bandArgs, category: "Quality" });
+  const rowsForShift = (rows, shift) =>
+    rows.filter((r) => r.granularity === shift.gran);
+  const prodBands = shifts.map((shift) => rowsForShift(prodRows, shift));
+  const qualBands = shifts.map((shift) => rowsForShift(qualRows, shift));
 
   // new_change.md C7/C12: the Production kpi_name + product pin, identical
   // to the Production card. Curing/TBM read Production_product pinned to the

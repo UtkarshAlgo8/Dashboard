@@ -282,7 +282,8 @@ function IndiaMap({
 }
 
 function KpiMini({ label, value }) {
-  const hasValue = typeof value === "number" && Number.isFinite(value);
+  const displayValue = numericPercent(value);
+  const hasValue = displayValue != null;
   return (
     <Box sx={{ textAlign: "center" }}>
       <Typography
@@ -304,7 +305,7 @@ function KpiMini({ label, value }) {
           lineHeight: 1,
         }}
       >
-        {hasValue ? value : "NA"}
+        {hasValue ? displayValue : "NA"}
         {hasValue && (
           <Typography
             component="span"
@@ -316,6 +317,11 @@ function KpiMini({ label, value }) {
       </Typography>
     </Box>
   );
+}
+
+function numericPercent(value) {
+  const n = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 export default IndiaMap;
