@@ -1,8 +1,23 @@
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 
 const INVENTORY_APP_URL = "http://10.200.203.239:8599/";
 
-function InventoryPage() {
+function InventoryPage({ plantId }) {
+  if (plantId !== "banmore") {
+    return (
+      <Box
+        sx={{
+          height: "100%",
+          display: "grid",
+          placeItems: "center",
+          color: "text.disabled",
+        }}
+      >
+        <Typography sx={{ fontSize: 13 }}>Inventory not configured.</Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ height: "100%", minHeight: 0, overflow: "hidden" }}>
       <iframe
