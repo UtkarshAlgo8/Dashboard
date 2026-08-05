@@ -336,7 +336,7 @@ function DatePill({ value, active, onClick }) {
         cursor: "pointer",
       }}
     >
-      {value ? format(value, "MMM d, yyyy") : "Pick a date"}
+      {value ? format(value, "dd-MM-yyyy") : "Pick a date"}
     </Box>
   );
 }

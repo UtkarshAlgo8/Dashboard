@@ -1,5 +1,6 @@
 import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 
 /**
  * First Aid log drill — kpi_name = First_Aid_log.
@@ -34,7 +35,7 @@ export default function FirstAidDrillPanel({ drillRows, granularity = "DAY" }) {
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
     .map((r) => {
       const { area, desc } = splitRemarks(r.remarks);
-      return [r.date ?? "—", area, desc, "—"];
+      return [toDisplayDate(r.date) ?? "—", area, desc, "—"];
     });
 
   return (

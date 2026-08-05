@@ -13,6 +13,7 @@ import {
   resolveProductionKpi,
 } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import JKLoader from "@/components/JKLoader.jsx";
 
@@ -274,8 +275,8 @@ export default function ShiftComparisonCard({
   ];
 
   const windowLabel = isRange
-    ? `${from ?? "…"} → ${to ?? "…"} · daily shift rows summed`
-    : (date ?? "latest day");
+    ? `${toDisplayDate(from) ?? "…"} → ${toDisplayDate(to) ?? "…"} · daily shift rows summed`
+    : (toDisplayDate(date) ?? "latest day");
 
   return (
     <Box

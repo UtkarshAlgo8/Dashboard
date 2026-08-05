@@ -1,5 +1,6 @@
 import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 
 /**
  * Reportable Incident log drill — kpi_name = Reportable_log.
@@ -33,7 +34,7 @@ export default function ReportableDrillPanel({ drillRows, granularity = "DAY" })
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
     .map((r) => {
       const { area, desc } = splitRemarks(r.remarks);
-      return [r.date ?? "—", "Reportable", area, desc, r.status ?? "—"];
+      return [toDisplayDate(r.date) ?? "—", "Reportable", area, desc, r.status ?? "—"];
     });
 
   return (

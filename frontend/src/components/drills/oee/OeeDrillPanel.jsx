@@ -17,6 +17,7 @@ import SubDrill from "./SubDrill.jsx";
 import { thresholdTier } from "./thresholds.js";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
 
 /**
@@ -357,9 +358,10 @@ function OeeDrillPanel({
       .map((r) => {
         const reason = r.remarks && r.remarks !== "nan" ? r.remarks : "Other";
         const k = dateKey(r.date);
-        const date = k
-          ? `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}`
-          : (r.date ?? "—");
+        const date =
+          toDisplayDate(
+            k ? `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}` : r.date,
+          ) ?? "—";
         return {
           date,
           sortKey: k ?? "",
