@@ -260,6 +260,10 @@ async function fetchDashboard(payload) {
       ? coerceMeasures(envelope.baseline)
       : null,
     baselineWindow: envelope.baselineWindow ?? null,
+    // The moment this response actually arrived from the backend. Stamped on
+    // the envelope (not in the component) so it flows through the cache and a
+    // cache hit correctly reports the ORIGINAL fetch time, not "now".
+    fetchedAt: new Date(),
   };
 }
 
@@ -463,6 +467,11 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const isDrillLoading = Boolean(drillPayload) && drillLoading;
   const error = landingError || drillError || null;
 
+  // When the latest landing data actually arrived from the backend, stamped
+  // on the envelope by the fetcher (see fetchDashboard). Derived purely from
+  // data — no effect, no ref — so it advances with each fetch / filter change.
+  const lastUpdatedAt = landingData?.fetchedAt ?? null;
+
   const kpis = data
     ? toKpiGrid(data, {
         section: sectionIdToName(state.section),
@@ -579,6 +588,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     truncated,
     isLoading,
     isDrillLoading,
+    lastUpdatedAt,
     error,
     setFilter,
     drillInto,

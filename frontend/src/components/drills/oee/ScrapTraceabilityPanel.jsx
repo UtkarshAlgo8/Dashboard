@@ -19,6 +19,7 @@ import { EmptyState, useToast } from "@/components/common";
 import { TableSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getScrapTraceability } from "@/api/drills.js";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import { BANBURY_PARAM_RANGES } from "@/lib/mockData.js";
 import { buildCsv, downloadCsv } from "@/lib/csv.js";
 
@@ -361,19 +362,14 @@ function ShiftPill({ shift }) {
 }
 
 function formatDateTime(iso) {
-  // Display as "15 Oct 26 · 07:23"
+  // Display as "15-10-2026 · 07:23"
   try {
     const d = new Date(iso);
-    const dd = d.toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "2-digit",
-    });
     const tt = d.toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
     });
-    return `${dd} · ${tt}`;
+    return `${toDisplayDate(d)} · ${tt}`;
   } catch {
     return iso;
   }

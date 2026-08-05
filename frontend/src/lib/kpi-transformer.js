@@ -16,6 +16,7 @@
  */
 
 import { isKg, kgToTonnes, toDisplayQuantity } from "./units.js";
+import { toDisplayDate } from "./dateFormat.js";
 
 // changes.md §0: missing-value sentinels are the literal strings "nan"
 // AND "null" (not JS null), plus "". Treat all as empty everywhere.
@@ -1566,7 +1567,7 @@ export function toGenericDrill(rows, { title } = {}) {
   const mapped = (rows ?? []).map((r) => [
     r.machine ?? "—",
     r.actual != null ? r.actual : "—",
-    r.date ?? "—",
+    toDisplayDate(r.date) ?? "—",
     r.status ?? "—",
   ]);
   return {

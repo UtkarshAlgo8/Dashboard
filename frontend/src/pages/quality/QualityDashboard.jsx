@@ -14,6 +14,7 @@ import jkLogo from "@/assets/jk-logo.png";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
 import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import {
   getProcessKpiChildren,
   getProcessKpiHistory,
@@ -584,6 +585,10 @@ function TrendPanel({kpi,onClose,tyreType,plant}){
               <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:10,height:10,background:stCol,display:"inline-block",borderRadius:2}}/>Period value</span>
               <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:14,height:0,borderTop:"1.5px dashed "+C.am,display:"inline-block"}}/>Target</span>
             </>}
+            {chartType!=="progress"&&ins.bestIdx>=0&&<>
+              <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:10,height:10,background:C.gn,display:"inline-block",borderRadius:"50%"}}/>Best</span>
+              <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:10,height:10,background:C.rd,display:"inline-block",borderRadius:"50%"}}/>Worst</span>
+            </>}
           </div>
           {chartType==="bar"
             ?<TrendBar labels={data.labels} series={data.series} target={tgt} color={stCol} bestIdx={ins.bestIdx} worstIdx={ins.worstIdx}/>
@@ -625,7 +630,7 @@ function LiveProcessTrendPanel({kpi,onClose,dateFrom,dateTo,shift}){
     return()=>{cancelled=true;};
   },[kpi?.trendKpiName,trendFrom,trendTo,shift]);
   if(!kpi)return null;
-  const labels=points.map(p=>String(p.date||"").slice(5));
+  const labels=points.map(p=>toDisplayDate(p.date)??"");
   const series=points.map(p=>Number(p.value));
   const targetNum=kpi.target!=null?parseFloat(String(kpi.target).replace(/[^0-9.\-]/g,"")):NaN;
   const current=series.length?series[series.length-1]:parseFloat(String(kpi.v).replace(/,/g,""));
@@ -661,6 +666,10 @@ function LiveProcessTrendPanel({kpi,onClose,dateFrom,dateTo,shift}){
             <span>Actual vs Target — fetched from API</span>
             <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:14,height:2,background:stCol,display:"inline-block"}}/>Actual</span>
             {!isNaN(targetNum)&&<span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:14,height:0,borderTop:"1.5px dashed "+C.am,display:"inline-block"}}/>Target</span>}
+            {ins.bestIdx>=0&&<>
+              <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:10,height:10,background:C.gn,display:"inline-block",borderRadius:"50%"}}/>Best</span>
+              <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}><span style={{width:10,height:10,background:C.rd,display:"inline-block",borderRadius:"50%"}}/>Worst</span>
+            </>}
           </div>
           {loading&&<div style={{padding:24,textAlign:"center",fontSize:13,color:C.mu}}>Fetching trend points...</div>}
           {error&&<div style={{padding:24,textAlign:"center",fontSize:13,color:C.rd}}>Trend fetch failed: {error.message||"Request failed"}</div>}
@@ -1190,9 +1199,9 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary})
       {p:"Building",mqv:3,top:"Visual issue",op:1,cl:2}
     ];
     const capa=[
-      {id:"NC-2451",p:"Curing",vio:"Dirty sidewall",rc:"Mould cleaning frequency low",ww:"5-Why pending",ca:"Increase cleaning to 2x/shift",pa:"Add SOP + visual check",own:"S.Singh",dd:"15-Apr",st:"Open"},
-      {id:"NC-2454",p:"Curing",vio:"Bladder pressure low",rc:"Pressure regulator drift",ww:"Completed",ca:"Replace regulator",pa:"Calibration plan",own:"R.Yadav",dd:"12-Apr",st:"Open"},
-      {id:"NC-2378",p:"Mixing",vio:"Dump temp >45°C",rc:"Cooling water temp high",ww:"Completed",ca:"Chiller maintenance",pa:"Daily temp log",own:"M.Sharma",dd:"08-Apr",st:"Closed"}
+      {id:"NC-2451",p:"Curing",vio:"Dirty sidewall",rc:"Mould cleaning frequency low",ww:"5-Why pending",ca:"Increase cleaning to 2x/shift",pa:"Add SOP + visual check",own:"S.Singh",dd:"15-04-2026",st:"Open"},
+      {id:"NC-2454",p:"Curing",vio:"Bladder pressure low",rc:"Pressure regulator drift",ww:"Completed",ca:"Replace regulator",pa:"Calibration plan",own:"R.Yadav",dd:"12-04-2026",st:"Open"},
+      {id:"NC-2378",p:"Mixing",vio:"Dump temp >45°C",rc:"Cooling water temp high",ww:"Completed",ca:"Chiller maintenance",pa:"Daily temp log",own:"M.Sharma",dd:"08-04-2026",st:"Closed"}
     ];
     return(<div style={{display:"grid",gap:10}}>
       <Card title="MQV — Daily Trend & Spike Analysis" accent={C.rd}>
@@ -1491,12 +1500,12 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary})
     return(<Card title="Open CAPA / NC Items" accent={C.rd}>
       <Breadcrumb path={["Process","Open CAPA"]}/>
       <DTable cols={["NC #","Process","Violation","Owner","Due Date","Age (days)","Status"]} rows={[
-        ["NC-2451","Curing","Dirty sidewall","S.Singh","15-Apr",6,<StatusPill status="Open"/>],
-        ["NC-2452","Curing","Cure time deviation","M.Verma","10-Apr",11,<StatusPill status="Overdue"/>],
-        ["NC-2454","Curing","Bladder pressure low","R.Yadav","12-Apr",9,<StatusPill status="Overdue"/>],
-        ["NC-2461","Mixing","Dump temp high","M.Sharma","18-Apr",3,<StatusPill status="Open"/>],
-        ["NC-2465","Building","Splice open","K.Reddy","20-Apr",1,<StatusPill status="Open"/>],
-        ["NC-2470","Stock","Width OOS","P.Joshi","16-Apr",5,<StatusPill status="Open"/>]
+        ["NC-2451","Curing","Dirty sidewall","S.Singh","15-04-2026",6,<StatusPill status="Open"/>],
+        ["NC-2452","Curing","Cure time deviation","M.Verma","10-04-2026",11,<StatusPill status="Overdue"/>],
+        ["NC-2454","Curing","Bladder pressure low","R.Yadav","12-04-2026",9,<StatusPill status="Overdue"/>],
+        ["NC-2461","Mixing","Dump temp high","M.Sharma","18-04-2026",3,<StatusPill status="Open"/>],
+        ["NC-2465","Building","Splice open","K.Reddy","20-04-2026",1,<StatusPill status="Open"/>],
+        ["NC-2470","Stock","Width OOS","P.Joshi","16-04-2026",5,<StatusPill status="Open"/>]
       ]}/>
       <div style={{marginTop:8,display:"flex",gap:6}}>
         <div style={{padding:"4px 10px",background:C.rd+"12",borderRadius:4,fontSize:13,color:C.rd,fontWeight:600}}>2 Overdue</div>
@@ -2118,22 +2127,22 @@ const COMPLAINT_KPIS=[
 ];
 
 const LOT_HOLDS=[
-  {lot:"LOT-A4451",cust:"Maruti Suzuki",sku:"ULTIMA NEO",size:"145/13",qty:300,prodDate:"02-Jun",holdDate:"08-Jun",inspDate:"10-Jun",closeDate:"12-Jun",aging:4,
+  {lot:"LOT-A4451",cust:"Maruti Suzuki",sku:"ULTIMA NEO",size:"145/13",qty:300,prodDate:"02-06-2026",holdDate:"08-06-2026",inspDate:"10-06-2026",closeDate:"12-06-2026",aging:4,
    cat:"Appearance",defect:"Sidewall bulge",insp:300,rel:288,rej:12,st:"Partially Released",owner:"Richa Jha",
    items:[{bc:"BTP-4451-018",def:"Sidewall bulge",sev:"Major",disp:"Scrapped"},{bc:"BTP-4451-042",def:"Sidewall bulge",sev:"Major",disp:"Scrapped"},{bc:"BTP-4451-077",def:"Sidewall mark",sev:"Minor",disp:"Scrapped"}]},
-  {lot:"LOT-A4463",cust:"Tata Motors",sku:"ULTIMA SPORT",size:"175/15",qty:240,prodDate:"05-Jun",holdDate:"11-Jun",inspDate:"13-Jun",closeDate:"",aging:9,
+  {lot:"LOT-A4463",cust:"Tata Motors",sku:"ULTIMA SPORT",size:"175/15",qty:240,prodDate:"05-06-2026",holdDate:"11-06-2026",inspDate:"13-06-2026",closeDate:"",aging:9,
    cat:"Dimensional",defect:"Bead seat variation",insp:180,rel:0,rej:0,st:"Under Inspection",owner:"Samson Mathew",
    items:[{bc:"BTP-4463-006",def:"Bead seat high",sev:"Major",disp:"Under review"},{bc:"BTP-4463-031",def:"Bead seat high",sev:"Major",disp:"Under review"}]},
-  {lot:"LOT-A4470",cust:"Maruti Suzuki",sku:"ULTIMA",size:"165/14",qty:180,prodDate:"07-Jun",holdDate:"14-Jun",inspDate:"",closeDate:"",aging:6,
+  {lot:"LOT-A4470",cust:"Maruti Suzuki",sku:"ULTIMA",size:"165/14",qty:180,prodDate:"07-06-2026",holdDate:"14-06-2026",inspDate:"",closeDate:"",aging:6,
    cat:"Uniformity",defect:"RFV high",insp:0,rel:0,rej:0,st:"On Hold",owner:"Richa Jha",
    items:[{bc:"BTP-4470-Pending",def:"RFV high (customer report)",sev:"Major",disp:"Awaiting inspection"}]},
-  {lot:"LOT-A4482",cust:"Hyundai",sku:"ULTIMA SPORT",size:"185/15",qty:200,prodDate:"01-Jun",holdDate:"06-Jun",inspDate:"07-Jun",closeDate:"09-Jun",aging:3,
+  {lot:"LOT-A4482",cust:"Hyundai",sku:"ULTIMA SPORT",size:"185/15",qty:200,prodDate:"01-06-2026",holdDate:"06-06-2026",inspDate:"07-06-2026",closeDate:"09-06-2026",aging:3,
    cat:"Appearance",defect:"Tread cosmetic",insp:200,rel:200,rej:0,st:"Fully Released",owner:"Daksh Gaur",
    items:[{bc:"—",def:"No defect confirmed on inspection",sev:"—",disp:"Released"}]},
-  {lot:"LOT-A4495",cust:"Tata Motors",sku:"XM2",size:"10.00R20",qty:120,prodDate:"03-Jun",holdDate:"09-Jun",inspDate:"10-Jun",closeDate:"13-Jun",aging:4,
+  {lot:"LOT-A4495",cust:"Tata Motors",sku:"XM2",size:"10.00R20",qty:120,prodDate:"03-06-2026",holdDate:"09-06-2026",inspDate:"10-06-2026",closeDate:"13-06-2026",aging:4,
    cat:"Construction",defect:"Belt edge separation",insp:120,rel:0,rej:120,st:"Rejected / Returned",owner:"Samson Mathew",
    items:[{bc:"BTP-4495-lot",def:"Belt edge separation — systemic",sev:"Critical",disp:"Full lot returned"}]},
-  {lot:"LOT-A4501",cust:"Ashok Leyland",sku:"JUC",size:"11.00R20",qty:150,prodDate:"06-Jun",holdDate:"12-Jun",inspDate:"14-Jun",closeDate:"",aging:8,
+  {lot:"LOT-A4501",cust:"Ashok Leyland",sku:"JUC",size:"11.00R20",qty:150,prodDate:"06-06-2026",holdDate:"12-06-2026",inspDate:"14-06-2026",closeDate:"",aging:8,
    cat:"Uniformity",defect:"Conicity out",insp:90,rel:0,rej:0,st:"Under Inspection",owner:"Richa Jha",
    items:[{bc:"BTP-4501-022",def:"Conicity out of band",sev:"Major",disp:"Under review"}]}
 ];
@@ -2163,12 +2172,12 @@ function LotHoldPanel({sub,setSub}){
 function ComplaintDrillPanel({kpi,sub,setSub}){
   if(kpi.drill==="zkd"){
     const zkds=[
-      {id:"ZKD-01",sz:"145/13",df:"Sidewall issue",lc:"Gurgaon",bc:"BC-7842145",dt:"02-Apr"},
-      {id:"ZKD-02",sz:"165/14",df:"Tread issue",lc:"Manesar",bc:"BC-7842166",dt:"05-Apr"},
-      {id:"ZKD-03",sz:"175/15",df:"Bead area crack",lc:"Pune",bc:"BC-7842178",dt:"08-Apr"},
-      {id:"ZKD-04",sz:"185/15",df:"Visual defect",lc:"Chennai",bc:"BC-7842185",dt:"10-Apr"},
-      {id:"ZKD-05",sz:"195/15",df:"Uniformity",lc:"Mumbai",bc:"BC-7842195",dt:"12-Apr"},
-      {id:"ZKD-06",sz:"165/14",df:"Sidewall issue",lc:"Hyderabad",bc:"BC-7842168",dt:"14-Apr"}
+      {id:"ZKD-01",sz:"145/13",df:"Sidewall issue",lc:"Gurgaon",bc:"BC-7842145",dt:"02-04-2026"},
+      {id:"ZKD-02",sz:"165/14",df:"Tread issue",lc:"Manesar",bc:"BC-7842166",dt:"05-04-2026"},
+      {id:"ZKD-03",sz:"175/15",df:"Bead area crack",lc:"Pune",bc:"BC-7842178",dt:"08-04-2026"},
+      {id:"ZKD-04",sz:"185/15",df:"Visual defect",lc:"Chennai",bc:"BC-7842185",dt:"10-04-2026"},
+      {id:"ZKD-05",sz:"195/15",df:"Uniformity",lc:"Mumbai",bc:"BC-7842195",dt:"12-04-2026"},
+      {id:"ZKD-06",sz:"165/14",df:"Sidewall issue",lc:"Hyderabad",bc:"BC-7842168",dt:"14-04-2026"}
     ];
     const selZ=sub;
     return(<div style={{display:"grid",gap:10}}>

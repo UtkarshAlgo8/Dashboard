@@ -12,6 +12,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import JKLoader from "@/components/JKLoader.jsx";
 import TimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import LineChart from "./LineChart.jsx";
 import BarChart from "./BarChart.jsx";
 import ProgressChart from "./ProgressChart.jsx";
@@ -289,7 +290,7 @@ function TrendModal({
       const sorted = pinned
         .filter((r) => r.granularity === "DAY")
         .sort((a, b) => (dateKey(a.date) > dateKey(b.date) ? 1 : -1));
-      labels = sorted.map((r) => r.date ?? "");
+      labels = sorted.map((r) => toDisplayDate(r.date) ?? "");
       values = sorted.map((r) => rowVal(r));
     }
   } else if (legacyData) {

@@ -179,6 +179,24 @@ test("C15: each time filter gets its defined previous period", () => {
     from: "2026-06-01",
     to: "2026-06-30",
   });
+  // Month picker -> a full calendar month arrives as a DAY range (1st -> last
+  // day). Its baseline is the previous WHOLE month so the label reads "vs Jun",
+  // not the equal-length day-shifted "31 May - 30 Jun".
+  assert.deepEqual(
+    previousWindow(at({ from: "2026-07-01", to: "2026-07-31" }), "DAY"),
+    { from: "2026-06-01", to: "2026-06-30" },
+  );
+  // Leap February stays a valid full month; its predecessor is January.
+  assert.deepEqual(
+    previousWindow(at({ from: "2024-02-01", to: "2024-02-29" }), "DAY"),
+    { from: "2024-01-01", to: "2024-01-31" },
+  );
+  // A month-to-date partial (not the last day) is NOT a full month -> it keeps
+  // the equal-length preceding window.
+  assert.deepEqual(
+    previousWindow(at({ from: "2026-07-01", to: "2026-07-05" }), "DAY"),
+    { from: "2026-06-26", to: "2026-06-30" },
+  );
 });
 
 test("C15: an undefinable baseline is null, so the UI blanks it", () => {

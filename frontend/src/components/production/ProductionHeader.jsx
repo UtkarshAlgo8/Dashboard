@@ -15,6 +15,16 @@ import TimeRangeSelect from "./TimeRangeSelect.jsx";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import jkLogo from "@/assets/jk-logo.png";
+import { toDisplayDate } from "@/lib/dateFormat.js";
+
+/** "dd-mm-yyyy HH:MM" (optionally with seconds) for the "last fetched" stamp. */
+function formatUpdated(date, withSeconds = false) {
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const time = `${pad2(date.getHours())}:${pad2(date.getMinutes())}${
+    withSeconds ? `:${pad2(date.getSeconds())}` : ""
+  }`;
+  return `${toDisplayDate(date)} ${time}`;
+}
 
 /**
  * Production-dashboard top header.
@@ -34,6 +44,7 @@ function ProductionHeader({
   onShiftChange,
   onExport,
   asOf = null,
+  lastUpdatedAt = null,
 }) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -151,6 +162,24 @@ function ProductionHeader({
         spacing={1.5}
         sx={{ justifySelf: "end" }}
       >
+        {lastUpdatedAt && (
+          <Tooltip
+            title={`Data last fetched ${formatUpdated(lastUpdatedAt, true)}`}
+            arrow
+          >
+            <Typography
+              sx={{
+                fontSize: 11,
+                color: "text.disabled",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Updated {formatUpdated(lastUpdatedAt)}
+            </Typography>
+          </Tooltip>
+        )}
+
         <TimeRangeSelect
           preset={timeRange.preset}
           from={timeRange.from}

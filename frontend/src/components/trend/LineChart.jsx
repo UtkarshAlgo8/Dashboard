@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { Box, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
+import ChartLegend from "./ChartLegend.jsx";
+import { buildTrendLegend } from "./trendLegend.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle. Depending on
 // the Vite CJS-interop path the default import resolves to either
@@ -115,9 +117,22 @@ function LineChart({ labels, values, unit, target }) {
     };
   }, [labels, values, unit, target, theme]);
 
+  const legendItems = buildTrendLegend({
+    values,
+    target,
+    unit,
+    colors: {
+      actual: theme.custom.brand.orange,
+      best: theme.custom.brand.green,
+      worst: theme.custom.brand.red,
+      target: theme.custom.brand.amber,
+    },
+  });
+
   return (
     <Box sx={{ width: "100%" }}>
       <HighchartsReact highcharts={Highcharts} options={options} />
+      <ChartLegend items={legendItems} />
     </Box>
   );
 }

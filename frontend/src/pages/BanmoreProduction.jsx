@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
+import JKLoader from "@/components/JKLoader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
 import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
 import CategoryTabs from "@/components/production/CategoryTabs.jsx";
@@ -28,7 +29,7 @@ import {
 } from "@/api/plants.js";
 import { getAnchors } from "@/api/dashboard.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
-import { presetToDateRange, buildDatePayload } from "@/lib/timeRange.js";
+import { presetToDateRange } from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { displayUnit } from "@/lib/units.js";
 import client from "@/api/client.js";
@@ -142,6 +143,7 @@ function BanmoreProduction() {
     rawRows,
     isLoading: kpiLoading,
     isDrillLoading,
+    lastUpdatedAt,
     error: kpiError,
     setFilter,
     drillInto,
@@ -224,8 +226,8 @@ function BanmoreProduction() {
   // "Overall" — the Production card reads Production_product pinned to it.
   const PROD_SUB_OPTIONS = {
     mix: ["Master Compound", "Final Compound"],
-    tbm: ["Green Tyre", "Passenger Radial", "LCV", "Unknown"],
-    cur: ["Cured Tyre", "Passenger Radial", "LCV", "Unknown"],
+    tbm: ["Green Tyre", "Passenger Radial", "LCV"],
+    cur: ["Cured Tyre", "Passenger Radial", "LCV"],
     stk: [], // Stock uses the sub-section selector + its own product types.
   };
   const SECTION_DEFAULT_PRODUCT = {
@@ -263,18 +265,25 @@ function BanmoreProduction() {
   // single section-level OEE_o row (sub_section empty), so they stay null.
   const pinnedSubSection = isStock ? activeSubSection : dashboard.subSection;
   // new_change.md C8: read the DISTINCT (product_type, unit_of_measurement)
-  // pairs the data actually holds for this sub-section. Its own small fetch,
-  // deliberately WITHOUT a product_type pin (the landing fetch carries one,
-  // so it can only ever return the already-selected product).
+  // pairs the data actually holds for this section / sub-section. Its own small
+  // fetch, deliberately WITHOUT a product_type pin (the landing fetch carries
+  // one, so it could only ever return the already-selected product).
+  //
+  // The enumeration is intentionally NOT scoped to the selected date window or
+  // granularity. Scoping it made the product-type toggle unstable — a narrow
+  // window, a partial "Today", or a shift view holds only a SUBSET of the
+  // products (e.g. TBM/Curing showed a different set each time), so pills
+  // appeared and disappeared as the selection changed. Omitting date/from/to
+  // (all dates) and granularity (defaults to DAY on the backend, where every
+  // product has rows) yields the COMPLETE, stable list; the key only changes
+  // on a section / sub-section switch, so there is no window-driven flicker.
   const optionsPayload = {
     plantId,
     context: {
       section: sectionName,
       category: "Productivity",
-      ...(dashboard.granularity ? { granularity: dashboard.granularity } : {}),
       ...(isStock ? { sub_section: activeSubSection } : {}),
     },
-    ...buildDatePayload({ from: dashboard.from, to: dashboard.to }),
     limit: 1000,
   };
   const currentOptionsKey = stableOptionsKey(optionsPayload);
@@ -322,19 +331,32 @@ function BanmoreProduction() {
     Array.isArray(productionOptionsData.options)
       ? productionOptionsData.options
       : [];
+  // "Unknown" is a catch-all bucket for rows whose product_type wasn't tagged;
+  // it is never a real product, so drop it from the selectable pills.
   const nonStockProductOptions = [
-    ...new Set(productionOptions.map((o) => o.productType).filter(Boolean)),
+    ...new Set(
+      productionOptions
+        .map((o) => o.productType)
+        .filter(Boolean)
+        .filter((p) => p.trim().toLowerCase() !== "unknown"),
+    ),
   ];
   // changes.md §4: Stock has NO synthetic "Overall" product — only the real
   // product rows of the sub-section, in the data's own spelling.
   const stockProductOptions = [
     ...nonStockProductOptions,
   ];
+  // TBM / Curing / Mixing: always offer the FULL canonical product-type set
+  // (PROD_SUB_OPTIONS) unioned with whatever the data actually holds, so every
+  // product type stays selectable even when it has no rows in the current
+  // window. Selecting an empty one shows a "no data" card (placeholder "—")
+  // rather than the pill disappearing — the user asked to see all product
+  // types with an explicit no-data state. Canonical entries come first so the
+  // section default remains index 0; any extra product the data carries (a
+  // name not in the canonical list) is appended.
   const navProductOptions = isStock
     ? stockProductOptions
-    : nonStockProductOptions.length > 0
-      ? nonStockProductOptions
-      : prodSubOptions;
+    : [...new Set([...prodSubOptions, ...nonStockProductOptions])];
   // The active product type (sent to the backend). Falls back to the
   // section default; for Stock that is the sub-section's first real product.
   const activeProductType =
@@ -419,6 +441,16 @@ function BanmoreProduction() {
     Array.isArray(sections) &&
     Array.isArray(tabs) &&
     summary;
+
+  // A SINGLE page-level loading flag for the whole dashboard body. The KPI
+  // grid, sidebar rings, plant summary and open drill panel all (re)fetch
+  // together on a section / filter / month change; instead of each showing its
+  // own spinner, one branded loader covers the body (see the overlay in the
+  // render) and the per-panel loaders below are suppressed. Inventory owns its
+  // own loading UI, so it is excluded.
+  const contentLoading =
+    dashboard.category !== "i" &&
+    (kpiLoading || isDrillLoading || sectionOeeLoading || summaryLoading);
 
   // Time-range UI state. Default preset is "month".
   // Today → single-date equality (state.date). Month/Year/custom →
@@ -599,6 +631,7 @@ function BanmoreProduction() {
           onShiftChange={onShiftChange}
           onExport={onExportPdf}
           asOf={effectiveAsOf}
+          lastUpdatedAt={lastUpdatedAt}
         />
         {Array.isArray(tabs) && (
           <CategoryTabs
@@ -614,6 +647,7 @@ function BanmoreProduction() {
       ) : (
         <Box
           sx={{
+            position: "relative",
             flex: 1,
             minHeight: exporting ? "auto" : 0,
             overflow: exporting ? "visible" : "hidden",
@@ -648,13 +682,13 @@ function BanmoreProduction() {
                   activeSectionId={dashboard.section}
                   onSelect={onSectionSelect}
                   statsBySectionId={sectionStatsById}
-                  loading={sectionOeeLoading}
+                  loading={false}
                 />
               </Box>
               <PlantSummaryCard
                 plant={plant}
                 summary={summary}
-                loading={summaryLoading}
+                loading={false}
               />
             </Stack>
           )}
@@ -799,10 +833,9 @@ function BanmoreProduction() {
 
                 <KpiGrid
                   kpis={kpis}
-                  // Show the grid loader while the landing cards refetch (e.g.
-                  // changing month / section) — but NOT while only a drill is
-                  // loading, so opening a drill doesn't blank the cards above.
-                  isLoading={kpiLoading && !isDrillLoading}
+                  // Per-panel loader suppressed: the single page-level overlay
+                  // (contentLoading) covers the whole body while data reloads.
+                  isLoading={false}
                   error={kpiError}
                   openDrillKpiId={openDrillKpiId}
                   onDrillKpi={handleDrillKpi}
@@ -849,7 +882,9 @@ function BanmoreProduction() {
                           prodSub={activeProductType}
                           unitPin={activeUnit}
                           mode={dashboard.mode}
-                          isLoading={isDrillLoading}
+                          // Per-panel loader suppressed in favour of the single
+                          // page-level overlay (contentLoading).
+                          isLoading={false}
                         />
                       </Box>
                     );
@@ -881,6 +916,29 @@ function BanmoreProduction() {
               </>
             )}
           </Box>
+
+          {/* The ONE loader for the whole dashboard body. Covers the sidebar,
+              summary, KPI grid and any open drill while data reloads, so the
+              user never sees several spinners at once. The backdrop is fully
+              OPAQUE: internally-fetching panels (Shift Comparison, drill
+              panels) render their own JKLoader, and a translucent overlay let
+              those peek through as a second "Please wait". An opaque cover
+              hides them regardless of which panel is mid-fetch. */}
+          {contentLoading && (
+            <Box
+              sx={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "background.default",
+              }}
+            >
+              <JKLoader />
+            </Box>
+          )}
         </Box>
       )}
 

@@ -135,6 +135,9 @@ function TimeRangeSelect({
             fontSize: 12,
             textTransform: "none",
             fontWeight: 500,
+            // Keep multi-word labels (e.g. the "Aug 2026" month pill) on one
+            // line instead of wrapping to two.
+            whiteSpace: "nowrap",
           },
           // Highlighted preset gets the primary tint (matches the rest of
           // the nav controls) instead of MUI's default grey.
@@ -234,12 +237,12 @@ function parseSafe(iso) {
   return isValid(d) ? d : null;
 }
 
-const PLACEHOLDER = "DD/MM/YYYY";
+const PLACEHOLDER = "DD-MM-YYYY";
 
 function formatRangeLabel(fromDate, toDate) {
   if (!fromDate && !toDate) return "Filter Date";
-  const f = fromDate ? format(fromDate, "dd/MM/yyyy") : PLACEHOLDER;
-  const t = toDate ? format(toDate, "dd/MM/yyyy") : PLACEHOLDER;
+  const f = fromDate ? format(fromDate, "dd-MM-yyyy") : PLACEHOLDER;
+  const t = toDate ? format(toDate, "dd-MM-yyyy") : PLACEHOLDER;
   return `${f} – ${t}`;
 }
 

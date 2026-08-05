@@ -8,6 +8,7 @@ import {
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 
 /* eslint-disable no-undef */
 const APP_VERSION =
@@ -18,7 +19,7 @@ const APP_VERSION =
  * About modal per BRD FR-X24. App name + version (from package.json
  * via Vite `define`) + build date (resolved at module load).
  */
-const BUILD_DATE = new Date().toISOString().slice(0, 10);
+const BUILD_DATE = toDisplayDate(new Date());
 
 function AboutModal({ open, onClose }) {
   return (
