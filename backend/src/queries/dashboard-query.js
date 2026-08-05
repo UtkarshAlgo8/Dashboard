@@ -587,6 +587,29 @@ function shiftIsoDays(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
+/** The whole calendar month immediately before the given ISO date's month,
+ * as a 1st→last-day window (e.g. any July date -> {from: Jun 1, to: Jun 30}). */
+function previousCalendarMonth(anchorIso) {
+  const d = new Date(Date.parse(`${anchorIso.slice(0, 7)}-01T00:00:00Z`));
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  const from = d.toISOString().slice(0, 10);
+  const end = new Date(Date.parse(`${from}T00:00:00Z`));
+  end.setUTCMonth(end.getUTCMonth() + 1);
+  end.setUTCDate(0);
+  return { from, to: end.toISOString().slice(0, 10) };
+}
+
+/** True when [from,to] is exactly the 1st → last day of one calendar month. */
+function isFullCalendarMonth(from, to) {
+  if (!from || !to) return false;
+  if (from.slice(0, 7) !== to.slice(0, 7)) return false;
+  if (!from.endsWith("-01")) return false;
+  const last = new Date(Date.parse(`${to.slice(0, 7)}-01T00:00:00Z`));
+  last.setUTCMonth(last.getUTCMonth() + 1);
+  last.setUTCDate(0);
+  return to === last.toISOString().slice(0, 10);
+}
+
 /**
  * new_change.md C15 — the comparison window for the % spike indicator.
  *
@@ -610,20 +633,23 @@ export function previousWindow(timeScope, granularity) {
   if (granularity === "MONTH") {
     const anchor = timeScope.date ?? timeScope.from;
     if (!anchor) return null;
-    const d = new Date(Date.parse(`${anchor.slice(0, 7)}-01T00:00:00Z`));
-    d.setUTCMonth(d.getUTCMonth() - 1);
-    const iso = d.toISOString().slice(0, 10);
     // Snapshot rows are dated the 1st, so a whole-month window is safe for
     // callers that send either a date or a range.
-    const end = new Date(Date.parse(`${iso}T00:00:00Z`));
-    end.setUTCMonth(end.getUTCMonth() + 1);
-    end.setUTCDate(0);
-    return { from: iso, to: end.toISOString().slice(0, 10) };
+    return previousCalendarMonth(anchor);
   }
 
   if (timeScope.mode === "SINGLE_DAY") {
     if (!timeScope.date) return null;
     return { date: shiftIsoDays(timeScope.date, -1) };
+  }
+
+  // A full calendar month selected via the header month picker arrives here
+  // as a DAY range (1st → last day), not a MONTH snapshot — the frontend
+  // aggregates the month's DAY rows. Its natural baseline is the PREVIOUS
+  // whole calendar month, which the label collapses to "vs Jun", rather than
+  // the equal-length day-shifted window below ("31 May – 30 Jun").
+  if (isFullCalendarMonth(timeScope.from, timeScope.to)) {
+    return previousCalendarMonth(timeScope.from);
   }
 
   // RANGE: the immediately preceding window of EQUAL length, ending the day
