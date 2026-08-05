@@ -1,4 +1,5 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Button, Stack, Typography } from "@mui/material";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 const INVENTORY_APP_URL = "http://10.200.203.239:8599/";
 
@@ -19,18 +20,28 @@ function InventoryPage({ plantId }) {
   }
 
   return (
-    <Box sx={{ height: "100%", minHeight: 0, overflow: "hidden" }}>
-      <iframe
-        src={INVENTORY_APP_URL}
-        title="Inventory"
-        style={{
-          width: "100%",
-          height: "100%",
-          border: 0,
-          display: "block",
-          background: "#fff",
-        }}
-      />
+    <Box sx={{ height: "100%", display: "grid", placeItems: "center", p: 3 }}>
+      <Stack spacing={2} alignItems="center" sx={{ textAlign: "center" }}>
+        <Typography sx={{ fontSize: 16, fontWeight: 700 }}>
+          Inventory Dashboard
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: "text.secondary", maxWidth: 420 }}>
+          The inventory dashboard opens in a new tab.
+        </Typography>
+        {/* Rendered as an anchor (not an onClick) so the browser's native
+            open-in-new-tab / middle-click behaviour works. */}
+        <Button
+          component="a"
+          href={INVENTORY_APP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          variant="contained"
+          startIcon={<OpenInNewIcon />}
+          sx={{ textTransform: "none", fontWeight: 600 }}
+        >
+          Open Inventory Dashboard
+        </Button>
+      </Stack>
     </Box>
   );
 }
