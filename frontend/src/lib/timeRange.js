@@ -37,7 +37,6 @@
 // arrives — Year then behaves like Month at the yearly granularity.
 export const ENABLE_YEAR = false;
 const DAY_GRAN = "DAY";
-const MONTH_GRAN = "MONTH";
 const YEAR_GRANULARITY = "YTD";
 
 /**
@@ -73,6 +72,36 @@ export function buildDatePayload({ date = null, from = null, to = null } = {}) {
   }
   const d = normalizeDateInput(date);
   return d ? { date: d } : {};
+}
+
+const MONTH_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** "yyyy-MM" key for a Date. */
+function monthKeyOf(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** The as-of month key (the default-selected month), e.g. "2026-06". */
+export function asOfMonthKey(asOf = null) {
+  return monthKeyOf(parseIso(asOf) ?? new Date());
+}
+
+/**
+ * The list of selectable months for the header dropdown: `count` months
+ * ending at (and including) the as-of month, newest first.
+ * @returns {{ key: string, label: string }[]}
+ */
+export function buildMonthOptions(asOf = null, count = 12) {
+  const anchor = parseIso(asOf) ?? new Date();
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1, 12, 0, 0);
+    out.push({ key: monthKeyOf(d), label: `${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}` });
+  }
+  return out;
 }
 
 export function presetToDateRange(timeRange, asOf = null) {
@@ -111,12 +140,28 @@ export function presetToDateRange(timeRange, asOf = null) {
   }
 
   if (preset === "month") {
-    // The window IS the month-to-date period: 1st of the as-of month → as-of.
+    // The user can pin a specific month via the header's month dropdown
+    // (timeRange.month = "yyyy-MM"); with none chosen we default to the
+    // as-of month. The window is that month's 1st → its end, except the
+    // as-of month itself, which is month-TO-DATE (1st → as-of).
+    //
+    // We AGGREGATE the month's DAY rows (mode "aggregate", granularity DAY) —
+    // the same proven path a custom from/to range uses — instead of reading a
+    // single pre-aggregated MONTH snapshot. DAY rows exist for every month, so
+    // the numbers reliably track the CHOSEN month; a MONTH snapshot depended
+    // on a pre-agg row that isn't present for every month and ignored the
+    // selected window (the card showed the latest month regardless). The
+    // transformer sums additive KPIs (Production) and averages rates (OEE)
+    // per its C5 class, so a single month stays under the row cap.
+    const monthAnchor = parseMonthKey(timeRange.month) ?? startOfMonth(anchor);
+    const isAsOfMonth =
+      monthAnchor.getFullYear() === anchor.getFullYear() &&
+      monthAnchor.getMonth() === anchor.getMonth();
     return {
-      granularity: MONTH_GRAN,
-      from: toIso(startOfMonth(anchor)),
-      to: today,
-      mode: "snapshot",
+      granularity: DAY_GRAN,
+      from: toIso(startOfMonth(monthAnchor)),
+      to: isAsOfMonth ? today : toIso(endOfMonth(monthAnchor)),
+      mode: "aggregate",
     };
   }
 
@@ -143,6 +188,19 @@ export function presetToDateRange(timeRange, asOf = null) {
 
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0);
+}
+
+function endOfMonth(d) {
+  // Day 0 of the next month == last day of this month.
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 12, 0, 0);
+}
+
+/** "yyyy-MM" → a Date at local noon on the 1st of that month, else null. */
+function parseMonthKey(key) {
+  if (typeof key !== "string") return null;
+  const m = /^(\d{4})-(\d{2})$/.exec(key.trim());
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1, 12, 0, 0);
 }
 
 function startOfYear(d) {

@@ -30,6 +30,7 @@ import { getAnchors } from "@/api/dashboard.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange, buildDatePayload } from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
+import { displayUnit } from "@/lib/units.js";
 import client from "@/api/client.js";
 import { exportElementToPdf } from "@/lib/exportPdf.js";
 
@@ -107,13 +108,6 @@ function BanmoreProduction() {
     cacheKey: "production:category-tabs",
     staleTime: 30 * 60 * 1000,
   });
-  const { data: summary } = usePolledQuery(() => getPlantSummary(plantId), {
-    interval: 0,
-    deps: [plantId],
-    keepPreviousData: true,
-    cacheKey: `production:${plantId}:summary`,
-    staleTime: 2 * 60 * 1000,
-  });
   // As-of date (BRD §13.5) — anchor for all time-range windows so values
   // render even when the calendar runs ahead of the available data.
   const { data: asOfData, isLoading: asOfLoading } = usePolledQuery(
@@ -172,34 +166,44 @@ function BanmoreProduction() {
   const hasDateRange = Boolean(
     (dashboard.from && dashboard.to) || dashboard.date,
   );
-  const { data: sectionOeeData } = usePolledQuery(
-    () => getSectionOee(plantId, dashboard.granularity ?? "MONTH"),
+  const oeeGran = dashboard.granularity ?? "MONTH";
+  const { data: sectionOeeData, isLoading: sectionOeeLoading } = usePolledQuery(
+    () =>
+      getSectionOee(plantId, oeeGran, dashboard.from, dashboard.to),
     {
       interval: 0,
       enabled: hasDateRange,
-      deps: [plantId, dashboard.granularity, hasDateRange],
+      deps: [plantId, oeeGran, dashboard.from, dashboard.to, hasDateRange],
       keepPreviousData: true,
-      cacheKey: `production:${plantId}:section-oee:${dashboard.granularity ?? "MONTH"}`,
+      cacheKey: `production:${plantId}:section-oee:${oeeGran}:${dashboard.from ?? ""}:${dashboard.to ?? ""}`,
       staleTime: 2 * 60 * 1000,
     },
   );
-  const sectionOeeById = {
+  // Every ring shows the section's OVERALL OEE (+ A/P/Q breakdown for the
+  // hover tooltip) from the section-oee endpoint, scoped to the SELECTED
+  // window (from/to) so the rings track the chosen month. It is NOT scoped by
+  // the selected sub-section / product / unit, so it stays put while the user
+  // navigates between sections.
+  const sectionStatsById = {
     mix: sectionOeeData?.Mixing ?? null,
     stk: sectionOeeData?.Stock ?? null,
     tbm: sectionOeeData?.TBM ?? null,
     cur: sectionOeeData?.Curing ?? null,
   };
-  // The ACTIVE section's ring should mirror the OEE actually shown in the
-  // render box right now (it already reflects the selected sub-section /
-  // product type / granularity, so it updates up AND down). When no OEE
-  // card is shown (e.g. non-Productivity tab), we keep the endpoint's
-  // first-item value as the fallback.
-  const shownOee = kpis.find(
-    (k) => k.id === "oee" && typeof k.value === "number",
-  )?.value;
-  if (typeof shownOee === "number") {
-    sectionOeeById[dashboard.section] = shownOee;
-  }
+
+  // Plant summary card (bottom-left): plant-level OEE_p + FTQ/Scrap, scoped to
+  // the SELECTED window so the headline OEE tracks the chosen month.
+  const { data: summary, isLoading: summaryLoading } = usePolledQuery(
+    () => getPlantSummary(plantId, dashboard.from, dashboard.to),
+    {
+      interval: 0,
+      enabled: hasDateRange,
+      deps: [plantId, dashboard.from, dashboard.to, hasDateRange],
+      keepPreviousData: true,
+      cacheKey: `production:${plantId}:summary:${dashboard.from ?? ""}:${dashboard.to ?? ""}`,
+      staleTime: 2 * 60 * 1000,
+    },
+  );
 
   // Section metadata per artifact (full title shown in section header).
   const SECTION_TITLE = {
@@ -273,12 +277,18 @@ function BanmoreProduction() {
     ...buildDatePayload({ from: dashboard.from, to: dashboard.to }),
     limit: 1000,
   };
+  const currentOptionsKey = stableOptionsKey(optionsPayload);
   const { data: productionOptionsData } = usePolledQuery(
-    () =>
-      client
+    () => {
+      // Tag the result with the exact scope it was fetched for, so stale
+      // options (kept by keepPreviousData across a section/sub-section/window
+      // change) can be detected and ignored below.
+      const key = stableOptionsKey(optionsPayload);
+      return client
         .post("/dashboard/product-options", optionsPayload)
-        .then((rows) =>
-          Array.isArray(rows)
+        .then((rows) => ({
+          key,
+          options: Array.isArray(rows)
             ? rows
                 .map((row) => ({
                   productType: row.productType ?? null,
@@ -290,19 +300,28 @@ function BanmoreProduction() {
                     (a.unit ?? "").localeCompare(b.unit ?? ""),
                 )
             : [],
-        ),
+        }));
+    },
     {
       enabled: hasDateRange && dashboard.category === "p",
       interval: 0,
       keepPreviousData: true,
-      cacheKey: `production:${stableOptionsKey(optionsPayload)}:product-options`,
+      cacheKey: `production:${currentOptionsKey}:product-options`,
       staleTime: 15 * 60 * 1000,
       deps: [JSON.stringify(optionsPayload)],
     },
   );
-  const productionOptions = Array.isArray(productionOptionsData)
-    ? productionOptionsData
-    : [];
+  // Only trust options that were fetched for the CURRENT section / sub-section
+  // / window. keepPreviousData keeps the previous section's options in hand
+  // until the new fetch lands; using them would seed a product / unit that
+  // doesn't exist in the new section, so the landing fetch returns nothing
+  // until a reload. Treating stale options as empty defers seeding until the
+  // correct options arrive (the seeding effects below no-op on an empty list).
+  const productionOptions =
+    productionOptionsData?.key === currentOptionsKey &&
+    Array.isArray(productionOptionsData.options)
+      ? productionOptionsData.options
+      : [];
   const nonStockProductOptions = [
     ...new Set(productionOptions.map((o) => o.productType).filter(Boolean)),
   ];
@@ -353,13 +372,22 @@ function BanmoreProduction() {
   }, [activeUnit]);
 
   // Stock has no product list until its options fetch lands; seed the first
-  // REAL product of the sub-section once it does.
+  // REAL product of the sub-section once it does. Also RE-seed when the pinned
+  // product isn't among the current sub-section's options (e.g. it lingered
+  // from the previous section) — otherwise the landing fetch filters by a
+  // product with no rows and the section shows nothing until a reload.
   useEffect(() => {
-    if (isStock && dashboard.productType == null && stockProductOptions[0]) {
-      setFilter({ productType: stockProductOptions[0] }, false);
+    if (!isStock) return;
+    const first = stockProductOptions[0];
+    if (!first) return; // options for this sub-section haven't arrived yet
+    if (
+      dashboard.productType == null ||
+      !stockProductOptions.includes(dashboard.productType)
+    ) {
+      setFilter({ productType: first, unitOfMeasurement: null }, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStock, dashboard.productType, stockProductOptions[0]]);
+  }, [isStock, dashboard.productType, stockProductOptions.join("|")]);
 
   useEffect(() => {
     if (isStock || navProductOptions.length === 0) return;
@@ -570,6 +598,7 @@ function BanmoreProduction() {
           shift={shiftKey}
           onShiftChange={onShiftChange}
           onExport={onExportPdf}
+          asOf={effectiveAsOf}
         />
         {Array.isArray(tabs) && (
           <CategoryTabs
@@ -618,10 +647,15 @@ function BanmoreProduction() {
                   sections={sections}
                   activeSectionId={dashboard.section}
                   onSelect={onSectionSelect}
-                  oeeBySectionId={sectionOeeById}
+                  statsBySectionId={sectionStatsById}
+                  loading={sectionOeeLoading}
                 />
               </Box>
-              <PlantSummaryCard plant={plant} summary={summary} />
+              <PlantSummaryCard
+                plant={plant}
+                summary={summary}
+                loading={summaryLoading}
+              />
             </Stack>
           )}
 
@@ -749,7 +783,9 @@ function BanmoreProduction() {
                         <NavTabs
                           items={unitOptionsForProduct.map((u) => ({
                             id: u,
-                            label: u,
+                            // KG is pinned/filtered as-is, but shown as MT —
+                            // production is presented in tonnes. lib/units.js.
+                            label: displayUnit(u),
                           }))}
                           value={activeUnit}
                           onChange={(u) =>
@@ -763,7 +799,10 @@ function BanmoreProduction() {
 
                 <KpiGrid
                   kpis={kpis}
-                  isLoading={kpiLoading}
+                  // Show the grid loader while the landing cards refetch (e.g.
+                  // changing month / section) — but NOT while only a drill is
+                  // loading, so opening a drill doesn't blank the cards above.
+                  isLoading={kpiLoading && !isDrillLoading}
                   error={kpiError}
                   openDrillKpiId={openDrillKpiId}
                   onDrillKpi={handleDrillKpi}
@@ -800,6 +839,7 @@ function BanmoreProduction() {
                           plantId={plantId}
                           section={dashboard.section}
                           sectionName={sectionName}
+                          subSection={pinnedSubSection}
                           cardDate={cardDate}
                           from={useMonthRange ? from : (cardDate ?? from)}
                           to={useMonthRange ? to : (cardDate ?? to)}
@@ -853,7 +893,10 @@ function BanmoreProduction() {
         category={dashboard.category}
         subSection={pinnedSubSection}
         productType={dashboard.productType}
+        unit={activeUnit}
         asOf={effectiveAsOf}
+        dashFrom={dashboard.from}
+        dashTo={dashboard.to}
       />
     </Box>
   );
@@ -871,6 +914,7 @@ function DrillPanelRouter({
   plantId,
   section,
   sectionName,
+  subSection,
   // new_change.md C3/C6: the card's own resolved date, or null when the
   // card is showing an explicit range.
   cardDate = null,
@@ -937,7 +981,7 @@ function DrillPanelRouter({
         <ProductionDrillPanel
           plantId={plantId}
           section={section}
-          subSection={section === "stk" ? pinnedSubSection : null}
+          subSection={section === "stk" ? subSection : null}
           prodSub={prodSub}
           unitPin={unitPin}
           // rawRows only seeds the unit toggle; the table rows come from the

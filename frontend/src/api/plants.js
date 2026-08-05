@@ -74,9 +74,10 @@ export function getCategoryTabs() {
  * @param {string} plantId
  * @returns {Promise<{ prodPct: number, scrapPct: number } | null>}
  */
-export function getPlantSummary(plantId) {
+export function getPlantSummary(plantId, from = null, to = null) {
   if (USE_MOCK) return mockDelay(PLANT_SUMMARIES[plantId] ?? null);
-  return client.get(`/plants/${plantId}/summary`);
+  const q = buildQuery({ from, to });
+  return client.get(`/plants/${plantId}/summary${q}`);
 }
 
 /**
@@ -94,18 +95,33 @@ export function getAsOf(plantId) {
 }
 
 /**
- * Latest OEE per section (for the sidebar donut rings), keyed by gold
- * section name: { Mixing, Stock, TBM, Curing }. Optional granularity
- * (Daily / MTD / YTD / Shift A-C) so the rings track the active range.
+ * Latest OVERALL OEE per section (for the sidebar donut rings) plus its
+ * Availability / Performance / Quality breakdown (for the hover tooltip),
+ * keyed by gold section name: { Mixing, Stock, TBM, Curing }. Each value is
+ * { oee, availability, performance, quality } (each a number or absent).
+ * Optional granularity (Daily / MTD / YTD / Shift A-C).
  *
  * @param {string} plantId
  * @param {string} [granularity]
- * @returns {Promise<Record<string, number>>}
+ * @returns {Promise<Record<string, { oee: number, availability?: number, performance?: number, quality?: number }>>}
  */
-export function getSectionOee(plantId, granularity) {
+export function getSectionOee(plantId, granularity, from = null, to = null) {
   if (USE_MOCK) {
-    return mockDelay({ Mixing: 84.9, Stock: 80.2, TBM: 82.6, Curing: 86.1 });
+    return mockDelay({
+      Mixing: { oee: 84.9, availability: 88.4, performance: 96.7, quality: 99.5 },
+      Stock: { oee: 80.2, availability: 85.1, performance: 94.8, quality: 99.3 },
+      TBM: { oee: 82.6, availability: 87.2, performance: 95.1, quality: 99.6 },
+      Curing: { oee: 86.1, availability: 90.0, performance: 96.2, quality: 99.7 },
+    });
   }
-  const q = granularity ? `?granularity=${encodeURIComponent(granularity)}` : "";
+  const q = buildQuery({ granularity, from, to });
   return client.get(`/plants/${plantId}/section-oee${q}`);
+}
+
+/** Build a `?a=1&b=2` query string from defined, non-empty values. */
+function buildQuery(params) {
+  const pairs = Object.entries(params)
+    .filter(([, v]) => v != null && v !== "")
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
+  return pairs.length ? `?${pairs.join("&")}` : "";
 }

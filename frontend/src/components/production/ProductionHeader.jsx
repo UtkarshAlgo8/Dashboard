@@ -33,6 +33,7 @@ function ProductionHeader({
   shift,
   onShiftChange,
   onExport,
+  asOf = null,
 }) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -170,6 +171,17 @@ function ProductionHeader({
           }
           shift={shift}
           onShiftChange={onShiftChange}
+          asOf={asOf}
+          month={timeRange.month ?? null}
+          onMonthChange={(monthKey) =>
+            onTimeRangeChange((prev) => ({
+              ...prev,
+              preset: "month",
+              from: "",
+              to: "",
+              month: monthKey,
+            }))
+          }
         />
 
         {/* TyreType badge — Banmore is PCR-only per FR-X2 */}

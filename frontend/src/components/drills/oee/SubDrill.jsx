@@ -1,14 +1,8 @@
+import { useState } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-} from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { EmptyState } from "@/components/common";
+import DataTable from "@/components/tables/DataTable.jsx";
 
 /**
  * Per-machine sub-drill panel (BRD FR-P38 through FR-P42).
@@ -41,11 +35,18 @@ function SubDrill({
   subCategories,
   onSelectSubCategory,
   rows,
+  rowsByDate = [],
   activeTraceItemCode,
   onTraceRowClick,
   accentTier,
 }) {
   const theme = useTheme();
+  // Availability / Performance leaves can be viewed grouped BY REASON (totals)
+  // or BY DATE (one row per dated record). Quality leaves have no such toggle.
+  const [detailView, setDetailView] = useState("reason");
+  const canToggleView = component !== "quality";
+  const view = canToggleView ? detailView : "reason";
+  const detailRows = view === "date" ? rowsByDate : rows;
   // Accent follows the selected cell's status tier (green/amber/red) so
   // the drill box highlight matches the highlighted cell. Falls back to
   // the per-component colour if no tier is supplied.
@@ -115,15 +116,50 @@ function SubDrill({
       </Stack>
 
       {activeSub ? (
-        rows && rows.length > 0 ? (
-          <DetailTable
-            component={component}
-            subCategory={subCategory}
-            rows={rows}
-            activeTraceItemCode={activeTraceItemCode}
-            onTraceRowClick={onTraceRowClick}
-          />
-        ) : (
+        <>
+          {canToggleView && (
+            <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+              {[
+                { id: "reason", label: "By reason" },
+                { id: "date", label: "By date" },
+              ].map((opt) => {
+                const isActive = view === opt.id;
+                return (
+                  <Box
+                    key={opt.id}
+                    onClick={() => setDetailView(opt.id)}
+                    sx={{
+                      px: 1.5,
+                      py: 0.4,
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      color: isActive ? "primary.contrastText" : accent,
+                      backgroundColor: isActive ? accent : "transparent",
+                      border: 1,
+                      borderColor: accent,
+                      "&:hover": {
+                        backgroundColor: isActive ? accent : `${accent}1A`,
+                      },
+                    }}
+                  >
+                    {opt.label}
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
+          {detailRows && detailRows.length > 0 ? (
+            <DetailTable
+              component={component}
+              subCategory={subCategory}
+              rows={detailRows}
+              view={view}
+              activeTraceItemCode={activeTraceItemCode}
+              onTraceRowClick={onTraceRowClick}
+            />
+          ) : (
           <Box
             sx={{
               border: 1,
@@ -138,7 +174,8 @@ function SubDrill({
               description={`No ${activeSub.name} recorded for ${machine.name} in this period.`}
             />
           </Box>
-        )
+          )}
+        </>
       ) : (
         <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
           Select a sub-category to see details.
@@ -152,93 +189,37 @@ function DetailTable({
   component,
   subCategory,
   rows,
+  view = "reason",
   activeTraceItemCode,
   onTraceRowClick,
 }) {
   // Column shape varies by component (availability/performance leaves share
   // the reason/events/duration shape; quality leaves show item-code detail,
-  // with the scrap leaf adding the Trace column).
-  const columns = columnsFor(component, subCategory);
+  // with the scrap leaf adding the Trace column). The "date" view swaps the
+  // Events count for a per-record Date column. Rendered through the shared
+  // DataTable so every leaf gains search, column sorting and value filters.
+  const columns = columnsFor(component, subCategory, view);
   const isScrap = component === "quality" && /scrap/i.test(subCategory ?? "");
 
   return (
-    <TableContainer
-      sx={{
-        maxHeight: 280,
-        border: 1,
-        borderColor: "divider",
-        borderRadius: 1.25,
-      }}
-    >
-      <Table
-        size="small"
-        stickyHeader
-        sx={(t) => ({
-          "& .MuiTableCell-root": {
-            border: "1px solid",
-            borderColor: t.palette.divider,
-          },
-          "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
-          },
-        })}
-      >
-        <TableHead>
-          <TableRow>
-            {columns.map((c) => (
-              <TableCell
-                key={c.key}
-                align={c.align ?? "center"}
-                sx={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.6,
-                  color: "text.disabled",
-                  backgroundColor: "background.paper",
-                  borderBottom: 1,
-                  borderColor: "divider",
-                }}
-              >
-                {c.label}
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((row, i) => {
-            const traceable = isScrap && row.traceable;
-            const active = traceable && row.itemCode === activeTraceItemCode;
-            return (
-              <TableRow
-                key={i}
-                hover={!traceable}
-                onClick={
-                  traceable ? () => onTraceRowClick(row.itemCode) : undefined
-                }
-                sx={{
-                  cursor: traceable ? "pointer" : "default",
-                  backgroundColor: active ? "primary.light" : undefined,
-                  "&:hover": traceable
-                    ? { backgroundColor: "primary.light" }
-                    : undefined,
-                }}
-              >
-                {columns.map((c) => (
-                  <TableCell
-                    key={c.key}
-                    align={c.align ?? "center"}
-                    sx={{ fontSize: 13 }}
-                  >
-                    {c.render ? c.render(row) : row[c.key]}
-                  </TableCell>
-                ))}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      maxHeight={280}
+      searchPlaceholder="Search…"
+      emptyMessage="No records."
+      onRowClick={
+        isScrap ? (row) => row.traceable && onTraceRowClick(row.itemCode) : undefined
+      }
+      rowSx={
+        isScrap
+          ? (row) =>
+              row.itemCode === activeTraceItemCode
+                ? { backgroundColor: "primary.light" }
+                : {}
+          : undefined
+      }
+    />
   );
 }
 
@@ -247,34 +228,53 @@ function DetailTable({
 const AVAILABILITY_COLUMNS = [
   { key: "reasonCategory", label: "Category", align: "center" },
   { key: "reason", label: "Reason", align: "center" },
-  { key: "events", label: "Events" },
-  { key: "durationMin", label: "Duration (min)" },
+  { key: "events", label: "Events", filterable: false },
+  { key: "durationMin", label: "Duration (min)", filterable: false },
 ];
 
 const PERFORMANCE_COLUMNS = [
   { key: "reason", label: "Reason", align: "center" },
-  { key: "events", label: "Events" },
-  { key: "durationMin", label: "Duration (min)" },
+  { key: "events", label: "Events", filterable: false },
+  { key: "durationMin", label: "Duration (min)", filterable: false },
+];
+
+// Timestamp-wise (By date) variants: one row per dated record — Events is
+// dropped (each row is a single occurrence) and a Date column is added.
+const AVAILABILITY_DATE_COLUMNS = [
+  { key: "date", label: "Date", align: "center" },
+  { key: "reasonCategory", label: "Category", align: "center" },
+  { key: "reason", label: "Reason", align: "center" },
+  { key: "durationMin", label: "Duration (min)", filterable: false },
+];
+
+const PERFORMANCE_DATE_COLUMNS = [
+  { key: "date", label: "Date", align: "center" },
+  { key: "reason", label: "Reason", align: "center" },
+  { key: "durationMin", label: "Duration (min)", filterable: false },
 ];
 
 const DEFECT_COLUMNS = [
   { key: "itemCode", label: "Item Code", align: "center" },
   { key: "defectType", label: "Defect Type", align: "center" },
-  { key: "qty", label: "Defect Qty" },
-  { key: "totalProduced", label: "Total Produced" },
+  { key: "qty", label: "Defect Qty", filterable: false },
+  { key: "totalProduced", label: "Total Produced", filterable: false },
   {
     key: "rate",
     label: "Rate %",
+    filterable: false,
+    value: (r) => (r.qty / r.totalProduced) * 100,
     render: (r) => ((r.qty / r.totalProduced) * 100).toFixed(2),
   },
 ];
 
 const SCRAP_COLUMNS = [
   { key: "itemCode", label: "Item Code", align: "center" },
-  { key: "qty", label: "Scrap Qty (kg)" },
+  { key: "qty", label: "Scrap Qty (kg)", filterable: false },
   {
     key: "traceable",
     label: "Trace",
+    sortable: false,
+    filterable: false,
     render: (r) =>
       r.traceable ? (
         <Box
@@ -300,12 +300,14 @@ const SCRAP_COLUMNS = [
  * names are read from the data, so we key off the component (and, for
  * quality, whether the leaf is a scrap leaf) rather than a frozen id.
  */
-function columnsFor(component, subCategory) {
-  if (component === "availability") return AVAILABILITY_COLUMNS;
+function columnsFor(component, subCategory, view = "reason") {
   if (component === "quality") {
     return /scrap/i.test(subCategory ?? "") ? SCRAP_COLUMNS : DEFECT_COLUMNS;
   }
-  return PERFORMANCE_COLUMNS;
+  if (component === "availability") {
+    return view === "date" ? AVAILABILITY_DATE_COLUMNS : AVAILABILITY_COLUMNS;
+  }
+  return view === "date" ? PERFORMANCE_DATE_COLUMNS : PERFORMANCE_COLUMNS;
 }
 
 export default SubDrill;

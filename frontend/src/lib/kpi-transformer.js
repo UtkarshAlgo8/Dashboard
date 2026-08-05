@@ -15,6 +15,8 @@
  * NULL sentinel: "nan" is treated as null throughout.
  */
 
+import { isKg, kgToTonnes, toDisplayQuantity } from "./units.js";
+
 // changes.md §0: missing-value sentinels are the literal strings "nan"
 // AND "null" (not JS null), plus "". Treat all as empty everywhere.
 const EMPTY_TOKENS = new Set(["", "nan", "null"]);
@@ -1388,22 +1390,38 @@ export function toKpiGrid(
           trendBaseline = formatBaselineWindow(baselineWindow, granularity);
         }
       } else {
-        const wantPrev = prevDayIso(resolvedDate);
-        const prevRow = preRows.find((r) => isoDate(r.date) === wantPrev);
+        // Day-wise comparison: prefer the exact previous calendar day, but
+        // fall back to the most recent EARLIER day present in the window when
+        // that exact day has no row (data gaps / weekends / window edge), so
+        // the comparison is always available whenever any prior day exists.
+        // preRows is sorted newest-first, so the first row dated before the
+        // current day is the most recent prior day.
+        const currentIso = isoDate(resolvedDate) || isoDate(latest.date);
+        const wantPrev = prevDayIso(currentIso);
+        const prevRow =
+          preRows.find((r) => isoDate(r.date) === wantPrev) ??
+          preRows.find((r) => isoDate(r.date) < currentIso);
         trend = spikePct(
           value,
           prevRow ? numberOrNull(prevRow.actual_value) : null,
         );
-        if (trend != null) trendBaseline = `vs ${fmtDayLabel(wantPrev)}`;
+        if (trend != null) {
+          trendBaseline = `vs ${fmtDayLabel(isoDate(prevRow.date))}`;
+        }
       }
 
+      // Production is recorded in KG but presented in metric tonnes (MT):
+      // divide the value/spark/target by 1000 and relabel. Non-KG units
+      // (%, M, NOS, Batch) pass through untouched. See lib/units.js.
+      const rawUnit = kpi.unit ?? denan(latest.unit_of_measurement) ?? null;
+      const disp = toDisplayQuantity(value, rawUnit);
       result.push({
         id: kpi.id,
         name: DISPLAY_NAME[kpiDef.name] ?? kpiDef.name,
         rawName: name,
-        value,
-        unit: kpi.unit ?? denan(latest.unit_of_measurement) ?? null,
-        spark: sparkVals,
+        value: round2(disp.value),
+        unit: disp.unit,
+        spark: isKg(rawUnit) ? sparkVals.map(kgToTonnes) : sparkVals,
         trend,
         trendBaseline,
         trendFavourable: trendFavourable(kpiDef.name, trend),
@@ -1411,7 +1429,10 @@ export function toKpiGrid(
         drillType: kpi.drillType,
         drillTargets: kpi.drillTargets ?? null,
         status: mapStatus(denan(latest.status)),
-        target: numberOrNull(latest.threshold_value),
+        target: round2(
+          toDisplayQuantity(numberOrNull(latest.threshold_value), rawUnit)
+            .value,
+        ),
         // C3/C6: the drill inherits THIS date — it never resolves its own.
         resolvedDate,
         // C6: only labelled when this KPI actually lags the section's
@@ -1477,13 +1498,16 @@ export function toKpiGrid(
       trend != null ? formatBaselineWindow(baselineWindow, granularity) : null;
 
     const latest = dailyRows[0];
+    // KG → MT display conversion (see snapshot path above / lib/units.js).
+    const rawUnit = kpi.unit ?? denan(latest.unit_of_measurement) ?? null;
+    const disp = toDisplayQuantity(value, rawUnit);
     result.push({
       id: kpi.id,
       name: DISPLAY_NAME[kpiDef.name] ?? kpiDef.name,
       rawName: name,
-      value,
-      unit: kpi.unit ?? denan(latest.unit_of_measurement) ?? null,
-      spark: sparkVals,
+      value: round2(disp.value),
+      unit: disp.unit,
+      spark: isKg(rawUnit) ? sparkVals.map(kgToTonnes) : sparkVals,
       trend,
       trendBaseline,
       trendFavourable: trendFavourable(kpiDef.name, trend),
@@ -1491,7 +1515,9 @@ export function toKpiGrid(
       drillType: kpi.drillType,
       drillTargets: kpi.drillTargets ?? null,
       status: mapStatus(denan(latest.status)),
-      target: numberOrNull(latest.threshold_value),
+      target: round2(
+        toDisplayQuantity(numberOrNull(latest.threshold_value), rawUnit).value,
+      ),
       // C3: an explicit range card hands its window down, not a single date.
       resolvedDate: null,
       asOfDate: null,
@@ -1557,6 +1583,11 @@ function numberOrNull(v) {
   if (isEmptyToken(v)) return null;
   const n = typeof v === "number" ? v : Number.parseFloat(v);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+/** Round to 2 decimals; null/undefined pass through (tonne values are small). */
+function round2(v) {
+  return v == null ? v : Math.round(v * 100) / 100;
 }
 
 /* ---------- new_change.md C18: spike direction ----------

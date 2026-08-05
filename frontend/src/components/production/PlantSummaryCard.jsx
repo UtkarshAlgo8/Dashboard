@@ -1,20 +1,51 @@
 import { Box, Stack, Typography, useTheme } from "@mui/material";
+import JKLoader from "@/components/JKLoader.jsx";
 
 /**
  * Plant card pinned at the bottom of the section sidebar (BRD FR-P6).
- * Shows the rolled-up plant OEE plus FTQ / Scrap / Safe pills.
+ * Shows the rolled-up plant OEE plus FTQ / Scrap / Safe pills. While the
+ * summary refetches (e.g. a month change) the body is replaced by a loader.
  */
-function PlantSummaryCard({ plant, summary }) {
+function PlantSummaryCard({ plant, summary, loading = false }) {
   const theme = useTheme();
-  if (!plant || !summary) return null;
+  if (!plant || (!summary && !loading)) return null;
 
-  const oee = plant.oe;
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          backgroundColor: "background.paper",
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1.25,
+          p: 1.5,
+          boxShadow: theme.custom.shadow,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 96,
+        }}
+      >
+        <JKLoader />
+      </Box>
+    );
+  }
+
+  // Headline is the plant-level OEE_p (real backend), falling back to the
+  // mock plant.oe, then the plant-level OEE_o, so the card renders in every
+  // data mode. "–" when no plant OEE is available.
+  const oeeRaw =
+    summary?.oeeP?.value ?? plant.oe ?? summary?.oee?.value ?? null;
+  const oeeNum = toNum(oeeRaw);
+  const oee = oeeNum == null ? null : Math.round(oeeNum * 10) / 10;
   const oeeColor =
-    oee >= 90
-      ? theme.custom.brand.green
-      : oee >= 85
-        ? theme.custom.brand.amber
-        : theme.custom.brand.red;
+    oee == null
+      ? theme.custom.text.muted
+      : oee >= 90
+        ? theme.custom.brand.green
+        : oee >= 85
+          ? theme.custom.brand.amber
+          : theme.custom.brand.red;
 
   const ftqColor =
     summary.ftqPct >= 95 ? theme.custom.brand.green : theme.custom.brand.amber;
@@ -48,7 +79,7 @@ function PlantSummaryCard({ plant, summary }) {
         <Typography
           sx={{ fontSize: 28, fontWeight: 700, lineHeight: 1, color: oeeColor }}
         >
-          {oee}%
+          {oee == null ? "–" : `${oee}%`}
         </Typography>
         <Typography
           sx={{ fontSize: 12, color: "text.disabled", fontWeight: 500 }}
@@ -69,6 +100,13 @@ function PlantSummaryCard({ plant, summary }) {
       </Stack>
     </Box>
   );
+}
+
+/** Athena serializes measures as strings; coerce to number|null. */
+function toNum(v) {
+  if (v == null || v === "" || v === "nan" || v === "null") return null;
+  const n = typeof v === "number" ? v : Number.parseFloat(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 function Pill({ color, label }) {
