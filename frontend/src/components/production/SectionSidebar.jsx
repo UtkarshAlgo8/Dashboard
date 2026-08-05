@@ -1,13 +1,22 @@
-import { Box, Stack, Typography, useTheme } from "@mui/material";
+import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
 import { motion } from "framer-motion";
+import JKLoader from "@/components/JKLoader.jsx";
 
 /**
  * Left vertical section sidebar (BRD FR-P4). Each row shows an OEE
- * donut ring with the score centered + section name + OEE % subtitle.
+ * donut ring with the section's stable OVERALL OEE centered + section name.
+ * Hovering a row reveals the Availability / Performance / Quality breakdown.
  * Down-chevrons between rows denote the process flow (Mixing → Stock
- * → TBM → Curing), per docs/artifact.jsx.
+ * → TBM → Curing), per docs/artifact.jsx. While the section OEE refetches
+ * (e.g. a month change) the rings are replaced by a loader.
  */
-function SectionSidebar({ sections, activeSectionId, onSelect, oeeBySectionId }) {
+function SectionSidebar({
+  sections,
+  activeSectionId,
+  onSelect,
+  statsBySectionId,
+  loading = false,
+}) {
   return (
     <Stack spacing={0}>
       <Typography
@@ -27,26 +36,39 @@ function SectionSidebar({ sections, activeSectionId, onSelect, oeeBySectionId })
       >
         Sections
       </Typography>
-      {sections.map((s, i) => (
-        <Box key={s.id}>
-          <SidebarRow
-            section={s}
-            oee={oeeBySectionId?.[s.id] ?? null}
-            active={s.id === activeSectionId}
-            onClick={() => onSelect(s.id)}
-          />
-          {i < sections.length - 1 && <FlowArrow />}
+      {loading ? (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 260,
+          }}
+        >
+          <JKLoader />
         </Box>
-      ))}
+      ) : (
+        sections.map((s, i) => (
+          <Box key={s.id}>
+            <SidebarRow
+              section={s}
+              stats={statsBySectionId?.[s.id] ?? null}
+              active={s.id === activeSectionId}
+              onClick={() => onSelect(s.id)}
+            />
+            {i < sections.length - 1 && <FlowArrow />}
+          </Box>
+        ))
+      )}
     </Stack>
   );
 }
 
-function SidebarRow({ section, oee: oeeProp, active, onClick }) {
+function SidebarRow({ section, stats, active, onClick }) {
   const theme = useTheme();
-  const oee = typeof oeeProp === "number" ? oeeProp : null;
+  const oee = typeof stats?.oee === "number" ? stats.oee : null;
   const ringColor = oeeColor(theme, oee);
-  return (
+  const row = (
     <Box
       onClick={onClick}
       sx={{
@@ -101,6 +123,142 @@ function SidebarRow({ section, oee: oeeProp, active, onClick }) {
           </Typography>
         </Typography>
       </Stack>
+    </Box>
+  );
+
+  return (
+    <Tooltip
+      arrow
+      placement="right"
+      enterDelay={120}
+      title={<SectionTooltip name={section.name} oee={oee} stats={stats} />}
+      slotProps={{
+        tooltip: {
+          sx: {
+            bgcolor: "background.paper",
+            color: "text.primary",
+            p: 0,
+            maxWidth: "none",
+            borderRadius: 2,
+            border: 1,
+            borderColor: "divider",
+            boxShadow: 6,
+          },
+        },
+        arrow: { sx: { color: "background.paper" } },
+      }}
+    >
+      {row}
+    </Tooltip>
+  );
+}
+
+const METRICS = [
+  { key: "availability", label: "Availability", caption: "Up-time" },
+  { key: "performance", label: "Performance", caption: "Speed" },
+  { key: "quality", label: "Quality", caption: "Yield" },
+];
+
+/** Formats an OEE-family metric: 100 → "100", 96.2 → "96.2". */
+function fmtPct(v) {
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+
+/** Rich hover card: overall OEE + Availability / Performance / Quality bars. */
+function SectionTooltip({ name, oee, stats }) {
+  const theme = useTheme();
+  const rows = METRICS.map((m) => ({ ...m, value: stats?.[m.key] })).filter(
+    (m) => typeof m.value === "number",
+  );
+  return (
+    <Box sx={{ p: 1.5, width: 244 }}>
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: 0.4,
+          color: "text.primary",
+        }}
+      >
+        {name}
+      </Typography>
+      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.5 }}>
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            bgcolor: oeeColor(theme, oee),
+          }}
+        />
+        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+          OEE: {oee == null ? "–" : fmtPct(oee)}
+        </Typography>
+      </Stack>
+      {rows.length === 0 ? (
+        <Typography sx={{ fontSize: 11.5, color: "text.disabled" }}>
+          No breakdown available for this section.
+        </Typography>
+      ) : (
+        <Stack spacing={1.25}>
+          {rows.map((m) => (
+            <MetricBar
+              key={m.key}
+              label={m.label}
+              caption={m.caption}
+              value={m.value}
+            />
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
+function MetricBar({ label, caption, value }) {
+  const theme = useTheme();
+  const color = oeeColor(theme, value);
+  const pct = Math.max(0, Math.min(100, value));
+  return (
+    <Box>
+      <Stack
+        direction="row"
+        alignItems="flex-end"
+        justifyContent="space-between"
+        sx={{ mb: 0.5 }}
+      >
+        <Box>
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: 0.4,
+              color: "text.primary",
+              lineHeight: 1.2,
+            }}
+          >
+            {label}
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: "text.disabled", lineHeight: 1.2 }}>
+            {caption}
+          </Typography>
+        </Box>
+        <Typography sx={{ fontSize: 15, fontWeight: 700, color: "text.primary" }}>
+          {fmtPct(value)}%
+        </Typography>
+      </Stack>
+      <Box
+        sx={{
+          height: 6,
+          borderRadius: 3,
+          bgcolor: theme.palette.action.disabledBackground,
+          overflow: "hidden",
+        }}
+      >
+        <Box sx={{ width: `${pct}%`, height: "100%", bgcolor: color }} />
+      </Box>
     </Box>
   );
 }

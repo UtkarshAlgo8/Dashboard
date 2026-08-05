@@ -116,9 +116,8 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
                   color: "primary.main",
                 }}
               >
-                <KeyboardArrowUpIcon
-                  sx={{ fontSize: 18, transform: "rotate(180deg)" }}
-                />
+                {/* Drill is open — the chevron points UP (collapse). */}
+                <KeyboardArrowUpIcon sx={{ fontSize: 18 }} />
               </Box>
             </Tooltip>
           ) : kpi.drillable ? (
@@ -136,7 +135,10 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
                   color: "primary.main",
                 }}
               >
-                <KeyboardArrowUpIcon sx={{ fontSize: 18 }} />
+                {/* Closed — the chevron points DOWN (drill down). */}
+                <KeyboardArrowUpIcon
+                  sx={{ fontSize: 18, transform: "rotate(180deg)" }}
+                />
               </Box>
             </Tooltip>
           ) : null}

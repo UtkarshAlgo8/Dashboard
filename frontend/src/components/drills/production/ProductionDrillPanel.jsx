@@ -5,21 +5,16 @@ import {
   MenuItem,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
   useTheme,
 } from "@mui/material";
-import MachineSearch from "@/components/drills/oee/MachineSearch.jsx";
+import DataTable from "@/components/tables/DataTable.jsx";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { aggregateForRange, canonicalUnit } from "@/lib/kpi-transformer.js";
+import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import client from "@/api/client.js";
 
 // Athena serializes measures as strings; coerce to number|null for display.
@@ -83,9 +78,11 @@ function deriveUnitOptions(rows, sectionName, ptFilter) {
     const u = r.unit_of_measurement;
     if (canonicalUnit(u) != null) units.add(u);
   }
+  // Keep the raw unit as the option value (the API is filtered by it), but
+  // display KG as MT — production is shown in tonnes. See lib/units.js.
   return [...units]
     .sort((a, b) => a.localeCompare(b))
-    .map((u) => ({ value: u, label: u }));
+    .map((u) => ({ value: u, label: displayUnit(u) }));
 }
 
 const VIEW_BY_OPTIONS = [
@@ -127,7 +124,6 @@ function ProductionDrillPanel({
   unitPin = null,
   isLoading = false,
 }) {
-  const [search, setSearch] = useState("");
   const [viewBy, setViewBy] = useState("machine");
   // dashboard_doc.md §7: Curing only — a trench (Tredge) level sits ABOVE
   // the press/SKU table. Selecting a Tredge filters the press/SKU lenses to
@@ -159,7 +155,8 @@ function ProductionDrillPanel({
     unit && unitOptions.some((o) => o.value === unit)
       ? unit
       : (pinnedOption?.value ?? unitOptions[0]?.value ?? null);
-  const unitLabel = activeUnit ?? "";
+  // activeUnit stays raw (KG) for the API/row filtering; the label shows MT.
+  const unitLabel = displayUnit(activeUnit) ?? "";
   const sectionTitle = SECTION_TITLE[section] ?? section;
 
   // Pick which kpi_name backs the table based on viewBy.
@@ -256,15 +253,6 @@ function ProductionDrillPanel({
     }));
   }, [pageData, kpiName]);
 
-  // Search narrows the CURRENT page only (machine lens). Cross-page search
-  // would need a server-side machine filter — out of scope for now.
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      viewBy === "sku" ? false : (r.machine ?? "").toLowerCase().includes(q),
-    );
-  }, [rows, search, viewBy]);
 
   // Curing trench list (§7): one row per Tredge (Production_s). Its own small
   // drillOnly fetch — trenches are few, so no pagination.
@@ -329,7 +317,13 @@ function ProductionDrillPanel({
 
   const fmt = (v) => {
     if (v == null) return "—";
-    if (activeUnit === "KG" && v < 1000) return v.toFixed(1);
+    // KG values are shown in MT (÷1000). Tonne magnitudes are ~1000× smaller,
+    // so keep 2 decimals until they reach whole-tonne scale; other units
+    // (M, NOS) keep the original rounded-with-separators format.
+    if (isKg(activeUnit)) {
+      const t = kgToTonnes(v);
+      return Math.abs(t) < 1000 ? t.toFixed(2) : Math.round(t).toLocaleString();
+    }
     return Math.round(v).toLocaleString();
   };
 
@@ -347,7 +341,7 @@ function ProductionDrillPanel({
   // table below. Other sections skip this and go straight to the table.
   const showTrenchPicker = isCuring && tredgeRows.length > 0;
 
-  if (filtered.length === 0 && !showTrenchPicker) {
+  if (rows.length === 0 && !showTrenchPicker) {
     if (loading) {
       return <DrillSkeleton title rows={5} cols={5} />;
     }
@@ -420,23 +414,22 @@ function ProductionDrillPanel({
             spacing={1.5}
             flexWrap="wrap"
           >
-            <MachineSearch value={search} onChange={setSearch} />
             <Box sx={{ flex: 1 }} />
             <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-              {filtered.length === 0
+              {rows.length === 0
                 ? "0 rows"
-                : `${pageStart + 1}–${pageStart + filtered.length} · page ${page + 1}`}
+                : `${pageStart + 1}–${pageStart + rows.length} · page ${page + 1}`}
               {selectedTredge ? ` in ${selectedTredge}` : ""}
               {prodSub ? ` · ${prodSub}` : ""}
             </Typography>
           </Stack>
 
-          {loading && filtered.length === 0 ? (
+          {loading && rows.length === 0 ? (
             <DrillSkeleton rows={6} cols={5} />
-          ) : filtered.length > 0 ? (
+          ) : rows.length > 0 ? (
             <>
               <ResultTable
-                rows={filtered}
+                rows={rows}
                 viewBy={viewBy}
                 unit={unitLabel}
                 fmt={fmt}
@@ -526,6 +519,30 @@ function Pager({ page, hasMore, onPage, onPrev, onNext }) {
  */
 function TrenchPicker({ rows, selected, onSelect, unit, fmt }) {
   const theme = useTheme();
+  const columns = [
+    { key: "tredge", label: "Tredge", align: "left" },
+    {
+      key: "planned",
+      label: `Planned (${unit})`,
+      filterable: false,
+      value: (r) => r.planned,
+      render: (r) => fmt(r.planned),
+    },
+    {
+      key: "actual",
+      label: `Actual (${unit})`,
+      filterable: false,
+      value: (r) => r.actual,
+      render: (r) => fmt(r.actual),
+    },
+    {
+      key: "achievement",
+      label: "Achievement",
+      filterable: false,
+      value: (r) => achievementOf(r) ?? -1,
+      render: (r) => <AchievementCell row={r} />,
+    },
+  ];
   return (
     <Stack spacing={1}>
       <Typography
@@ -539,66 +556,20 @@ function TrenchPicker({ rows, selected, onSelect, unit, fmt }) {
       >
         Trench-wise — click to drill into presses
       </Typography>
-      <TableContainer
-        sx={{ border: 1, borderColor: "divider", borderRadius: 1.25 }}
-      >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <Th align="left">Tredge</Th>
-              <Th>{`Planned (${unit})`}</Th>
-              <Th>{`Actual (${unit})`}</Th>
-              <Th>Achievement</Th>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((r) => {
-              const ach = r.planned > 0 ? (r.actual / r.planned) * 100 : null;
-              const achColor =
-                ach == null
-                  ? theme.palette.text.disabled
-                  : ach >= 100
-                    ? theme.custom.brand.green
-                    : ach >= 95
-                      ? theme.custom.brand.amber
-                      : theme.custom.brand.red;
-              const isSel = selected === r.tredge;
-              return (
-                <TableRow
-                  key={r.tredge}
-                  hover
-                  onClick={() => onSelect(r.tredge)}
-                  sx={{
-                    cursor: "pointer",
-                    backgroundColor: isSel
-                      ? `${theme.custom.brand.orange}1f`
-                      : undefined,
-                  }}
-                >
-                  <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
-                    {r.tredge}
-                  </TableCell>
-                  <TableCell align="center" sx={{ fontSize: 13 }}>
-                    {fmt(r.planned)}
-                  </TableCell>
-                  <TableCell
-                    align="center"
-                    sx={{ fontSize: 13, fontWeight: 600 }}
-                  >
-                    {fmt(r.actual)}
-                  </TableCell>
-                  <TableCell
-                    align="center"
-                    sx={{ fontSize: 13, fontWeight: 700, color: achColor }}
-                  >
-                    {ach == null ? "—" : `${ach.toFixed(1)}%`}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowKey={(r) => r.tredge}
+        onRowClick={(r) => onSelect(r.tredge)}
+        rowSx={(r) =>
+          selected === r.tredge
+            ? { backgroundColor: `${theme.custom.brand.orange}1f` }
+            : {}
+        }
+        maxHeight={320}
+        searchPlaceholder="Search trench…"
+        emptyMessage="No trenches."
+      />
     </Stack>
   );
 }
@@ -644,143 +615,79 @@ function ToggleGroup({ label, value, onChange, options }) {
   );
 }
 
-function ResultTable({ rows, viewBy, unit, fmt }) {
-  const theme = useTheme();
+function achievementOf(r) {
+  return r.planned > 0 ? (r.actual / r.planned) * 100 : null;
+}
 
+function AchievementCell({ row }) {
+  const theme = useTheme();
+  const ach = achievementOf(row);
+  const color =
+    ach == null
+      ? theme.palette.text.disabled
+      : ach >= 100
+        ? theme.custom.brand.green
+        : ach >= 95
+          ? theme.custom.brand.amber
+          : theme.custom.brand.red;
   return (
-    <TableContainer
-      sx={{
-        maxHeight: 380,
-        border: 1,
-        borderColor: "divider",
-        borderRadius: 1.25,
-      }}
-    >
-      <Table
-        size="small"
-        stickyHeader
-        sx={(t) => ({
-          "& .MuiTableCell-root": {
-            border: "1px solid",
-            borderColor: t.palette.divider,
-          },
-          "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
-          },
-        })}
-      >
-        <TableHead>
-          <TableRow>
-            {viewBy === "machine" && (
-              <>
-                <Th align="center">Machine</Th>
-                <Th>Compounds</Th>
-              </>
-            )}
-            {viewBy === "sku" && (
-              <>
-                <Th align="center">Item Code</Th>
-                <Th>Machines</Th>
-              </>
-            )}
-            {viewBy === "both" && (
-              <>
-                <Th align="center">Machine</Th>
-                <Th align="center">Item Code</Th>
-              </>
-            )}
-            <Th>{`Planned (${unit})`}</Th>
-            <Th>{`Actual (${unit})`}</Th>
-            <Th>Achievement</Th>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((r, i) => {
-            const planned = r.planned;
-            const actual = r.actual;
-            const achievement = planned > 0 ? (actual / planned) * 100 : null;
-            const achColor =
-              achievement == null
-                ? theme.palette.text.disabled
-                : achievement >= 100
-                  ? theme.custom.brand.green
-                  : achievement >= 95
-                    ? theme.custom.brand.amber
-                    : theme.custom.brand.red;
-            return (
-              <TableRow key={i} hover>
-                {viewBy === "machine" && (
-                  <>
-                    <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
-                      {r.machine}
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontSize: 13 }}>
-                      {r.itemCount}
-                    </TableCell>
-                  </>
-                )}
-                {viewBy === "sku" && (
-                  <>
-                    <TableCell sx={{ fontSize: 13, fontFamily: "monospace" }}>
-                      {r.itemcode}
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontSize: 13 }}>
-                      {r.machineCount}
-                    </TableCell>
-                  </>
-                )}
-                {viewBy === "both" && (
-                  <>
-                    <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
-                      {r.machine}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 13, fontFamily: "monospace" }}>
-                      {r.itemcode}
-                    </TableCell>
-                  </>
-                )}
-                <TableCell align="center" sx={{ fontSize: 13 }}>
-                  {fmt(planned)}
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{ fontSize: 13, fontWeight: 600 }}
-                >
-                  {fmt(actual)}
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{ fontSize: 13, fontWeight: 700, color: achColor }}
-                >
-                  {achievement == null ? "—" : `${achievement.toFixed(1)}%`}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <Box component="span" sx={{ fontWeight: 700, color }}>
+      {ach == null ? "—" : `${ach.toFixed(1)}%`}
+    </Box>
   );
 }
 
-function Th({ children, align = "center" }) {
+function ResultTable({ rows, viewBy, unit, fmt }) {
+  const idCols = [];
+  if (viewBy === "machine" || viewBy === "both") {
+    idCols.push({ key: "machine", label: "Machine", align: "left" });
+  }
+  if (viewBy === "sku" || viewBy === "both") {
+    idCols.push({
+      key: "itemcode",
+      label: "Item Code",
+      align: "left",
+      render: (r) => (
+        <Box component="span" sx={{ fontFamily: "monospace" }}>
+          {r.itemcode}
+        </Box>
+      ),
+    });
+  }
+  const columns = [
+    ...idCols,
+    {
+      key: "planned",
+      label: `Planned (${unit})`,
+      filterable: false,
+      value: (r) => r.planned,
+      render: (r) => fmt(r.planned),
+    },
+    {
+      key: "actual",
+      label: `Actual (${unit})`,
+      filterable: false,
+      value: (r) => r.actual,
+      render: (r) => fmt(r.actual),
+    },
+    {
+      key: "achievement",
+      label: "Achievement",
+      filterable: false,
+      value: (r) => achievementOf(r) ?? -1,
+      render: (r) => <AchievementCell row={r} />,
+    },
+  ];
+
   return (
-    <TableCell
-      align={align}
-      sx={{
-        fontSize: 11,
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
-        borderBottom: 1,
-        borderColor: "divider",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </TableCell>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      getRowKey={(r) => `${r.machine ?? ""}||${r.itemcode ?? ""}`}
+      maxHeight={380}
+      searchPlaceholder="Search this page…"
+      emptyMessage="No rows on this page."
+    />
   );
 }
 

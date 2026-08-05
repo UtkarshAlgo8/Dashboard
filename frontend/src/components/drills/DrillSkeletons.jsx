@@ -1,69 +1,26 @@
 import { Box, Skeleton, Stack } from "@mui/material";
+import JKLoader from "@/components/JKLoader.jsx";
 
 /**
- * Skeleton primitives sized to match each drill panel's chrome so the
- * layout doesn't shift when data resolves.
+ * Drill loading indicators. The table-shaped loading state now shows the
+ * branded JKLoader (never an empty / "no data" flash) until rows resolve.
+ * Props are kept for call-site compatibility.
  */
 
-export function TableSkeleton({ rows = 6, cols = 5, withHeader = true }) {
+export function TableSkeleton() {
   return (
     <Box
       sx={{
         border: 1,
         borderColor: "divider",
         borderRadius: 1.25,
-        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 240,
       }}
     >
-      {withHeader && (
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            px: 1.5,
-            py: 1,
-            borderBottom: 1,
-            borderColor: "divider",
-            backgroundColor: "background.paper",
-          }}
-        >
-          {Array.from({ length: cols }).map((_, i) => (
-            <Skeleton
-              key={i}
-              variant="text"
-              sx={{
-                flex: i === 0 ? 2 : 1,
-                fontSize: 11,
-              }}
-            />
-          ))}
-        </Stack>
-      )}
-      {Array.from({ length: rows }).map((_, r) => (
-        <Stack
-          key={r}
-          direction="row"
-          spacing={1}
-          alignItems="center"
-          sx={{
-            px: 1.5,
-            py: 1,
-            borderBottom: r === rows - 1 ? 0 : 1,
-            borderColor: "divider",
-          }}
-        >
-          {Array.from({ length: cols }).map((_, c) => (
-            <Skeleton
-              key={c}
-              variant="text"
-              sx={{
-                flex: c === 0 ? 2 : 1,
-                fontSize: 13,
-              }}
-            />
-          ))}
-        </Stack>
-      ))}
+      <JKLoader />
     </Box>
   );
 }

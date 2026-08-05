@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Box,
   Button,
+  Menu,
   MenuItem,
   Select,
   Stack,
@@ -9,8 +10,10 @@ import {
   ToggleButtonGroup,
 } from "@mui/material";
 import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { format, parseISO, isValid } from "date-fns";
 import { DateRangeFilterDialog } from "@/components/common";
+import { asOfMonthKey, buildMonthOptions } from "@/lib/timeRange.js";
 
 /**
  * Time-range selector. Three preset pills (Today / Month / Year per
@@ -58,13 +61,25 @@ function TimeRangeSelect({
   shift,
   onShiftChange,
   presetLabels,
+  // When provided, the Month pill becomes a dropdown of selectable months
+  // (bounded by `asOf`); `month` is the pinned "yyyy-MM" (default: as-of month).
+  asOf = null,
+  month = null,
+  onMonthChange,
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [monthAnchor, setMonthAnchor] = useState(null);
 
   const fromDate = parseSafe(from);
   const toDate = parseSafe(to);
   const label = formatRangeLabel(fromDate, toDate);
   const showShift = preset === "today" && typeof onShiftChange === "function";
+
+  const monthMenuEnabled = typeof onMonthChange === "function";
+  const monthOptions = useMemo(() => buildMonthOptions(asOf), [asOf]);
+  const selectedMonthKey = month ?? asOfMonthKey(asOf);
+  const selectedMonthLabel =
+    monthOptions.find((o) => o.key === selectedMonthKey)?.label ?? "Month";
 
   return (
     <Stack direction="row" spacing={1} alignItems="center">
@@ -106,7 +121,12 @@ function TimeRangeSelect({
         value={preset ?? ""}
         exclusive
         onChange={(_, value) => {
-          if (value) onPresetChange(value);
+          // The Month pill opens its own dropdown (handled in onClick below)
+          // when the month menu is enabled, so ignore its group toggle — that
+          // also avoids the exclusive-group deselect on re-clicking Month.
+          if (!value) return;
+          if (value === "month" && monthMenuEnabled) return;
+          onPresetChange(value);
         }}
         sx={{
           "& .MuiToggleButton-root": {
@@ -126,12 +146,54 @@ function TimeRangeSelect({
           },
         }}
       >
-        {PRESETS.map((p) => (
-          <ToggleButton key={p.id} value={p.id} disabled={p.disabled}>
-            {presetLabels?.[p.id] ?? p.label}
-          </ToggleButton>
-        ))}
+        {PRESETS.map((p) => {
+          const useMonthMenu = p.id === "month" && monthMenuEnabled;
+          return (
+            <ToggleButton
+              key={p.id}
+              value={p.id}
+              disabled={p.disabled}
+              onClick={
+                useMonthMenu
+                  ? (e) => {
+                      setMonthAnchor(e.currentTarget);
+                      if (preset !== "month") onPresetChange("month");
+                    }
+                  : undefined
+              }
+            >
+              {useMonthMenu && preset === "month"
+                ? selectedMonthLabel
+                : (presetLabels?.[p.id] ?? p.label)}
+              {useMonthMenu && (
+                <KeyboardArrowDownIcon sx={{ fontSize: 16, ml: 0.25, mr: -0.75 }} />
+              )}
+            </ToggleButton>
+          );
+        })}
       </ToggleButtonGroup>
+
+      <Menu
+        anchorEl={monthAnchor}
+        open={Boolean(monthAnchor)}
+        onClose={() => setMonthAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+      >
+        {monthOptions.map((o) => (
+          <MenuItem
+            key={o.key}
+            selected={o.key === selectedMonthKey}
+            onClick={() => {
+              onMonthChange(o.key);
+              setMonthAnchor(null);
+            }}
+            sx={{ fontSize: 13, py: 0.5 }}
+          >
+            {o.label}
+          </MenuItem>
+        ))}
+      </Menu>
 
       <Button
         size="small"

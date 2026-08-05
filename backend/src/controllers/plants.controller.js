@@ -18,6 +18,28 @@ import {
 const coreFilter = (plantId) =>
   `${plantDepartmentPredicate(plantId)} AND ${excludeUnknownKpiPredicate()}`;
 
+/** ISO yyyy-mm-dd → sortable "YYYYMMDD"; null / malformed → null. */
+function isoToYmd(iso) {
+  if (typeof iso !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  return m ? `${m[1]}${m[2]}${m[3]}` : null;
+}
+
+/**
+ * SQL fragment restricting the date column to the selected [from, to] window
+ * (either bound optional). Empty string when no window is given, so the caller
+ * falls back to "latest overall". Lets the OEE endpoints track the chosen
+ * month instead of always showing the newest row.
+ */
+function dateWindowSql(from, to) {
+  const f = isoToYmd(from);
+  const t = isoToYmd(to);
+  const parts = [];
+  if (f) parts.push(`${DATE_YYYYMMDD} >= '${f}'`);
+  if (t) parts.push(`${DATE_YYYYMMDD} <= '${t}'`);
+  return parts.length ? ` AND ${parts.join(" AND ")}` : "";
+}
+
 /**
  * Plant-scoped controllers: one plant, summary, as-of date, per-section OEE.
  */
@@ -54,6 +76,9 @@ export function getPlant(req, res) {
 export async function getSummary(req, res, next) {
   if (notPhase1Plant(req, res, "Unknown plant.")) return;
   const key = buildCacheKey(`/plants/${req.params.plantId}/summary`, req.query);
+  // Scope the headline figures to the selected window (from/to) so the plant
+  // card tracks the chosen month; absent → latest overall.
+  const windowSql = dateWindowSql(req.query.from, req.query.to);
   try {
     const data = await cached(key, async () => {
       // Real KPI names (realdata.md §9): the plain "OEE" is gone — Banmore
@@ -77,13 +102,12 @@ export async function getSummary(req, res, next) {
               ${escapeLiteral("OEE_o")},
               ${escapeLiteral("FTQ")},
               ${escapeLiteral("Scrap")}
-            )
+            )${windowSql}
         ) ranked
         WHERE rn = 1
       `.trim();
       const rows = await runQuery(sql);
-      const pick = (name) => {
-        const row = rows.find((r) => r.kpi_name === name);
+      const toPick = (row) => {
         if (!row) return null;
         // d is "YYYYMMDD" → DD-MM-YYYY for the card.
         const s = row.d == null ? "" : String(row.d);
@@ -92,7 +116,36 @@ export async function getSummary(req, res, next) {
           : null;
         return { value: row.actual_value, date };
       };
-      return { oee: pick("OEE_o"), ftq: pick("FTQ"), scrap: pick("Scrap") };
+      const pick = (name) => toPick(rows.find((r) => r.kpi_name === name));
+
+      // Plant-level OEE (the sidebar's plant card headline). Unlike OEE_o —
+      // which is always scoped to a section AND a product_type/sub_section —
+      // OEE_p is the whole-plant daily figure with section / sub_section /
+      // machine / product_type ALL empty. It therefore needs its own query
+      // (the OEE_o predicate above would never match it). We take the single
+      // latest DAY value (rn=1) — no summing/averaging across days.
+      const oeePSql = `
+        SELECT actual_value, d
+        FROM (
+          SELECT actual_value, ${DATE_YYYYMMDD} AS d,
+                 ROW_NUMBER() OVER (
+                   ORDER BY ${DATE_YYYYMMDD} DESC
+                 ) AS rn
+          FROM ${plantSqlTable(req.plantId)}
+          WHERE ${coreFilter(req.plantId)}
+            AND kpi_name = ${escapeLiteral("OEE_p")}
+            AND ${emptyColumnPredicate("machine")}
+            AND ${emptyColumnPredicate("section")}
+            AND ${emptyColumnPredicate("sub_section")}
+            AND ${emptyColumnPredicate("product_type")}
+            AND granularity = ${escapeLiteral("DAY")}${windowSql}
+        ) ranked
+        WHERE rn = 1
+      `.trim();
+      const oeePRows = await runQuery(oeePSql);
+      const oeeP = toPick(oeePRows[0]);
+
+      return { oeeP, oee: pick("OEE_o"), ftq: pick("FTQ"), scrap: pick("Scrap") };
     }, CACHE_TTL.KPI_ROWS);
     res.json({ data });
   } catch (err) {
@@ -130,12 +183,22 @@ export async function getAsOf(req, res, next) {
   }
 }
 
+/** kpi_name → the field it maps to in the per-section stats object. */
+const SECTION_OEE_KPIS = {
+  OEE_o: "oee",
+  Availability_o: "availability",
+  Performance_o: "performance",
+  Quality_o: "quality",
+};
+
 /**
- * Per-section OEE — latest OVERALL OEE_o per section, for the left section
- * column (changes.md §2). Section-level rows have machine / product_type /
+ * Per-section OEE — latest OVERALL OEE_o per section, plus its Availability /
+ * Performance / Quality breakdown, for the left section column + its hover
+ * tooltip (changes.md §2). Section-level rows have machine / product_type /
  * sub_section empty. Sections with no overall OEE_o for the requested
- * granularity (Stock, TBM, and Mixing at MONTH) are omitted → the frontend
- * shows NULL. Honours an optional ?granularity, defaulting to MONTH.
+ * granularity (Stock, TBM, and Mixing at MONTH) render NULL (ring shows "–").
+ * Response shape (per section): { oee, availability, performance, quality },
+ * each a number or absent. Honours an optional ?granularity, default MONTH.
  */
 export async function getSectionOee(req, res, next) {
   if (notPhase1Plant(req, res, "Unknown plant.")) return;
@@ -143,30 +206,41 @@ export async function getSectionOee(req, res, next) {
   // MONTH (was MTD). Inbound values are normalized through the synonym map.
   const gran =
     normalizeGranularity(req.query.granularity) ?? DEFAULT_GRANULARITY;
-  const key = buildCacheKey(`/plants/${req.params.plantId}/section-oee`, { gran });
+  const { from, to } = req.query;
+  const key = buildCacheKey(`/plants/${req.params.plantId}/section-oee`, {
+    gran,
+    from,
+    to,
+  });
+  // Scope to the selected window so the rings track the chosen month.
+  const windowSql = dateWindowSql(from, to);
   try {
     const data = await cached(key, async () => {
       // changes.md §2: the left section column shows each section's OVERALL
-      // OEE_o only. OEE is product-agnostic (never pin product_type) and
-      // section-level (sub_section empty). Where OEE_o is absent for the
-      // section/granularity — Stock (no OEE_o), TBM (none), Mixing-Month
-      // (no MONTH row) — the section shows NULL. We DO NOT fabricate a value
-      // from OEE_s; that number is a subsection metric, not the section OEE.
+      // OEE_o plus its Availability_o / Performance_o / Quality_o breakdown
+      // (for the hover tooltip). All four are product-agnostic (never pin
+      // product_type) and section-level (sub_section empty). Where OEE_o is
+      // absent for the section/granularity — Stock (no OEE_o), TBM (none),
+      // Mixing-Month (no MONTH row) — the section shows NULL. We DO NOT
+      // fabricate a value from OEE_s; that is a subsection metric.
+      const kpiList = Object.keys(SECTION_OEE_KPIS)
+        .map((k) => escapeLiteral(k))
+        .join(", ");
       const sql = `
-        SELECT section, sub_section, actual_value
+        SELECT section, kpi_name, actual_value
         FROM (
-          SELECT section, sub_section, actual_value,
+          SELECT section, kpi_name, actual_value,
                  ROW_NUMBER() OVER (
-                   PARTITION BY section
+                   PARTITION BY section, kpi_name
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
           FROM ${plantSqlTable(req.plantId)}
           WHERE ${coreFilter(req.plantId)}
-            AND kpi_name = ${escapeLiteral("OEE_o")}
+            AND kpi_name IN (${kpiList})
             AND ${emptyColumnPredicate("machine")}
             AND ${emptyColumnPredicate("product_type")}
             AND ${emptyColumnPredicate("sub_section")}
-            AND granularity = ${escapeLiteral(gran)}
+            AND granularity = ${escapeLiteral(gran)}${windowSql}
         ) ranked
         WHERE rn = 1
       `.trim();
@@ -175,14 +249,21 @@ export async function getSectionOee(req, res, next) {
       const out = {};
       for (const r of rows) {
         const sec = r.section;
-        if (isEmptyValue(sec)) continue;
+        const field = SECTION_OEE_KPIS[r.kpi_name];
+        if (isEmptyValue(sec) || !field) continue;
         const val = Number(r.actual_value);
         if (!Number.isFinite(val)) continue;
-        out[sec] = Math.round(val * 10) / 10;
+        (out[sec] ??= {})[field] = Math.round(val * 10) / 10;
+      }
+      // A section is only meaningful once it has an overall OEE — drop any that
+      // came back with only a breakdown metric, so the ring stays NULL there.
+      for (const sec of Object.keys(out)) {
+        if (typeof out[sec].oee !== "number") delete out[sec];
       }
       // Sections with no overall OEE_o row (Stock / TBM, and Mixing at MONTH)
       // are simply absent from `out` → the frontend renders NULL for them.
-      return out; // e.g. { Mixing: 18.8, Curing: 31.7 } (Stock/TBM null)
+      // e.g. { Mixing: { oee: 18.8, availability: 21, performance: 96, quality: 99 } }
+      return out;
     }, CACHE_TTL.KPI_ROWS);
     res.json({ data });
   } catch (err) {

@@ -5,12 +5,12 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Skeleton,
   Stack,
   Typography,
   useTheme,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import JKLoader from "@/components/JKLoader.jsx";
 import TimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
 import LineChart from "./LineChart.jsx";
 import BarChart from "./BarChart.jsx";
@@ -21,6 +21,8 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getTrend } from "@/api/trends.js";
 import client from "@/api/client.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
+import { isKg, kgToTonnes } from "@/lib/units.js";
+import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import {
   denanDimension,
   isProductAgnosticKpi,
@@ -47,13 +49,36 @@ function TrendModal({
   compound,
   subSection = null,
   productType = null,
+  // The unit pinned on the dashboard card (e.g. "Batch" / "KG"). Production is
+  // recorded in BOTH a count unit and a mass unit, so the trend pins one to
+  // avoid blending two series into a zig-zag.
+  unit = null,
   asOf = null,
+  // The date window currently selected on the dashboard (resolved from/to).
+  // The trend opens on this SAME range so it matches what the user is viewing.
+  dashFrom = null,
+  dashTo = null,
 }) {
   const theme = useTheme();
   const toast = useToast();
   const [range, setRange] = useState("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+
+  // Each time the modal opens, seed its range from the dashboard's selection
+  // so the trend shows the SAME window the user has on the dashboard. The user
+  // can still change it afterwards; a later dashboard change is picked up on
+  // the next open. Uses the render-time "adjust state on prop change" pattern
+  // (guarded by the open transition) — no effect, no extra render.
+  const [prevOpen, setPrevOpen] = useState(false);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open && dashFrom && dashTo) {
+      setRange("custom");
+      setFrom(dashFrom);
+      setTo(dashTo);
+    }
+  }
 
   // Resolve the active date range (preset OR custom) to ISO from/to,
   // anchored to the as-of date (BRD §13.5).
@@ -199,9 +224,36 @@ function TrendModal({
       }
       return true;
     });
-    const pinned = isProductAgnosticKpi(kpi.rawName)
+    const productPinned = isProductAgnosticKpi(kpi.rawName)
       ? preferScopedRows(scoped, productType)
       : scoped;
+
+    // Production is recorded in BOTH a count unit ("Batch") and a mass unit
+    // ("KG"/"MT") as separate rows per day. Plotting both blends two series
+    // into a zig-zag, so when the series carries more than one unit keep only
+    // the one pinned on the dashboard card. Single-unit and unit-less (OEE)
+    // series are left untouched.
+    const pinned = (() => {
+      const units = new Set(
+        productPinned
+          .map((r) => canonicalUnit(r.unit_of_measurement))
+          .filter(Boolean),
+      );
+      if (units.size <= 1 || !unit) return productPinned;
+      const pin = canonicalUnit(unit);
+      const only = productPinned.filter(
+        (r) => canonicalUnit(r.unit_of_measurement) === pin,
+      );
+      return only.length > 0 ? only : productPinned;
+    })();
+
+    // Production is stored in KG but charted in MT (kpi.unit is already "MT"
+    // from the transformer), so a KG row's value is divided by 1000 here to
+    // match the axis/tooltip label. Non-KG rows pass through. See lib/units.js.
+    const rowVal = (r) => {
+      const v = numOrNull(r?.actual_value);
+      return isKg(r?.unit_of_measurement) ? kgToTonnes(v) : v;
+    };
 
     if (isMonthly) {
       // One point per month = the latest available MTD record in that
@@ -217,7 +269,7 @@ function TrendModal({
       }
       const months = [...byMonth.keys()].sort();
       labels = months;
-      values = months.map((m) => numOrNull(byMonth.get(m).actual_value));
+      values = months.map((m) => rowVal(byMonth.get(m)));
     } else if (range === "year") {
       // Year/YTD disabled (realdata.md §3) — no yearly granularity in the
       // real data. Match MONTH so a stale "year" range still renders a series
@@ -232,13 +284,13 @@ function TrendModal({
       }
       const years = [...byYear.keys()].sort();
       labels = years;
-      values = years.map((y) => numOrNull(byYear.get(y).actual_value));
+      values = years.map((y) => rowVal(byYear.get(y)));
     } else {
       const sorted = pinned
         .filter((r) => r.granularity === "DAY")
         .sort((a, b) => (dateKey(a.date) > dateKey(b.date) ? 1 : -1));
       labels = sorted.map((r) => r.date ?? "");
-      values = sorted.map((r) => numOrNull(r.actual_value));
+      values = sorted.map((r) => rowVal(r));
     }
   } else if (legacyData) {
     labels = legacyData.labels ?? [];
@@ -400,33 +452,18 @@ function monthKey(d) {
 }
 
 function ChartSkeleton() {
-  const heights = [40, 60, 90, 70, 110, 80, 130, 100, 140, 120, 150, 130];
   return (
-    <Stack spacing={1.5} sx={{ width: "100%" }}>
-      <Stack direction="row" spacing={2} alignItems="center">
-        <Skeleton variant="text" width={60} sx={{ fontSize: 11 }} />
-        <Skeleton variant="text" width={60} sx={{ fontSize: 11 }} />
-      </Stack>
-      <Stack
-        direction="row"
-        alignItems="flex-end"
-        spacing={1}
-        sx={{ height: 220 }}
-      >
-        {heights.map((h, i) => (
-          <Skeleton
-            key={i}
-            variant="rounded"
-            sx={{ flex: 1, height: h, alignSelf: "flex-end" }}
-          />
-        ))}
-      </Stack>
-      <Stack direction="row" spacing={1}>
-        {heights.map((_, i) => (
-          <Skeleton key={i} variant="text" sx={{ flex: 1, fontSize: 11 }} />
-        ))}
-      </Stack>
-    </Stack>
+    <Box
+      sx={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 260,
+      }}
+    >
+      <JKLoader />
+    </Box>
   );
 }
 

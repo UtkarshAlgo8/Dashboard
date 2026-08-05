@@ -1,5 +1,5 @@
 import { Box, Tooltip, Typography } from "@mui/material";
-import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import DataTable from "@/components/tables/DataTable.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import {
@@ -13,6 +13,8 @@ import {
   resolveProductionKpi,
 } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
+import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
+import JKLoader from "@/components/JKLoader.jsx";
 
 /**
  * Shift Comparison card — appears below KPI grid, Productivity tab only.
@@ -75,7 +77,7 @@ function useShiftBands({
     limit: 10000,
   };
   const hasWindow = isRange ? Boolean(from || to) : Boolean(date);
-  const { data } = usePolledQuery(
+  const { data, isLoading } = usePolledQuery(
     () => client.post("/dashboard/shift-comparison", payload),
     {
       // Never call kpi-data without a resolved window.
@@ -84,7 +86,7 @@ function useShiftBands({
       deps: [JSON.stringify(payload)],
     },
   );
-  return Array.isArray(data) ? data : [];
+  return { rows: Array.isArray(data) ? data : [], isLoading };
 }
 
 /**
@@ -129,8 +131,17 @@ export default function ShiftComparisonCard({
     extraKpis:
       section === "TBM" || section === "Curing" ? ["Production_product"] : null,
   };
-  const prodRows = useShiftBands(prodArgs);
-  const qualRows = useShiftBands({ ...bandArgs, category: "Quality" });
+  const { rows: prodRows, isLoading: prodLoading } = useShiftBands(prodArgs);
+  const { rows: qualRows, isLoading: qualLoading } = useShiftBands({
+    ...bandArgs,
+    category: "Quality",
+  });
+  // First-load: show the branded loader (never an all-"—" flash) until at
+  // least one band resolves; once we have rows, refetches update in place.
+  const loadingFirst =
+    (prodLoading || qualLoading) &&
+    prodRows.length === 0 &&
+    qualRows.length === 0;
   const rowsForShift = (rows, shift) =>
     rows.filter((r) => r.granularity === shift.gran);
   const prodBands = shifts.map((shift) => rowsForShift(prodRows, shift));
@@ -215,7 +226,14 @@ export default function ShiftComparisonCard({
     );
   };
 
-  const prodByShift = shifts.map((_, i) => readShift(prodRowsFor(i), prodKpi));
+  // Production is stored in KG but presented in MT — divide each shift's
+  // production by 1000 when the pinned unit is KG. Scrap/Rework (NOS) below
+  // are never touched. See lib/units.js.
+  const prodUnit = canonicalUnit(unit);
+  const prodByShift = shifts.map((_, i) => {
+    const v = readShift(prodRowsFor(i), prodKpi);
+    return isKg(prodUnit) ? kgToTonnes(v) : v;
+  });
 
   // new_change.md C14: flag a partial / in-progress day — at least one shift
   // has data and at least one has none, so the totals cannot reconcile yet.
@@ -223,13 +241,37 @@ export default function ShiftComparisonCard({
   const someMissing = prodByShift.some((v) => v == null);
   const isPartial = anyProd && someMissing;
 
-  const unitLabel = canonicalUnit(unit) ?? "";
-  const tableRows = shifts.map(({ label }, i) => [
-    label,
-    fmtQty(prodByShift[i]),
-    fmtQty(readShift(qRowsFor("Scrap", i), "Scrap")),
-    fmtQty(readShift(qRowsFor("Rework", i), "Rework")),
-  ]);
+  const unitLabel = displayUnit(prodUnit) ?? "";
+  const shiftRows = shifts.map(({ label }, i) => ({
+    shift: label,
+    production: prodByShift[i],
+    scrap: readShift(qRowsFor("Scrap", i), "Scrap"),
+    rework: readShift(qRowsFor("Rework", i), "Rework"),
+  }));
+  const shiftColumns = [
+    { key: "shift", label: "Shift", align: "left" },
+    {
+      key: "production",
+      label: unitLabel ? `Production (${unitLabel})` : "Production",
+      filterable: false,
+      value: (r) => (r.production == null ? -1 : r.production),
+      render: (r) => fmtQty(r.production),
+    },
+    {
+      key: "scrap",
+      label: "Scrap",
+      filterable: false,
+      value: (r) => (r.scrap == null ? -1 : r.scrap),
+      render: (r) => fmtQty(r.scrap),
+    },
+    {
+      key: "rework",
+      label: "Rework",
+      filterable: false,
+      value: (r) => (r.rework == null ? -1 : r.rework),
+      render: (r) => fmtQty(r.rework),
+    },
+  ];
 
   const windowLabel = isRange
     ? `${from ?? "…"} → ${to ?? "…"} · daily shift rows summed`
@@ -267,15 +309,27 @@ export default function ShiftComparisonCard({
           </Tooltip>
         )}
       </Typography>
-      <DrillTable
-        cols={[
-          "Shift",
-          unitLabel ? `Production (${unitLabel})` : "Production",
-          "Scrap",
-          "Rework",
-        ]}
-        rows={tableRows}
-      />
+      {loadingFirst ? (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 160,
+          }}
+        >
+          <JKLoader />
+        </Box>
+      ) : (
+        <DataTable
+          columns={shiftColumns}
+          rows={shiftRows}
+          getRowKey={(r) => r.shift}
+          search={false}
+          maxHeight={260}
+          emptyMessage="No shift data."
+        />
+      )}
     </Box>
   );
 }

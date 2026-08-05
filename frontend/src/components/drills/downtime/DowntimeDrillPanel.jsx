@@ -1,17 +1,29 @@
 import { useMemo } from "react";
-import {
-  Box,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
+import DataTable from "@/components/tables/DataTable.jsx";
 import { snapshotLatest } from "@/lib/drillDate.js";
+
+const DOWNTIME_COLUMNS = [
+  { key: "code", label: "Code Category", align: "left" },
+  { key: "machine", label: "Equipment", align: "left" },
+  { key: "reason", label: "Delay Reason", align: "left" },
+  { key: "events", label: "Events" },
+  {
+    key: "totalMin",
+    label: "Total DT (Min)",
+    filterable: false,
+    value: (r) => r.totalHrs * 60,
+    render: (r) => Math.round(r.totalMin),
+  },
+  {
+    key: "totalHrs",
+    label: "Total DT (Hr)",
+    filterable: false,
+    value: (r) => r.totalHrs,
+    render: (r) => r.totalHrs.toFixed(2),
+  },
+];
 
 /**
  * Downtime drill — leaf table per dashboard_kpi_map_reference §11:
@@ -115,65 +127,13 @@ function DowntimeDrillPanel({
         Detailed Downtime Log
       </Typography>
 
-      <TableContainer
-        sx={{
-          maxHeight: 440,
-          border: 1,
-          borderColor: "divider",
-          borderRadius: 1.25,
-        }}
-      >
-        <Table
-          size="small"
-          stickyHeader
-          sx={(t) => ({
-            "& .MuiTableCell-root": {
-              border: "1px solid",
-              borderColor: t.palette.divider,
-            },
-            "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom.surface.soft,
-            },
-          })}
-        >
-          <TableHead>
-            <TableRow>
-              <Th align="center">Code Category</Th>
-              <Th align="center">Equipment</Th>
-              <Th align="center">Delay Reason</Th>
-              <Th>Events</Th>
-              <Th>Total DT (Min)</Th>
-              <Th>Total DT (Hr)</Th>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {grouped.map((r, i) => (
-              <TableRow key={i} hover>
-                <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
-                  {r.code}
-                </TableCell>
-                <TableCell sx={{ fontSize: 13 }}>{r.machine}</TableCell>
-                <TableCell sx={{ fontSize: 13 }}>{r.reason}</TableCell>
-                <TableCell align="center" sx={{ fontSize: 13 }}>
-                  {r.events}
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{ fontSize: 13, fontWeight: 600 }}
-                >
-                  {Math.round(r.totalMin)}
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{ fontSize: 13, fontWeight: 600 }}
-                >
-                  {r.totalHrs.toFixed(2)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DataTable
+        columns={DOWNTIME_COLUMNS}
+        rows={grouped}
+        maxHeight={440}
+        searchPlaceholder="Search downtime…"
+        emptyMessage="No Downtime breakdown for this range."
+      />
     </Stack>
   );
 }
@@ -186,27 +146,6 @@ function parseRemarks(raw) {
     code: raw.slice(0, colonIdx).trim(),
     reason: raw.slice(colonIdx + 1).trim(),
   };
-}
-
-function Th({ children, align = "center" }) {
-  return (
-    <TableCell
-      align={align}
-      sx={{
-        fontSize: 11,
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
-        borderBottom: 1,
-        borderColor: "divider",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </TableCell>
-  );
 }
 
 export default DowntimeDrillPanel;

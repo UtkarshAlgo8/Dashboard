@@ -1,7 +1,7 @@
 import { Box, Typography } from "@mui/material";
 import KpiCard from "./KpiCard.jsx";
-import KpiCardSkeleton from "./KpiCardSkeleton.jsx";
 import StockSubSelector from "./StockSubSelector.jsx";
+import JKLoader from "@/components/JKLoader.jsx";
 
 /**
  * KPI grid — CR-08 refactor.
@@ -55,21 +55,16 @@ function KpiGrid({
         </Box>
       )}
 
-      {isLoading && (!kpis || kpis.length === 0) ? (
+      {isLoading ? (
         <Box
           sx={{
-            display: "grid",
-            gap: 2,
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, 1fr)",
-              md: "repeat(auto-fit, minmax(220px, 1fr))",
-            },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 140,
           }}
         >
-          {Array.from({ length: 4 }).map((_, i) => (
-            <KpiCardSkeleton key={i} />
-          ))}
+          <JKLoader />
         </Box>
       ) : !kpis || kpis.length === 0 ? (
         <Box sx={{ py: 4, textAlign: "center", color: "text.disabled" }}>

@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   Box,
-  Button,
-  MenuItem,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -15,7 +12,6 @@ import {
   useTheme,
 } from "@mui/material";
 import OverallTiles from "./OverallTiles.jsx";
-import MachineSearch from "./MachineSearch.jsx";
 import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
 import { thresholdTier } from "./thresholds.js";
@@ -52,7 +48,6 @@ const COMPONENT_PARENT_KPI = {
   performance: "Performance_m",
   quality: "Quality_m",
 };
-const MACHINE_PAGE_SIZE = 10;
 const OEE_CORE_KPIS = new Set([
   "OEE_o",
   "OEE_s",
@@ -81,8 +76,6 @@ function OeeDrillPanel({
   isLoading = false,
   trench = false,
 }) {
-  const [search, setSearch] = useState("");
-  const [machinePage, setMachinePage] = useState(0);
   const [selectedCell, setSelectedCell] = useState(null);
   const [subCategory, setSubCategory] = useState(null);
   // dashboard_doc.md §6: Curing only — a trench (Tredge) tier sits ABOVE the
@@ -100,12 +93,6 @@ function OeeDrillPanel({
       section,
     [section],
   );
-  const machinePageKey = `${search}|${sectionName}|${selectedTredge ?? ""}`;
-  const [prevMachinePageKey, setPrevMachinePageKey] = useState(machinePageKey);
-  if (prevMachinePageKey !== machinePageKey) {
-    setPrevMachinePageKey(machinePageKey);
-    setMachinePage(0);
-  }
 
   // OEE is machine-scoped only (§15.5): use the rows as-is, no product
   // filtering. Collapse to the latest available date in snapshot mode so
@@ -245,21 +232,6 @@ function OeeDrillPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopedRows, sectionName, trench, selectedTredge]);
 
-  const filteredMachines = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return machines;
-    return machines.filter((m) => m.name.toLowerCase().includes(q));
-  }, [machines, search]);
-  const machinePageCount = Math.max(
-    1,
-    Math.ceil(filteredMachines.length / MACHINE_PAGE_SIZE),
-  );
-  const activeMachinePage = Math.min(machinePage, machinePageCount - 1);
-  const visibleMachines = useMemo(() => {
-    const start = activeMachinePage * MACHINE_PAGE_SIZE;
-    return filteredMachines.slice(start, start + MACHINE_PAGE_SIZE);
-  }, [filteredMachines, activeMachinePage]);
-
   const handleSelectCell = (machineId, component) => {
     setSelectedCell((current) => {
       if (
@@ -365,6 +337,42 @@ function OeeDrillPanel({
       .map((r) => ({ ...r, durationMin: Math.round(r.durationMin) }));
   }, [selectedCell, activeSubCategory, scopedRows, sectionName, granularity]);
 
+  // Timestamp-wise view of the SAME availability/performance leaves: one row
+  // per dated record (the data is day-level, so the timestamp is the date),
+  // sorted chronologically. Quality leaves keep only the item-code view.
+  const subRowsByDate = useMemo(() => {
+    if (!selectedCell || !activeSubCategory || !Array.isArray(scopedRows))
+      return [];
+    if (selectedCell.component === "quality") return [];
+    const leafKpi = activeSubCategory;
+    const matching = scopedRows.filter(
+      (r) =>
+        r.section === sectionName &&
+        r.kpi_name === leafKpi &&
+        r.granularity === granularity &&
+        r.machine === selectedCell.machineId,
+    );
+    return matching
+      .filter((r) => typeof r.actual_value === "number" && r.actual_value > 0)
+      .map((r) => {
+        const reason = r.remarks && r.remarks !== "nan" ? r.remarks : "Other";
+        const k = dateKey(r.date);
+        const date = k
+          ? `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}`
+          : (r.date ?? "—");
+        return {
+          date,
+          sortKey: k ?? "",
+          reason,
+          reasonCategory: deriveCategory(reason),
+          durationMin: Math.round(r.actual_value),
+        };
+      })
+      .sort((a, b) =>
+        a.sortKey > b.sortKey ? 1 : a.sortKey < b.sortKey ? -1 : 0,
+      );
+  }, [selectedCell, activeSubCategory, scopedRows, sectionName, granularity]);
+
   const selectedMachine = selectedCell
     ? { id: selectedCell.machineId, name: selectedCell.machineId }
     : null;
@@ -452,9 +460,6 @@ function OeeDrillPanel({
             >
               Machine-wise breakdown
             </Typography>
-            {machines.length > 0 && (
-              <MachineSearch value={search} onChange={setSearch} />
-            )}
           </Stack>
 
           {machines.length === 0 ? (
@@ -480,7 +485,7 @@ function OeeDrillPanel({
           ) : (
             <>
               <MachineTable
-                machines={visibleMachines.map((m) => ({
+                machines={machines.map((m) => ({
                   id: m.id,
                   name: m.name,
                   availability: m.availability ?? 0,
@@ -490,13 +495,6 @@ function OeeDrillPanel({
                 selectedCell={selectedCell}
                 onSelectCell={handleSelectCell}
               />
-              {filteredMachines.length > MACHINE_PAGE_SIZE && (
-                <TablePager
-                  page={activeMachinePage}
-                  pageCount={machinePageCount}
-                  onPage={setMachinePage}
-                />
-              )}
               {selectedMachine && selectedCell && activeSubCategory && (
                 <SubDrill
                   machine={selectedMachine}
@@ -505,6 +503,7 @@ function OeeDrillPanel({
                   subCategories={subLeaves}
                   onSelectSubCategory={setSubCategory}
                   rows={subRows}
+                  rowsByDate={subRowsByDate}
                   accentTier={selectedTier}
                 />
               )}
@@ -608,50 +607,6 @@ function TrenchTh({ children, align = "center" }) {
     >
       {children}
     </TableCell>
-  );
-}
-
-function TablePager({ page, pageCount, onPage }) {
-  return (
-    <Stack
-      direction="row"
-      alignItems="center"
-      justifyContent="flex-end"
-      spacing={1.25}
-      sx={{ pt: 0.5 }}
-    >
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={() => onPage(Math.max(0, page - 1))}
-        disabled={page <= 0}
-      >
-        Prev
-      </Button>
-      <Select
-        size="small"
-        value={page}
-        onChange={(e) => onPage(Number(e.target.value))}
-        sx={{
-          minWidth: 104,
-          "& .MuiSelect-select": { py: 0.55, fontSize: 12 },
-        }}
-      >
-        {Array.from({ length: pageCount }, (_, i) => (
-          <MenuItem key={i} value={i}>
-            Page {i + 1}
-          </MenuItem>
-        ))}
-      </Select>
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={() => onPage(Math.min(pageCount - 1, page + 1))}
-        disabled={page >= pageCount - 1}
-      >
-        Next
-      </Button>
-    </Stack>
   );
 }
 
