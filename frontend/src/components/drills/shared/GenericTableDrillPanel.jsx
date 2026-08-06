@@ -28,6 +28,13 @@ export default function GenericTableDrillPanel({
   mode = "snapshot",
   granularity = "DAY",
   isLoading = false,
+  // Passed through to panels that fetch their own DAY rows for a dated view
+  // when the card sits on MONTH.
+  plantId = "banmore",
+  subSection = null,
+  productType = null,
+  from = null,
+  to = null,
 }) {
   // While the drill fetch is still in flight and we don't yet have any
   // child rows, render a skeleton. Otherwise the user sees an empty
@@ -56,7 +63,18 @@ export default function GenericTableDrillPanel({
     case "rw":
       return <ReworkDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
     case "ncm":
-      return <NcmDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <NcmDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          plantId={plantId}
+          sectionName={sectionName}
+          subSection={subSection}
+          productType={productType}
+          from={from}
+          to={to}
+        />
+      );
     // Cost
     case "spc":
       return <SpecificPowerDrillPanel drillRows={sectionFiltered} granularity={granularity} />;

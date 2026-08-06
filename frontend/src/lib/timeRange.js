@@ -16,10 +16,10 @@
  *   So presets map to "snapshot" mode (take the latest pre-aggregated
  *   row's actual_value verbatim) at the appropriate granularity:
  *
- *     today  → snapshot @ Daily   (latest day's value)
- *     month  → snapshot @ MTD     (latest month-to-date value)
+ *     today  → snapshot @ DAY     (latest day's value)
+ *     month  → snapshot @ MONTH   (the selected month's pre-aggregated row)
  *     year   → snapshot @ YTD     (latest year-to-date value)
- *     custom → aggregate @ Daily  (let transformer roll Daily per spec)
+ *     custom → aggregate @ DAY    (let transformer roll Daily per spec)
  *
  *   The trailing 7-day from/to window keeps the fetch under the 5000-row
  *   cap while reliably catching the most recent snapshot.
@@ -37,6 +37,7 @@
 // arrives — Year then behaves like Month at the yearly granularity.
 export const ENABLE_YEAR = false;
 const DAY_GRAN = "DAY";
+const MONTH_GRAN = "MONTH";
 const YEAR_GRANULARITY = "YTD";
 
 /**
@@ -145,23 +146,42 @@ export function presetToDateRange(timeRange, asOf = null) {
     // as-of month. The window is that month's 1st → its end, except the
     // as-of month itself, which is month-TO-DATE (1st → as-of).
     //
-    // We AGGREGATE the month's DAY rows (mode "aggregate", granularity DAY) —
-    // the same proven path a custom from/to range uses — instead of reading a
-    // single pre-aggregated MONTH snapshot. DAY rows exist for every month, so
-    // the numbers reliably track the CHOSEN month; a MONTH snapshot depended
-    // on a pre-agg row that isn't present for every month and ignored the
-    // selected window (the card showed the latest month regardless). The
-    // transformer sums additive KPIs (Production) and averages rates (OEE)
-    // per its C5 class, so a single month stays under the row cap.
+    // We read the pre-aggregated MONTH row (mode "snapshot", granularity
+    // MONTH) rather than rolling the month's DAY rows up client-side.
+    //
+    // Why: for RATE KPIs the two disagree, and only the MONTH row is
+    // defensible. Averaging DAY rows counts an idle day as a literal 0 and
+    // drags the month down — Mixing machine 0201 in Aug-2026 reads
+    // Availability 50.01 as a DAY average (two zero-production days) against
+    // 84.53 in the MONTH row. The ETL's monthly rollup excludes those days,
+    // and that judgement cannot be reconstructed on the client. OEE differs
+    // for a second, subtler reason: the MONTH row is computed from monthly
+    // A x P x Q, which is not the mean of the daily OEE values. Additive
+    // KPIs (Production) agree exactly either way, so nothing regresses there.
+    //
+    // The window still pins the CHOSEN month — the regression that reverted
+    // an earlier attempt at this. Every MONTH row is dated the 1st of its
+    // month (verified across all 124 section/KPI pairs), so a 1st -> month-end
+    // window selects exactly one month's rows and the card can no longer show
+    // "the latest month regardless" of the dropdown.
+    //
+    // No card loses coverage by switching: for every (section, kpi_name)
+    // that backs a card, the months carrying MONTH rows are a superset of
+    // those carrying DAY rows. The only DAY-without-MONTH gaps in the gold
+    // table are the plant-level rows (section NULL: OEE_p and the plant
+    // loss reasons), and the plant summary card reads its own endpoint
+    // (getPlantSummary, from/to only) rather than this granularity.
+    //
+    // A month's rows also drop from thousands to ~9, well under the row cap.
     const monthAnchor = parseMonthKey(timeRange.month) ?? startOfMonth(anchor);
     const isAsOfMonth =
       monthAnchor.getFullYear() === anchor.getFullYear() &&
       monthAnchor.getMonth() === anchor.getMonth();
     return {
-      granularity: DAY_GRAN,
+      granularity: MONTH_GRAN,
       from: toIso(startOfMonth(monthAnchor)),
       to: isAsOfMonth ? today : toIso(endOfMonth(monthAnchor)),
-      mode: "aggregate",
+      mode: "snapshot",
     };
   }
 

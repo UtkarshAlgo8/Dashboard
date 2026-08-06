@@ -305,6 +305,26 @@ const RATE_KPIS_SQL = `kpi_name IN (${[...RATE_KPIS]
 /**
  * Columns that together identify ONE logical measurement. Two rows agreeing
  * on all of these are duplicates of the same fact, not separate production.
+ *
+ * `remarks` is part of the identity, not a free-text annotation. The
+ * availability/performance loss leaves (Breakdown, Setup & Change, No
+ * Schedule, …) store ONE ROW PER REASON, and the reason lives in `remarks`:
+ * Mixing machine 0201 has 27 Breakdown rows for Jul-2026 totalling 2,379
+ * minutes, one per reason. Without `remarks` in the partition those 27
+ * distinct facts looked like 27 copies of one, and __dedupe_rn = 1 kept only
+ * the largest — the API returned a single 659-minute row and silently
+ * discarded 72 % of the downtime, at DAY and MONTH alike.
+ *
+ * `status` is the same story for NCM_Hold / NCM_Hold_sku, which store one row
+ * per business status (Use As / Rework / Hold / Repass). MS1066 on 2026-08-05
+ * carries "Use As" 6,150 AND "Hold" 3,690; without `status` in the partition
+ * the smaller one vanished. Mixing / Master Compound / Aug-2026 came back as
+ * 114,000 against a true 149,669.89.
+ *
+ * Adding both is a no-op for the KPIs dedupe actually protects: every
+ * Production* and OEE-family row has remarks AND status blank (verified
+ * across all 1.2 M of them), so a constant column in the PARTITION BY cannot
+ * change their grouping and the C4/C5 over-count guarantees are unchanged.
  */
 const DEDUPE_PARTITION = [
   "date",
@@ -320,6 +340,8 @@ const DEDUPE_PARTITION = [
   "category",
   "kpi_name",
   "unit_of_measurement",
+  "remarks",
+  "status",
 ];
 
 /** ISO yyyy-mm-dd → YYYYMMDD digit string for comparison literals. */

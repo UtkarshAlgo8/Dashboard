@@ -35,7 +35,8 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
  *     label,                       // header text
  *     align = "center",
  *     render?: (row) => node,      // custom cell content
- *     value?: (row) => primitive,  // sort/filter/search value (defaults to row[key])
+ *     value?: (row) => primitive,  // filter/search value (defaults to row[key])
+ *     sortValue?: (row) => primitive, // sort key when it differs from `value`
  *     sortable = true,
  *     filterable = true,
  *     minWidth?,
@@ -75,6 +76,13 @@ function DataTable({
     const raw = col.value ? col.value(row) : row?.[col.key];
     return raw;
   };
+  // Sort key, which is not always the displayed/filtered value. A date column
+  // shows dd-mm-yyyy but must order chronologically, and toNum() would read
+  // "2026-08-01" as the number 2026 — tying every date within a year. Such a
+  // column supplies sortValue (e.g. 20260801) and keeps `value` for the
+  // filter dropdown and search text.
+  const sortValueOf = (col, row) =>
+    col.sortValue ? col.sortValue(row) : valueOf(col, row);
   const textOf = (col, row) => {
     const v = valueOf(col, row);
     return v == null ? "" : String(v);
@@ -123,8 +131,8 @@ function DataTable({
       if (col) {
         const dir = sort.dir === "desc" ? -1 : 1;
         out.sort((a, b) => {
-          const av = valueOf(col, a);
-          const bv = valueOf(col, b);
+          const av = sortValueOf(col, a);
+          const bv = sortValueOf(col, b);
           const an = toNum(av);
           const bn = toNum(bv);
           if (an != null && bn != null) return (an - bn) * dir;
