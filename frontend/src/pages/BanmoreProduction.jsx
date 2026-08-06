@@ -458,24 +458,22 @@ function BanmoreProduction() {
     dashboard.category !== "i" &&
     (kpiLoading || sectionOeeLoading || summaryLoading);
 
-  // Is this reload a SECTION switch, or a change to the window/filters?
+  // Which REGION is actually reloading?
   //
-  // Derived rather than flagged: the landing query keeps previous data while
-  // refetching, so mid-switch `rawRows` still describe the section we are
-  // leaving. When that disagrees with the section now selected, the user
-  // clicked the sidebar; when it agrees, only the date / shift / product moved.
+  // Read it off the queries themselves rather than guessing from what the user
+  // clicked. The sidebar rings (getSectionOee) and the plant summary
+  // (getPlantSummary) are both keyed on plant + window — not section, product,
+  // sub-section or category. So they refetch for a date / granularity change
+  // and for nothing else, and their loading flags ARE the signal that the
+  // whole body is changing.
   //
-  // It matters because the two reloads change different regions. A section
-  // switch leaves the sidebar rings and the plant summary standing (both are
-  // their own queries, keyed on plant + window, not section), so covering them
-  // reads as the whole app blinking — the loader belongs in the content column
-  // only. A window change moves all of them, so the full-body loader is right.
-  const rowsSection = Array.isArray(rawRows)
-    ? (rawRows.find((r) => r?.section && r.section !== "nan")?.section ?? null)
-    : null;
-  const sectionSwitching =
-    contentLoading && rowsSection !== null && rowsSection !== sectionName;
-  const bodyLoading = contentLoading && !sectionSwitching;
+  // Everything else — section, product type, sub-section, unit, category tab —
+  // moves only the landing query, i.e. only the content column. Covering the
+  // sidebar and summary for those reads as the whole app blinking over content
+  // that never changed.
+  const bodyLoading =
+    dashboard.category !== "i" && (sectionOeeLoading || summaryLoading);
+  const contentOnlyLoading = contentLoading && !bodyLoading;
 
   // Time-range UI state. Default preset is "month".
   // Today → single-date equality (state.date). Month/Year/custom →
@@ -991,12 +989,12 @@ function BanmoreProduction() {
             )}
           </Box>
 
-            {/* Section switch — cover the content column only. The sidebar
-                stays live so the user can see which section they picked and
-                keep clicking; the plant summary is section-independent and does
-                not move. Same opaque backdrop as the body loader, for the same
-                reason: it must hide the per-panel loaders beneath. */}
-            {sectionSwitching && (
+            {/* Section / product / sub-section / category change — cover the
+                content column only. The sidebar stays live so the user can see
+                what they picked and keep clicking; the plant summary does not
+                move for any of these. Same opaque backdrop as the body loader,
+                for the same reason: it must hide the per-panel loaders. */}
+            {contentOnlyLoading && (
               <Box
                 sx={{
                   position: "absolute",
@@ -1014,9 +1012,9 @@ function BanmoreProduction() {
             )}
           </Box>
 
-          {/* The ONE loader for the whole dashboard body — window / shift /
-              product changes, which move the sidebar rings and plant summary
-              too. Covers the sidebar, summary, KPI grid and any open drill so
+          {/* The ONE loader for the whole dashboard body — date / granularity
+              changes, the only ones that move the sidebar rings and plant
+              summary too. Covers the sidebar, summary, KPI grid and any open drill so
               the user never sees several spinners at once. The backdrop is
               fully OPAQUE: internally-fetching panels (Shift Comparison, drill
               panels) render their own JKLoader, and a translucent overlay let
