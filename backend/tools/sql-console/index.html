@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gold SQL Console</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --border: #dfe3e8;
+    --text: #1b1f24;
+    --muted: #6b7280;
+    --accent: #1565c0;
+    --danger: #c62828;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b; --panel: #1c2026; --border: #2e343c;
+      --text: #e6e8eb; --muted: #9aa3af; --accent: #63a4ff; --danger: #ef6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  header h1 { font-size: 14px; font-weight: 700; margin: 0; letter-spacing: .3px; }
+  header .meta { font: 12px var(--mono); color: var(--muted); }
+  .grow { flex: 1; }
+  button {
+    font: 500 13px inherit; padding: 6px 14px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.08); }
+
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 12px 16px; gap: 10px; }
+
+  .editor { display: flex; flex-direction: column; gap: 6px; }
+  textarea {
+    width: 100%; height: 150px; resize: vertical; padding: 10px 12px;
+    font: 13px/1.55 var(--mono); tab-size: 2;
+    color: var(--text); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bar label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  select, input[type=number] {
+    font: 12px inherit; padding: 4px 6px; border-radius: 5px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  }
+  .status { font: 12px var(--mono); color: var(--muted); }
+  .status.error { color: var(--danger); white-space: pre-wrap; }
+
+  .results {
+    flex: 1; min-height: 0; overflow: auto;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+  }
+  table { border-collapse: collapse; width: max-content; min-width: 100%; font: 12px var(--mono); }
+  th, td {
+    padding: 5px 10px; border-bottom: 1px solid var(--border);
+    text-align: left; white-space: nowrap; max-width: 420px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  th {
+    position: sticky; top: 0; z-index: 1; background: var(--panel);
+    border-bottom: 2px solid var(--border); font-weight: 700;
+  }
+  td.num { text-align: right; }
+  td.null { color: var(--muted); font-style: italic; }
+  tbody tr:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .empty { padding: 24px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Gold SQL Console</h1>
+  <span class="meta" id="meta">…</span>
+  <span class="grow"></span>
+  <span class="status" id="status"></span>
+  <button id="csv" disabled>Download CSV</button>
+  <button class="primary" id="run">Run &nbsp;⌘↵</button>
+</header>
+
+<main>
+  <div class="editor">
+    <textarea id="sql" spellcheck="false" placeholder="SELECT ... FROM gold.gold ..."></textarea>
+    <div class="bar">
+      <label>Snippet
+        <select id="snippets">
+          <option value="">choose…</option>
+        </select>
+      </label>
+      <label>History
+        <select id="history"><option value="">recent…</option></select>
+      </label>
+      <label>Max rows shown
+        <input type="number" id="cap" value="500" min="10" step="50" style="width:80px" />
+      </label>
+      <span class="status">Read-only — only SELECT / WITH are accepted.</span>
+    </div>
+  </div>
+  <div class="results" id="results">
+    <div class="empty">Run a query to see rows.</div>
+  </div>
+</main>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const sqlBox = $("sql"), runBtn = $("run"), csvBtn = $("csv"), statusEl = $("status");
+const resultsEl = $("results"), capEl = $("cap"), historyEl = $("history"), snippetsEl = $("snippets");
+
+const HISTORY_KEY = "goldSqlConsole.history";
+let lastRows = [], lastColumns = [];
+
+const SNIPPETS = [
+  ["Distinct kpi_name per section",
+   "SELECT section, kpi_name, count(*) AS n\nFROM gold.gold\nGROUP BY section, kpi_name\nORDER BY section, n DESC"],
+  ["Columns of one section/date window",
+   "SELECT *\nFROM gold.gold\nWHERE section = 'Mixing'\n  AND CAST(date AS VARCHAR) BETWEEN '2026-08-01' AND '2026-08-06'\nLIMIT 200"],
+  ["Rate KPIs — window average",
+   "SELECT kpi_name, granularity,\n       count(*) AS n,\n       avg(CAST(actual_value AS DOUBLE)) AS avg_value\nFROM gold.gold\nWHERE section = 'Mixing'\n  AND kpi_name IN ('OEE_o','Availability_o','Performance_o','Quality_o')\n  AND CAST(date AS VARCHAR) BETWEEN '2026-08-01' AND '2026-08-06'\nGROUP BY kpi_name, granularity\nORDER BY kpi_name, granularity"],
+  ["Additive KPI — sum, pinned by unit",
+   "SELECT unit_of_measurement, product_type, granularity,\n       sum(CAST(actual_value AS DOUBLE)) AS total\nFROM gold.gold\nWHERE section = 'Mixing'\n  AND kpi_name = 'Production'\n  AND CAST(date AS VARCHAR) BETWEEN '2026-08-01' AND '2026-08-06'\nGROUP BY unit_of_measurement, product_type, granularity\nORDER BY unit_of_measurement, product_type, granularity"],
+  ["Machine-level daily rows",
+   "SELECT CAST(date AS VARCHAR) AS d, machine, kpi_name, actual_value\nFROM gold.gold\nWHERE section = 'Mixing'\n  AND granularity = 'DAY'\n  AND kpi_name IN ('OEE_m','Availability_m','Performance_m','Quality_m')\n  AND CAST(date AS VARCHAR) BETWEEN '2026-08-01' AND '2026-08-06'\nORDER BY d, machine, kpi_name"],
+  ["Date coverage per section",
+   "SELECT section,\n       min(CAST(date AS VARCHAR)) AS first_date,\n       max(CAST(date AS VARCHAR)) AS last_date,\n       count(*) AS rows\nFROM gold.gold\nGROUP BY section\nORDER BY section"],
+];
+
+for (const [label, sql] of SNIPPETS) {
+  const opt = document.createElement("option");
+  opt.value = sql;
+  opt.textContent = label;
+  snippetsEl.append(opt);
+}
+snippetsEl.addEventListener("change", () => {
+  if (!snippetsEl.value) return;
+  sqlBox.value = snippetsEl.value;
+  snippetsEl.value = "";
+  sqlBox.focus();
+});
+
+/* ---------- history (localStorage, newest first, deduped) ---------- */
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) ?? []; }
+  catch { return []; }
+}
+function pushHistory(sql) {
+  const next = [sql, ...loadHistory().filter((q) => q !== sql)].slice(0, 30);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  renderHistory();
+}
+function renderHistory() {
+  historyEl.replaceChildren(new Option("recent…", ""));
+  for (const q of loadHistory()) {
+    historyEl.append(new Option(q.replace(/\s+/g, " ").slice(0, 80), q));
+  }
+}
+historyEl.addEventListener("change", () => {
+  if (!historyEl.value) return;
+  sqlBox.value = historyEl.value;
+  historyEl.value = "";
+  sqlBox.focus();
+});
+renderHistory();
+
+/* ---------- rendering ---------- */
+
+// Athena returns every column as a string, so right-align anything that
+// parses cleanly as a number to keep numeric columns scannable.
+const isNumeric = (v) => v !== "" && v != null && Number.isFinite(Number(v));
+
+function renderRows(rows, columns, cap) {
+  if (rows.length === 0) {
+    resultsEl.replaceChildren(Object.assign(document.createElement("div"),
+      { className: "empty", textContent: "Query ran fine — 0 rows." }));
+    return;
+  }
+  const table = document.createElement("table");
+  const thead = table.createTHead().insertRow();
+  for (const col of columns) {
+    const th = document.createElement("th");
+    th.textContent = col;
+    thead.append(th);
+  }
+  const tbody = table.createTBody();
+  for (const row of rows.slice(0, cap)) {
+    const tr = tbody.insertRow();
+    for (const col of columns) {
+      const cell = tr.insertCell();
+      const v = row?.[col];
+      if (v === null || v === undefined || v === "") {
+        cell.className = "null";
+        cell.textContent = v === "" ? "(empty)" : "null";
+      } else {
+        const text = typeof v === "object" ? JSON.stringify(v) : String(v);
+        cell.textContent = text;
+        cell.title = text;
+        if (isNumeric(v)) cell.className = "num";
+      }
+    }
+  }
+  resultsEl.replaceChildren(table);
+}
+
+function toCsv(rows, columns) {
+  const esc = (v) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  };
+  return [columns.join(","), ...rows.map((r) => columns.map((c) => esc(r?.[c])).join(","))].join("\n");
+}
+
+csvBtn.addEventListener("click", () => {
+  const blob = new Blob([toCsv(lastRows, lastColumns)], { type: "text/csv" });
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(blob),
+    download: "query-result.csv",
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* ---------- run ---------- */
+async function run() {
+  const sql = sqlBox.value.trim();
+  if (!sql) return;
+
+  runBtn.disabled = true;
+  csvBtn.disabled = true;
+  statusEl.className = "status";
+  statusEl.textContent = "running…";
+
+  try {
+    const res = await fetch("/query", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql }),
+    });
+    const payload = await res.json();
+
+    if (!res.ok) {
+      statusEl.className = "status error";
+      statusEl.textContent = `${payload.type ?? "ERROR"}: ${payload.error}`;
+      resultsEl.replaceChildren(Object.assign(document.createElement("div"),
+        { className: "empty", textContent: "No results — query failed." }));
+      return;
+    }
+
+    lastRows = payload.rows;
+    lastColumns = payload.columns;
+    pushHistory(sql);
+
+    const cap = Math.max(10, Number(capEl.value) || 500);
+    renderRows(payload.rows, payload.columns, cap);
+
+    const shown = Math.min(payload.rowCount, cap);
+    const capped = shown < payload.rowCount ? ` (showing first ${shown})` : "";
+    statusEl.className = "status";
+    statusEl.textContent = `${payload.rowCount} rows${capped} · ${payload.elapsedMs} ms`;
+    csvBtn.disabled = payload.rowCount === 0;
+  } catch (err) {
+    statusEl.className = "status error";
+    statusEl.textContent = `Request failed: ${err.message}`;
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+runBtn.addEventListener("click", run);
+sqlBox.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run(); }
+});
+
+fetch("/meta").then((r) => r.json()).then((m) => {
+  $("meta").textContent = `engine=${m.engine} · table=${m.table}`;
+  if (!sqlBox.value) {
+    sqlBox.value = `SELECT kpi_name, count(*) AS n\nFROM ${m.table}\nWHERE section = 'Mixing'\nGROUP BY kpi_name\nORDER BY n DESC`;
+  }
+}).catch(() => { $("meta").textContent = "(meta unavailable)"; });
+</script>
+</body>
+</html>
