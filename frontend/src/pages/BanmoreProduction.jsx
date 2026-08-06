@@ -448,9 +448,34 @@ function BanmoreProduction() {
   // own spinner, one branded loader covers the body (see the overlay in the
   // render) and the per-panel loaders below are suppressed. Inventory owns its
   // own loading UI, so it is excluded.
+  //
+  // `isDrillLoading` is NOT part of this. Opening or switching a drill leaves
+  // the cards, rings and summary untouched, so covering them was pure flicker
+  // over content that never changed — the drill panel renders its own skeleton
+  // instead. A section / filter / month change still lands here, because that
+  // reloads the landing query and `kpiLoading` goes true.
   const contentLoading =
     dashboard.category !== "i" &&
-    (kpiLoading || isDrillLoading || sectionOeeLoading || summaryLoading);
+    (kpiLoading || sectionOeeLoading || summaryLoading);
+
+  // Is this reload a SECTION switch, or a change to the window/filters?
+  //
+  // Derived rather than flagged: the landing query keeps previous data while
+  // refetching, so mid-switch `rawRows` still describe the section we are
+  // leaving. When that disagrees with the section now selected, the user
+  // clicked the sidebar; when it agrees, only the date / shift / product moved.
+  //
+  // It matters because the two reloads change different regions. A section
+  // switch leaves the sidebar rings and the plant summary standing (both are
+  // their own queries, keyed on plant + window, not section), so covering them
+  // reads as the whole app blinking — the loader belongs in the content column
+  // only. A window change moves all of them, so the full-body loader is right.
+  const rowsSection = Array.isArray(rawRows)
+    ? (rawRows.find((r) => r?.section && r.section !== "nan")?.section ?? null)
+    : null;
+  const sectionSwitching =
+    contentLoading && rowsSection !== null && rowsSection !== sectionName;
+  const bodyLoading = contentLoading && !sectionSwitching;
 
   // Time-range UI state. Default preset is "month".
   // Today → single-date equality (state.date). Month/Year/custom →
@@ -608,6 +633,31 @@ function BanmoreProduction() {
     resetDrill();
   };
 
+  // Which drill panel is OPEN is page state (`openDrillKpiId`); which drill is
+  // FETCHED is hook state (`drillSourceKpiId` / `drillKpis`). A section or
+  // category change calls setFilter(..., resetDrill=true), which clears the
+  // hook side but cannot clear the page side — so the panel kept rendering
+  // with no drill fetch behind it and the machine-wise breakdown showed empty
+  // until the user closed and reopened it. Re-arm the same card so the two
+  // stay in step.
+  useEffect(() => {
+    if (!openDrillKpiId) return;
+    // Already wired to this card. This is also what stops the effect
+    // re-dispatching: drillInto sets drillSourceKpiId to the card id.
+    if (dashboard.drillSourceKpiId === openDrillKpiId) return;
+    const kpi = kpis.find((k) => k.id === openDrillKpiId && k.drillable);
+    // The card may not exist (or not be drillable) in the new section. Leave
+    // openDrillKpiId set — the panel renders nothing, and switching back to a
+    // section that has it re-arms the drill.
+    if (!kpi) return;
+    const cardDate = kpi.resolvedDate ?? null;
+    if (PROD_DRILL_TYPES.has(kpi.drillType)) {
+      drillInto([], kpi.id, {}, cardDate);
+    } else if (kpi.drillTargets) {
+      drillInto(kpi.drillTargets, kpi.id, {}, cardDate);
+    }
+  }, [openDrillKpiId, kpis, dashboard.drillSourceKpiId, drillInto]);
+
   return (
     <Box
       ref={rootRef}
@@ -693,6 +743,19 @@ function BanmoreProduction() {
             </Stack>
           )}
 
+          {/* Positioning context for the section-switch loader below. It is
+              this wrapper — not the scrolling card inside it — that anchors the
+              overlay, so a scrolled page still gets a centred loader rather
+              than one parked at the top of the scroll height. */}
+          <Box
+            sx={{
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              minWidth: 0,
+            }}
+          >
           <Box
             sx={{
               backgroundColor: "background.paper",
@@ -703,6 +766,7 @@ function BanmoreProduction() {
                 dashboard.category === "i" ? "none" : theme.custom.shadow,
               display: "flex",
               flexDirection: "column",
+              flex: 1,
               minHeight: 0,
               overflow: exporting
                 ? "visible"
@@ -876,15 +940,25 @@ function BanmoreProduction() {
                           cardDate={cardDate}
                           from={useMonthRange ? from : (cardDate ?? from)}
                           to={useMonthRange ? to : (cardDate ?? to)}
+                          // The SELECTED window, never collapsed to the card's
+                          // anchor day. A panel that fetches dated DAY rows for
+                          // a MONTH card needs the whole month: `from`/`to`
+                          // above resolve to the card's own date, which for a
+                          // MONTH card is the 1st — so a DAY fetch built on
+                          // them returns only the 1st.
+                          windowFrom={from}
+                          windowTo={to}
                           shift={dashboard.granularity}
                           allDrillRows={drillRows}
                           rawRows={rawRows}
                           prodSub={activeProductType}
                           unitPin={activeUnit}
                           mode={dashboard.mode}
-                          // Per-panel loader suppressed in favour of the single
-                          // page-level overlay (contentLoading).
-                          isLoading={false}
+                          // The panel owns its own in-place skeleton while the
+                          // drill fetch runs. The page-level overlay covers the
+                          // body only when the LANDING data is reloading, which
+                          // a drill never triggers.
+                          isLoading={isDrillLoading}
                         />
                       </Box>
                     );
@@ -917,14 +991,38 @@ function BanmoreProduction() {
             )}
           </Box>
 
-          {/* The ONE loader for the whole dashboard body. Covers the sidebar,
-              summary, KPI grid and any open drill while data reloads, so the
-              user never sees several spinners at once. The backdrop is fully
-              OPAQUE: internally-fetching panels (Shift Comparison, drill
+            {/* Section switch — cover the content column only. The sidebar
+                stays live so the user can see which section they picked and
+                keep clicking; the plant summary is section-independent and does
+                not move. Same opaque backdrop as the body loader, for the same
+                reason: it must hide the per-panel loaders beneath. */}
+            {sectionSwitching && (
+              <Box
+                sx={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 5,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "background.default",
+                  borderRadius: 1.25,
+                }}
+              >
+                <JKLoader />
+              </Box>
+            )}
+          </Box>
+
+          {/* The ONE loader for the whole dashboard body — window / shift /
+              product changes, which move the sidebar rings and plant summary
+              too. Covers the sidebar, summary, KPI grid and any open drill so
+              the user never sees several spinners at once. The backdrop is
+              fully OPAQUE: internally-fetching panels (Shift Comparison, drill
               panels) render their own JKLoader, and a translucent overlay let
               those peek through as a second "Please wait". An opaque cover
               hides them regardless of which panel is mid-fetch. */}
-          {contentLoading && (
+          {bodyLoading && (
             <Box
               sx={{
                 position: "absolute",
@@ -978,6 +1076,9 @@ function DrillPanelRouter({
   cardDate = null,
   from,
   to,
+  // The selected window, independent of the card-anchor collapse above.
+  windowFrom = null,
+  windowTo = null,
   shift,
   allDrillRows,
   rawRows,
@@ -994,11 +1095,14 @@ function DrillPanelRouter({
   // (DAY / SHIFT A-C / MONTH); fall back to DAY when none is set
   // (All-Shifts Today / custom range) — realdata.md §3.
   const granularity = shift ?? "DAY";
+  // The OEE drills (mixOEE / curOEE) now follow the card onto MONTH — they have
+  // a pre-aggregated row at every tier, so downgrading them to DAY only made
+  // the machine table contradict the card above it. The Production drills stay
+  // on DAY: their SKU levels carry 4 months of MONTH rows against 8 for the OEE
+  // family, and those panels paginate a fetch of their own.
   const productivityDrillGranularity =
     granularity === "MONTH" &&
-    ["mixOEE", "curOEE", "mixProd", "tbmProd", "stkProd", "curProd"].includes(
-      kpi.drillType,
-    )
+    ["mixProd", "tbmProd", "stkProd", "curProd"].includes(kpi.drillType)
       ? "DAY"
       : granularity;
 
@@ -1020,6 +1124,11 @@ function DrillPanelRouter({
           rawRows={rawRows}
           mode={mode}
           granularity={productivityDrillGranularity}
+          // Window + plant for the panel's own date-wise leaf fetch, which only
+          // runs on MONTH (the shared rows carry no per-date detail there).
+          plantId={plantId}
+          from={from}
+          to={to}
           // new_change.md C3/C6: OEE reads the rows already in hand, which
           // also carry the (newer) Production rows. Without the card's date
           // the panel's "latest date" collapses to Production's 07-20 and
@@ -1093,6 +1202,13 @@ function DrillPanelRouter({
           mode={mode}
           granularity={granularity}
           isLoading={isLoading}
+          // Context + window for panels that fetch their own DAY rows when the
+          // card is on MONTH (NCM Hold's dated detail).
+          plantId={plantId}
+          subSection={subSection}
+          productType={prodSub}
+          from={windowFrom ?? from}
+          to={windowTo ?? to}
         />
       );
     // null drillType — no drill panel

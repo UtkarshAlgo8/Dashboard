@@ -16,6 +16,8 @@ import MachineTable from "./MachineTable.jsx";
 import SubDrill from "./SubDrill.jsx";
 import { thresholdTier } from "./thresholds.js";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
+import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import client from "@/api/client.js";
 import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
@@ -76,6 +78,11 @@ function OeeDrillPanel({
   cardDate = null,
   isLoading = false,
   trench = false,
+  // Window + plant for the date-wise leaf fetch below. Only used when the
+  // panel is on MONTH, where the shared rows carry no per-date detail.
+  plantId = "banmore",
+  from = null,
+  to = null,
 }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [subCategory, setSubCategory] = useState(null);
@@ -338,19 +345,78 @@ function OeeDrillPanel({
       .map((r) => ({ ...r, durationMin: Math.round(r.durationMin) }));
   }, [selectedCell, activeSubCategory, scopedRows, sectionName, granularity]);
 
+  // ---------- date-wise leaf rows ----------
+  //
+  // "By date" wants one row per DATE. Under a MONTH card the shared drill
+  // rows cannot supply that: the month's leaves are stored one row per
+  // REASON, all stamped the 1st of the month, so grouping them by date
+  // collapses to a single bar. Fetch the DAY rows for just this
+  // (machine, leaf, window) instead — ~28 rows — rather than putting the
+  // whole ~3.4k-row DAY payload back on every drill open.
+  //
+  // On DAY / SHIFT the shared rows are already date-wise, so this stays off.
+  const needsDayLeafRows =
+    String(granularity).toUpperCase() === "MONTH" &&
+    Boolean(selectedCell) &&
+    Boolean(activeSubCategory) &&
+    selectedCell?.component !== "quality" &&
+    Boolean(from && to);
+
+  const dayLeafPayload = needsDayLeafRows
+    ? {
+        plantId,
+        context: {
+          section: sectionName,
+          category: "Productivity",
+          granularity: "DAY",
+        },
+        from,
+        to,
+        drillKpis: [activeSubCategory],
+        parentFilters: { machine: selectedCell.machineId },
+        drillOnly: true,
+        limit: 2000,
+      }
+    : null;
+
+  const { data: dayLeafData } = usePolledQuery(
+    () =>
+      dayLeafPayload
+        ? client
+            .post("/dashboard/kpi-data", dayLeafPayload)
+            .then((r) => r.data ?? r)
+        : Promise.resolve(null),
+    {
+      enabled: Boolean(dayLeafPayload),
+      interval: 0,
+      keepPreviousData: false,
+      deps: [JSON.stringify(dayLeafPayload)],
+    },
+  );
+
   // Timestamp-wise view of the SAME availability/performance leaves: one row
   // per dated record (the data is day-level, so the timestamp is the date),
   // sorted chronologically. Quality leaves keep only the item-code view.
   const subRowsByDate = useMemo(() => {
-    if (!selectedCell || !activeSubCategory || !Array.isArray(scopedRows))
-      return [];
+    if (!selectedCell || !activeSubCategory) return [];
     if (selectedCell.component === "quality") return [];
     const leafKpi = activeSubCategory;
-    const matching = scopedRows.filter(
+    // Athena returns measures as strings on this direct call (the shared
+    // fetch coerces them at its own boundary), so normalise here.
+    const coerce = (v) =>
+      typeof v === "number" ? v : Number.parseFloat(v ?? "");
+    const source = needsDayLeafRows
+      ? (dayLeafData ?? []).map((r) => ({
+          ...r,
+          actual_value: coerce(r.actual_value),
+        }))
+      : (scopedRows ?? []);
+    const wantGran = needsDayLeafRows ? "DAY" : granularity;
+    const matching = source.filter(
       (r) =>
         r.section === sectionName &&
         r.kpi_name === leafKpi &&
-        r.granularity === granularity &&
+        r.granularity === wantGran &&
         r.machine === selectedCell.machineId,
     );
     return matching
@@ -373,7 +439,15 @@ function OeeDrillPanel({
       .sort((a, b) =>
         a.sortKey > b.sortKey ? 1 : a.sortKey < b.sortKey ? -1 : 0,
       );
-  }, [selectedCell, activeSubCategory, scopedRows, sectionName, granularity]);
+  }, [
+    selectedCell,
+    activeSubCategory,
+    scopedRows,
+    sectionName,
+    granularity,
+    needsDayLeafRows,
+    dayLeafData,
+  ]);
 
   const selectedMachine = selectedCell
     ? { id: selectedCell.machineId, name: selectedCell.machineId }

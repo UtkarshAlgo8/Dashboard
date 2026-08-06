@@ -67,13 +67,27 @@ const initialState = {
 
 function reducer(state, action) {
   switch (action.type) {
-    case "SET_FILTER":
+    case "SET_FILTER": {
       // section/category change uses resetDrill=true. Only the drill
       // chain resets — date / from / to persist across navigation so the
       // user's time-range selection survives switching tabs.
+      //
+      // `drillDate` is the CARD's resolved date (C3/C6), captured when the
+      // drill was opened. It belongs to the window that was active THEN, so a
+      // new date window makes it stale: the drill fetch keeps asking for the
+      // old day while the panel filters on the card's freshly-resolved one.
+      // The two disagree and the machine table renders "not available" until
+      // the user closes and reopens the drill, which re-pins it. Drop it and
+      // let the drill inherit the new window; the panel still narrows to the
+      // card's date client-side, and that date is always inside the window.
+      const changesWindow =
+        "date" in action.payload ||
+        "from" in action.payload ||
+        "to" in action.payload;
       return {
         ...state,
         ...action.payload,
+        ...(changesWindow ? { drillDate: null } : {}),
         ...(action.resetDrill
           ? {
               drillKpis: null,
@@ -83,6 +97,7 @@ function reducer(state, action) {
             }
           : {}),
       };
+    }
     case "SET_DRILL": {
       // Single-drill UX: replace previous drill targets with the new
       // card's targets. Date filter is preserved across drill changes.
@@ -370,10 +385,17 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // card's effective granularity (state.granularity), falling back to
   // Daily only when no granularity is active (All-Shifts Today / custom
   // range, where the panels aggregate Daily rows over the window).
-  const drillGranularity =
-    state.category === "p" && state.granularity === "MONTH"
-      ? "DAY"
-      : (state.granularity ?? "DAY");
+  //
+  // MONTH is no longer downgraded to DAY here. It used to be, which left the
+  // OEE card reading the month's pre-aggregated row while the machine table
+  // under it read ONE arbitrary day — a machine idle on that day showed 0.0
+  // against a real monthly value (Mixing 0201, Jul-2026: 0.0 on the 31st vs
+  // 84.12 for the month). MONTH rows exist at every tier this drill needs
+  // (OEE_m / Availability_m / Performance_m / Quality_m plus all six
+  // availability-loss leaves, for every machine), and the fetch shrinks from
+  // ~3.4k rows to ~311. The date-wise view inside the drill fetches its own
+  // DAY rows — see useLeafDayRows in OeeDrillPanel.
+  const drillGranularity = state.granularity ?? "DAY";
   const drillDateSource =
     state.category === "p" && state.granularity === "MONTH" && state.from && state.to
       ? state
@@ -457,11 +479,17 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // screen incomplete — surface it rather than showing a partial sum as final.
   const truncated =
     Boolean(landingData?.truncated) || Boolean(drillData?.truncated);
-  // Treat "waiting for the date window" as loading too, so the grid shows a
-  // skeleton (not an empty "no data" state) while the range resolves and the
-  // gated landing fetch has not run yet.
-  const isLoading =
-    !hasDateRange || landingLoading || (Boolean(drillPayload) && drillLoading);
+  // LANDING-only loading. Treat "waiting for the date window" as loading too,
+  // so the grid shows a skeleton (not an empty "no data" state) while the range
+  // resolves and the gated landing fetch has not run yet.
+  //
+  // The drill fetch is deliberately NOT folded in here. Opening a drill does
+  // not re-run the landing query (drillKpis does not feed landingPayload), so
+  // the cards are already on screen; reporting them as loading made the page
+  // put a full-body loader over content that never changed. Drill-only
+  // progress belongs to `isDrillLoading` below, which the panel renders in
+  // place.
+  const isLoading = !hasDateRange || landingLoading;
   // Drill-only loading flag so drill panels can render a skeleton while
   // their fetch is in flight, without confusing it with landing reload.
   const isDrillLoading = Boolean(drillPayload) && drillLoading;
@@ -522,10 +550,9 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
         kpi.resolvedDate && state.granularity !== "MONTH"
           ? { date: kpi.resolvedDate }
           : state;
-      const gran =
-        state.category === "p" && state.granularity === "MONTH"
-          ? "DAY"
-          : (state.granularity ?? "DAY");
+      // Must match drillGranularity above, or the prefetch warms a cache key
+      // the real drill fetch never asks for.
+      const gran = state.granularity ?? "DAY";
       fetchCachedDashboard({
         plantId,
         context: {
