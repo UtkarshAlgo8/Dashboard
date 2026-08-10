@@ -2,6 +2,7 @@ import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { config } from "../config.js";
 import { runQuery } from "../utils/upstream.js";
 import {
+  buildDrillAggregateQuery,
   buildFetchQuery,
   buildLatestDateQuery,
   buildProductOptionsQuery,
@@ -200,6 +201,72 @@ export async function postProductOptions(req, res, next) {
         unit: row.unit_of_measurement ?? null,
       })),
     });
+  } catch (err) {
+    if (err instanceof QueryValidationError) {
+      res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: err.message },
+      });
+      return;
+    }
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/dashboard/drill-aggregate — one page of a drill lens, rolled
+ * up per grouping key server-side.
+ *
+ * The paginated drill tables need one result row per DISPLAYED row. Paging the
+ * raw rows instead slices (machine, day) records, which splits a machine's
+ * days across pages and shows a partial total on each. Returns
+ * `{ data: [...] }` where every row is `{ ...groupKeys, actual_value,
+ * threshold_value, unit_of_measurement }`.
+ */
+export async function postDrillAggregate(req, res, next) {
+  try {
+    const {
+      context = {},
+      parentFilters = {},
+      date,
+      from,
+      to,
+      kpiName,
+      groupBy = [],
+      limit,
+      offset,
+      plantId = "banmore",
+    } = req.body ?? {};
+
+    const sql = buildDrillAggregateQuery({
+      plantId,
+      context,
+      parentFilters,
+      date,
+      from,
+      to,
+      kpiName,
+      groupBy,
+      limit,
+      offset,
+    });
+    const rows = await cached(
+      buildCacheKey("/dashboard/drill-aggregate", {
+        plantId,
+        context,
+        parentFilters,
+        date,
+        from,
+        to,
+        kpiName,
+        groupBy,
+        limit,
+        offset,
+      }),
+      () => runQuery(sql),
+      CACHE_TTL.KPI_ROWS,
+    );
+
+    res.json({ data: rows });
   } catch (err) {
     if (err instanceof QueryValidationError) {
       res.status(400).json({

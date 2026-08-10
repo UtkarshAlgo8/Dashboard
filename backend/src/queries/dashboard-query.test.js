@@ -11,6 +11,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildDrillAggregateQuery,
   buildFetchQuery,
   buildLatestDateQuery,
   previousWindow,
@@ -230,4 +231,81 @@ test("de-dup: additive rows collapse, rate rows are exempt", () => {
     "rate KPIs must be exempt from the unproven collapse rule",
   );
   assert.ok(!sql.includes("SELECT *"), "the helper column must not leak");
+});
+
+/* -------- drill-aggregate — one result row per DISPLAYED row -------- */
+
+test("drill-aggregate groups and sums server-side, so a page is N machines", () => {
+  // The whole point: paging raw rows sliced (machine, DAY) records, so a page
+  // of 25 rendered as ~6 machines and a machine's days could straddle the
+  // boundary, showing a partial total on each page.
+  const sql = buildDrillAggregateQuery({
+    context: { section: "Curing", granularity: "DAY" },
+    from: "2026-07-01",
+    to: "2026-07-16",
+    kpiName: "Production_m",
+    groupBy: ["machine"],
+    limit: 25,
+    offset: 50,
+  });
+  assert.match(sql, /GROUP BY 1/);
+  assert.ok(sql.includes("SUM(TRY_CAST(actual_value AS DOUBLE))"));
+  assert.ok(sql.includes("SUM(TRY_CAST(threshold_value AS DOUBLE))"));
+  assert.ok(sql.includes("kpi_name = 'Production_m'"));
+  assert.ok(sql.includes("OFFSET 50 LIMIT 25"));
+  // De-dup must run BEFORE the SUM or the shadow rows inflate every total.
+  assert.ok(sql.indexOf("ROW_NUMBER() OVER") < sql.indexOf("GROUP BY"));
+  assert.ok(sql.includes("__dedupe_rn = 1"));
+});
+
+test("drill-aggregate groups by both dimensions for the Machine + SKU lens", () => {
+  const sql = buildDrillAggregateQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+    kpiName: "Production_m_sku",
+    groupBy: ["machine", "itemcode"],
+  });
+  assert.match(sql, /GROUP BY 1, 2/);
+  assert.match(sql, /ORDER BY machine, itemcode/);
+});
+
+test("drill-aggregate refuses a KPI that SUM would misaggregate", () => {
+  // A rate KPI needs AVERAGE and a level KPI the latest day — summing either
+  // yields a plausible, silently wrong number, so they are rejected outright.
+  for (const kpiName of ["OEE_m", "Inventory_item", "Production"]) {
+    assert.throws(
+      () =>
+        buildDrillAggregateQuery({
+          context: { section: "Mixing" },
+          date: "2026-07-16",
+          kpiName,
+          groupBy: ["machine"],
+        }),
+      QueryValidationError,
+      `${kpiName} must not be summable`,
+    );
+  }
+});
+
+test("drill-aggregate rejects an unknown group-by column", () => {
+  assert.throws(
+    () =>
+      buildDrillAggregateQuery({
+        context: { section: "Mixing" },
+        date: "2026-07-16",
+        kpiName: "Production_m",
+        groupBy: ["remarks"],
+      }),
+    QueryValidationError,
+  );
+  assert.throws(
+    () =>
+      buildDrillAggregateQuery({
+        context: { section: "Mixing" },
+        date: "2026-07-16",
+        kpiName: "Production_m",
+        groupBy: [],
+      }),
+    QueryValidationError,
+  );
 });

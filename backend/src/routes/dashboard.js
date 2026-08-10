@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  postDrillAggregate,
   postFetch,
   postProductOptions,
   postShiftComparison,
@@ -14,6 +15,9 @@ export const router = Router();
 // `fetch`) so the endpoint is self-describing in the browser network tab.
 router.post("/kpi-data", postFetch);
 router.post("/product-options", postProductOptions);
+// One page of a drill lens, grouped server-side so a page of N rows is N
+// machines/SKUs with complete totals — not N raw (machine, day) records.
+router.post("/drill-aggregate", postDrillAggregate);
 router.post("/shift-comparison", postShiftComparison);
 router.get("/vocab", getVocab);
 // new_change.md C6: per-KPI latest DAY date, so each card anchors to its own

@@ -688,34 +688,25 @@ export function previousWindow(timeScope, granularity) {
 /* ---------- Public builder ---------- */
 
 /**
- * Build SELECT SQL for one dashboard fetch.
+ * The scope predicates every dashboard read shares: the always-on core
+ * filters, the context picker stack, the date + granularity window, and the
+ * parent-row carry-forward filters. Callers append their own row-shape clause
+ * (landing band, drill kpi_name list, …) to the returned array.
  *
  * @param {object} input
  * @param {object} input.context  context dict from frontend picker stack
- * @param {string} [input.date]   ISO yyyy-mm-dd or DD-MM-YYYY
- * @param {string[]|null} [input.drillKpis]
- *        null/undefined → landing query (drill_down_level = 1)
- *        non-empty array → drill query (kpi_name IN ...)
  * @param {object} [input.parentFilters]  carry-forward filters
  *        from clicked row (machine, itemcode)
- * @param {number} [input.limit]
- * @returns {string} SQL
+ * @param {string} [input.date]   ISO yyyy-mm-dd or DD-MM-YYYY
+ * @returns {string[]} WHERE predicates, to be joined with AND
  */
-export function buildFetchQuery({
+function buildScopeWhere({
   plantId = "banmore",
   context = {},
+  parentFilters = {},
   date,
   from,
   to,
-  drillKpis = null,
-  parentFilters = {},
-  limit = 5000,
-  // Pagination + drill-only mode (used by the paginated Production drill).
-  // offset: rows to skip. drillOnly: when true, return ONLY the drill rows
-  // (kpi_name IN drillKpis) — NO landing band — so a page is exactly `limit`
-  // rows of that one lens for LIMIT/OFFSET paging.
-  offset = 0,
-  drillOnly = false,
 } = {}) {
   if (typeof context !== "object" || context === null) {
     throw new QueryValidationError("context must be an object");
@@ -884,6 +875,48 @@ export function buildFetchQuery({
     where.push(`${key} = ${escapeLiteral(value)}`);
   }
 
+  return where;
+}
+
+/**
+ * Build SELECT SQL for one dashboard fetch.
+ *
+ * @param {object} input
+ * @param {object} input.context  context dict from frontend picker stack
+ * @param {string} [input.date]   ISO yyyy-mm-dd or DD-MM-YYYY
+ * @param {string[]|null} [input.drillKpis]
+ *        null/undefined → landing query (drill_down_level = 1)
+ *        non-empty array → drill query (kpi_name IN ...)
+ * @param {object} [input.parentFilters]  carry-forward filters
+ *        from clicked row (machine, itemcode)
+ * @param {number} [input.limit]
+ * @returns {string} SQL
+ */
+export function buildFetchQuery({
+  plantId = "banmore",
+  context = {},
+  date,
+  from,
+  to,
+  drillKpis = null,
+  parentFilters = {},
+  limit = 5000,
+  // Pagination + drill-only mode (used by the paginated Production drill).
+  // offset: rows to skip. drillOnly: when true, return ONLY the drill rows
+  // (kpi_name IN drillKpis) — NO landing band — so a page is exactly `limit`
+  // rows of that one lens for LIMIT/OFFSET paging.
+  offset = 0,
+  drillOnly = false,
+} = {}) {
+  const where = buildScopeWhere({
+    plantId,
+    context,
+    parentFilters,
+    date,
+    from,
+    to,
+  });
+
   // 4. Drill shape. Null/undefined → landing only. Array → return BOTH
   //    landing rows AND drill children so the grid always has cards while
   //    the drill panel is open.
@@ -1018,6 +1051,128 @@ export function buildFetchQuery({
   return (
     `SELECT ${outerCols} FROM ${dedupedSource} ` +
     `WHERE (__dedupe_rn = 1 OR ${RATE_KPIS_SQL}) ${orderBy} ${pageClause}`
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * KPIs `buildDrillAggregateQuery` may sum. Deliberately narrow: SUM is only
+ * the right roll-up for the additive Production leaves (kpi-transformer's
+ * classifyKpiAggregation returns SUM for these). A rate KPI would need AVERAGE
+ * and a level KPI the latest day, so neither is allowed in rather than being
+ * silently summed into a wrong number.
+ */
+const AGGREGATABLE_DRILL_KPIS = new Set([
+  "Production_m",
+  "Production_sku",
+  "Production_m_sku",
+  "Production_s",
+]);
+
+/** Dimensions a drill page may group by. */
+const AGGREGATE_GROUP_COLUMNS = new Set(["machine", "itemcode", "sub_section"]);
+
+/**
+ * Build SELECT SQL for ONE page of a drill lens, already rolled up per
+ * grouping key.
+ *
+ * Why this exists rather than paging raw rows: over a date range the gold
+ * table stores one row per (machine, itemcode, DAY), so a raw LIMIT/OFFSET
+ * page slices *days*, not machines. The client then groups what it got, which
+ * (a) makes the page's displayed row count unrelated to the page size, and
+ * (b) splits a single machine across two pages, showing a partial total on
+ * each. Grouping in SQL makes one result row == one displayed row, so the page
+ * window and the totals both mean what they say.
+ *
+ * Aggregation matches the frontend's aggregateForRange exactly: SUM over the
+ * window, with missing days simply absent (never counted as 0). De-duplication
+ * runs BEFORE the SUM, so the shadow rows documented above cannot inflate it.
+ *
+ * @param {object} input
+ * @param {object} input.context  context dict from frontend picker stack
+ * @param {string} input.kpiName  one additive Production leaf
+ * @param {string[]} input.groupBy  dimension columns, e.g. ["machine"]
+ * @returns {string} SQL
+ */
+export function buildDrillAggregateQuery({
+  plantId = "banmore",
+  context = {},
+  parentFilters = {},
+  date,
+  from,
+  to,
+  kpiName,
+  groupBy = [],
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const safeKpi = safeStringValue(kpiName ?? "", "kpiName");
+  if (!AGGREGATABLE_DRILL_KPIS.has(safeKpi)) {
+    throw new QueryValidationError(
+      `Invalid kpiName: ${safeKpi}. Allowed: ${[...AGGREGATABLE_DRILL_KPIS].join(", ")}`,
+    );
+  }
+  if (!Array.isArray(groupBy) || groupBy.length === 0) {
+    throw new QueryValidationError("groupBy must be a non-empty array");
+  }
+  const cols = [...new Set(groupBy.map((c) => safeStringValue(c, "groupBy[]")))];
+  for (const col of cols) {
+    if (!AGGREGATE_GROUP_COLUMNS.has(col)) {
+      throw new QueryValidationError(
+        `Invalid groupBy column: ${col}. Allowed: ${[...AGGREGATE_GROUP_COLUMNS].join(", ")}`,
+      );
+    }
+  }
+
+  const where = buildScopeWhere({
+    plantId,
+    context,
+    parentFilters,
+    date,
+    from,
+    to,
+  });
+  where.push(`kpi_name = ${escapeLiteral(safeKpi)}`);
+
+  const lim = Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 100;
+  const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
+  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const dateCol =
+    config.upstream.engine === "databricks"
+      ? "CAST(date AS VARCHAR) AS date"
+      : "date";
+  const innerCols = GOLD_COLUMNS.map((c) => (c === "date" ? dateCol : c)).join(
+    ", ",
+  );
+  const dedupedSource =
+    `(SELECT ${innerCols}, ROW_NUMBER() OVER (` +
+    `PARTITION BY ${DEDUPE_PARTITION.join(", ")} ` +
+    `ORDER BY actual_value DESC) AS __dedupe_rn ` +
+    `FROM ${table} WHERE ${where.join(" AND ")})`;
+
+  // Normalize the grouping keys so the NULL / "nan" / "" spellings of "no
+  // value" collapse into ONE bucket instead of several look-alike rows.
+  const keyExprs = cols.map((c) => `${cleanedColumn(c)} AS ${c}`);
+  // Measures stay VARCHAR in gold; TRY_CAST turns the unparseable ones into
+  // NULL, which SUM skips — so a missing day never lands as a 0.
+  const measures = [
+    "SUM(TRY_CAST(actual_value AS DOUBLE)) AS actual_value",
+    "SUM(TRY_CAST(threshold_value AS DOUBLE)) AS threshold_value",
+    // The single unit for the group; the caller already pins one, so MIN is
+    // just a deterministic pick rather than a real choice.
+    `MIN(${cleanedColumn("unit_of_measurement")}) AS unit_of_measurement`,
+  ];
+  // GROUP BY ordinals — the key expressions are non-trivial and Trino matches
+  // them positionally without re-stating the CASE.
+  const groupOrdinals = cols.map((_, i) => i + 1).join(", ");
+  const orderBy = cols.join(", ");
+  const pageClause = off > 0 ? `OFFSET ${off} LIMIT ${lim}` : `LIMIT ${lim}`;
+
+  return (
+    `SELECT ${[...keyExprs, ...measures].join(", ")} FROM ${dedupedSource} ` +
+    `WHERE __dedupe_rn = 1 GROUP BY ${groupOrdinals} ` +
+    `ORDER BY ${orderBy} ${pageClause}`
   )
     .replace(/\s+/g, " ")
     .trim();

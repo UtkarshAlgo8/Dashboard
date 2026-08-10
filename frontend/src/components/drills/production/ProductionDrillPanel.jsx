@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   Box,
-  Button,
-  MenuItem,
-  Select,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
@@ -11,9 +8,10 @@ import {
   useTheme,
 } from "@mui/material";
 import DataTable from "@/components/tables/DataTable.jsx";
+import TablePager from "@/components/tables/TablePager.jsx";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
-import { aggregateForRange, canonicalUnit } from "@/lib/kpi-transformer.js";
+import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import client from "@/api/client.js";
 
@@ -167,15 +165,37 @@ function ProductionDrillPanel({
         ? "Production_sku"
         : "Production_m_sku";
 
+  // The dimensions this lens groups by — one result row per distinct value.
+  const groupBy =
+    viewBy === "machine"
+      ? ["machine"]
+      : viewBy === "sku"
+        ? ["itemcode"]
+        : ["machine", "itemcode"];
+
   // ---- Server-side pagination -------------------------------------------
-  // Each lens (Machine / SKU / Machine+SKU) is its OWN paginated API call:
-  // 100 rows of that leaf kpi_name at a time, advancing OFFSET for Prev/Next.
-  // The server applies the section / product / granularity / unit / trench
-  // filters, so the panel just displays the page it gets back — raw rows,
-  // one machine/SKU each once the lake is deduped. No client aggregation,
-  // no fetching the whole 10k band.
-  const PAGE_SIZE = 100;
+  // Each lens (Machine / SKU / Machine+SKU) is its OWN paginated API call,
+  // advancing OFFSET for Prev/Next. The server applies the section / product /
+  // granularity / unit / trench filters AND the group-by roll-up, so one
+  // returned row is exactly one displayed row.
+  //
+  // The roll-up has to happen server-side. Gold stores one row per
+  // (machine, itemcode, DAY), so paging the RAW rows slices days: a page of 25
+  // could render as 6 machines, and a machine whose days straddle the page
+  // boundary would appear on both pages carrying a partial total. Grouping in
+  // SQL makes the page window and the totals mean the same thing.
+  // Page size is user-controlled; the endpoint accepts up to 10000, so this
+  // lens can offer a longer page than the shared default.
+  const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
+  const [pageSize, setPageSize] = useState(100);
   const [page, setPage] = useState(0); // 0-indexed
+
+  // OFFSET is in rows, so the current page index means something different
+  // under a new size — always land back on page 1.
+  const handlePageSize = (size) => {
+    setPageSize(size);
+    setPage(0);
+  };
 
   // Reset to page 1 whenever the lens or any scope filter changes — done
   // during render (React's "adjust state on prop change" pattern) so a stale
@@ -201,61 +221,41 @@ function ProductionDrillPanel({
     },
     from,
     to,
-    drillKpis: [kpiName],
-    drillOnly: true,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
+    kpiName,
+    groupBy,
+    limit: pageSize,
+    offset: page * pageSize,
   };
   // Gate: no unit yet ⇒ the landing rows (which seed the unit toggle) haven't
   // arrived; and never fetch without a date window.
   const canFetch = Boolean(activeUnit) && Boolean(from || to);
   const { data: pageData, isLoading: pageLoading } = usePolledQuery(
     () =>
-      client.post("/dashboard/kpi-data", pagePayload).then((r) => r.data ?? r),
+      client
+        .post("/dashboard/drill-aggregate", pagePayload)
+        .then((r) => r.data ?? r),
     { enabled: canFetch, interval: 0, deps: [JSON.stringify(pagePayload)] },
   );
 
-  // Map the raw page rows to the table shape. No dedup/aggregation — one row
-  // per stored (machine, itemcode) as returned (the raw LIMIT/OFFSET model:
-  // fully correct once the lake is deduped). itemCount/machineCount were
-  // artifacts of the old client grouping; raw rows don't carry them.
+  // Rows arrive already grouped and summed over the window (new_change.md
+  // C5/C3 — the additive Production levels SUM day-wise, exactly as the card
+  // above does), so this only shapes them for the table. A dimension the lens
+  // doesn't group by isn't in the response at all.
   const rows = useMemo(() => {
     if (!Array.isArray(pageData)) return [];
-    // new_change.md C5/C3: over a RANGE the page carries one row per
-    // (machine, sku, DAY), so the drill must aggregate day-wise exactly as
-    // the card does — SUM for the additive Production levels — otherwise a
-    // range card sits above a table of single-day rows. A single day
-    // (from == to) collapses to one row per key, so this is a no-op there.
-    const byKey = new Map();
-    for (const r of pageData) {
-      const machine = r.machine && r.machine !== "nan" ? r.machine : "—";
-      const itemcode = r.itemcode && r.itemcode !== "nan" ? r.itemcode : "—";
-      const key = `${machine}||${itemcode}`;
-      const cur = byKey.get(key) ?? {
-        machine,
-        itemcode,
-        planned: [],
-        actual: [],
-        itemCount: 0,
-        machineCount: 0,
-      };
-      const p = num(r.threshold_value);
-      const a = num(r.actual_value);
-      if (p != null) cur.planned.push(p);
-      if (a != null) cur.actual.push(a);
-      byKey.set(key, cur);
-    }
-    return [...byKey.values()].map((g) => ({
-      ...g,
-      // Missing days are simply absent from the list — never counted as 0.
-      planned: aggregateForRange(g.planned, kpiName),
-      actual: aggregateForRange(g.actual, kpiName),
+    return pageData.map((r) => ({
+      machine: r.machine ?? "—",
+      itemcode: r.itemcode ?? "—",
+      planned: num(r.threshold_value),
+      actual: num(r.actual_value),
     }));
-  }, [pageData, kpiName]);
+  }, [pageData]);
 
 
-  // Curing trench list (§7): one row per Tredge (Production_s). Its own small
-  // drillOnly fetch — trenches are few, so no pagination.
+  // Curing trench list (§7): one row per Tredge (Production_s). Grouped
+  // server-side for the same reason the table above is — the raw rows are one
+  // per (Tredge, DAY), so a wide range used to overflow the 100-row fetch and
+  // silently drop trenches off the end of the list.
   const trenchPayload = isCuring
     ? {
         plantId,
@@ -265,12 +265,11 @@ function ProductionDrillPanel({
           ...(granularity ? { granularity } : {}),
           ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
           ...(prodSub ? { product_type: prodSub } : {}),
-          ...(!isCuring && subSection ? { sub_section: subSection } : {}),
         },
         from,
         to,
-        drillKpis: ["Production_s"],
-        drillOnly: true,
+        kpiName: "Production_s",
+        groupBy: ["sub_section"],
         limit: 100,
         offset: 0,
       }
@@ -279,7 +278,7 @@ function ProductionDrillPanel({
     () =>
       trenchPayload
         ? client
-            .post("/dashboard/kpi-data", trenchPayload)
+            .post("/dashboard/drill-aggregate", trenchPayload)
             .then((r) => r.data ?? r)
         : Promise.resolve([]),
     {
@@ -290,25 +289,12 @@ function ProductionDrillPanel({
   );
   const tredgeRows = useMemo(() => {
     if (!Array.isArray(trenchData)) return [];
-    const byTredge = new Map();
-    for (const r of trenchData) {
-      const t = r.sub_section;
-      if (!t || t === "nan" || t === "null") continue;
-      const cur = byTredge.get(t) ?? { tredge: t, planned: [], actual: [] };
-      const p = num(r.threshold_value);
-      const a = num(r.actual_value);
-      if (p != null) cur.planned.push(p);
-      if (a != null) cur.actual.push(a);
-      byTredge.set(t, cur);
-    }
-    // new_change.md C5: aggregate the trench rows over the range the same
-    // way the card does (Production_s is additive → summed day-wise), so
-    // the trench list reconciles with the Production card above it.
-    return [...byTredge.values()]
-      .map((g) => ({
-        tredge: g.tredge,
-        planned: aggregateForRange(g.planned, "Production_s"),
-        actual: aggregateForRange(g.actual, "Production_s"),
+    return trenchData
+      .filter((r) => r.sub_section)
+      .map((r) => ({
+        tredge: r.sub_section,
+        planned: num(r.threshold_value),
+        actual: num(r.actual_value),
       }))
       .sort((x, y) =>
         x.tredge.localeCompare(y.tredge, undefined, { numeric: true }),
@@ -331,9 +317,9 @@ function ProductionDrillPanel({
     ? `${sectionTitle} — ${prodSub} Production`
     : `${sectionTitle} Production`;
 
-  // A full page (100 rows) means there may be more; a short page is the last.
-  const hasMore = Array.isArray(pageData) && pageData.length === PAGE_SIZE;
-  const pageStart = page * PAGE_SIZE;
+  // A full page means there may be more; a short page is the last.
+  const hasMore = Array.isArray(pageData) && pageData.length === pageSize;
+  const pageStart = page * pageSize;
   const loading = isLoading || pageLoading;
 
   // Curing trench tier (§7): until a Tredge is selected, show the
@@ -434,15 +420,17 @@ function ProductionDrillPanel({
                 unit={unitLabel}
                 fmt={fmt}
               />
-              {(page > 0 || hasMore) && (
-                <Pager
-                  page={page}
-                  hasMore={hasMore}
-                  onPage={setPage}
-                  onPrev={() => setPage((p) => Math.max(0, p - 1))}
-                  onNext={() => setPage((p) => p + 1)}
-                />
-              )}
+              {/* Always shown once there are rows — even on a single short
+                  page the size control is the way to widen the page. */}
+              <TablePager
+                page={page}
+                pageSize={pageSize}
+                hasMore={hasMore}
+                onPageChange={setPage}
+                onPageSizeChange={handlePageSize}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                disabled={loading}
+              />
             </>
           ) : (
             <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
@@ -454,61 +442,6 @@ function ProductionDrillPanel({
           )}
         </>
       )}
-    </Stack>
-  );
-}
-
-/**
- * Page toggle for the SKU / machine table — 100 rows per page, fetched
- * server-side. Prev/Next; Next is disabled when the last page returned fewer
- * than a full 100 rows (no total count in the raw LIMIT/OFFSET model).
- */
-function Pager({ page, hasMore, onPage, onPrev, onNext }) {
-  return (
-    <Stack
-      direction="row"
-      alignItems="center"
-      justifyContent="flex-end"
-      spacing={1.5}
-      sx={{ pt: 0.5 }}
-    >
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={onPrev}
-        disabled={page <= 0}
-      >
-        Prev
-      </Button>
-      <Typography
-        component="span"
-        sx={{ fontSize: 12, color: "text.secondary" }}
-      >
-        Page
-      </Typography>
-      <Select
-        size="small"
-        value={page}
-        onChange={(e) => onPage(Number(e.target.value))}
-        sx={{
-          minWidth: 96,
-          "& .MuiSelect-select": { py: 0.55, fontSize: 12 },
-        }}
-      >
-        {Array.from({ length: page + (hasMore ? 2 : 1) }, (_, i) => (
-          <MenuItem key={i} value={i}>
-            {i + 1}
-          </MenuItem>
-        ))}
-      </Select>
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={onNext}
-        disabled={!hasMore}
-      >
-        Next
-      </Button>
     </Stack>
   );
 }

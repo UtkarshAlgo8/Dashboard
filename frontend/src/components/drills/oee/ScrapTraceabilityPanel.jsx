@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  CircularProgress,
   Stack,
   Table,
   TableBody,
@@ -16,6 +15,7 @@ import {
 import DownloadIcon from "@mui/icons-material/Download";
 import ParamChip from "./ParamChip.jsx";
 import { EmptyState, useToast } from "@/components/common";
+import TablePager from "@/components/tables/TablePager.jsx";
 import { TableSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getScrapTraceability } from "@/api/drills.js";
@@ -31,30 +31,38 @@ const SHIFT_COLOR_KEY = { A: "blue", B: "amber", C: "purple" };
  * Opens beneath the Quality/Scrap sub-drill table when a traceable
  * scrap row is clicked. Owns its own fetch and the CSV download.
  */
-const PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 100;
 
 function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
   const theme = useTheme();
   const toast = useToast();
 
-  // Pagination: fetch one PAGE_SIZE page at a time and accumulate. Rows are
-  // stored per-page (keyed by page index) so an in-flight "Load more" can't
-  // append the previous page's data twice — the fetch tags its own page.
+  // Pagination: one page of rows at a time, navigable in both directions.
+  // Fetched pages are kept (keyed by page index) so stepping back is instant
+  // and so the CSV can still export everything the user has walked through;
+  // the table itself renders ONLY the current page.
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [pageRows, setPageRows] = useState({}); // { [pageIndex]: row[] }
-  const [hasMore, setHasMore] = useState(true);
 
-  // Reset the accumulation whenever the traced entity changes. Done during
-  // render (React's "adjusting state on prop change" pattern) rather than in
-  // an effect, so the stale pages never flash before an effect can clear them.
+  // Reset the cache whenever the traced entity changes. Done during render
+  // (React's "adjusting state on prop change" pattern) rather than in an
+  // effect, so the stale pages never flash before an effect can clear them.
   const entityKey = `${plantId}/${section}/${machine.id}/${itemCode}`;
   const [prevEntityKey, setPrevEntityKey] = useState(entityKey);
   if (prevEntityKey !== entityKey) {
     setPrevEntityKey(entityKey);
     setPage(0);
     setPageRows({});
-    setHasMore(true);
   }
+
+  // OFFSET is in rows, so every cached page is indexed against the OLD size —
+  // changing it invalidates the whole cache, not just the current page.
+  const handlePageSize = (size) => {
+    setPageSize(size);
+    setPage(0);
+    setPageRows({});
+  };
 
   const { data, isLoading, error } = usePolledQuery(
     async () => {
@@ -63,8 +71,8 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
         section,
         machineId: machine.id,
         itemCode,
-        limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
+        limit: pageSize,
+        offset: page * pageSize,
       });
       // Tag the result with the page it belongs to so the accumulator below
       // correlates async responses to the correct page (no stale closure).
@@ -72,20 +80,18 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
     },
     {
       interval: 0, // point-in-time snapshot; no polling
-      deps: [plantId, section, machine.id, itemCode, page],
+      deps: [plantId, section, machine.id, itemCode, page, pageSize],
     },
   );
 
-  // Accumulate each resolved page into pageRows. Reacting to the async fetch
-  // result IS synchronizing with an external system, so the synchronous
-  // setState here is the canonical pattern (same as usePolledQuery itself).
+  // Store each resolved page. Reacting to the async fetch result IS
+  // synchronizing with an external system, so the synchronous setState here
+  // is the canonical pattern (same as usePolledQuery itself).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!data) return;
     const { page: p, rows } = data;
     setPageRows((prev) => ({ ...prev, [p]: rows }));
-    // A short page (< PAGE_SIZE) is the last one — hide "Load more".
-    setHasMore(rows.length === PAGE_SIZE);
   }, [data]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -93,8 +99,12 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
     toast.error("Could not load traceability report.");
   }
 
-  // Flatten accumulated pages in order.
-  const rows = useMemo(
+  // The rows on screen: the current page only.
+  const rows = pageRows[page] ?? [];
+
+  // Every page fetched so far, in page order — what the CSV exports, so the
+  // report is never narrower than what the user has already seen.
+  const loadedRows = useMemo(
     () =>
       Object.keys(pageRows)
         .map(Number)
@@ -103,18 +113,14 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
     [pageRows],
   );
 
-  // Only the FIRST page shows the full-panel skeleton; later pages keep the
-  // existing rows visible and show a spinner on the "Load more" button.
-  const isLoadingFirstPage = isLoading && rows.length === 0;
-  const isLoadingMore = isLoading && rows.length > 0;
-
-  const handleLoadMore = () => {
-    if (isLoading) return;
-    setPage((p) => p + 1);
-  };
+  // A full page means another may follow; a short page is the last one. An
+  // un-fetched page can't answer yet, so Next stays disabled until it lands.
+  const hasMore = pageRows[page] ? pageRows[page].length === pageSize : false;
+  const isLoadingPage = isLoading && !pageRows[page];
+  const pageStart = page * pageSize;
 
   const handleDownload = () => {
-    if (rows.length === 0) {
+    if (loadedRows.length === 0) {
       toast.warn("No records to export.");
       return;
     }
@@ -138,7 +144,7 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
       "Power (kW)",
       "Alarm Parameter",
     ];
-    const csvRows = rows.map((r) => [
+    const csvRows = loadedRows.map((r) => [
       itemCode,
       r.productionId,
       r.produced,
@@ -193,15 +199,15 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
           size="small"
           startIcon={<DownloadIcon />}
           onClick={handleDownload}
-          disabled={rows.length === 0}
+          disabled={loadedRows.length === 0}
         >
           Download Traceability Report
         </Button>
       </Stack>
 
-      {isLoadingFirstPage ? (
+      {isLoadingPage ? (
         <TableSkeleton rows={4} cols={7} />
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && page === 0 ? (
         <Box
           sx={{
             border: 1,
@@ -218,26 +224,42 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
         </Box>
       ) : (
         <>
-          <TraceabilityTable rows={rows} />
-          {hasMore && (
-            <Stack alignItems="center" sx={{ mt: 1.5 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={handleLoadMore}
-                disabled={isLoadingMore}
-                startIcon={
-                  isLoadingMore ? (
-                    <CircularProgress size={14} color="inherit" />
-                  ) : undefined
-                }
-              >
-                {isLoadingMore
-                  ? "Loading…"
-                  : `Load more (${rows.length} shown)`}
-              </Button>
-            </Stack>
+          {/* A page past the end (the previous page happened to be exactly
+              full) renders empty — with the pager still there to step back,
+              never the "no records at all" empty state. */}
+          {rows.length > 0 ? (
+            <TraceabilityTable rows={rows} />
+          ) : (
+            <Typography
+              sx={{ fontSize: 13, color: "text.disabled", py: 2 }}
+              align="center"
+            >
+              No further Production IDs on this page.
+            </Typography>
           )}
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            spacing={1}
+            useFlexGap
+            flexWrap="wrap"
+            sx={{ mt: 1.5 }}
+          >
+            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+              {rows.length === 0
+                ? "0 rows"
+                : `${pageStart + 1}–${pageStart + rows.length}`}
+            </Typography>
+            <TablePager
+              page={page}
+              pageSize={pageSize}
+              hasMore={hasMore}
+              onPageChange={setPage}
+              onPageSizeChange={handlePageSize}
+              disabled={isLoading}
+            />
+          </Stack>
         </>
       )}
     </Box>
