@@ -7,6 +7,7 @@ import {
   plantDepartmentPredicate,
   plantSqlTable,
   emptyColumnPredicate,
+  GRAN_MONTH,
 } from "../utils/normalize.js";
 
 /**
@@ -16,8 +17,9 @@ import {
 
 // sx / sy are SVG coordinates for the India map markers (viewBox
 // 0..MAP_W × 0..MAP_H, see frontend/src/lib/indiaMap.js). `sub` is the
-// subtitle shown on the plant card and the map hover popover. oe/otif/
-// yield are the headline KPI values surfaced on the card.
+// subtitle shown on the plant card and the map hover popover. oee/otif/
+// yield are the headline KPI values surfaced on the card (oee = OEE_p,
+// current month).
 export const PLANTS = [
   {
     id: "banmore",
@@ -28,7 +30,7 @@ export const PLANTS = [
     tyreType: "PCR",
     sx: 169.7,
     sy: 228.6,
-    oe: null,
+    oee: null,
     otif: null,
     yield: null,
     enabled: true,
@@ -42,7 +44,7 @@ export const PLANTS = [
     tyreType: "PCR/TBR",
     sx: 202.0,
     sy: 446.6,
-    oe: null,
+    oee: null,
     otif: null,
     yield: null,
     enabled: true,
@@ -56,7 +58,7 @@ export const PLANTS = [
     tyreType: "PCR/TBR",
     sx: 167.6,
     sy: 170.2,
-    oe: null,
+    oee: null,
     otif: null,
     yield: null,
     enabled: false,
@@ -70,7 +72,7 @@ export const PLANTS = [
     tyreType: "PCR/TBR",
     sx: 163.0,
     sy: 441.0,
-    oe: null,
+    oee: null,
     otif: null,
     yield: null,
     enabled: false,
@@ -105,8 +107,10 @@ export const CATEGORY_TABS = [
   { id: "i", code: "I", name: "Inventory", enabled: true },
 ];
 
+// OEE is NOT in this map — the landing tile reads OEE_p at MONTH granularity
+// through its own query (see landingOeePForPlant). Only OTIF / Yield still use
+// the generic latest-row-by-alias lookup.
 const LANDING_KPI_ALIASES = {
-  oe: ["oe", "oee", "oee_o"],
   otif: ["otif"],
   yield: ["yield", "yield_%", "yield_pct"],
 };
@@ -121,13 +125,43 @@ function percentOrNull(v) {
   return Math.round(n * 10) / 10;
 }
 
+/**
+ * Current-month plant OEE for the landing card. OEE_p is the whole-plant
+ * figure — section / sub_section / machine / product_type are ALL empty, so
+ * the OEE_o predicates would never match it. Monthly rows are stored dated on
+ * the 1st of their month at granularity MONTH, so the latest such row (rn=1)
+ * IS the current month. No date filter: a data-load lag must not blank the
+ * card, it should keep showing the newest month that exists.
+ */
+async function landingOeePForPlant(plantId) {
+  const sql = `
+    SELECT actual_value
+    FROM (
+      SELECT actual_value,
+             ROW_NUMBER() OVER (
+               ORDER BY ${DATE_YYYYMMDD} DESC
+             ) AS rn
+      FROM ${plantSqlTable(plantId)}
+      WHERE ${plantDepartmentPredicate(plantId)}
+        AND kpi_name = ${escapeLiteral("OEE_p")}
+        AND ${emptyColumnPredicate("machine")}
+        AND ${emptyColumnPredicate("section")}
+        AND ${emptyColumnPredicate("sub_section")}
+        AND ${emptyColumnPredicate("product_type")}
+        AND granularity = ${escapeLiteral(GRAN_MONTH)}
+    ) ranked
+    WHERE rn = 1
+  `.trim();
+  const rows = await runQuery(sql);
+  return rows.length ? percentOrNull(rows[0].actual_value) : null;
+}
+
 async function landingKpisForPlant(plantId) {
   const sql = `
     SELECT metric, actual_value
     FROM (
       SELECT
         CASE
-          WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.oe)}) THEN 'oe'
           WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.otif)}) THEN 'otif'
           WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.yield)}) THEN 'yield'
         END AS metric,
@@ -135,7 +169,6 @@ async function landingKpisForPlant(plantId) {
         ROW_NUMBER() OVER (
           PARTITION BY
             CASE
-              WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.oe)}) THEN 'oe'
               WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.otif)}) THEN 'otif'
               WHEN LOWER(kpi_name) IN (${aliasList(LANDING_KPI_ALIASES.yield)}) THEN 'yield'
             END
@@ -145,7 +178,6 @@ async function landingKpisForPlant(plantId) {
       WHERE ${plantDepartmentPredicate(plantId)}
         AND LOWER(kpi_name) IN (
           ${aliasList([
-            ...LANDING_KPI_ALIASES.oe,
             ...LANDING_KPI_ALIASES.otif,
             ...LANDING_KPI_ALIASES.yield,
           ])}
@@ -154,8 +186,11 @@ async function landingKpisForPlant(plantId) {
     ) ranked
     WHERE rn = 1
   `.trim();
-  const rows = await runQuery(sql);
-  const out = { oe: null, otif: null, yield: null };
+  const [rows, oee] = await Promise.all([
+    runQuery(sql),
+    landingOeePForPlant(plantId),
+  ]);
+  const out = { oee, otif: null, yield: null };
   for (const row of rows) {
     if (row.metric && Object.hasOwn(out, row.metric)) {
       out[row.metric] = percentOrNull(row.actual_value);
@@ -173,7 +208,7 @@ export async function getPlants(_req, res, next) {
         const entries = await Promise.all(
           enabled.map(async (p) => {
             const plantId = normalizePlantId(p.id);
-            if (!plantId) return [p.id, { oe: null, otif: null, yield: null }];
+            if (!plantId) return [p.id, { oee: null, otif: null, yield: null }];
             return [p.id, await landingKpisForPlant(plantId)];
           }),
         );
@@ -183,7 +218,7 @@ export async function getPlants(_req, res, next) {
     );
     const data = PLANTS.map((p) => ({
       ...p,
-      ...(summaries[p.id] ?? { oe: null, otif: null, yield: null }),
+      ...(summaries[p.id] ?? { oee: null, otif: null, yield: null }),
     }));
     res.json({ data });
   } catch (err) {

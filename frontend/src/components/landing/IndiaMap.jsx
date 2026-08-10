@@ -271,7 +271,7 @@ function IndiaMap({
             {focusPlant.sub}
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="space-between">
-            <KpiMini label="OE" value={focusPlant.oe} />
+            <KpiMini label="OEE" value={focusPlant.oee} />
             <KpiMini label="OTIF" value={focusPlant.otif} />
             <KpiMini label="YIELD" value={focusPlant.yield} />
           </Stack>

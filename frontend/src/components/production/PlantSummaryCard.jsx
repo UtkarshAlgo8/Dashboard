@@ -32,10 +32,10 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
   }
 
   // Headline is the plant-level OEE_p (real backend), falling back to the
-  // mock plant.oe, then the plant-level OEE_o, so the card renders in every
+  // mock plant.oee, then the plant-level OEE_o, so the card renders in every
   // data mode. "–" when no plant OEE is available.
   const oeeRaw =
-    summary?.oeeP?.value ?? plant.oe ?? summary?.oee?.value ?? null;
+    summary?.oeeP?.value ?? plant.oee ?? summary?.oee?.value ?? null;
   const oeeNum = toNum(oeeRaw);
   const oee = oeeNum == null ? null : Math.round(oeeNum * 10) / 10;
   const oeeColor =

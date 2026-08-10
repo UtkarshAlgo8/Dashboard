@@ -3,7 +3,7 @@ import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
 /**
  * Single plant card. Active plants get hover-lift + select
  * interactivity; disabled plants render dimmed with a Tooltip
- * (Q-NAV-01). A left stripe + KPI pills are colour-coded by OE health.
+ * (Q-NAV-01). A left stripe + KPI pills are colour-coded by OEE health.
  */
 function statusColor(theme, v) {
   const value = numericPercent(v);
@@ -30,7 +30,7 @@ function PlantCard({
 }) {
   const theme = useTheme();
   const highlighted = active && (hovered || selected);
-  const accent = statusColor(theme, plant.oe);
+  const accent = statusColor(theme, plant.oee);
   const initial = (plant.name || "?").trim().charAt(0).toUpperCase();
 
   const card = (
@@ -55,7 +55,7 @@ function PlantCard({
         "&:hover": active ? { boxShadow: theme.custom.shadow } : undefined,
       }}
     >
-      {/* Left accent stripe — coloured by OE health. */}
+      {/* Left accent stripe — coloured by OEE health. */}
       <Box
         sx={{
           position: "absolute",
@@ -118,7 +118,11 @@ function PlantCard({
       </Stack>
 
       <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-        <KpiCell label="OE" value={plant.oe} color={statusColor(theme, plant.oe)} />
+        <KpiCell
+          label="OEE"
+          value={plant.oee}
+          color={statusColor(theme, plant.oee)}
+        />
         <KpiCell
           label="OTIF"
           value={plant.otif}

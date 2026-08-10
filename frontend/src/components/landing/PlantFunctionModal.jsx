@@ -87,7 +87,7 @@ function PlantFunctionModal({
             justifyContent="space-around"
             alignItems="flex-end"
           >
-            <KpiPill label="OE" value={plant.oe} />
+            <KpiPill label="OEE" value={plant.oee} />
             <KpiPill label="OTIF" value={plant.otif} />
             <KpiPill label="YIELD" value={plant.yield} />
           </Stack>
