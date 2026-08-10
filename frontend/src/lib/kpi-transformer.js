@@ -15,7 +15,12 @@
  * NULL sentinel: "nan" is treated as null throughout.
  */
 
-import { isKg, kgToTonnes, toDisplayQuantity } from "./units.js";
+import {
+  canonicalUnitLabel,
+  isKg,
+  kgToTonnes,
+  toDisplayQuantity,
+} from "./units.js";
 import { toDisplayDate } from "./dateFormat.js";
 
 // changes.md §0: missing-value sentinels are the literal strings "nan"
@@ -44,17 +49,14 @@ function canonicalizeProductType(v) {
 // spelled two ways; apply the alias map to BOTH the filter value and the
 // row value so a pin actually matches. "(unset)"/"null"/"nan"/"" all mean
 // "no unit" and render blank, never the literal "(unset)".
-const UNIT_ALIASES = new Map([
-  ["METERS", "M"],
-  ["NUM", "NOS"],
-]);
+// The alias map itself lives in lib/units.js, so the value a filter
+// compares on and the label the card prints can never drift apart.
 export function canonicalUnit(raw) {
   const d = denan(raw);
   if (d == null) return null;
   const u = String(d).trim();
   if (u === "" || u === "(unset)") return null;
-  const upper = u.toUpperCase();
-  return UNIT_ALIASES.get(upper) ?? upper;
+  return canonicalUnitLabel(u).toUpperCase();
 }
 
 // changes.md §8/§10: granularity comparisons must be spelling-tolerant.
@@ -1077,6 +1079,18 @@ function buildKpiGroups(rows, { section, allowedNames, plantLevelNames }) {
   return groups;
 }
 
+// The series the unit pills actually describe — they are built from the
+// Production rows' (product_type, unit) pairs. Only these honour a unit pin
+// strictly; see the pin logic in selectSeries.
+const UNIT_PINNED_SERIES = new Set([
+  "Production",
+  "Production_product",
+  "Production_s",
+  "Production_m",
+  "Production_sku",
+  "Production_m_sku",
+]);
+
 /**
  * Narrow one KPI's rows down to the single pinned series the card renders:
  * one kpi_name, one product_type, one unit_of_measurement. Returns the
@@ -1148,7 +1162,19 @@ function selectSeries(
         canonicalUnit(r.unit_of_measurement) ===
         canonicalUnit(unitOfMeasurement),
     );
-    if (unitRows.length > 0) groupDesc = unitRows;
+    if (unitRows.length > 0) {
+      groupDesc = unitRows;
+    } else if (UNIT_PINNED_SERIES.has(name)) {
+      // The unit pills describe the Production series specifically, and the
+      // option list spans ALL history — CTP's Mixing Chemical was recorded
+      // in KG once, in May, and in NUM every other day. Falling back for
+      // that series showed the NUM total under an "MT" pill, so the card
+      // read identically whichever unit was picked. Blank it instead: no
+      // rows in the selected unit is a real answer, and placeholderCard
+      // renders "—". Every other KPI keeps the soft fallback — a unitless
+      // OEE row must not vanish because a quantity unit is pinned.
+      groupDesc = [];
+    }
   }
 
   // Some KPIs (Production) are recorded in MULTIPLE units in the same

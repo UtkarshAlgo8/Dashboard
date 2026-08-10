@@ -20,9 +20,31 @@ export function kgToTonnes(value) {
   return value == null ? value : value / KG_PER_TONNE;
 }
 
-/** The label a raw unit is displayed under ("KG" → "MT"; others unchanged). */
+/**
+ * Spellings the lake uses for the SAME unit, mapped to the one label we
+ * show. The source emits both "NUM" and "NOS" for a count and both
+ * "Meters" and "M" for a length; showing each row under its own raw
+ * spelling makes one series look like two (CTP's Mixing card read "NUM"
+ * while its own unit pill read "NOS"). Keyed by the upper-cased form.
+ */
+const UNIT_LABEL_ALIASES = new Map([
+  ["METERS", "M"],
+  ["METER", "M"],
+  ["NUM", "NOS"],
+]);
+
+/**
+ * The canonical LABEL for a unit — alias-merged, but otherwise left in the
+ * data's own casing ("%" and "min" are shown verbatim, not upper-cased).
+ */
+export function canonicalUnitLabel(unit) {
+  if (typeof unit !== "string") return unit;
+  return UNIT_LABEL_ALIASES.get(unit.trim().toUpperCase()) ?? unit;
+}
+
+/** The label a raw unit is displayed under ("KG" → "MT", "NUM" → "NOS"). */
 export function displayUnit(unit) {
-  return isKg(unit) ? "MT" : unit;
+  return isKg(unit) ? "MT" : canonicalUnitLabel(unit);
 }
 
 /**
@@ -33,6 +55,6 @@ export function displayUnit(unit) {
  * @returns {{ value: number|null, unit: string|null }}
  */
 export function toDisplayQuantity(value, rawUnit) {
-  if (!isKg(rawUnit)) return { value, unit: rawUnit ?? null };
+  if (!isKg(rawUnit)) return { value, unit: canonicalUnitLabel(rawUnit) ?? null };
   return { value: kgToTonnes(value), unit: "MT" };
 }

@@ -31,6 +31,7 @@ import { getAnchors, getVocab } from "@/api/dashboard.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
+import { canonicalizeProductType } from "@/lib/dashboardRowScopes.js";
 import { displayUnit } from "@/lib/units.js";
 import client from "@/api/client.js";
 import { exportElementToPdf } from "@/lib/exportPdf.js";
@@ -264,6 +265,14 @@ function BanmoreProduction() {
     : [];
   const sectionDefaultProduct = isBanmore ? SECTION_DEFAULT_PRODUCT : {};
 
+  // Tyre lines come from the plant lookup (Banmore: ["PCR"] → the header
+  // renders a static badge; CTP: ["All","PCR","TBR"] → a picker). Until it
+  // lands, assume a single PCR line so the badge doesn't flash a picker.
+  const tyreTypes = plant?.tyreTypes?.length ? plant.tyreTypes : ["PCR"];
+  const activeTyreType = tyreTypes.includes(dashboard.tyreType)
+    ? dashboard.tyreType
+    : tyreTypes[0];
+
   // Stock sub-sections (BRD §13.2). The first is the default on entering
   // Stock. new_change.md C8: the PRODUCT list is NOT hardcoded — every
   // sub-section makes different products under different names (4 Roll makes
@@ -316,6 +325,11 @@ function BanmoreProduction() {
       section: sectionName,
       category: "Productivity",
       ...(isStock ? { sub_section: activeSubSection } : {}),
+      // Scope the pills to the selected line too — a product only that line
+      // makes must not stay selectable once the other line is picked.
+      ...(activeTyreType && activeTyreType !== "All"
+        ? { tyre_type: activeTyreType }
+        : {}),
     },
     limit: 1000,
   };
@@ -411,11 +425,31 @@ function BanmoreProduction() {
         .filter(Boolean),
     ),
   ];
+  // The options list is deliberately window-independent (see above), so it
+  // also carries units that exist somewhere in history but not here and now:
+  // CTP's Mixing Chemical was recorded in KG exactly once, in May, and in NUM
+  // every other day. Pinning the first option regardless left the shift box —
+  // which filters on the pinned unit strictly — with no matching row and every
+  // cell reading "—". Prefer a unit the CURRENT window actually holds, and
+  // fall back to the first option while the rows are still in flight.
+  const unitsInWindow = new Set(
+    (Array.isArray(rawRows) ? rawRows : [])
+      .filter(
+        (r) =>
+          !activeProductType ||
+          canonicalizeProductType(r.product_type) ===
+            canonicalizeProductType(activeProductType),
+      )
+      .map((r) => canonicalUnit(r.unit_of_measurement))
+      .filter(Boolean),
+  );
   const activeUnit =
     dashboard.unitOfMeasurement &&
     unitOptionsForProduct.includes(dashboard.unitOfMeasurement)
       ? dashboard.unitOfMeasurement
-      : (unitOptionsForProduct[0] ?? null);
+      : (unitOptionsForProduct.find((u) => unitsInWindow.has(u)) ??
+        unitOptionsForProduct[0] ??
+        null);
 
   // Keep the pinned unit valid whenever the section / sub-section / product
   // changes under it (a stale unit would silently match no rows).
@@ -713,6 +747,9 @@ function BanmoreProduction() {
           onExport={onExportPdf}
           asOf={effectiveAsOf}
           lastUpdatedAt={lastUpdatedAt}
+          tyreTypes={tyreTypes}
+          tyreType={activeTyreType}
+          onTyreTypeChange={(v) => setFilter({ tyreType: v }, false)}
         />
         {Array.isArray(tabs) && (
           <CategoryTabs
