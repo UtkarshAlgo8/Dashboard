@@ -55,19 +55,46 @@ export function emptyColumnPredicate(column) {
 export const PLANT_BANMORE = "BANMORE";
 export const PLANT_CHENNAI = "CHENNAI";
 
+/* ----------------------------------------------------------------- *
+ * Tyre type                                                          *
+ * ----------------------------------------------------------------- *
+ * Banmore's gold table only ever stores tyre_type = 'PCR' (plus the
+ * empty sentinel on non-production rows), so the plant has nothing to
+ * pick between. Chennai/CTP (ctp_gold.ctp_gold) runs BOTH lines and
+ * stores three values on department = Production:
+ *   PCR  — Curing / TBM / Stock
+ *   TBR  — Curing / TBM / Stock
+ *   Both — Mixing (100% of it) and part of Stock
+ * 'Both' is compound shared by both lines, NOT a third product line, so
+ * it is deliberately not offered as a choice: it is folded into whichever
+ * line is selected. A strict PCR/TBR match would instead empty Mixing,
+ * which has no PCR- or TBR-tagged row at all.
+ */
+export const TYRE_TYPE_ALL = "All";
+// The stored value meaning "shared between both lines" — matched by PCR
+// and by TBR, never selectable on its own.
+export const TYRE_TYPE_SHARED = "Both";
+
+const TYRE_TYPES_SINGLE_LINE = [TYRE_TYPE_ALL, "PCR"];
+const TYRE_TYPES_BOTH_LINES = [TYRE_TYPE_ALL, "PCR", "TBR"];
+
 const PLANT_SCOPES = {
   banmore: {
     id: "banmore",
     code: PLANT_BANMORE,
     name: "Banmore Plant",
     tyreType: "PCR",
+    tyreTypes: TYRE_TYPES_SINGLE_LINE,
     sqlTable: null,
   },
   chennai: {
     id: "chennai",
     code: PLANT_CHENNAI,
     name: "Chennai Plant",
-    tyreType: "PCR",
+    // Default selection, not a fixed filter — CTP runs PCR and TBR, so it
+    // opens unfiltered and the user narrows from `tyreTypes`.
+    tyreType: TYRE_TYPE_ALL,
+    tyreTypes: TYRE_TYPES_BOTH_LINES,
     sqlTable: "ctp_gold.ctp_gold",
   },
 };
@@ -100,6 +127,31 @@ export function plantScope(value = "banmore") {
 
 export function plantSqlTable(value = "banmore") {
   return plantScope(value).sqlTable;
+}
+
+/** Tyre-type options offered for a plant, first entry = default. */
+export function plantTyreTypes(value = "banmore") {
+  return [...plantScope(value).tyreTypes];
+}
+
+/**
+ * SQL predicate for a tyre_type selection, or null when the selection
+ * places no restriction ("All" / empty).
+ *
+ * A line selection also keeps the shared-compound rows (tyre_type =
+ * 'Both'): Mixing is recorded entirely as 'Both' at CTP, so a strict
+ * equality match would blank that section for every non-"All" choice.
+ */
+export function tyreTypePredicate(value, column = "tyre_type") {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  if (trimmed === "" || trimmed.toLowerCase() === TYRE_TYPE_ALL.toLowerCase()) {
+    return null;
+  }
+  const spellings = [trimmed, TYRE_TYPE_SHARED]
+    .map((s) => `'${s.toUpperCase().replaceAll("'", "''")}'`)
+    .join(", ");
+  return `UPPER(${column}) IN (${spellings})`;
 }
 
 // realdata.md §2: the ONLY department. Real data has both "Production"

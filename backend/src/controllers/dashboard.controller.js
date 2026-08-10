@@ -1,6 +1,11 @@
 import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
-import { config } from "../config.js";
 import { runQuery } from "../utils/upstream.js";
+import {
+  normalizePlantId,
+  plantDepartmentPredicate,
+  plantSqlTable,
+  canonicalizeSubSection,
+} from "../utils/normalize.js";
 import {
   buildDrillAggregateQuery,
   buildFetchQuery,
@@ -387,24 +392,46 @@ export async function getAnchors(req, res, next) {
 }
 
 /**
- * GET /api/v1/dashboard/vocab — distinct vocabulary values for the
+ * GET /api/v1/dashboard/vocab?plantId= — distinct vocabulary values for the
  * frontend picker allow-lists. Cached aggressively.
+ *
+ * Plant-scoped: every plant runs its own sections/sub-sections (CTP's Stock
+ * has EBR / TDA / Super Assembly and no 4 Roll or Slitter; Banmore is the
+ * reverse), so a picker built from one plant's list matches nothing at the
+ * other and the section renders empty. `subSections` maps each section to the
+ * sub-sections that plant actually records, which is what the Stock selector
+ * is built from.
  */
-export async function getVocab(_req, res, next) {
+export async function getVocab(req, res, next) {
   try {
-    const vocab = await cached("dashboard:vocab", async () => {
+    const plantId = normalizePlantId(req.query.plantId) ?? "banmore";
+    const vocab = await cached(`dashboard:vocab:${plantId}`, async () => {
       const grab = (sql) =>
         runQuery(sql).then((rows) => rows.map((r) => Object.values(r)[0]));
-      const table = config.upstream.sqlTable;
+      const table = plantSqlTable(plantId);
+      const scope = plantDepartmentPredicate(plantId);
+      const present = (col) =>
+        `${col} IS NOT NULL AND ${col} != 'nan' AND ${col} != 'null' AND ${col} != ''`;
 
-      const [sections, categories, granularities, tyreTypes] = await Promise.all([
-        grab(`SELECT DISTINCT section FROM ${table} WHERE section IS NOT NULL AND section != 'nan' AND section != '' ORDER BY section`),
-        grab(`SELECT DISTINCT category FROM ${table} WHERE category IS NOT NULL AND category != 'nan' AND category != '' ORDER BY category`),
-        grab(`SELECT DISTINCT granularity FROM ${table} WHERE granularity IS NOT NULL AND granularity != 'nan' AND granularity != '' ORDER BY granularity`),
-        grab(`SELECT DISTINCT tyre_type FROM ${table} WHERE tyre_type IS NOT NULL AND tyre_type != 'nan' AND tyre_type != '' ORDER BY tyre_type`),
-      ]);
+      const [sections, categories, granularities, tyreTypes, subSectionRows] =
+        await Promise.all([
+          grab(`SELECT DISTINCT section FROM ${table} WHERE ${scope} AND ${present("section")} ORDER BY section`),
+          grab(`SELECT DISTINCT category FROM ${table} WHERE ${scope} AND ${present("category")} ORDER BY category`),
+          grab(`SELECT DISTINCT granularity FROM ${table} WHERE ${scope} AND ${present("granularity")} ORDER BY granularity`),
+          grab(`SELECT DISTINCT tyre_type FROM ${table} WHERE ${scope} AND ${present("tyre_type")} ORDER BY tyre_type`),
+          runQuery(
+            `SELECT DISTINCT section, sub_section FROM ${table} WHERE ${scope} AND ${present("section")} AND ${present("sub_section")} ORDER BY section, sub_section`,
+          ),
+        ]);
 
-      return { sections, categories, granularities, tyreTypes };
+      const subSections = {};
+      for (const row of subSectionRows) {
+        const sub = canonicalizeSubSection(row.sub_section);
+        const list = (subSections[row.section] ??= []);
+        if (!list.includes(sub)) list.push(sub);
+      }
+
+      return { sections, categories, granularities, tyreTypes, subSections };
     }, CACHE_TTL.STATIC_LOOKUPS);
     res.json({ data: vocab });
   } catch (err) {

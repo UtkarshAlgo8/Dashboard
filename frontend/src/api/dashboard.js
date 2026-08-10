@@ -32,3 +32,29 @@ export function getAnchors(plantId = "banmore") {
   }
   return anchorsPromises.get(plantId);
 }
+
+/**
+ * GET /dashboard/vocab?plantId= — the vocabulary THIS plant actually
+ * records (sections, categories, granularities, tyre types, and the
+ * sub-sections of each section).
+ *
+ * Pickers must be built from this, not from a frozen list: CTP's Stock has
+ * EBR / TDA / Super Assembly and no 4 Roll or Slitter, so Banmore's list
+ * selects a sub-section that matches no CTP row and the section renders
+ * empty. Static per session, so the promise is memoized per plant.
+ */
+const vocabPromises = new Map();
+
+export function getVocab(plantId = "banmore") {
+  if (!vocabPromises.has(plantId)) {
+    const query = new URLSearchParams({ plantId });
+    const promise = client
+      .get(`/dashboard/vocab?${query.toString()}`)
+      .catch((err) => {
+        vocabPromises.delete(plantId);
+        throw err;
+      });
+    vocabPromises.set(plantId, promise);
+  }
+  return vocabPromises.get(plantId);
+}

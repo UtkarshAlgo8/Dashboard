@@ -27,7 +27,7 @@ import {
   getAsOf,
   getSectionOee,
 } from "@/api/plants.js";
-import { getAnchors } from "@/api/dashboard.js";
+import { getAnchors, getVocab } from "@/api/dashboard.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
@@ -73,6 +73,10 @@ function BanmoreProduction() {
   const theme = useTheme();
   const { plantId: routePlantId } = useParams();
   const plantId = routePlantId ?? "banmore";
+  // Several pickers below carry Banmore's own vocabulary as a frozen list
+  // (compound types, Stock sub-sections). They only apply to Banmore — every
+  // other plant is driven from its own data, see `vocab` / product-options.
+  const isBanmore = plantId === "banmore";
   const [trendKpi, setTrendKpi] = useState(null);
   // Whole-page PDF export. `exporting` temporarily releases the static
   // 100vh layout (height auto / overflow visible) so the FULL page +
@@ -102,6 +106,16 @@ function BanmoreProduction() {
   const { data: sections } = usePolledQuery(getSections, {
     interval: 0,
     cacheKey: "production:sections",
+    staleTime: 30 * 60 * 1000,
+  });
+  // The plant's OWN vocabulary — the Stock sub-section pills and the
+  // product-type pills are built from it. A frozen Banmore list picks a
+  // sub-section / product CTP never records, and the section renders empty.
+  const { data: vocab } = usePolledQuery(() => getVocab(plantId), {
+    interval: 0,
+    deps: [plantId],
+    keepPreviousData: true,
+    cacheKey: `production:${plantId}:vocab`,
     staleTime: 30 * 60 * 1000,
   });
   const { data: tabs } = usePolledQuery(getCategoryTabs, {
@@ -238,7 +252,17 @@ function BanmoreProduction() {
     // sub-section's first REAL product, never a synthetic "Overall".
     stk: null,
   };
-  const prodSubOptions = PROD_SUB_OPTIONS[dashboard.section] ?? [];
+  // PROD_SUB_OPTIONS / SECTION_DEFAULT_PRODUCT above are BANMORE's canonical
+  // vocabulary (Master vs Final Compound, Passenger Radial / LCV). CTP makes
+  // different things under different names — its Mixing productivity is
+  // "Chemical" alone, with no Master Compound at all — so seeding another
+  // plant with this list pins a product that matches no row and the whole
+  // section reads as "no data". Off Banmore, the pills come purely from what
+  // the plant records (nonStockProductOptions, below).
+  const prodSubOptions = isBanmore
+    ? (PROD_SUB_OPTIONS[dashboard.section] ?? [])
+    : [];
+  const sectionDefaultProduct = isBanmore ? SECTION_DEFAULT_PRODUCT : {};
 
   // Stock sub-sections (BRD §13.2). The first is the default on entering
   // Stock. new_change.md C8: the PRODUCT list is NOT hardcoded — every
@@ -247,7 +271,12 @@ function BanmoreProduction() {
   // nothing for some of them and the card blanks. The options are derived
   // from the data below (and `Belt Mother Roll` is never aliased to `Belt` —
   // a mother roll is a genuinely different intermediate product).
-  const STOCK_SUBSECTIONS = [
+  // Banmore's canonical order (the artefact's, first entry = default). Used
+  // as-is for Banmore; every other plant lists the sub-sections IT records —
+  // CTP's Stock has EBR / TDA / Super Assembly / Belt Edge Filler and neither
+  // 4 Roll nor Slitter, so this list would default to a sub-section with no
+  // rows and blank the section.
+  const BANMORE_STOCK_SUBSECTIONS = [
     "4 Roll",
     "Extruder",
     "3 Roll",
@@ -255,6 +284,10 @@ function BanmoreProduction() {
     "Slitter",
     "Bead",
   ];
+  const vocabStockSubs = vocab?.subSections?.Stock ?? [];
+  const STOCK_SUBSECTIONS = isBanmore
+    ? BANMORE_STOCK_SUBSECTIONS
+    : vocabStockSubs;
   const isStock = dashboard.section === "stk";
   const activeSubSection = dashboard.subSection ?? STOCK_SUBSECTIONS[0];
   // dashboard_doc.md §3/§8: OEE is disambiguated by sub_section. Stock OEE
@@ -363,7 +396,7 @@ function BanmoreProduction() {
     dashboard.productType ??
     (isStock
       ? (stockProductOptions[0] ?? null)
-      : (navProductOptions[0] ?? SECTION_DEFAULT_PRODUCT[dashboard.section]));
+      : (navProductOptions[0] ?? sectionDefaultProduct[dashboard.section]));
 
   // new_change.md C8/C9: multi-unit series (Stock Extruder / 3 Roll / Bead,
   // Mixing KG vs Batch) must pin a unit as well as the product — the two
@@ -572,7 +605,7 @@ function BanmoreProduction() {
         {
           section: id,
           subSection: null,
-          productType: SECTION_DEFAULT_PRODUCT[id] ?? null,
+          productType: sectionDefaultProduct[id] ?? null,
           unitOfMeasurement: null,
         },
         true,
@@ -586,7 +619,7 @@ function BanmoreProduction() {
   useEffect(() => {
     // Stock is seeded from its data-driven options (C8) in the effect above.
     if (dashboard.productType == null && !isStock) {
-      const def = SECTION_DEFAULT_PRODUCT[dashboard.section];
+      const def = sectionDefaultProduct[dashboard.section];
       if (def) setFilter({ productType: def }, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

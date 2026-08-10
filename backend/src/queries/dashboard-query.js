@@ -39,6 +39,8 @@ import {
   canonicalDimensionPredicate,
   normalizeUnit,
   unitPredicate,
+  tyreTypePredicate,
+  TYRE_TYPE_ALL,
 } from "../utils/normalize.js";
 
 export const ALLOWED_CONTEXT_KEYS = new Set([
@@ -80,7 +82,11 @@ export const ALLOWED_CATEGORIES = new Set([
 // when ENABLE_YEAR). Sourced from the shared normalization layer so this
 // stays in lock-step with the synonym map.
 export const ALLOWED_GRANULARITIES = allowedGranularities();
-export const ALLOWED_TYRE_TYPES = new Set(["PCR", "TBR", "LTR", "All"]);
+// The selectable tyre types. Banmore is PCR-only; CTP runs PCR and TBR.
+// "All" applies no filter. "Both" is a STORED value (shared compound), not
+// a selection — see tyreTypePredicate. LTR was in this list historically but
+// exists in neither gold table, so it is gone.
+export const ALLOWED_TYRE_TYPES = new Set([TYRE_TYPE_ALL, "PCR", "TBR"]);
 
 /**
  * SQL predicate restricting rows to the four in-scope sections. The per-request
@@ -759,6 +765,15 @@ function buildScopeWhere({
     // new_change.md C9 — match every stored spelling of the same unit
     // ("Meters" == "M", "NUM" == "NOS") so the filter doesn't silently miss
     // half the rows. KG vs Batch are NOT aliased — they stay distinct.
+    // tyre_type: "All" places no restriction, and a line selection also
+    // keeps the shared-compound rows (tyre_type = 'Both') — Mixing at CTP
+    // is recorded entirely as 'Both' and would otherwise vanish.
+    if (key === "tyre_type") {
+      const predicate = tyreTypePredicate(value, key);
+      if (predicate) where.push(predicate);
+      continue;
+    }
+
     if (key === "unit_of_measurement") {
       const canonUnit = normalizeUnit(value);
       if (canonUnit == null) {

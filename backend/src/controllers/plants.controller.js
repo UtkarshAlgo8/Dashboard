@@ -65,7 +65,16 @@ function notPhase1Plant(req, res, message) {
 export function getPlant(req, res) {
   if (notPhase1Plant(req, res)) return;
   const scope = plantScope(req.plantId);
-  res.json({ data: { id: scope.id, name: scope.name, tyreType: scope.tyreType } });
+  // tyreType is the DEFAULT selection; tyreTypes is what the picker offers
+  // (Banmore runs one line, CTP runs PCR and TBR).
+  res.json({
+    data: {
+      id: scope.id,
+      name: scope.name,
+      tyreType: scope.tyreType,
+      tyreTypes: scope.tyreTypes,
+    },
+  });
 }
 
 /**
