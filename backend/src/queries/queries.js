@@ -9,6 +9,7 @@ import {
   GRAN_DAY,
   GRAN_MONTH,
   YEAR_GRANULARITY,
+  tyreTypePredicate,
 } from "../utils/normalize.js";
 
 /**
@@ -101,6 +102,13 @@ function whereClause(filters, plantId = filters?.plant ?? "banmore") {
   for (const [col, val] of Object.entries(filters)) {
     if (val === undefined || val === null) continue;
     if (col === "plant" || col === "department") continue; // forced by CORE_FILTER
+    // tyre_type is not a plain equality: "All" means no restriction, and a
+    // line selection also keeps the shared-compound ('Both') rows.
+    if (col === "tyre_type") {
+      const predicate = tyreTypePredicate(val);
+      if (predicate) parts.push(predicate);
+      continue;
+    }
     parts.push(`${col} = ${escapeLiteral(val)}`);
   }
   return `WHERE ${parts.join(" AND ")}`;

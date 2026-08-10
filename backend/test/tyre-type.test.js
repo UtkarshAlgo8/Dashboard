@@ -21,7 +21,7 @@ import {
 test("CTP offers All / PCR / TBR, Banmore only its single line", () => {
   assert.deepEqual(plantTyreTypes("chennai"), [TYRE_TYPE_ALL, "PCR", "TBR"]);
   assert.deepEqual(plantTyreTypes("ctp"), [TYRE_TYPE_ALL, "PCR", "TBR"]);
-  assert.deepEqual(plantTyreTypes("banmore"), [TYRE_TYPE_ALL, "PCR"]);
+  assert.deepEqual(plantTyreTypes("banmore"), ["PCR"]);
   // "Both" is a stored value, never a choice.
   assert.ok(!plantTyreTypes("chennai").includes("Both"));
 });

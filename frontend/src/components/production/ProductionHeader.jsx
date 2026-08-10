@@ -8,6 +8,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
+import { motion } from "framer-motion";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import { useNavigate } from "react-router-dom";
@@ -45,9 +46,17 @@ function ProductionHeader({
   onExport,
   asOf = null,
   lastUpdatedAt = null,
+  // The tyre lines this plant runs, and the active selection. One entry =
+  // a static badge; several = a picker (see the control below).
+  tyreTypes = ["PCR"],
+  tyreType = null,
+  onTyreTypeChange,
 }) {
   const theme = useTheme();
   const navigate = useNavigate();
+  // Fall back to the first option so the control never renders unselected
+  // while the plant lookup is still in flight.
+  const activeTyreType = tyreTypes.includes(tyreType) ? tyreType : tyreTypes[0];
 
   // Download button state machine: idle → loading (spinner) → done (green
   // + tick) → back to idle after 3s.
@@ -213,26 +222,39 @@ function ProductionHeader({
           }
         />
 
-        {/* TyreType badge — Banmore is PCR-only per FR-X2 */}
-        <Tooltip title="Banmore plant produces PCR only" arrow>
-          <Box
-            sx={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: 0.6,
-              color: theme.custom.brand.teal,
-              border: 1,
-              borderColor: theme.custom.brand.teal,
-              backgroundColor: theme.custom.surface.soft,
-              px: 1,
-              py: 0.5,
-              borderRadius: 1,
-              whiteSpace: "nowrap",
-            }}
+        {/* Tyre line. A plant that runs one line (Banmore, PCR-only per
+            FR-X2) shows a static badge — there is nothing to choose. A
+            plant that runs several (CTP: PCR and TBR) gets a picker. */}
+        {tyreTypes.length > 1 ? (
+          <TyreTypeToggle
+            options={tyreTypes}
+            value={activeTyreType}
+            onChange={onTyreTypeChange}
+          />
+        ) : (
+          <Tooltip
+            title={`${plant?.name ?? "This plant"} produces ${tyreTypes[0] ?? "PCR"} only`}
+            arrow
           >
-            PCR ONLY
-          </Box>
-        </Tooltip>
+            <Box
+              sx={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 0.6,
+                color: theme.custom.brand.teal,
+                border: 1,
+                borderColor: theme.custom.brand.teal,
+                backgroundColor: theme.custom.surface.soft,
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tyreTypes[0] ?? "PCR"} ONLY
+            </Box>
+          </Tooltip>
+        )}
 
         <Tooltip
           title={
@@ -296,6 +318,91 @@ function ProductionHeader({
         <UserMenu user={MOCK_USER} size={32} />
       </Stack>
     </Box>
+  );
+}
+
+/**
+ * Tyre-line segmented toggle — one soft track holding every line, with a
+ * white knob sliding under the active one. Used instead of a dropdown so
+ * the alternatives are readable at a glance; the plant only ever runs two
+ * or three lines, so they all fit on the row.
+ *
+ * The knob is a framer-motion shared-layout element (same technique as
+ * NavTabs) with its own layoutId, so it springs between segments rather
+ * than cutting.
+ */
+function TyreTypeToggle({ options, value, onChange }) {
+  const theme = useTheme();
+  return (
+    <Stack
+      direction="row"
+      role="radiogroup"
+      aria-label="Tyre type"
+      sx={{
+        alignItems: "center",
+        p: 0.4,
+        borderRadius: 999,
+        backgroundColor: theme.custom.surface.soft,
+      }}
+    >
+      {options.map((option) => {
+        const active = option === value;
+        return (
+          <Box
+            key={option}
+            role="radio"
+            aria-checked={active}
+            tabIndex={0}
+            onClick={() => onChange?.(option)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onChange?.(option);
+              }
+            }}
+            sx={{
+              position: "relative",
+              px: 1.75,
+              py: 0.4,
+              borderRadius: 999,
+              fontSize: 12,
+              // Constant weight so a segment never resizes as it activates.
+              fontWeight: 700,
+              lineHeight: 1.5,
+              whiteSpace: "nowrap",
+              userSelect: "none",
+              cursor: "pointer",
+            }}
+          >
+            {active && (
+              <motion.div
+                layoutId="tyreTypeKnob"
+                transition={{ type: "spring", stiffness: 520, damping: 19, mass: 0.7 }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: 999,
+                  backgroundColor: theme.palette.background.paper,
+                  boxShadow: theme.custom.shadow,
+                  zIndex: 0,
+                }}
+              />
+            )}
+            <Box
+              component="span"
+              sx={{
+                position: "relative",
+                zIndex: 1,
+                color: active ? "text.primary" : "text.secondary",
+                transition: "color 0.2s ease",
+              }}
+            >
+              {option}
+            </Box>
+          </Box>
+        );
+      })}
+    </Stack>
   );
 }
 

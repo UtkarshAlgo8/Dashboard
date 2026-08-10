@@ -1252,6 +1252,15 @@ export function buildProductOptionsQuery({
     where.push(canonicalDimensionPredicate("sub_section", subSection));
   }
 
+  // Scope the options to the selected tyre line, so a product only the
+  // other line makes doesn't stay on the pill row after switching.
+  if (context.tyre_type) {
+    const predicate = tyreTypePredicate(
+      safeStringValue(context.tyre_type, "tyre_type"),
+    );
+    if (predicate) where.push(predicate);
+  }
+
   const { parts: dateParts, timeScope } = dateWhereParts({ date, from, to });
   where.push(...dateParts);
 

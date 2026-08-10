@@ -75,7 +75,9 @@ export const TYRE_TYPE_ALL = "All";
 // and by TBR, never selectable on its own.
 export const TYRE_TYPE_SHARED = "Both";
 
-const TYRE_TYPES_SINGLE_LINE = [TYRE_TYPE_ALL, "PCR"];
+// A one-line plant lists just that line: with nothing to choose between,
+// the header shows a static "PCR ONLY" badge rather than a picker.
+const TYRE_TYPES_SINGLE_LINE = ["PCR"];
 const TYRE_TYPES_BOTH_LINES = [TYRE_TYPE_ALL, "PCR", "TBR"];
 
 const PLANT_SCOPES = {

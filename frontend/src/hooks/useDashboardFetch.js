@@ -43,6 +43,10 @@ const initialState = {
   // pinning a Production unit never filters away the unit-less OEE rows
   // that share the same landing fetch.
   unitOfMeasurement: null,
+  // The selected tyre line. null = the plant's default (no filter for a
+  // two-line plant like CTP; the single line for a one-line plant, where
+  // the header shows a static badge instead of a picker).
+  tyreType: null,
   category: "p",
   granularity: null, // null = no granularity filter (Lambda ignores category when granularity is set)
   // "snapshot" → transformer takes latest row's actual_value as the
@@ -150,6 +154,12 @@ function buildContext(state) {
   // product type would filter them all out.
   if ((state.category === "p" || state.category === "q") && state.productType) {
     ctx.product_type = state.productType;
+  }
+  // tyre_type: sent for every category — the line a KPI belongs to is a
+  // property of the row, not of the tab. "All" is omitted rather than sent,
+  // since it means "no restriction".
+  if (state.tyreType && state.tyreType !== "All") {
+    ctx.tyre_type = state.tyreType;
   }
   if (state.granularity) ctx.granularity = state.granularity;
   // date / from / to are NOT in context — they are top-level payload
