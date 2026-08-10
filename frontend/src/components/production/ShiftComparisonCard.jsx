@@ -70,10 +70,11 @@ function useShiftBands({
     ...buildDatePayload(isRange ? { from, to } : { date }),
     // new_change.md C7/C12: Production_product is NOT a landing-level row,
     // so a product-wise Curing/TBM shift cell needs it requested by name.
-    // Without `drillOnly` the landing band still comes back alongside it,
-    // and product_type stays unpinned server-side so the aggregate and its
-    // children both arrive — exactly one of them is picked below (C4).
-    drillKpis: extraKpis,
+    // /dashboard/shift-comparison names this `extraKpis` — it ADDS to the
+    // landing band rather than replacing it the way kpi-data's `drillKpis`
+    // does — and product_type stays unpinned server-side so the aggregate
+    // and its children both arrive; exactly one is picked below (C4).
+    extraKpis,
     parentFilters: {},
     limit: 10000,
   };
