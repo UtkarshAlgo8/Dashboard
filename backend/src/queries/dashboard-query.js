@@ -164,25 +164,6 @@ const AGGREGATE_PRODUCT_CHILDREN = {
 };
 
 /**
- * The top-level ("headline") kpi_name of each category — the row whose
- * product_type names a real, selectable product rather than a drill child.
- * Used to build the product pill row; see buildProductOptionsQuery.
- */
-const HEADLINE_PRODUCT_KPIS = new Set(["Production", "Inventory"]);
-
-/**
- * The "overall" product_type each section records alongside its per-product
- * children — the inverse of AGGREGATE_PRODUCT_CHILDREN, keyed by section.
- * Used to pin the product-split levels when the caller pins no product at
- * all (C4, unpinned case — see buildScopeWhere). Sections absent from this
- * map (Stock, Mixing) store no aggregate row and need no pin.
- */
-const SECTION_AGGREGATE_PRODUCT = {
-  Curing: "Cured Tyre",
-  TBM: "Green Tyre",
-};
-
-/**
  * new_change.md C4 — drill levels that store BOTH the aggregate row and its
  * per-product children in the same kpi_name.
  *
@@ -864,38 +845,6 @@ function buildScopeWhere({
     }
   }
 
-  // 1b. new_change.md C4, the UNPINNED case. The guard above lives inside
-  //     the context loop, so it only ever runs when the caller SENDS a
-  //     product_type — the loop never visits a key that isn't there. With
-  //     no product pinned, a product-split kpi_name matches the aggregate
-  //     row AND every per-product child and sums to a multiple of the
-  //     parent card:
-  //
-  //       CTP Curing TBR, 2026-07-30, Production_m
-  //         Cured Tyre 1,654  +  Unknown 1,654            = 3,308  (2x)
-  //       CTP TBM TBR, same day
-  //         Green Tyre 1,881  +  Unknown 1,881  + Carcass 1,881
-  //                                                       = 5,643  (3x)
-  //
-  //     Banmore hides this because its Curing/TBM pickers always pin a
-  //     product; CTP's TBR line does not. Pin to the section's AGGREGATE
-  //     rather than blacklisting children — the child set differs per
-  //     plant (CTP TBM adds "Carcass", which is not in
-  //     AGGREGATE_PRODUCT_CHILDREN) and the aggregate is by definition
-  //     the overall total the card already shows. Sections with no
-  //     declared aggregate (Stock, Mixing) are untouched.
-  const productPin = context.product_type;
-  const hasProductPin =
-    productPin != null && String(productPin).trim() !== "";
-  const aggregateProduct =
-    SECTION_AGGREGATE_PRODUCT[String(context.section ?? "").trim()];
-  if (!hasProductPin && aggregateProduct) {
-    where.push(
-      `(NOT ${PRODUCT_SPLIT_KPIS_SQL} ` +
-        `OR ${canonicalDimensionPredicate("product_type", aggregateProduct)})`,
-    );
-  }
-
   // 2. Date predicate (new_change.md C1). Format-robust: compare the
   //    normalized YYYYMMDD form of the stored `date` against the YYYYMMDD
   //    form of the caller's input. A range ALWAYS wins over a stale single
@@ -1287,33 +1236,13 @@ export function buildProductOptionsQuery({
     );
   }
 
-  // The pill row lists every product the SECTION records, read from the
-  // headline rows of each category — `Production` for Productivity and
-  // `Inventory` for Inventory. Reading the headline (rather than any
-  // kpi_name) is what keeps drill children out: Curing/TBM store their
-  // per-product splits under Production_m / Production_product, so
-  // "Unknown" and the other aggregate children never reach this list.
-  //
-  // NCM_Hold is deliberately NOT a headline here — it introduces products
-  // no other view knows ("Compound", "Raw Material") and a second spelling
-  // of one that exists ("SideWall" vs "Sidewall" at Banmore Stock).
-  //
-  // Neither category nor a non-null actual_value is required:
-  //   - category: CTP Mixing records `Chemical` under Productivity and
-  //     `Final Compound` under Inventory. Pinning Productivity hid the
-  //     latter from the picker entirely.
-  //   - non-null: CTP Stock has 13 products but values on only `Tread`,
-  //     so the old TRY_CAST guard offered a single pill and made the
-  //     other 12 unreachable. They are real products with real rows; the
-  //     card renders "—" for them, which is the honest answer and now the
-  //     consistent one (see the strict filter pins in kpi-transformer).
   const where = [
     plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
     `section = ${escapeLiteral(section)}`,
-    `kpi_name IN (${[...HEADLINE_PRODUCT_KPIS]
-      .map((k) => escapeLiteral(k))
-      .join(", ")})`,
+    `category = ${escapeLiteral("Productivity")}`,
+    `kpi_name = ${escapeLiteral("Production")}`,
+    "TRY_CAST(actual_value AS DOUBLE) IS NOT NULL",
   ];
 
   if (context.sub_section) {

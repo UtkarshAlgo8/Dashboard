@@ -319,16 +319,11 @@ function BanmoreProduction() {
   // (all dates) and granularity (defaults to DAY on the backend, where every
   // product has rows) yields the COMPLETE, stable list; the key only changes
   // on a section / sub-section switch, so there is no window-driven flicker.
-  // No `category` pin: the pill row lists every product the SECTION records,
-  // not only the ones with Productivity rows. CTP Mixing keeps `Chemical`
-  // under Productivity and `Final Compound` under Inventory, and pinning
-  // Productivity here hid the latter from the picker entirely. The backend
-  // reads the headline row of each category (see HEADLINE_PRODUCT_KPIS), so
-  // drill children still cannot reach this list.
   const optionsPayload = {
     plantId,
     context: {
       section: sectionName,
+      category: "Productivity",
       ...(isStock ? { sub_section: activeSubSection } : {}),
       // Scope the pills to the selected line too — a product only that line
       // makes must not stay selectable once the other line is picked.
