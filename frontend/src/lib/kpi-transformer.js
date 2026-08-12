@@ -1079,18 +1079,6 @@ function buildKpiGroups(rows, { section, allowedNames, plantLevelNames }) {
   return groups;
 }
 
-// The series the unit pills actually describe — they are built from the
-// Production rows' (product_type, unit) pairs. Only these honour a unit pin
-// strictly; see the pin logic in selectSeries.
-const UNIT_PINNED_SERIES = new Set([
-  "Production",
-  "Production_product",
-  "Production_s",
-  "Production_m",
-  "Production_sku",
-  "Production_m_sku",
-]);
-
 /**
  * Narrow one KPI's rows down to the single pinned series the card renders:
  * one kpi_name, one product_type, one unit_of_measurement. Returns the
@@ -1129,52 +1117,46 @@ function selectSeries(
     }
   }
 
-  // Equipment-level KPIs (OEE, Downtime, …) are exempted from the
+  // A selected filter is honoured STRICTLY: a card only ever shows rows
+  // that match it. When nothing matches, the group is emptied and the
+  // card renders "—" via placeholderCard, because "no data for what you
+  // picked" is a real answer and showing a neighbouring value in its
+  // place is not.
+  //
+  // This deliberately blanks the equipment-level KPIs (OEE, Downtime, …)
+  // whenever a product type is selected. They are exempted from the
   // server-side product_type filter (see PRODUCT_AGNOSTIC_KPIS in the
-  // backend), so a group may carry rows for several product types.
-  // PREFER rows matching the selected product type when they exist —
-  // Mixing genuinely records OEE per-compound (Master vs Final) — and
-  // fall back to the line-level rows otherwise: TBM records OEE only
-  // under "Green Tyre", Curing/Stock under a NULL section row, so
-  // selecting a secondary product type must still show the line value
-  // instead of an empty card. Product-specific KPIs (Production, etc.)
-  // are already narrowed server-side, so the match keeps all of them
-  // (no-op) and they never fall back to a different product.
+  // backend) and are recorded once per LINE, not per product — TBM under
+  // "Green Tyre", Curing/Stock under a NULL product row — so no OEE row
+  // carries the selected product and the card has nothing to show. That
+  // is the intended trade-off: the previous soft fallback made a
+  // line-level number look product-specific.
+  //
   // new_change.md C7/C4: a strictly pinned series is already narrowed to
-  // exactly one product_type — the soft "prefer, else fall back" rule
-  // below would re-admit the aggregate row alongside its children.
+  // exactly one product_type, so the match below would re-admit the
+  // aggregate row alongside its children — skip it there.
   if (productType && !strictProductPin) {
     // changes.md §6: compare canonically so "Sidewall" rows match a
     // "SideWall" selection (and vice-versa) instead of splitting.
     const wantPt = canonicalizeProductType(productType);
-    const matching = groupDesc.filter(
+    groupDesc = groupDesc.filter(
       (r) => canonicalizeProductType(r.product_type) === wantPt,
     );
-    if (matching.length > 0) groupDesc = matching;
   }
 
   // new_change.md C8/C9: pin the selected unit when this series really
   // carries several (Stock Extruder / 3 Roll / Bead, Mixing KG vs Batch).
-  // A no-match leaves the group alone rather than blanking the card.
+  // Strict, for the same reason as the product pin above: CTP's Mixing
+  // Chemical was recorded in KG once, in May, and in NUM every other day,
+  // and the old soft fallback showed that NUM total under an "MT" pill —
+  // the card read identically whichever unit was picked. A no-match now
+  // empties the group and the card renders "—".
   if (unitOfMeasurement) {
-    const unitRows = groupDesc.filter(
+    groupDesc = groupDesc.filter(
       (r) =>
         canonicalUnit(r.unit_of_measurement) ===
         canonicalUnit(unitOfMeasurement),
     );
-    if (unitRows.length > 0) {
-      groupDesc = unitRows;
-    } else if (UNIT_PINNED_SERIES.has(name)) {
-      // The unit pills describe the Production series specifically, and the
-      // option list spans ALL history — CTP's Mixing Chemical was recorded
-      // in KG once, in May, and in NUM every other day. Falling back for
-      // that series showed the NUM total under an "MT" pill, so the card
-      // read identically whichever unit was picked. Blank it instead: no
-      // rows in the selected unit is a real answer, and placeholderCard
-      // renders "—". Every other KPI keeps the soft fallback — a unitless
-      // OEE row must not vanish because a quantity unit is pinned.
-      groupDesc = [];
-    }
   }
 
   // Some KPIs (Production) are recorded in MULTIPLE units in the same
