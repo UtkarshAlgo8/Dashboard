@@ -1079,6 +1079,26 @@ function buildKpiGroups(rows, { section, allowedNames, plantLevelNames }) {
   return groups;
 }
 
+// The series the unit pills actually describe — they are built from the
+// Production rows' (product_type, unit) pairs. On the SOFT path (Banmore)
+// only these honour a unit pin strictly; the strict path pins every series.
+const UNIT_PINNED_SERIES = new Set([
+  "Production",
+  "Production_product",
+  "Production_s",
+  "Production_m",
+  "Production_sku",
+  "Production_m_sku",
+]);
+
+/**
+ * Plants whose filter pins are honoured strictly (no fall back to a
+ * line-level or neighbouring row). CTP only — Banmore keeps the soft
+ * behaviour it shipped with. Matched against the route's plantId, which
+ * is "chennai" from the plants list and "ctp" from the aliases.
+ */
+const STRICT_FILTER_PLANTS = new Set(["chennai", "ctp"]);
+
 /**
  * Narrow one KPI's rows down to the single pinned series the card renders:
  * one kpi_name, one product_type, one unit_of_measurement. Returns the
@@ -1088,7 +1108,7 @@ function buildKpiGroups(rows, { section, allowedNames, plantLevelNames }) {
 function selectSeries(
   groups,
   kpiDef,
-  { section, productType, unitOfMeasurement, drilledKpiId },
+  { section, productType, unitOfMeasurement, drilledKpiId, strictFilters },
 ) {
   let name = kpiDef.name;
   let groupDesc = groups.get(name) ?? [];
@@ -1117,20 +1137,29 @@ function selectSeries(
     }
   }
 
-  // A selected filter is honoured STRICTLY: a card only ever shows rows
-  // that match it. When nothing matches, the group is emptied and the
-  // card renders "—" via placeholderCard, because "no data for what you
-  // picked" is a real answer and showing a neighbouring value in its
-  // place is not.
-  //
-  // This deliberately blanks the equipment-level KPIs (OEE, Downtime, …)
-  // whenever a product type is selected. They are exempted from the
+  // Equipment-level KPIs (OEE, Downtime, …) are exempted from the
   // server-side product_type filter (see PRODUCT_AGNOSTIC_KPIS in the
-  // backend) and are recorded once per LINE, not per product — TBM under
-  // "Green Tyre", Curing/Stock under a NULL product row — so no OEE row
-  // carries the selected product and the card has nothing to show. That
-  // is the intended trade-off: the previous soft fallback made a
-  // line-level number look product-specific.
+  // backend), so a group may carry rows for several product types.
+  //
+  // `strictFilters` decides what a no-match means, and it is per PLANT:
+  //
+  //   CTP (strict)  — a selected filter is honoured exactly. No match
+  //     empties the group and the card renders "—", because "no data for
+  //     what you picked" is a real answer. CTP Stock has 12 products with
+  //     rows but no values, and borrowing a neighbour's number there
+  //     misreports the plant.
+  //
+  //   Banmore (soft) — PREFER rows matching the selection, and fall back
+  //     to the line-level rows otherwise. Banmore records OEE once per
+  //     line with an EMPTY product_type (Mixing: 49 such rows), so strict
+  //     matching blanks the OEE card the moment a compound is picked —
+  //     while the sidebar donut, which reads /plants/:id/section-oee,
+  //     still shows the value. Banmore is the live plant and must keep
+  //     the behaviour it shipped with.
+  //
+  // Product-specific KPIs (Production, etc.) are already narrowed
+  // server-side, so the match keeps all of them (no-op) on either path
+  // and they never fall back to a different product.
   //
   // new_change.md C7/C4: a strictly pinned series is already narrowed to
   // exactly one product_type, so the match below would re-admit the
@@ -1139,24 +1168,29 @@ function selectSeries(
     // changes.md §6: compare canonically so "Sidewall" rows match a
     // "SideWall" selection (and vice-versa) instead of splitting.
     const wantPt = canonicalizeProductType(productType);
-    groupDesc = groupDesc.filter(
+    const matching = groupDesc.filter(
       (r) => canonicalizeProductType(r.product_type) === wantPt,
     );
+    if (strictFilters || matching.length > 0) groupDesc = matching;
   }
 
   // new_change.md C8/C9: pin the selected unit when this series really
   // carries several (Stock Extruder / 3 Roll / Bead, Mixing KG vs Batch).
-  // Strict, for the same reason as the product pin above: CTP's Mixing
-  // Chemical was recorded in KG once, in May, and in NUM every other day,
-  // and the old soft fallback showed that NUM total under an "MT" pill —
-  // the card read identically whichever unit was picked. A no-match now
-  // empties the group and the card renders "—".
+  // Same per-plant split as the product pin above. On Banmore a no-match
+  // leaves the group alone EXCEPT for the series the unit pills actually
+  // describe (UNIT_PINNED_SERIES) — the option list spans all history, and
+  // falling back there showed one unit's total under another unit's pill.
   if (unitOfMeasurement) {
-    groupDesc = groupDesc.filter(
+    const unitRows = groupDesc.filter(
       (r) =>
         canonicalUnit(r.unit_of_measurement) ===
         canonicalUnit(unitOfMeasurement),
     );
+    if (strictFilters || unitRows.length > 0) {
+      groupDesc = unitRows;
+    } else if (UNIT_PINNED_SERIES.has(name)) {
+      groupDesc = [];
+    }
   }
 
   // Some KPIs (Production) are recorded in MULTIPLE units in the same
@@ -1256,6 +1290,11 @@ export function toKpiGrid(
     baselineWindow = null,
     // new_change.md C10: the row cap was hit, so any total is INCOMPLETE.
     truncated = false,
+    // Which plant's rows these are. Decides whether a filter pin is
+    // honoured strictly (CTP) or falls back to the line-level row
+    // (Banmore) — see STRICT_FILTER_PLANTS and selectSeries. Defaults to
+    // the soft path, so an omitted plantId can never blank a card.
+    plantId = null,
   } = {},
 ) {
   if (!Array.isArray(rows) || rows.length === 0) return [];
@@ -1298,7 +1337,15 @@ export function toKpiGrid(
   const baselineGroups = Array.isArray(baselineRows)
     ? buildKpiGroups(baselineRows, groupOpts)
     : null;
-  const narrowOpts = { section, productType, unitOfMeasurement, drilledKpiId };
+  const narrowOpts = {
+    section,
+    productType,
+    unitOfMeasurement,
+    drilledKpiId,
+    strictFilters: STRICT_FILTER_PLANTS.has(
+      String(plantId ?? "").trim().toLowerCase(),
+    ),
+  };
 
   // Build lookup for this section/category only.
   const kpiByName = new Map(allowedKpis.map((k) => [k.name, k]));

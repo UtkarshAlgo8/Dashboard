@@ -516,6 +516,8 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
         category: state.category.toUpperCase(),
         granularity: state.granularity ?? "DAY",
         mode: state.mode ?? "snapshot",
+        // Decides strict vs soft filter pins — CTP strict, Banmore soft.
+        plantId,
         // Equipment KPIs come back for every product type now (backend
         // exemption); the transformer uses this to prefer the selected
         // product's row when it exists and fall back to the line value.
