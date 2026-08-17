@@ -6,6 +6,7 @@
  */
 import { config } from "./config.js";
 import { app } from "./app.js";
+import { startWarmer } from "./utils/warmer.js";
 
 app.listen(config.port, () => {
   // eslint-disable-next-line no-console
@@ -14,4 +15,8 @@ app.listen(config.port, () => {
   );
   // eslint-disable-next-line no-console
   console.log(`CORS allow-origin: ${config.frontendOrigin}`);
+  // Started here rather than in app.js so mounting the app in a test never
+  // schedules background upstream traffic. The warmer replays HTTP requests
+  // against this server, so it can only start once we are listening.
+  startWarmer();
 });

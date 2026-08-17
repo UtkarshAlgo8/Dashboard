@@ -85,4 +85,39 @@ export const config = {
     sqlTable: optional("QUALITY_SQL_TABLE", "quality_gold"),
   },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),
+  // Cache backing store. "memory" (default) is a Map in this process and is
+  // wiped by every deploy — `npm run deploy` rebuilds the container, so the
+  // first user after a release used to re-pay the full Athena cost. "redis"
+  // keeps the cache across restarts and shares it if more than one container
+  // ever runs. Redis is optional: an unreachable server degrades to memory.
+  cache: {
+    driver: optional("CACHE_DRIVER", "memory"), // "memory" | "redis"
+    redisUrl: optional("REDIS_URL", "redis://127.0.0.1:6379"),
+    keyPrefix: optional("CACHE_KEY_PREFIX", "jkdash:"),
+    // TTL floor for entries written by the warmer. MUST exceed the warm
+    // interval — see effectiveTtl() in utils/cache.js.
+    warmTtlMs: asInt("CACHE_WARM_TTL_MS", 25 * 60 * 1000),
+    // Hard ceiling on what the in-process store holds. Applies under BOTH
+    // drivers: the redis driver mirrors every write into memory, so this is
+    // what bounds this process either way. Measured working set is ~100 MB.
+    maxBytes: asInt("CACHE_MAX_BYTES", 192 * 1024 * 1024),
+  },
+  // Background warmer: keeps the landing page and each plant's opening
+  // dashboard hot so opening them never waits on the upstream API.
+  warm: {
+    enabled: optional("CACHE_WARM_ENABLED", "true") !== "false",
+    intervalMs: asInt("CACHE_WARM_INTERVAL_MS", 10 * 60 * 1000),
+    // Delay before the first cycle, so the server is listening (the warmer
+    // replays real HTTP requests against itself) and boot traffic settles.
+    bootDelayMs: asInt("CACHE_WARM_BOOT_DELAY_MS", 2_000),
+    plants: optional("CACHE_WARM_PLANTS", "banmore,chennai")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    // How many recorded POST views to replay per cycle, most-requested first.
+    maxRecorded: asInt("CACHE_WARM_MAX_RECORDED", 20),
+    // Parallel warm requests. Kept low: firing every target at once risks
+    // throttling the upstream and timing out the warm it is trying to do.
+    concurrency: asInt("CACHE_WARM_CONCURRENCY", 2),
+  },
 };
