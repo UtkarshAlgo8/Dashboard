@@ -1033,6 +1033,33 @@ const DISPLAY_NAME = {
 /* ---------- public API ---------- */
 
 /**
+ * The gold `kpi_name` values the grid actually renders for a (section, tab).
+ *
+ * Derived from ALLOWED_KPIS rather than duplicated, so the landing FETCH and
+ * the landing FILTER can never drift: toKpiGrid narrows incoming rows to
+ * exactly this set (see `allowedNames` below), and the fetch now asks the
+ * backend for exactly this set. Anything else the query returned was read,
+ * parsed and dropped.
+ *
+ * Includes the C7 `Production_product` exception for TBM/Curing, matching the
+ * addition toKpiGrid makes to its own allow-list.
+ *
+ * @param {string} section gold section value ("Mixing" | "TBM" | "Curing" | "Stock")
+ * @param {string} category tab id, uppercase ("P" | "Q" | "C" | "M" | "S")
+ * @returns {string[]} kpi_names, or [] when the combo has no catalogue entry
+ *          (callers must treat [] as "no filter", never as "fetch nothing")
+ */
+export function landingKpiNames(section, category) {
+  const defs = ALLOWED_KPIS[section]?.[category] ?? [];
+  if (defs.length === 0) return [];
+  const names = new Set(defs.map((k) => k.name));
+  if (section === "TBM" || section === "Curing") {
+    names.add("Production_product");
+  }
+  return [...names];
+}
+
+/**
  * A no-data placeholder card so a KPI keeps its fixed slot in the grid
  * even when the current view has no rows for it. Stable positions avoid
  * the confusion of cards reordering / disappearing when data changes.

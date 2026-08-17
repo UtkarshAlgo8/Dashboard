@@ -275,6 +275,41 @@ const GOLD_COLUMNS = [
 ];
 
 /**
+ * The subset of GOLD_COLUMNS a kpi-data row actually needs to reach the UI.
+ *
+ * The dashboard reads raw rows, so every column in the projection is shipped
+ * once per row over the wire. Seven of them are never read by any frontend
+ * consumer — `record_id`, `plant`, `department` and `tyre_type` are pins the
+ * client already knows (it sent them), and `production_ids` / `previous_values`
+ * / `plot_data` are the heavy blob columns (plot_data alone backs the SPC
+ * widget board, which queries the table directly via spc.queries.js and never
+ * goes through this endpoint).
+ *
+ * Dropping them from the OUTER select only. The inner de-duplication sub-query
+ * still scans the full GOLD_COLUMNS list because DEDUPE_PARTITION partitions on
+ * `plant` / `department` / `remarks` / `status`, so narrowing the projection
+ * cannot change which row survives the collapse.
+ */
+const OUTPUT_COLUMNS = [
+  "date",
+  "section",
+  "sub_section",
+  "machine",
+  "product_type",
+  "itemcode",
+  "granularity",
+  "category",
+  "kpi_name",
+  "unit_of_measurement",
+  "drill_down_attribute",
+  "drill_down_level",
+  "actual_value",
+  "threshold_value",
+  "status",
+  "remarks",
+];
+
+/**
  * Rate / ratio KPIs — the C5 AVERAGE class.
  *
  * These are EXCLUDED from the de-duplication below. Additive rows duplicate
@@ -922,6 +957,10 @@ export function buildFetchQuery({
   // rows of that one lens for LIMIT/OFFSET paging.
   offset = 0,
   drillOnly = false,
+  // The kpi_names the landing grid actually renders for this (section,
+  // category), sent by the client from its own ALLOWED_KPIS catalogue.
+  // null/omitted → every landing-level kpi_name, the pre-existing behaviour.
+  landingKpis = null,
 } = {}) {
   const where = buildScopeWhere({
     plantId,
@@ -983,6 +1022,41 @@ export function buildFetchQuery({
     }
   }
 
+  // 4b. Narrow the landing band to the KPIs the grid RENDERS.
+  //
+  // The landing predicate above selects every top-level row in the
+  // (section, category) scope, but the grid only ever draws the 3-4 KPIs in
+  // its catalogue — toKpiGrid discards the rest against the same allow-list
+  // the client sends here. Mixing/Productivity returns 6 landing kpi_names for
+  // the 3 on screen — Availability_o, Performance_o, Quality_o and OEE_p are
+  // all fetched and thrown away — so roughly half of every response was pure
+  // waste, multiplied by each day in the window.
+  //
+  // Union'd with drillKpis, never intersected: the C7 `Production_product`
+  // request rides on the landing payload and is NOT in the grid catalogue, so
+  // an allow-list that excluded it would blank the TBM/Curing Production card.
+  // Skipped entirely under drillOnly, where `kpi_name IN (drillKpis)` above is
+  // already the tighter filter.
+  if (!drillOnly && landingKpis != null) {
+    if (!Array.isArray(landingKpis) || landingKpis.length === 0) {
+      throw new QueryValidationError(
+        "landingKpis must be a non-empty array or null",
+      );
+    }
+    const names = new Set(
+      landingKpis.map((k) => safeStringValue(k, "landingKpis[]")),
+    );
+    for (const k of Array.isArray(drillKpis) ? drillKpis : []) {
+      names.add(safeStringValue(k, "drillKpis[]"));
+    }
+    if (names.size > 64) {
+      throw new QueryValidationError("landingKpis exceeds 64 entries");
+    }
+    where.push(
+      `kpi_name IN (${[...names].map((n) => escapeLiteral(n)).join(", ")})`,
+    );
+  }
+
   // 5. Bound result size. Upstream Lambda has its own limit too.
   const lim =
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
@@ -1026,7 +1100,9 @@ export function buildFetchQuery({
   const innerCols = GOLD_COLUMNS.map((c) => (c === "date" ? dateCol : c)).join(
     ", ",
   );
-  const outerCols = GOLD_COLUMNS.join(", ");
+  // Only the columns a row needs to reach the UI — see OUTPUT_COLUMNS. The
+  // inner scan keeps the full list so the dedupe partition is unchanged.
+  const outerCols = OUTPUT_COLUMNS.join(", ");
   const dedupedSource =
     `(SELECT ${innerCols}, ROW_NUMBER() OVER (` +
     `PARTITION BY ${DEDUPE_PARTITION.join(", ")} ` +

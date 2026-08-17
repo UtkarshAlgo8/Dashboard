@@ -18,7 +18,11 @@
  */
 import { useEffect, useReducer, useCallback } from "react";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
-import { toKpiGrid, toDrillRows } from "@/lib/kpi-transformer.js";
+import {
+  toKpiGrid,
+  toDrillRows,
+  landingKpiNames,
+} from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
 import { getAnchors } from "@/api/dashboard.js";
 import client from "@/api/client.js";
@@ -340,6 +344,14 @@ function needsBaseline(state) {
 export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // The kpi_names the grid renders for the active (section, category) — the
+  // same allow-list toKpiGrid narrows to, so the fetch and the filter stay in
+  // lockstep.
+  const gridKpiNames = landingKpiNames(
+    sectionIdToName(state.section),
+    state.category.toUpperCase(),
+  );
+
   // Landing payload — always fetched. Carries the 4 KPI cards for every
   // (section, category) combo.
   //
@@ -371,6 +383,15 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
       state.section === "tbm" || state.section === "cur"
         ? ["Production_product"]
         : null,
+    // Fetch ONLY the KPIs this grid draws. The landing band otherwise returns
+    // every top-level kpi_name in the (section, category) — 6 names in Mixing
+    // Productivity against the 3 on screen — and toKpiGrid discards the
+    // remainder against this very list. Measured over a default 8-day window
+    // (2026-08-06 → 08-13, Banmore): 72 → 40 rows in Mixing, 298 → 162 in
+    // Stock. An empty list means the combo has no catalogue entry, in which
+    // case we send nothing and keep the old unfiltered behaviour rather than
+    // fetching zero rows.
+    ...(gridKpiNames.length > 0 ? { landingKpis: gridKpiNames } : {}),
     parentFilters: {},
     limit: 10000,
     // new_change.md C15: ask for the preceding comparison window where the

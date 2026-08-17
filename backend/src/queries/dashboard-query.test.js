@@ -309,3 +309,133 @@ test("drill-aggregate rejects an unknown group-by column", () => {
     QueryValidationError,
   );
 });
+
+/* ------- landingKpis — fetch only the KPIs the grid actually renders ------- */
+
+/**
+ * The scan's WHERE clause only. The ORDER BY carries its own `kpi_name IN
+ * (...)` priority CASE listing the OEE family, so a whole-SQL match cannot
+ * tell a filter from a sort key.
+ */
+function scopeWhere(sql) {
+  const start = sql.indexOf(" WHERE ");
+  const end = sql.indexOf(") WHERE (__dedupe_rn");
+  assert.ok(start > -1 && end > start, "unexpected query shape");
+  return sql.slice(start, end);
+}
+
+test("landingKpis narrows the landing band to the rendered KPIs", () => {
+  const sql = buildFetchQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+    landingKpis: ["OEE_o", "Production", "Plan_Compliance"],
+  });
+  assert.ok(
+    sql.includes("kpi_name IN ('OEE_o', 'Production', 'Plan_Compliance')"),
+    "the allow-list must reach the WHERE",
+  );
+  // The level gate still applies — the allow-list narrows the band, it does
+  // not replace it, so a drill-level row sharing one of these names stays out.
+  assert.ok(sql.includes("drill_down_level IN ('1', '1.0')"));
+});
+
+test("landingKpis unions with drillKpis rather than excluding them", () => {
+  // C7: TBM/Curing ride `Production_product` on the landing payload, and it is
+  // NOT in the grid catalogue. Intersecting would blank the Production card.
+  const sql = buildFetchQuery({
+    context: { section: "Curing", granularity: "DAY" },
+    date: "2026-07-16",
+    drillKpis: ["Production_product"],
+    landingKpis: ["OEE_o", "Production"],
+  });
+  assert.ok(sql.includes("'Production_product'"), "the C7 KPI must survive");
+  assert.ok(sql.includes("'OEE_o'") && sql.includes("'Production'"));
+});
+
+test("landingKpis is ignored under drillOnly, where drillKpis is tighter", () => {
+  const sql = buildFetchQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+    drillKpis: ["Production_m"],
+    drillOnly: true,
+    landingKpis: ["OEE_o", "Production"],
+  });
+  const where = scopeWhere(sql);
+  assert.ok(where.includes("kpi_name IN ('Production_m')"));
+  assert.ok(
+    !where.includes("'OEE_o'"),
+    "the landing allow-list must not widen a drill page",
+  );
+});
+
+test("landingKpis omitted keeps every landing-level kpi_name", () => {
+  const sql = buildFetchQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+  });
+  assert.ok(
+    !/kpi_name IN/.test(scopeWhere(sql)),
+    "no allow-list means no kpi_name filter",
+  );
+});
+
+test("landingKpis rejects an empty array rather than returning nothing", () => {
+  // [] would build `kpi_name IN ()` — invalid SQL, or worse, zero rows
+  // presented as a real empty state. The client sends nothing instead.
+  assert.throws(
+    () =>
+      buildFetchQuery({
+        context: { section: "Mixing", granularity: "DAY" },
+        date: "2026-07-16",
+        landingKpis: [],
+      }),
+    QueryValidationError,
+  );
+  assert.throws(
+    () =>
+      buildFetchQuery({
+        context: { section: "Mixing", granularity: "DAY" },
+        date: "2026-07-16",
+        landingKpis: Array.from({ length: 65 }, (_, i) => `K${i}`),
+      }),
+    QueryValidationError,
+  );
+});
+
+/* ------- projection — only the columns a row needs to reach the UI -------- */
+
+test("the response projection drops the columns no consumer reads", () => {
+  const sql = buildFetchQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+  });
+  const outer = sql.slice(0, sql.indexOf(" FROM ("));
+  for (const col of [
+    "record_id",
+    "plant",
+    "department",
+    "tyre_type",
+    "production_ids",
+    "previous_values",
+    "plot_data",
+  ]) {
+    assert.ok(!outer.includes(col), `${col} must not be projected`);
+  }
+  for (const col of [
+    "date",
+    "section",
+    "machine",
+    "kpi_name",
+    "actual_value",
+    "threshold_value",
+    "drill_down_attribute",
+    "status",
+    "remarks",
+  ]) {
+    assert.ok(outer.includes(col), `${col} is read by the UI and must survive`);
+  }
+  // The dedupe partition reads plant/department/remarks/status, so the INNER
+  // scan must still carry them — narrowing the projection must not change
+  // which duplicate row wins.
+  assert.ok(sql.includes("PARTITION BY date, plant, department"));
+});

@@ -31,6 +31,10 @@ export async function postFetch(req, res, next) {
       from,
       to,
       drillKpis = null,
+      // The kpi_names the landing grid renders. Lets the query return only
+      // the rows that end up on screen instead of every top-level KPI in the
+      // section/category, most of which the transformer discards.
+      landingKpis = null,
       parentFilters = {},
       limit,
       offset,
@@ -72,6 +76,7 @@ export async function postFetch(req, res, next) {
         from,
         to,
         drillKpis,
+        landingKpis,
         parentFilters,
         limit: effectiveLimit + 1,
         offset,
@@ -92,6 +97,10 @@ export async function postFetch(req, res, next) {
 
     }
 
+    // Key on the NORMALIZED limit, not the raw one. `effectiveLimit` clamps
+    // and defaults the caller's value, so two requests that run byte-identical
+    // SQL (limit omitted vs limit: 5000, or 10000 vs 9999) landed on different
+    // keys and each paid its own upstream round-trip.
     const cacheKey = buildCacheKey("/dashboard/kpi-data", {
       context,
       plantId,
@@ -99,8 +108,9 @@ export async function postFetch(req, res, next) {
       from,
       to,
       drillKpis,
+      landingKpis,
       parentFilters,
-      limit,
+      limit: effectiveLimit,
       offset,
       drillOnly,
     });
@@ -144,13 +154,14 @@ export async function postFetch(req, res, next) {
           context,
           ...window,
           drillKpis,
+          landingKpis,
           parentFilters,
           limit: effectiveLimit + 1,
           offset,
           drillOnly,
         });
         const baselineRows = await cached(
-          buildCacheKey("/dashboard/kpi-data:baseline", { context, plantId, window, drillKpis, parentFilters, limit, offset, drillOnly }),
+          buildCacheKey("/dashboard/kpi-data:baseline", { context, plantId, window, drillKpis, landingKpis, parentFilters, limit: effectiveLimit, offset, drillOnly }),
           () => runQuery(baselineSql),
           CACHE_TTL.KPI_ROWS,
         );

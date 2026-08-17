@@ -114,9 +114,10 @@ function TrendModal({
    * kpi_name (TBM/Curing Production reads `Production_product`, drill_down_level
    * '3', C7) that a landing-only fetch (drillKpis:null) never returns — the
    * series came back empty ("No trend data" for Curing Production, found
-   * 2026-07-23). The backend OR-joins it with the landing band, and the
-   * client-side filter below (r.kpi_name === kpi.rawName) already isolates the
-   * single series, so the extra landing rows never reach the chart.
+   * 2026-07-23). Paired with drillOnly so the query is exactly that one
+   * kpi_name: the client-side filter below (r.kpi_name === kpi.rawName) kept
+   * only those rows anyway, and the landing band the OR-join used to bring
+   * along was fetched purely to be discarded.
    */
   // Narrow the fetch with section/category/granularity — the table is far
   // too large to fetch unfiltered (the row cap would truncate the series).
@@ -155,6 +156,12 @@ function TrendModal({
             : resolved.from,
         to: isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to,
         drillKpis: [kpi.rawName],
+        // The chart plots ONE series and filters to `r.kpi_name === rawName`
+        // immediately below, so the landing band the OR-join used to bring
+        // along was fetched and dropped in full — a month of every top-level
+        // KPI in the section for a single line. drillOnly narrows the query to
+        // that one kpi_name; the rows the chart keeps are identical.
+        drillOnly: true,
         limit: 10000,
       }
     : null;
