@@ -70,7 +70,11 @@ maxmemory-policy allkeys-lru
 save 900 1
 appendonly no
 bind 0.0.0.0
-protected-mode yes
+# Redis is not published to the host (`docker run` has no -p), so the Docker
+# network is the security boundary. protected-mode rejects non-loopback clients
+# when no password is configured, which includes backend -> redis traffic on
+# jk-net (172.x), causing the backend to fall back to memory.
+protected-mode no
 tcp-keepalive 300
 timeout 0
 EOF
