@@ -1,0 +1,23 @@
+# Keep the host's node_modules OUT of the build context.
+#
+# The Dockerfile runs `npm install --omit=dev` and THEN `COPY . .`, so without
+# this a node_modules directory sitting in the build context overwrites the one
+# the image just installed. If that stale copy predates a dependency (ioredis,
+# say), the dynamic import in utils/cache-store.js fails, createStore catches
+# it, and the app silently serves from the memory store — a deploy that looks
+# clean and caches nothing.
+node_modules
+
+.git
+.gitignore
+npm-debug.log*
+temp.txt
+
+# Parsed-workbook cache; rebuilt on demand and often large.
+data/.quality_gold.cache.json
+
+# NOTE: .env is deliberately NOT excluded. The current deploy relies on it
+# being baked into the image, since `docker run` passes no --env-file and
+# config.js throws at boot without AWS_DATA_URL / AWS_DATA_API_KEY. That does
+# put secrets in an image layer — worth moving to --env-file, but it is a
+# change to the production deploy path and belongs in its own commit.

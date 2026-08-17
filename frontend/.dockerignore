@@ -1,0 +1,16 @@
+# The build stage runs `npm install` itself; copying the host's tree in on top
+# both slows the build and risks platform-specific binaries from a dev machine.
+node_modules
+
+# Vite build output — regenerated inside the image.
+dist
+
+# Developer-machine override. It pins VITE_API_BASE_URL at the production
+# backend, which would otherwise leak into a test image and point the test
+# frontend at the production API.
+.env.local
+
+.git
+.gitignore
+npm-debug.log*
+logs
