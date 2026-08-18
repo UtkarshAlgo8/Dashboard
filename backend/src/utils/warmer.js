@@ -37,6 +37,10 @@ function staticTargets() {
       { method: "GET", path: `/api/v1/plants/${plantId}/summary` },
       { method: "GET", path: `/api/v1/dashboard/vocab?plantId=${plantId}` },
       { method: "GET", path: `/api/v1/dashboard/anchors?plantId=${plantId}` },
+      // The snapshot composes the entire page-load chain. The body is the
+      // server's default (no filter overrides); the FE may then refetch
+      // individual panels on user interaction.
+      { method: "POST", path: "/api/v1/dashboard/snapshot", body: { plantId } },
     );
   }
   return targets;

@@ -19,6 +19,7 @@ import { router as trendsRouter } from "./routes/trends.js";
 import { router as inventoryRouter } from "./routes/inventory.js";
 import { router as anomaliesRouter } from "./routes/anomalies.js";
 import { router as dashboardRouter } from "./routes/dashboard.js";
+import { router as snapshotRouter } from "./routes/snapshot.js";
 import { router as adminRouter } from "./routes/admin.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
@@ -58,6 +59,8 @@ app.use("/api/v1/plants/:plantId/production/drills", drillsRouter);
 app.use("/api/v1/plants/:plantId/inventory", inventoryRouter);
 app.use("/api/v1/plants/:plantId/anomalies", anomaliesRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
+// /api/v1/dashboard/snapshot — composes the page-load chain into one call.
+app.use("/api/v1/dashboard", snapshotRouter);
 //   /api/v1/admin/cache/{stats,warm}                      → cache ops
 app.use("/api/v1/admin", adminRouter);
 
