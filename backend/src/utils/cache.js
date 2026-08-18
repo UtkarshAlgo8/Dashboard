@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { config } from "../config.js";
 import { createStore } from "./cache-store.js";
+import { materializerStats } from "./materializer.js";
 
 /**
  * TTL cache in front of the upstream data API.
@@ -186,6 +187,7 @@ export async function cacheStats() {
       lastRunDurationMs: stats.lastWarmDurationMs,
       lastRunTargets: stats.lastWarmTargets,
     },
+    materializer: materializerStats(),
   };
 }
 

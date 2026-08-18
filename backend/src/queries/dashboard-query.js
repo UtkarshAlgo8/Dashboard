@@ -162,6 +162,9 @@ const AGGREGATE_PRODUCT_CHILDREN = {
   "Green Tyre": ["Passenger Radial", "LCV", "Unknown"],
   "Cured Tyre": ["Passenger Radial", "LCV", "Unknown"],
 };
+// Exported so the materializer (src/utils/materializer.js) can mirror the
+// product-split lookup logic in JS without duplicating this map.
+export { AGGREGATE_PRODUCT_CHILDREN };
 
 /**
  * new_change.md C4 — drill levels that store BOTH the aggregate row and its

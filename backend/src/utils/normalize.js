@@ -440,6 +440,10 @@ const UNIT_ALIASES = new Map([
   ["METER", "M"],
   ["NUM", "NOS"],
 ]);
+// Exported so the materializer can mirror the same spelling-merge logic
+// in JS. Keep the two in lockstep — drift silently halves filtered rows
+// when "Meters" is sent and the materializer doesn't fold it.
+export { UNIT_ALIASES };
 
 /**
  * Normalize a unit_of_measurement value for display.

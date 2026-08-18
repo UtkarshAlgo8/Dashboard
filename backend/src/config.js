@@ -120,4 +120,19 @@ export const config = {
     // throttling the upstream and timing out the warm it is trying to do.
     concurrency: asInt("CACHE_WARM_CONCURRENCY", 2),
   },
+  // Data materializer — pulls level-1+2 deduped rows for the trailing
+  // window and serves kpi-data / drill-aggregate from process memory.
+  // Trailing-window refresh on a 30-min cadence: shift-grain data doesn't
+  // change more often than that, so longer intervals would serve stale
+  // data on a new shift boundary.
+  materialize: {
+    enabled: optional("CACHE_MATERIALIZE_ENABLED", "true") !== "false",
+    intervalMs: asInt("CACHE_MATERIALIZE_INTERVAL_MS", 30 * 60 * 1000),
+    bootDelayMs: asInt("CACHE_MATERIALIZE_BOOT_DELAY_MS", 5_000),
+    windowDays: asInt("CACHE_MATERIALIZE_WINDOW_DAYS", 60),
+    levels: optional("CACHE_MATERIALIZE_LEVELS", "1,2")
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n)),
+  },
 };

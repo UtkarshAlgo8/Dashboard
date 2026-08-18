@@ -1,6 +1,11 @@
 import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import {
+  lookupLanding,
+  lookupDrill,
+  lookupDrillAggregate,
+} from "../utils/materializer.js";
+import {
   normalizePlantId,
   plantDepartmentPredicate,
   plantSqlTable,
@@ -114,7 +119,24 @@ export async function postFetch(req, res, next) {
       offset,
       drillOnly,
     });
-    const rows = await cached(cacheKey, () => runQuery(sql), CACHE_TTL.KPI_ROWS);
+    // Materializer-first read. The materializer holds level-1+2 deduped
+    // rows for the trailing window and serves any filter combination
+    // out of memory. Falls through to the warmed cache + Athena when
+    // the materializer has no data (e.g. plant not warmed, window
+    // outside range, or materializer disabled). On a hit, we still go
+    // through the cache to preserve the existing 2-min TTL semantics
+    // for any other reader and to avoid a refetch on the next call.
+    const matRows = drillOnly
+      ? lookupDrill(req.body)
+      : lookupLanding(req.body);
+    const rows =
+      matRows != null
+        ? matRows
+        : await cached(
+            cacheKey,
+            () => runQuery(sql),
+            CACHE_TTL.KPI_ROWS,
+          );
 
     // C10: we asked for one row beyond the cap. If it came back, the result is
     // incomplete — trim the probe row and flag it so the UI can refuse to show
@@ -265,22 +287,30 @@ export async function postDrillAggregate(req, res, next) {
       limit,
       offset,
     });
-    const rows = await cached(
-      buildCacheKey("/dashboard/drill-aggregate", {
-        plantId,
-        context,
-        parentFilters,
-        date,
-        from,
-        to,
-        kpiName,
-        groupBy,
-        limit,
-        offset,
-      }),
-      () => runQuery(sql),
-      CACHE_TTL.KPI_ROWS,
-    );
+    // Materializer-first read for the additive drill-aggregate. The
+    // materializer's lookupDrillAggregate does the SUM rollup in JS;
+    // when it answers, we still cache the SQL-shaped response so other
+    // readers don't re-aggregate.
+    const matRows = lookupDrillAggregate(req.body);
+    const rows =
+      matRows != null
+        ? matRows
+        : await cached(
+            buildCacheKey("/dashboard/drill-aggregate", {
+              plantId,
+              context,
+              parentFilters,
+              date,
+              from,
+              to,
+              kpiName,
+              groupBy,
+              limit,
+              offset,
+            }),
+            () => runQuery(sql),
+            CACHE_TTL.KPI_ROWS,
+          );
 
     res.json({ data: rows });
   } catch (err) {
