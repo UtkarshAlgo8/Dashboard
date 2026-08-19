@@ -61,6 +61,8 @@ export default function FtdDrillPanel({ drillRows, granularity = "DAY" }) {
         title="Machine-wise FTQ"
         cols={["Machine", "FTQ %", "Defects", "Top Defect"]}
         rows={rows}
+        downloadFilename="drill-ftq-machine"
+        downloadSheetName="FTQ"
       />
     </Stack>
   );

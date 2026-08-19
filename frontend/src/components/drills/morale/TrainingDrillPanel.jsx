@@ -51,6 +51,8 @@ export default function TrainingDrillPanel({ drillRows, granularity = "DAY" }) {
         title="Training by Area"
         cols={["Area", "Plan Hrs", "Actual Hrs", "Compliance %"]}
         rows={rows}
+        downloadFilename="drill-training"
+        downloadSheetName="Training"
       />
     </Stack>
   );

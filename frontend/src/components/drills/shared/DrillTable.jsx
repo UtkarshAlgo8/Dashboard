@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   Stack,
   Table,
@@ -8,11 +9,21 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * Reusable drill data table — matches artifact DTable style.
  * Columns: first column left-aligned, rest right-aligned.
  * Odd rows get a subtle background for readability.
+ *
+ * Download support (top-left icon, Excel-only by default):
+ *   downloadFilename   - when set, a download icon appears next to the title.
+ *                        Excel is built from `rows` + `cols` (or
+ *                        `downloadHeaders` if the displayed rows are
+ *                        pre-formatted strings you don't want in the file).
+ *   downloadHeaders    - optional override of `cols` for the Excel export
+ *                        only. The rendered table still uses `cols`.
+ *   downloadSheetName  - worksheet name (default "Data").
  *
  * @param {string}   title      - panel title (shown above table)
  * @param {string[]} cols       - column headers
@@ -20,21 +31,61 @@ import {
  * @param {Function} [rowMapper] - optional: (row) => (cell|string)[]
  * @param {string}   [accent]   - MUI color token for title accent
  */
-export function DrillTable({ title, cols, rows, rowMapper, accent }) {
+export function DrillTable({
+  title,
+  cols,
+  rows,
+  rowMapper,
+  accent,
+  downloadFilename,
+  downloadHeaders,
+  downloadSheetName,
+}) {
+  const tableRef = useRef(null);
+  const excelHeaders = downloadHeaders ?? cols ?? [];
+
+  // DrillTable's rows are either rowMapper-shaped arrays of cells (the
+  // common case) or pre-resolved arrays/objects. Normalise to
+  // { header: cell } for the Excel builder.
+  const excelRows = (Array.isArray(rows) ? rows : []).map((row) => {
+    const cells = rowMapper
+      ? rowMapper(row)
+      : Array.isArray(row)
+        ? row
+        : Object.values(row);
+    const out = {};
+    excelHeaders.forEach((h, i) => {
+      out[h ?? `col_${i}`] = cells[i];
+    });
+    return out;
+  });
+
   return (
-    <Stack spacing={1.25}>
+    <Stack spacing={1.25} sx={{ position: "relative" }}>
       {title && (
-        <Typography
-          sx={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: accent ? `${accent}.main` : "text.primary",
-          }}
-        >
-          {title}
-        </Typography>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {downloadFilename && (
+            <CardDownloadButton
+              cardRef={tableRef}
+              rows={excelRows}
+              headers={excelHeaders}
+              filename={downloadFilename}
+              sheetName={downloadSheetName}
+            />
+          )}
+          <Typography
+            sx={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: accent ? `${accent}.main` : "text.primary",
+            }}
+          >
+            {title}
+          </Typography>
+        </Stack>
       )}
       <TableContainer
+        ref={tableRef}
         sx={{
           maxHeight: 320,
           border: 1,
@@ -43,18 +94,18 @@ export function DrillTable({ title, cols, rows, rowMapper, accent }) {
         }}
       >
         <Table
-        size="small"
-        stickyHeader
-        sx={(t) => ({
-          "& .MuiTableCell-root": {
-            border: "1px solid",
-            borderColor: t.palette.divider,
-          },
-          "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
-          },
-        })}
-      >
+          size="small"
+          stickyHeader
+          sx={(t) => ({
+            "& .MuiTableCell-root": {
+              border: "1px solid",
+              borderColor: t.palette.divider,
+            },
+            "& thead .MuiTableCell-root": {
+              backgroundColor: t.custom.surface.soft,
+            },
+          })}
+        >
           <TableHead>
             <TableRow>
               {cols.map((c) => (

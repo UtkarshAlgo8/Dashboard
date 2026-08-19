@@ -33,6 +33,8 @@ export default function ReworkDrillPanel({ drillRows }) {
         title="Rework Detail"
         cols={["SKU", "Machine", "Defect", "Qty", "Status"]}
         rows={rows}
+        downloadFilename="drill-rework"
+        downloadSheetName="Rework"
       />
     </Stack>
   );

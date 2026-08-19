@@ -22,7 +22,10 @@ function fmt(v, d = 1) {
   return typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
 }
 
-export default function SpecificPowerDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function SpecificPowerDrillPanel({
+  drillRows,
+  granularity = "DAY",
+}) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Specific_Power_m") continue;
@@ -40,8 +43,7 @@ export default function SpecificPowerDrillPanel({ drillRows, granularity = "DAY"
     .map(([machine, { actuals, targets }]) => {
       const sp = avg(actuals);
       const target = avg(targets);
-      const variance =
-        sp != null && target != null ? sp - target : null;
+      const variance = sp != null && target != null ? sp - target : null;
       return [machine, fmt(sp, 2), fmt(target, 1), fmt(variance, 1)];
     });
 
@@ -51,6 +53,8 @@ export default function SpecificPowerDrillPanel({ drillRows, granularity = "DAY"
         title="Machine-wise Specific Power (kWh/MT)"
         cols={["Machine", "Sp. Power", "Target", "Variance"]}
         rows={rows}
+        downloadFilename="drill-specific-power"
+        downloadSheetName="SpecificPower"
       />
     </Stack>
   );

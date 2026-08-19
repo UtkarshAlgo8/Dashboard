@@ -16,7 +16,10 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function SafetyAuditDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function SafetyAuditDrillPanel({
+  drillRows,
+  granularity = "DAY",
+}) {
   const byArea = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Audit_area") continue;
@@ -46,6 +49,8 @@ export default function SafetyAuditDrillPanel({ drillRows, granularity = "DAY" }
         title="Audit by Area"
         cols={["Area", "Score", "NC Major", "NC Minor", "Observations"]}
         rows={rows}
+        downloadFilename="drill-safety-audit"
+        downloadSheetName="SafetyAudit"
       />
     </Stack>
   );

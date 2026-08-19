@@ -22,7 +22,10 @@ function splitRemarks(remarks) {
   };
 }
 
-export default function ReportableDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function ReportableDrillPanel({
+  drillRows,
+  granularity = "DAY",
+}) {
   const rows = (drillRows ?? [])
     .filter(
       (r) =>
@@ -34,7 +37,13 @@ export default function ReportableDrillPanel({ drillRows, granularity = "DAY" })
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
     .map((r) => {
       const { area, desc } = splitRemarks(r.remarks);
-      return [toDisplayDate(r.date) ?? "—", "Reportable", area, desc, r.status ?? "—"];
+      return [
+        toDisplayDate(r.date) ?? "—",
+        "Reportable",
+        area,
+        desc,
+        r.status ?? "—",
+      ];
     });
 
   return (
@@ -43,6 +52,8 @@ export default function ReportableDrillPanel({ drillRows, granularity = "DAY" })
         title="Reportable Incidents"
         cols={["Date", "Type", "Area", "Description", "Status"]}
         rows={rows}
+        downloadFilename="drill-reportable-incidents"
+        downloadSheetName="Reportable"
       />
     </Stack>
   );

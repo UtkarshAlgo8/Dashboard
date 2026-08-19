@@ -16,7 +16,10 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function AbsenteeismDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function AbsenteeismDrillPanel({
+  drillRows,
+  granularity = "DAY",
+}) {
   const bySection = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Absenteeism_section") continue;
@@ -39,6 +42,8 @@ export default function AbsenteeismDrillPanel({ drillRows, granularity = "DAY" }
         title="Section-wise Absenteeism (plant-level)"
         cols={["Area", "Total", "Present", "Absent", "Rate"]}
         rows={rows}
+        downloadFilename="drill-absenteeism"
+        downloadSheetName="Absenteeism"
       />
     </Stack>
   );

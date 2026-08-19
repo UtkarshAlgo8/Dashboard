@@ -1,10 +1,11 @@
-import { useMemo } from "react";
-import { Stack, Typography } from "@mui/material";
+import { useMemo, useRef } from "react";
+import { Box, Stack, Typography } from "@mui/material";
 import DataTable from "@/components/tables/DataTable.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import { toDrillRows } from "@/lib/kpi-transformer.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * NCM Hold drill — item-code-wise hold details (kpi_name = NCM_Hold_sku).
@@ -113,7 +114,9 @@ export default function NcmDrillPanel({
   const { data: dayData } = usePolledQuery(
     () =>
       dayPayload
-        ? client.post("/dashboard/kpi-data", dayPayload).then((r) => r.data ?? r)
+        ? client
+            .post("/dashboard/kpi-data", dayPayload)
+            .then((r) => r.data ?? r)
         : Promise.resolve(null),
     {
       enabled: Boolean(dayPayload),
@@ -150,18 +153,47 @@ export default function NcmDrillPanel({
       .sort((a, b) => b.actual - a.actual);
   }, [needsDayRows, dayData, drillRows, granularity]);
 
+  const cardRef = useRef(null);
+  const excelRows = rows.map((r) => ({
+    "Item Code": r.itemCode,
+    Date: toDisplayDate(r.date) ?? "—",
+    "Hold Quantity": Math.round(r.actual),
+    "Final Status": r.statusRaw ?? "—",
+    "Remark / Reason": r.reason ?? "—",
+  }));
+
   return (
     <Stack spacing={1.25}>
-      <Typography sx={{ fontSize: 13, fontWeight: 600, color: "text.primary" }}>
-        NCM Hold Details
-      </Typography>
-      <DataTable
-        columns={COLUMNS}
-        rows={rows}
-        getRowKey={(r, i) => `${r.itemCode}|${r.reason}|${r.date}|${i}`}
-        searchPlaceholder="Search item code or reason…"
-        emptyMessage="No NCM hold records for this selection."
-      />
+      <Stack direction="row" alignItems="center" spacing={1}>
+        {/* Top-left download — menu offers PDF (visual) + Excel (NCM rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={excelRows}
+          headers={[
+            "Item Code",
+            "Date",
+            "Hold Quantity",
+            "Final Status",
+            "Remark / Reason",
+          ]}
+          filename="drill-ncm-hold"
+          sheetName="NCMHold"
+        />
+        <Typography
+          sx={{ fontSize: 13, fontWeight: 600, color: "text.primary" }}
+        >
+          NCM Hold Details
+        </Typography>
+      </Stack>
+      <Box ref={cardRef}>
+        <DataTable
+          columns={COLUMNS}
+          rows={rows}
+          getRowKey={(r, i) => `${r.itemCode}|${r.reason}|${r.date}|${i}`}
+          searchPlaceholder="Search item code or reason…"
+          emptyMessage="No NCM hold records for this selection."
+        />
+      </Box>
     </Stack>
   );
 }

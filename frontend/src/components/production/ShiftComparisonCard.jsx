@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Box, Tooltip, Typography } from "@mui/material";
 import DataTable from "@/components/tables/DataTable.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
@@ -16,6 +17,7 @@ import { buildDatePayload } from "@/lib/timeRange.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import JKLoader from "@/components/JKLoader.jsx";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * Shift Comparison card — appears below KPI grid, Productivity tab only.
@@ -279,21 +281,35 @@ export default function ShiftComparisonCard({
     ? `${toDisplayDate(from) ?? "…"} → ${toDisplayDate(to) ?? "…"} · daily shift rows summed`
     : (toDisplayDate(date) ?? "latest day");
 
+  const cardRef = useRef(null);
+
   return (
     <Box
+      ref={cardRef}
       sx={{
+        position: "relative",
         border: 1,
         borderColor: "divider",
         borderRadius: 1.25,
         p: 2,
       }}
     >
+      {/* Top-left download — menu offers PDF (visual) + Excel (shift rows). */}
+      <CardDownloadButton
+        cardRef={cardRef}
+        rows={shiftRows}
+        headers={["Shift", "Production", "Scrap", "Rework"]}
+        filename={`shift-comparison-${(section ?? "section").toLowerCase().replace(/\s+/g, "-")}`}
+        sheetName="ShiftComparison"
+        sx={{ position: "absolute", top: 4, left: 4 }}
+      />
       <Typography
         sx={{
           fontSize: 13,
           fontWeight: 600,
           color: "primary.main",
           mb: 0.5,
+          pl: 3, // leave room for the absolute download icon
         }}
       >
         Shift Comparison

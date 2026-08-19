@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import {
   Box,
   Stack,
@@ -14,6 +14,7 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import client from "@/api/client.js";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 // Athena serializes measures as strings; coerce to number|null for display.
 function num(v) {
@@ -251,7 +252,6 @@ function ProductionDrillPanel({
     }));
   }, [pageData]);
 
-
   // Curing trench list (§7): one row per Tredge (Production_s). Grouped
   // server-side for the same reason the table above is — the raw rows are one
   // per (Tredge, DAY), so a wide range used to overflow the 100-row fetch and
@@ -326,6 +326,58 @@ function ProductionDrillPanel({
   // trench-wise list (Production_s). Selecting one reveals its press/SKU
   // table below. Other sections skip this and go straight to the table.
   const showTrenchPicker = isCuring && tredgeRows.length > 0;
+  const cardRef = useRef(null);
+
+  // Excel rows: shape by the active view-by so columns match the table.
+  const excelHeaders =
+    viewBy === "machine"
+      ? [
+          "Machine",
+          `Planned (${unitLabel})`,
+          `Actual (${unitLabel})`,
+          "Achievement %",
+        ]
+      : viewBy === "sku"
+        ? [
+            "Item Code",
+            `Planned (${unitLabel})`,
+            `Actual (${unitLabel})`,
+            "Achievement %",
+          ]
+        : [
+            "Machine",
+            "Item Code",
+            `Planned (${unitLabel})`,
+            `Actual (${unitLabel})`,
+            "Achievement %",
+          ];
+  const excelRows = rows.map((r) => {
+    const ach =
+      r.planned > 0 ? Number(((r.actual / r.planned) * 100).toFixed(2)) : "";
+    if (viewBy === "machine") {
+      return {
+        Machine: r.machine,
+        [`Planned (${unitLabel})`]: r.planned,
+        [`Actual (${unitLabel})`]: r.actual,
+        "Achievement %": ach,
+      };
+    }
+    if (viewBy === "sku") {
+      return {
+        "Item Code": r.itemcode,
+        [`Planned (${unitLabel})`]: r.planned,
+        [`Actual (${unitLabel})`]: r.actual,
+        "Achievement %": ach,
+      };
+    }
+    return {
+      Machine: r.machine,
+      "Item Code": r.itemcode,
+      [`Planned (${unitLabel})`]: r.planned,
+      [`Actual (${unitLabel})`]: r.actual,
+      "Achievement %": ach,
+    };
+  });
 
   if (rows.length === 0 && !showTrenchPicker) {
     if (loading) {
@@ -343,17 +395,29 @@ function ProductionDrillPanel({
 
   return (
     <Stack spacing={2}>
-      <Typography
-        sx={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: "primary.main",
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        {title}
-      </Typography>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        {/* Top-left download — menu offers PDF (visual) + Excel (page rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={excelRows}
+          headers={excelHeaders}
+          filename={`drill-production-${sectionName.toLowerCase().replace(/\s+/g, "-")}${
+            prodSub ? `-${prodSub.toLowerCase().replace(/\s+/g, "-")}` : ""
+          }`}
+          sheetName="Production"
+        />
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {title}
+        </Typography>
+      </Stack>
 
       {/* Curing trench tier (§7): Tredge-wise list (Production_s). Click a
           Tredge to drill into its presses / SKUs. */}
@@ -413,7 +477,7 @@ function ProductionDrillPanel({
           {loading && rows.length === 0 ? (
             <DrillSkeleton rows={6} cols={5} />
           ) : rows.length > 0 ? (
-            <>
+            <Box ref={cardRef}>
               <ResultTable
                 rows={rows}
                 viewBy={viewBy}
@@ -431,7 +495,7 @@ function ProductionDrillPanel({
                 pageSizeOptions={PAGE_SIZE_OPTIONS}
                 disabled={loading}
               />
-            </>
+            </Box>
           ) : (
             <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
               <Typography sx={{ fontSize: 13 }}>

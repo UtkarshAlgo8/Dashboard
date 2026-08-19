@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   Box,
   Stack,
@@ -10,6 +11,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * Item-level Live Inventory table per BRD FR-P65 + summary strip
@@ -17,12 +19,15 @@ import {
  */
 function InventoryItemTable({ bar }) {
   const theme = useTheme();
+  const cardRef = useRef(null);
   if (!bar) return null;
   const total = bar.items.reduce((acc, it) => acc + it.liveStock, 0);
 
   return (
     <Box
+      ref={cardRef}
       sx={{
+        position: "relative",
         backgroundColor: "background.paper",
         border: 1,
         borderColor: "divider",
@@ -38,15 +43,30 @@ function InventoryItemTable({ bar }) {
         spacing={1.5}
         sx={{ mb: 1.5 }}
       >
-        <Box>
-          <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-            Live Inventory
-          </Typography>
-          <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
-            {bar.label} — {bar.items.length} item
-            {bar.items.length !== 1 ? "s" : ""}
-          </Typography>
-        </Box>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {/* Top-left download — menu offers PDF (visual) + Excel (item rows). */}
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={bar.items.map((it) => ({
+              "Item Code": it.itemCode,
+              Description: it.description,
+              "Live Stock": it.liveStock,
+              Unit: it.unit,
+            }))}
+            headers={["Item Code", "Description", "Live Stock", "Unit"]}
+            filename={`inventory-items-${(bar.label ?? "items").toLowerCase().replace(/\s+/g, "-")}`}
+            sheetName="InventoryItems"
+          />
+          <Box>
+            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+              Live Inventory
+            </Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
+              {bar.label} — {bar.items.length} item
+              {bar.items.length !== 1 ? "s" : ""}
+            </Typography>
+          </Box>
+        </Stack>
         <Box sx={{ textAlign: "right" }}>
           <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
             Total
@@ -78,18 +98,18 @@ function InventoryItemTable({ bar }) {
         }}
       >
         <Table
-        size="small"
-        stickyHeader
-        sx={(t) => ({
-          "& .MuiTableCell-root": {
-            border: "1px solid",
-            borderColor: t.palette.divider,
-          },
-          "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
-          },
-        })}
-      >
+          size="small"
+          stickyHeader
+          sx={(t) => ({
+            "& .MuiTableCell-root": {
+              border: "1px solid",
+              borderColor: t.palette.divider,
+            },
+            "& thead .MuiTableCell-root": {
+              backgroundColor: t.custom.surface.soft,
+            },
+          })}
+        >
           <TableHead>
             <TableRow>
               <Th align="center">Item Code</Th>
@@ -104,7 +124,10 @@ function InventoryItemTable({ bar }) {
                   {it.itemCode}
                 </TableCell>
                 <TableCell sx={{ fontSize: 13 }}>{it.description}</TableCell>
-                <TableCell align="center" sx={{ fontSize: 16, fontWeight: 700 }}>
+                <TableCell
+                  align="center"
+                  sx={{ fontSize: 16, fontWeight: 700 }}
+                >
                   {it.liveStock.toLocaleString()}{" "}
                   <Typography
                     component="span"

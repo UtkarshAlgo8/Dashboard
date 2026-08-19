@@ -36,6 +36,8 @@ export default function ScrapDrillPanel({ drillRows, granularity = "DAY" }) {
         title="Defect / Scrap Detail"
         cols={["SKU", "Machine", "Reason"]}
         rows={rows}
+        downloadFilename="drill-defect-scrap"
+        downloadSheetName="DefectScrap"
       />
     </Stack>
   );

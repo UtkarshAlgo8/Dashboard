@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   Box,
   IconButton,
@@ -11,6 +12,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import Sparkline from "./Sparkline.jsx";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * KPI card — CR-08 update.
@@ -23,6 +25,7 @@ import Sparkline from "./Sparkline.jsx";
  */
 function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
   const theme = useTheme();
+  const cardRef = useRef(null);
   const sparkColor = kpi.trendFavourable
     ? theme.custom.brand.green
     : theme.custom.brand.red;
@@ -33,8 +36,10 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
 
   return (
     <Box
+      ref={cardRef}
       onClick={() => onClick(kpi)}
       sx={{
+        position: "relative",
         backgroundColor: "background.paper",
         border: 1,
         borderColor: isDrilling ? "primary.main" : "divider",
@@ -59,17 +64,26 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
     >
       {/* Header row */}
       <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Typography
-          sx={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: "text.disabled",
-            textTransform: "uppercase",
-            letterSpacing: 0.6,
-          }}
-        >
-          {kpi.name}
-        </Typography>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          {/* Top-left download — captures the card visually as PDF. */}
+          <CardDownloadButton
+            cardRef={cardRef}
+            filename={`kpi-${(kpi.name ?? "card").toLowerCase().replace(/\s+/g, "-")}`}
+            sx={{ position: "absolute", top: 4, left: 4 }}
+          />
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: "text.disabled",
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+              pl: 3, // leave room for the absolute download icon
+            }}
+          >
+            {kpi.name}
+          </Typography>
+        </Stack>
         <Stack direction="row" spacing={0.75} alignItems="center">
           <Tooltip title="Trend" arrow>
             <IconButton

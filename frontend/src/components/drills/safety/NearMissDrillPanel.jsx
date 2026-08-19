@@ -38,6 +38,8 @@ export default function NearMissDrillPanel({ drillRows, granularity = "DAY" }) {
         title="Near Miss Categories"
         cols={["Category", "Count", "Share", "Status"]}
         rows={rows}
+        downloadFilename="drill-near-miss"
+        downloadSheetName="NearMiss"
       />
     </Stack>
   );

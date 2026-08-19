@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Box, Stack, Typography } from "@mui/material";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import DataTable from "@/components/tables/DataTable.jsx";
 import { snapshotLatest } from "@/lib/drillDate.js";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 const DOWNTIME_COLUMNS = [
   { key: "code", label: "Code Category", align: "left" },
@@ -58,6 +59,8 @@ function DowntimeDrillPanel({
   isLoading = false,
 }) {
   const sectionName = SECTION_NAME[section] ?? section;
+
+  const cardRef = useRef(null);
 
   const grouped = useMemo(() => {
     if (!Array.isArray(rawRows)) return [];
@@ -115,25 +118,44 @@ function DowntimeDrillPanel({
 
   return (
     <Stack spacing={1.5}>
-      <Typography
-        sx={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: "primary.main",
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        Detailed Downtime Log
-      </Typography>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        {/* Top-left download — menu offers PDF (visual) + Excel (rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={grouped}
+          headers={[
+            "Code Category",
+            "Equipment",
+            "Delay Reason",
+            "Events",
+            "Total DT (Min)",
+            "Total DT (Hr)",
+          ]}
+          filename={`drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
+          sheetName="Downtime"
+        />
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          Detailed Downtime Log
+        </Typography>
+      </Stack>
 
-      <DataTable
-        columns={DOWNTIME_COLUMNS}
-        rows={grouped}
-        maxHeight={440}
-        searchPlaceholder="Search downtime…"
-        emptyMessage="No Downtime breakdown for this range."
-      />
+      <Box ref={cardRef}>
+        <DataTable
+          columns={DOWNTIME_COLUMNS}
+          rows={grouped}
+          maxHeight={440}
+          searchPlaceholder="Search downtime…"
+          emptyMessage="No Downtime breakdown for this range."
+        />
+      </Box>
     </Stack>
   );
 }

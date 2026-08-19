@@ -16,7 +16,10 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function ScrapRateDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function ScrapRateDrillPanel({
+  drillRows,
+  granularity = "DAY",
+}) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Scrap_Rate_m") continue;
@@ -35,8 +38,7 @@ export default function ScrapRateDrillPanel({ drillRows, granularity = "DAY" }) 
     .map(([machine, { actuals, targets }]) => {
       const rate = avg(actuals);
       const target = avg(targets);
-      const variance =
-        rate != null && target != null ? rate - target : null;
+      const variance = rate != null && target != null ? rate - target : null;
       return [
         machine,
         rate != null ? `${rate.toFixed(2)}%` : "—",
@@ -51,6 +53,8 @@ export default function ScrapRateDrillPanel({ drillRows, granularity = "DAY" }) 
         title="Machine-wise Scrap Rate"
         cols={["Machine", "Scrap Rate", "Target", "Variance"]}
         rows={rows}
+        downloadFilename="drill-scrap-rate"
+        downloadSheetName="ScrapRate"
       />
     </Stack>
   );

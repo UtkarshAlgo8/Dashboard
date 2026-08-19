@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import {
   Box,
   Stack,
@@ -21,6 +21,7 @@ import client from "@/api/client.js";
 import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * OEE drill panel — derives its data straight from the gold rows the
@@ -465,6 +466,31 @@ function OeeDrillPanel({
     );
   }, [selectedCell, machines]);
 
+  const cardRef = useRef(null);
+  const machineExcelRows = useMemo(
+    () =>
+      machines.map((m) => ({
+        Machine: m.name,
+        Availability:
+          m.availability != null ? Number(m.availability.toFixed(2)) : "",
+        Performance:
+          m.performance != null ? Number(m.performance.toFixed(2)) : "",
+        Quality: m.quality != null ? Number(m.quality.toFixed(2)) : "",
+        OEE:
+          m.availability != null && m.performance != null && m.quality != null
+            ? Number(
+                (
+                  (m.availability / 100) *
+                  (m.performance / 100) *
+                  (m.quality / 100) *
+                  100
+                ).toFixed(2),
+              )
+            : "",
+      })),
+    [machines],
+  );
+
   if (!overall) {
     // While the drill fetch is in flight, show a skeleton instead of the
     // empty-state message — otherwise the user reads "no data" for the
@@ -490,103 +516,126 @@ function OeeDrillPanel({
 
   return (
     <Stack spacing={3}>
-      {/* A/P/Q card row — sits as a secondary KPI band under the main grid.
-          For Curing, reflects the selected trench (or section overall). */}
-      <OverallTiles
-        overall={overall}
-        sectionName={
-          showTrench && selectedTredge
-            ? `${sectionName} · ${selectedTredge}`
-            : sectionName
-        }
-        machineCount={machines.length}
-      />
-
-      {/* Curing trench tier (§6): Tredge list (OEE_s + A_s/P_s/Q_s). Click a
-          Tredge to drill into its presses. */}
-      {showTrench && (
-        <TrenchTable
-          tredges={tredges}
-          selected={selectedTredge}
-          onSelect={(t) => {
-            setSelectedTredge((cur) => (cur === t ? null : t));
-            setSelectedCell(null);
-            setSubCategory(null);
-          }}
+      <Stack direction="row" alignItems="center" spacing={1}>
+        {/* Top-left download — menu offers PDF (visual) + Excel (machine rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={machineExcelRows}
+          headers={["Machine", "Availability", "Performance", "Quality", "OEE"]}
+          filename={`drill-oee-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
+          sheetName="OEE"
         />
-      )}
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {sectionName} OEE
+        </Typography>
+      </Stack>
+      <Box ref={cardRef}>
+        {/* A/P/Q card row — sits as a secondary KPI band under the main grid.
+            For Curing, reflects the selected trench (or section overall). */}
+        <OverallTiles
+          overall={overall}
+          sectionName={
+            showTrench && selectedTredge
+              ? `${sectionName} · ${selectedTredge}`
+              : sectionName
+          }
+          machineCount={machines.length}
+        />
 
-      {/* Machine-wise breakdown — for Curing, only after a Tredge is picked. */}
-      {(!showTrench || selectedTredge) && (
-        <Stack spacing={1.5}>
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            spacing={1}
-          >
-            <Typography
-              sx={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: "primary.main",
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
+        {/* Curing trench tier (§6): Tredge list (OEE_s + A_s/P_s/Q_s). Click a
+            Tredge to drill into its presses. */}
+        {showTrench && (
+          <TrenchTable
+            tredges={tredges}
+            selected={selectedTredge}
+            onSelect={(t) => {
+              setSelectedTredge((cur) => (cur === t ? null : t));
+              setSelectedCell(null);
+              setSubCategory(null);
+            }}
+          />
+        )}
+
+        {/* Machine-wise breakdown — for Curing, only after a Tredge is picked. */}
+        {(!showTrench || selectedTredge) && (
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              spacing={1}
             >
-              Machine-wise breakdown
-            </Typography>
-          </Stack>
-
-          {machines.length === 0 ? (
-            isLoading ? (
-              <DrillSkeleton title={false} rows={5} cols={5} />
-            ) : (
-              <Box
+              <Typography
                 sx={{
-                  p: 2,
-                  border: 1,
-                  borderColor: "divider",
-                  borderRadius: 1.25,
-                  textAlign: "center",
-                  color: "text.disabled",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "primary.main",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
                 }}
               >
-                <Typography sx={{ fontSize: 13 }}>
-                  Machine-level rows for {sectionName} are not available for
-                  this selection.
-                </Typography>
-              </Box>
-            )
-          ) : (
-            <>
-              <MachineTable
-                machines={machines.map((m) => ({
-                  id: m.id,
-                  name: m.name,
-                  availability: m.availability ?? 0,
-                  performance: m.performance ?? 0,
-                  quality: m.quality ?? 0,
-                }))}
-                selectedCell={selectedCell}
-                onSelectCell={handleSelectCell}
-              />
-              {selectedMachine && selectedCell && activeSubCategory && (
-                <SubDrill
-                  machine={selectedMachine}
-                  component={selectedCell.component}
-                  subCategory={activeSubCategory}
-                  subCategories={subLeaves}
-                  onSelectSubCategory={setSubCategory}
-                  rows={subRows}
-                  rowsByDate={subRowsByDate}
-                  accentTier={selectedTier}
+                Machine-wise breakdown
+              </Typography>
+            </Stack>
+
+            {machines.length === 0 ? (
+              isLoading ? (
+                <DrillSkeleton title={false} rows={5} cols={5} />
+              ) : (
+                <Box
+                  sx={{
+                    p: 2,
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 1.25,
+                    textAlign: "center",
+                    color: "text.disabled",
+                  }}
+                >
+                  <Typography sx={{ fontSize: 13 }}>
+                    Machine-level rows for {sectionName} are not available for
+                    this selection.
+                  </Typography>
+                </Box>
+              )
+            ) : (
+              <>
+                <MachineTable
+                  machines={machines.map((m) => ({
+                    id: m.id,
+                    name: m.name,
+                    availability: m.availability ?? 0,
+                    performance: m.performance ?? 0,
+                    quality: m.quality ?? 0,
+                  }))}
+                  selectedCell={selectedCell}
+                  onSelectCell={handleSelectCell}
                 />
-              )}
-            </>
-          )}
-        </Stack>
-      )}
+                {selectedMachine && selectedCell && activeSubCategory && (
+                  <SubDrill
+                    machine={selectedMachine}
+                    component={selectedCell.component}
+                    subCategory={activeSubCategory}
+                    subCategories={subLeaves}
+                    onSelectSubCategory={setSubCategory}
+                    rows={subRows}
+                    rowsByDate={subRowsByDate}
+                    accentTier={selectedTier}
+                  />
+                )}
+              </>
+            )}
+          </Stack>
+        )}
+      </Box>
     </Stack>
   );
 }

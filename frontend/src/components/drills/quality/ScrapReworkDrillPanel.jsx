@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Box,
   Stack,
@@ -16,6 +16,7 @@ import {
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { snapshotLatest } from "@/lib/drillDate.js";
 import { canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 // changes.md §1/§8: match granularity spelling-tolerantly ("Daily" vs the
 // real "DAY") so the subsection drill pins the SAME granularity as the card
@@ -142,6 +143,8 @@ function ScrapReworkDrillPanel({
       .sort((a, b) => b.qty - a.qty);
   }, [atGranularity, selectedSub, leafKpi, viewBy]);
 
+  const cardRef = useRef(null);
+
   if (subsections.length === 0) {
     if (isLoading) return <DrillSkeleton title rows={5} cols={4} />;
     return (
@@ -153,82 +156,121 @@ function ScrapReworkDrillPanel({
     );
   }
 
+  // Excel rows reflect the deepest view the user is looking at — the
+  // detail table once a subsection is picked, the subsection list otherwise.
+  const excelHeaders = selectedSub
+    ? (() => {
+        const h = [];
+        if (viewBy === "reason" || viewBy === "both") h.push("Reason");
+        if (viewBy === "machine" || viewBy === "both") h.push("Machine");
+        if (viewBy === "sku" || viewBy === "both") h.push("Item Code");
+        h.push("Quantity");
+        return h;
+      })()
+    : ["Subsection", "Quantity"];
+  const excelRows = selectedSub
+    ? detailRows.map((r) => {
+        const out = {};
+        if (viewBy === "reason" || viewBy === "both") out.Reason = r.reason;
+        if (viewBy === "machine" || viewBy === "both") out.Machine = r.machine;
+        if (viewBy === "sku" || viewBy === "both")
+          out["Item Code"] = r.itemCode;
+        out.Quantity = Math.round(r.qty);
+        return out;
+      })
+    : subsections.map((s) => ({
+        Subsection: s.sub,
+        Quantity: Math.round(s.total),
+      }));
+
   return (
     <Stack spacing={2}>
-      <Typography
-        sx={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: "primary.main",
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        {kind} — subsection-wise
-      </Typography>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        {/* Top-left download — menu offers PDF (visual) + Excel (detail rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={excelRows}
+          headers={excelHeaders}
+          filename={`drill-${kind.toLowerCase()}-${(selectedSub ?? "subsection").toLowerCase().replace(/\s+/g, "-")}`}
+          sheetName={kind}
+        />
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {kind} — subsection-wise
+        </Typography>
+      </Stack>
 
-      <SubsectionTable
-        rows={subsections}
-        selected={selectedSub}
-        onSelect={(s) =>
-          setSelectedSub((cur) => {
-            const next = cur === s ? null : s;
-            if (next) setViewBy("reason"); // default view per §4/§5
-            return next;
-          })
-        }
-      />
+      <Box ref={cardRef}>
+        <SubsectionTable
+          rows={subsections}
+          selected={selectedSub}
+          onSelect={(s) =>
+            setSelectedSub((cur) => {
+              const next = cur === s ? null : s;
+              if (next) setViewBy("reason"); // default view per §4/§5
+              return next;
+            })
+          }
+        />
 
-      {selectedSub && (
-        <>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "text.disabled",
-                textTransform: "uppercase",
-                letterSpacing: 0.4,
-              }}
-            >
-              View by
-            </Typography>
-            <ToggleButtonGroup
-              size="small"
-              exclusive
-              value={viewBy}
-              onChange={(_, v) => v && setViewBy(v)}
-              sx={{
-                "& .MuiToggleButton-root": {
-                  px: 1.5,
-                  py: 0.25,
-                  fontSize: 12,
-                  textTransform: "none",
-                },
-              }}
-            >
-              <ToggleButton value="reason">Reason</ToggleButton>
-              <ToggleButton value="machine">Machine</ToggleButton>
-              <ToggleButton value="sku">SKU</ToggleButton>
-              <ToggleButton value="both">Machine + SKU</ToggleButton>
-            </ToggleButtonGroup>
-            <Box sx={{ flex: 1 }} />
-            <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-              {detailRows.length} rows · {selectedSub}
-            </Typography>
-          </Stack>
-
-          {detailRows.length > 0 ? (
-            <DetailTable rows={detailRows} viewBy={viewBy} kind={kind} />
-          ) : (
-            <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
-              <Typography sx={{ fontSize: 13 }}>
-                No {viewBy} rows for {selectedSub} in this fetch.
+        {selectedSub && (
+          <>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "text.disabled",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                }}
+              >
+                View by
               </Typography>
-            </Box>
-          )}
-        </>
-      )}
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={viewBy}
+                onChange={(_, v) => v && setViewBy(v)}
+                sx={{
+                  "& .MuiToggleButton-root": {
+                    px: 1.5,
+                    py: 0.25,
+                    fontSize: 12,
+                    textTransform: "none",
+                  },
+                }}
+              >
+                <ToggleButton value="reason">Reason</ToggleButton>
+                <ToggleButton value="machine">Machine</ToggleButton>
+                <ToggleButton value="sku">SKU</ToggleButton>
+                <ToggleButton value="both">Machine + SKU</ToggleButton>
+              </ToggleButtonGroup>
+              <Box sx={{ flex: 1 }} />
+              <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+                {detailRows.length} rows · {selectedSub}
+              </Typography>
+            </Stack>
+
+            {detailRows.length > 0 ? (
+              <DetailTable rows={detailRows} viewBy={viewBy} kind={kind} />
+            ) : (
+              <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
+                <Typography sx={{ fontSize: 13 }}>
+                  No {viewBy} rows for {selectedSub} in this fetch.
+                </Typography>
+              </Box>
+            )}
+          </>
+        )}
+      </Box>
     </Stack>
   );
 }
@@ -264,7 +306,10 @@ function SubsectionTable({ rows, selected, onSelect }) {
                 <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
                   {r.sub}
                 </TableCell>
-                <TableCell align="center" sx={{ fontSize: 13, fontWeight: 600 }}>
+                <TableCell
+                  align="center"
+                  sx={{ fontSize: 13, fontWeight: 600 }}
+                >
                   {Math.round(r.total).toLocaleString()}
                 </TableCell>
               </TableRow>

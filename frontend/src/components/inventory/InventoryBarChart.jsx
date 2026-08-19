@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 const H = 130;
 const PAD = { top: 20, bottom: 40 };
@@ -10,11 +12,14 @@ const PAD = { top: 20, bottom: 40 };
  */
 function InventoryBarChart({ title, bars, selectedBarId, onBarClick }) {
   const theme = useTheme();
+  const cardRef = useRef(null);
   const maxValue = Math.max(...bars.flatMap((b) => [b.today, b.yesterday]));
 
   return (
     <Box
+      ref={cardRef}
       sx={{
+        position: "relative",
         backgroundColor: "background.paper",
         border: 1,
         borderColor: "divider",
@@ -27,7 +32,24 @@ function InventoryBarChart({ title, bars, selectedBarId, onBarClick }) {
       }}
     >
       <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{title}</Typography>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {/* Top-left download — menu offers PDF (visual) + Excel (bar values). */}
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={bars.map((b) => ({
+              Item: b.label,
+              Today: b.today,
+              Yesterday: b.yesterday,
+              "Max (today/yesterday)": maxValue,
+            }))}
+            headers={["Item", "Today", "Yesterday", "Max (today/yesterday)"]}
+            filename={`inventory-bar-${(title ?? "chart").toLowerCase().replace(/\s+/g, "-")}`}
+            sheetName="InventoryBar"
+          />
+          <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+            {title}
+          </Typography>
+        </Stack>
         <Stack direction="row" spacing={1.5} alignItems="center">
           <LegendDot color={theme.palette.primary.main} label="Today" />
           <LegendDot color={theme.palette.text.disabled} label="Yesterday" />

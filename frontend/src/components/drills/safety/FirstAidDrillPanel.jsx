@@ -44,6 +44,8 @@ export default function FirstAidDrillPanel({ drillRows, granularity = "DAY" }) {
         title="First Aid Cases"
         cols={["Date", "Area", "Injury", "Root Cause"]}
         rows={rows}
+        downloadFilename="drill-first-aid"
+        downloadSheetName="FirstAid"
       />
     </Stack>
   );

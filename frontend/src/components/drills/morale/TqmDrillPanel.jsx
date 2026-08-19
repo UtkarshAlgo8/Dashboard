@@ -51,6 +51,8 @@ export default function TqmDrillPanel({ drillRows, granularity = "DAY" }) {
         title="TQM by Pillar"
         cols={["Pillar", "Score", "Target", "Gap"]}
         rows={rows}
+        downloadFilename="drill-tqm"
+        downloadSheetName="TQM"
       />
     </Stack>
   );
