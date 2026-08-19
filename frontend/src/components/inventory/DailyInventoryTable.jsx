@@ -54,8 +54,17 @@ function DailyInventoryTable({ history }) {
         mt: 2,
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-        {/* Top-left download — menu offers PDF (visual) + Excel (history rows). */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+        sx={{ mb: 1.5 }}
+      >
+        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+          Daily Inventory — last 7 days
+        </Typography>
+        {/* Top-right download — menu offers PDF (visual) + Excel (history rows). */}
         <CardDownloadButton
           cardRef={cardRef}
           rows={excelRows}
@@ -63,9 +72,6 @@ function DailyInventoryTable({ history }) {
           filename="inventory-daily-7-days"
           sheetName="DailyInventory"
         />
-        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-          Daily Inventory — last 7 days
-        </Typography>
       </Stack>
       <TableContainer
         sx={{ border: 1, borderColor: "divider", borderRadius: 1 }}

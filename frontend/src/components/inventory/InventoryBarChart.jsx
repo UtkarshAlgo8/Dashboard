@@ -32,8 +32,13 @@ function InventoryBarChart({ title, bars, selectedBarId, onBarClick }) {
       }}
     >
       <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Stack direction="row" alignItems="center" spacing={1}>
-          {/* Top-left download — menu offers PDF (visual) + Excel (bar values). */}
+        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{title}</Typography>
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <LegendDot color={theme.palette.primary.main} label="Today" />
+            <LegendDot color={theme.palette.text.disabled} label="Yesterday" />
+          </Stack>
+          {/* Top-right download — menu offers PDF (visual) + Excel (bar values). */}
           <CardDownloadButton
             cardRef={cardRef}
             rows={bars.map((b) => ({
@@ -46,13 +51,6 @@ function InventoryBarChart({ title, bars, selectedBarId, onBarClick }) {
             filename={`inventory-bar-${(title ?? "chart").toLowerCase().replace(/\s+/g, "-")}`}
             sheetName="InventoryBar"
           />
-          <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-            {title}
-          </Typography>
-        </Stack>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <LegendDot color={theme.palette.primary.main} label="Today" />
-          <LegendDot color={theme.palette.text.disabled} label="Yesterday" />
         </Stack>
       </Stack>
 

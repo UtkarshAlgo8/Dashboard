@@ -1,6 +1,4 @@
-import { useRef } from "react";
 import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
-import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * Single plant card. Active plants get hover-lift + select
@@ -20,12 +18,6 @@ function numericPercent(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Same as numericPercent but formatted as "—" when missing — for Excel. */
-function pctOrNa(value) {
-  const n = numericPercent(value);
-  return n == null ? "NA" : n;
-}
-
 function PlantCard({
   plant,
   active,
@@ -37,14 +29,12 @@ function PlantCard({
   disabledReason,
 }) {
   const theme = useTheme();
-  const cardRef = useRef(null);
   const highlighted = active && (hovered || selected);
   const accent = statusColor(theme, plant.oee);
   const initial = (plant.name || "?").trim().charAt(0).toUpperCase();
 
   const card = (
     <Box
-      ref={cardRef}
       onMouseEnter={active ? onHover : undefined}
       onMouseLeave={active ? onLeave : undefined}
       onClick={active ? onSelect : undefined}
@@ -65,22 +55,6 @@ function PlantCard({
         "&:hover": active ? { boxShadow: theme.custom.shadow } : undefined,
       }}
     >
-      {/* Top-left download — menu offers PDF (visual) + Excel (KPI pills).
-          Sits above the avatar (which is below at pl:2.5, p:2). */}
-      <Box sx={{ position: "absolute", top: 4, left: 12, zIndex: 2 }}>
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={[
-            { KPI: "OEE", Value: pctOrNa(plant.oee), Unit: "%" },
-            { KPI: "OTIF", Value: pctOrNa(plant.otif), Unit: "%" },
-            { KPI: "Yield", Value: pctOrNa(plant.yield), Unit: "%" },
-          ]}
-          headers={["KPI", "Value", "Unit"]}
-          filename={`plant-${(plant.name ?? "plant").toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName="Plant"
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Box>
       {/* Left accent stripe — coloured by OEE health. */}
       <Box
         sx={{

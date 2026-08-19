@@ -516,15 +516,12 @@ function OeeDrillPanel({
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        {/* Top-left download — menu offers PDF (visual) + Excel (machine rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={machineExcelRows}
-          headers={["Machine", "Availability", "Performance", "Quality", "OEE"]}
-          filename={`drill-oee-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName="OEE"
-        />
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
         <Typography
           sx={{
             fontSize: 13,
@@ -536,6 +533,14 @@ function OeeDrillPanel({
         >
           {sectionName} OEE
         </Typography>
+        {/* Top-right download — menu offers PDF (visual) + Excel (machine rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={machineExcelRows}
+          headers={["Machine", "Availability", "Performance", "Quality", "OEE"]}
+          filename={`drill-oee-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
+          sheetName="OEE"
+        />
       </Stack>
       <Box ref={cardRef}>
         {/* A/P/Q card row — sits as a secondary KPI band under the main grid.

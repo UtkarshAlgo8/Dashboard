@@ -24,7 +24,15 @@ export default function BudgetDrillPanel({ drillRows }) {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
+        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+          Budget Utilization
+        </Typography>
         <CardDownloadButton
           cardRef={cardRef}
           rows={[
@@ -44,9 +52,6 @@ export default function BudgetDrillPanel({ drillRows }) {
           filename="drill-budget-utilization"
           sheetName="Budget"
         />
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-          Budget Utilization
-        </Typography>
       </Stack>
       <Box
         ref={cardRef}

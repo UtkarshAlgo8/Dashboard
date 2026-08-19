@@ -164,8 +164,18 @@ export default function NcmDrillPanel({
 
   return (
     <Stack spacing={1.25}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        {/* Top-left download — menu offers PDF (visual) + Excel (NCM rows). */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
+        <Typography
+          sx={{ fontSize: 13, fontWeight: 600, color: "text.primary" }}
+        >
+          NCM Hold Details
+        </Typography>
+        {/* Top-right download — menu offers PDF (visual) + Excel (NCM rows). */}
         <CardDownloadButton
           cardRef={cardRef}
           rows={excelRows}
@@ -179,11 +189,6 @@ export default function NcmDrillPanel({
           filename="drill-ncm-hold"
           sheetName="NCMHold"
         />
-        <Typography
-          sx={{ fontSize: 13, fontWeight: 600, color: "text.primary" }}
-        >
-          NCM Hold Details
-        </Typography>
       </Stack>
       <Box ref={cardRef}>
         <DataTable

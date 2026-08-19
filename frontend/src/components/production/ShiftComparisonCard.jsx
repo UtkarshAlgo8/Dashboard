@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Box, Tooltip, Typography } from "@mui/material";
+import { Box, Stack, Tooltip, Typography } from "@mui/material";
 import DataTable from "@/components/tables/DataTable.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
@@ -294,39 +294,47 @@ export default function ShiftComparisonCard({
         p: 2,
       }}
     >
-      {/* Top-left download — menu offers PDF (visual) + Excel (shift rows). */}
-      <CardDownloadButton
-        cardRef={cardRef}
-        rows={shiftRows}
-        headers={["Shift", "Production", "Scrap", "Rework"]}
-        filename={`shift-comparison-${(section ?? "section").toLowerCase().replace(/\s+/g, "-")}`}
-        sheetName="ShiftComparison"
-        sx={{ position: "absolute", top: 4, left: 4 }}
-      />
-      <Typography
-        sx={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: "primary.main",
-          mb: 0.5,
-          pl: 3, // leave room for the absolute download icon
-        }}
+      <Stack
+        direction="row"
+        alignItems="flex-start"
+        justifyContent="space-between"
+        spacing={1}
       >
-        Shift Comparison
-      </Typography>
-      <Typography sx={{ fontSize: 11, color: "text.disabled", mb: 1.5 }}>
-        {windowLabel}
-        {isPartial && (
-          <Tooltip
-            title="This day is still in progress — one or more shifts have no row yet, so the shifts do not add up to the day total."
-            arrow
+        <Box sx={{ flex: 1 }}>
+          <Typography
+            sx={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "primary.main",
+              mb: 0.5,
+            }}
           >
-            <Box component="span" sx={{ ml: 1, color: "warning.main" }}>
-              · partial day (in progress)
-            </Box>
-          </Tooltip>
-        )}
-      </Typography>
+            Shift Comparison
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: "text.disabled", mb: 1.5 }}>
+            {windowLabel}
+            {isPartial && (
+              <Tooltip
+                title="This day is still in progress — one or more shifts have no row yet, so the shifts do not add up to the day total."
+                arrow
+              >
+                <Box component="span" sx={{ ml: 1, color: "warning.main" }}>
+                  · partial day (in progress)
+                </Box>
+              </Tooltip>
+            )}
+          </Typography>
+        </Box>
+        {/* Top-right download — menu offers PDF (visual) + Excel (shift rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={shiftRows}
+          headers={["Shift", "Production", "Scrap", "Rework"]}
+          filename={`shift-comparison-${(section ?? "section").toLowerCase().replace(/\s+/g, "-")}`}
+          sheetName="ShiftComparison"
+          sx={{ mt: 0.25 }}
+        />
+      </Stack>
       {loadingFirst ? (
         <Box
           sx={{

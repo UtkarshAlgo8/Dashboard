@@ -118,8 +118,24 @@ function DowntimeDrillPanel({
 
   return (
     <Stack spacing={1.5}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        {/* Top-left download — menu offers PDF (visual) + Excel (rows). */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          Detailed Downtime Log
+        </Typography>
+        {/* Top-right download — menu offers PDF (visual) + Excel (rows). */}
         <CardDownloadButton
           cardRef={cardRef}
           rows={grouped}
@@ -134,17 +150,6 @@ function DowntimeDrillPanel({
           filename={`drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
           sheetName="Downtime"
         />
-        <Typography
-          sx={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: "primary.main",
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-          }}
-        >
-          Detailed Downtime Log
-        </Typography>
       </Stack>
 
       <Box ref={cardRef}>

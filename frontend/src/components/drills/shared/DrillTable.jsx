@@ -63,16 +63,12 @@ export function DrillTable({
   return (
     <Stack spacing={1.25} sx={{ position: "relative" }}>
       {title && (
-        <Stack direction="row" alignItems="center" spacing={1}>
-          {downloadFilename && (
-            <CardDownloadButton
-              cardRef={tableRef}
-              rows={excelRows}
-              headers={excelHeaders}
-              filename={downloadFilename}
-              sheetName={downloadSheetName}
-            />
-          )}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={1}
+        >
           <Typography
             sx={{
               fontSize: 13,
@@ -82,6 +78,15 @@ export function DrillTable({
           >
             {title}
           </Typography>
+          {downloadFilename && (
+            <CardDownloadButton
+              cardRef={tableRef}
+              rows={excelRows}
+              headers={excelHeaders}
+              filename={downloadFilename}
+              sheetName={downloadSheetName}
+            />
+          )}
         </Stack>
       )}
       <TableContainer

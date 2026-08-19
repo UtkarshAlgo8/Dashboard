@@ -1,7 +1,5 @@
-import { useRef } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import JKLoader from "@/components/JKLoader.jsx";
-import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
  * Plant card pinned at the bottom of the section sidebar (BRD FR-P6).
@@ -10,7 +8,6 @@ import CardDownloadButton from "@/components/CardDownloadButton.jsx";
  */
 function PlantSummaryCard({ plant, summary, loading = false }) {
   const theme = useTheme();
-  const cardRef = useRef(null);
   if (!plant || (!summary && !loading)) return null;
 
   if (loading) {
@@ -57,9 +54,7 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
 
   return (
     <Box
-      ref={cardRef}
       sx={{
-        position: "relative",
         backgroundColor: "background.paper",
         border: 1,
         borderColor: "divider",
@@ -68,15 +63,8 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
         boxShadow: theme.custom.shadow,
       }}
     >
-      {/* Top-left download — captures the rolled-up plant card as PDF. */}
-      <CardDownloadButton
-        cardRef={cardRef}
-        filename={`plant-summary-${(plant.name ?? "plant").toLowerCase().replace(/\s+/g, "-")}`}
-        sx={{ position: "absolute", top: 4, left: 4 }}
-      />
       <Typography
         sx={{
-          pl: 3, // leave room for the absolute download icon
           fontSize: 10,
           color: "text.disabled",
           textTransform: "uppercase",

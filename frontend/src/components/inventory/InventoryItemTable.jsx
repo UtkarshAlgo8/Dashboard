@@ -43,8 +43,37 @@ function InventoryItemTable({ bar }) {
         spacing={1.5}
         sx={{ mb: 1.5 }}
       >
-        <Stack direction="row" alignItems="center" spacing={1}>
-          {/* Top-left download — menu offers PDF (visual) + Excel (item rows). */}
+        <Box>
+          <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+            Live Inventory
+          </Typography>
+          <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
+            {bar.label} — {bar.items.length} item
+            {bar.items.length !== 1 ? "s" : ""}
+          </Typography>
+        </Box>
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <Box sx={{ textAlign: "right" }}>
+            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+              Total
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: 20,
+                fontWeight: 700,
+                color: theme.palette.primary.main,
+              }}
+            >
+              {total.toLocaleString()}{" "}
+              <Typography
+                component="span"
+                sx={{ fontSize: 12, color: "text.disabled" }}
+              >
+                {bar.unit}
+              </Typography>
+            </Typography>
+          </Box>
+          {/* Top-right download — menu offers PDF (visual) + Excel (item rows). */}
           <CardDownloadButton
             cardRef={cardRef}
             rows={bar.items.map((it) => ({
@@ -57,36 +86,7 @@ function InventoryItemTable({ bar }) {
             filename={`inventory-items-${(bar.label ?? "items").toLowerCase().replace(/\s+/g, "-")}`}
             sheetName="InventoryItems"
           />
-          <Box>
-            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-              Live Inventory
-            </Typography>
-            <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
-              {bar.label} — {bar.items.length} item
-              {bar.items.length !== 1 ? "s" : ""}
-            </Typography>
-          </Box>
         </Stack>
-        <Box sx={{ textAlign: "right" }}>
-          <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-            Total
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: 20,
-              fontWeight: 700,
-              color: theme.palette.primary.main,
-            }}
-          >
-            {total.toLocaleString()}{" "}
-            <Typography
-              component="span"
-              sx={{ fontSize: 12, color: "text.disabled" }}
-            >
-              {bar.unit}
-            </Typography>
-          </Typography>
-        </Box>
       </Stack>
 
       <TableContainer

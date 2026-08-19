@@ -185,15 +185,12 @@ function ScrapReworkDrillPanel({
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        {/* Top-left download — menu offers PDF (visual) + Excel (detail rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={excelHeaders}
-          filename={`drill-${kind.toLowerCase()}-${(selectedSub ?? "subsection").toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName={kind}
-        />
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
         <Typography
           sx={{
             fontSize: 13,
@@ -205,6 +202,14 @@ function ScrapReworkDrillPanel({
         >
           {kind} — subsection-wise
         </Typography>
+        {/* Top-right download — menu offers PDF (visual) + Excel (detail rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={excelRows}
+          headers={excelHeaders}
+          filename={`drill-${kind.toLowerCase()}-${(selectedSub ?? "subsection").toLowerCase().replace(/\s+/g, "-")}`}
+          sheetName={kind}
+        />
       </Stack>
 
       <Box ref={cardRef}>

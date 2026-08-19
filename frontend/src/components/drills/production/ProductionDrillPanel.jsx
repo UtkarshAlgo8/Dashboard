@@ -395,17 +395,12 @@ function ProductionDrillPanel({
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        {/* Top-left download — menu offers PDF (visual) + Excel (page rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={excelHeaders}
-          filename={`drill-production-${sectionName.toLowerCase().replace(/\s+/g, "-")}${
-            prodSub ? `-${prodSub.toLowerCase().replace(/\s+/g, "-")}` : ""
-          }`}
-          sheetName="Production"
-        />
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+      >
         <Typography
           sx={{
             fontSize: 13,
@@ -417,6 +412,16 @@ function ProductionDrillPanel({
         >
           {title}
         </Typography>
+        {/* Top-right download — menu offers PDF (visual) + Excel (page rows). */}
+        <CardDownloadButton
+          cardRef={cardRef}
+          rows={excelRows}
+          headers={excelHeaders}
+          filename={`drill-production-${sectionName.toLowerCase().replace(/\s+/g, "-")}${
+            prodSub ? `-${prodSub.toLowerCase().replace(/\s+/g, "-")}` : ""
+          }`}
+          sheetName="Production"
+        />
       </Stack>
 
       {/* Curing trench tier (§7): Tredge-wise list (Production_s). Click a
