@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Box,
   Dialog,
@@ -6,6 +6,8 @@ import {
   DialogTitle,
   IconButton,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
   useTheme,
 } from "@mui/material";
@@ -14,16 +16,18 @@ import JKLoader from "@/components/JKLoader.jsx";
 import TimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import LineChart from "./LineChart.jsx";
+import MultiLineChart from "./MultiLineChart.jsx";
 import BarChart from "./BarChart.jsx";
 import ProgressChart from "./ProgressChart.jsx";
+import MultiSelectPills from "./MultiSelectPills.jsx";
 import { pickChartType } from "./pickChartType.js";
 import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getTrend } from "@/api/trends.js";
 import client from "@/api/client.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
-import { isKg, kgToTonnes } from "@/lib/units.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
+import { isKg, kgToTonnes } from "@/lib/units.js";
 import {
   denanDimension,
   isProductAgnosticKpi,
@@ -33,12 +37,19 @@ import {
 /**
  * KPI Trend Analysis modal per BRD §9.3 (FR-X10 through FR-X17).
  *
- * Uses v2 POST /dashboard/kpi-data when kpi.name is available (live data),
- * falling back to the legacy GET /plants/:id/production/trends endpoint
- * (mock / older integration).
+ * Two paths share this modal:
  *
- * Opens via the Trend Icon on a KpiCard. Owns its own time-range
- * state. Closes via Escape, backdrop click, or the X button.
+ *   1. OEE path — VIEW BY / COMPARE / OVERLAY pills on top of a
+ *      MultiLineChart, with optional overlay charts stacked below.
+ *      Multi-series chart + multi-axis overlays.
+ *
+ *   2. Legacy single-series path — every other KPI (Production, Scrap,
+ *      Downtime, …) keeps the original single-line behaviour. Render
+ *      decision lives in `renderTrend()` below.
+ *
+ * v2 fetch: use kpi.rawName (actual gold_dummy kpi_name like "OEE_o")
+ * so we bypass the stale KPI_NAME_BY_ID map in getTrend. Falls back to
+ * the legacy GET endpoint for KPIs without rawName.
  */
 function TrendModal({
   open,
@@ -81,48 +92,93 @@ function TrendModal({
     }
   }
 
+  if (!kpi) return null;
+
+  // Route OEE to the new pills UI; everything else keeps the legacy form.
+  return kpi.id === "oee" ? (
+    <OeeTrendModal
+      open={open}
+      onClose={onClose}
+      plantId={plantId}
+      kpi={kpi}
+      section={section}
+      asOf={asOf}
+      range={range}
+      from={from}
+      to={to}
+      onRangeChange={setRange}
+      onFromChange={setFrom}
+      onToChange={setTo}
+      theme={theme}
+    />
+  ) : (
+    <LegacyTrendModal
+      open={open}
+      onClose={onClose}
+      plantId={plantId}
+      kpi={kpi}
+      section={section}
+      category={category}
+      compound={compound}
+      subSection={subSection}
+      productType={productType}
+      unit={unit}
+      asOf={asOf}
+      range={range}
+      from={from}
+      to={to}
+      onRangeChange={setRange}
+      onFromChange={setFrom}
+      onToChange={setTo}
+      toast={toast}
+      theme={theme}
+    />
+  );
+}
+
+/* =========================================================================
+ * Legacy single-series modal — preserved verbatim for non-OEE KPIs.
+ * The original implementation lives here; only the shell (DialogTitle,
+ * close button) is shared via the modal frame.
+ * ========================================================================= */
+
+function LegacyTrendModal({
+  open,
+  onClose,
+  plantId,
+  kpi,
+  section,
+  category,
+  compound,
+  subSection,
+  productType,
+  unit,
+  asOf,
+  range,
+  from,
+  to,
+  onRangeChange,
+  onFromChange,
+  onToChange,
+  toast,
+  theme,
+}) {
   // Resolve the active date range (preset OR custom) to ISO from/to,
   // anchored to the as-of date (BRD §13.5).
   const resolved = presetToDateRange({ preset: range, from, to }, asOf);
-
-  // Monthly trend (BRD §13.6): one point per month = the latest MTD
-  // record within that month. To collect every month we must fetch a
-  // window wider than the snapshot's trailing few days — back to the
-  // start of the as-of year through the as-of date.
   const isMonthly = range === "month" && !from && !to;
-  // Daily trend (dashboard_doc.md §2): the CURRENT MONTH day-by-day, one
-  // point per day, anchored to the latest available date — NOT a single
-  // day. So when the preset is "today" with no custom range, we fetch the
-  // whole current month at Daily granularity and plot every day.
   const isDailyTrend = range === "today" && !from && !to;
   const anchorIso = asOf ?? resolved.to ?? null;
   const monthlyFrom = anchorIso
     ? `${anchorIso.slice(0, 4)}-01-01`
     : resolved.from;
   const monthlyTo = anchorIso ?? resolved.to;
-  // First day of the anchor month → anchor day.
   const dailyFrom = anchorIso ? `${anchorIso.slice(0, 7)}-01` : resolved.from;
   const dailyTo = anchorIso ?? resolved.to;
 
   const sectionName = sectionIdToName(section);
 
-  /**
-   * v2 fetch: use kpi.rawName (actual gold_dummy kpi_name like "OEE_o")
-   * so we bypass the stale KPI_NAME_BY_ID map in getTrend.
-   *
-   * Request the card's rawName as a drillKpi. Some cards read a DRILL-LEVEL
-   * kpi_name (TBM/Curing Production reads `Production_product`, drill_down_level
-   * '3', C7) that a landing-only fetch (drillKpis:null) never returns — the
-   * series came back empty ("No trend data" for Curing Production, found
-   * 2026-07-23). Paired with drillOnly so the query is exactly that one
-   * kpi_name: the client-side filter below (r.kpi_name === kpi.rawName) kept
-   * only those rows anyway, and the landing band the OR-join used to bring
-   * along was fetched purely to be discarded.
-   */
-  // Narrow the fetch with section/category/granularity — the table is far
-  // too large to fetch unfiltered (the row cap would truncate the series).
   // realdata.md §3: real granularities are MONTH (monthly), DAY otherwise.
-  // Year/YTD is disabled — a stale "year" range falls back to MONTH.
   const v2Granularity = isMonthly
     ? "MONTH"
     : range === "year"
@@ -145,9 +201,6 @@ function TrendModal({
           ...(subSection ? { sub_section: subSection } : {}),
           ...(shouldSendProductType ? { product_type: productType } : {}),
         },
-        // Daily trend sends a RANGE (current month), not a single-day
-        // equality, so the series has one point per day (§2). Monthly/
-        // Yearly use their wider windows; custom ranges pass through.
         date: null,
         from: isDailyTrend
           ? dailyFrom
@@ -156,11 +209,6 @@ function TrendModal({
             : resolved.from,
         to: isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to,
         drillKpis: [kpi.rawName],
-        // The chart plots ONE series and filters to `r.kpi_name === rawName`
-        // immediately below, so the landing band the OR-join used to bring
-        // along was fetched and dropped in full — a month of every top-level
-        // KPI in the section for a single line. drillOnly narrows the query to
-        // that one kpi_name; the rows the chart keeps are identical.
         drillOnly: true,
         limit: 10000,
       }
@@ -178,9 +226,6 @@ function TrendModal({
     },
   );
 
-  /**
-   * Legacy fetch (mock / older API).
-   */
   const {
     data: legacyData,
     isLoading: legacyLoading,
@@ -206,20 +251,19 @@ function TrendModal({
 
   if (legacyError) toast.error("Could not load trend data.");
 
-  if (!kpi) return null;
-
   const isLoading = useV2 ? v2Loading : legacyLoading;
 
-  // Resolve trend data — prefer v2 rows, fall back to legacy.
-  // Filter client-side: the Lambda ignores section/granularity/kpi_name,
-  // so the response contains every KPI for every section. We narrow
-  // to one section + one KPI + Daily granularity for the line chart.
+  // Production is stored in KG but charted in MT (kpi.unit is already "MT"
+  // from the transformer), so a KG row's value is divided by 1000 here to
+  // match the axis/tooltip label. Non-KG rows pass through. See lib/units.js.
+  const rowVal = (r) => {
+    const v = numOrNull(r?.actual_value);
+    return isKg(r?.unit_of_measurement) ? kgToTonnes(v) : v;
+  };
+
   let labels = [];
   let values = [];
   if (useV2 && Array.isArray(v2Rows)) {
-    // Pin the series to one product type + sub-section so the line is a
-    // single consistent series, not a blend (BRD §13.6). product_type is
-    // empty for section-level KPIs (OEE) — those rows always pass.
     const scoped = v2Rows.filter((r) => {
       if (r.section !== sectionName || r.kpi_name !== kpi.rawName) return false;
       if (subSection && r.sub_section !== subSection) return false;
@@ -236,11 +280,6 @@ function TrendModal({
       ? preferScopedRows(scoped, productType)
       : scoped;
 
-    // Production is recorded in BOTH a count unit ("Batch") and a mass unit
-    // ("KG"/"MT") as separate rows per day. Plotting both blends two series
-    // into a zig-zag, so when the series carries more than one unit keep only
-    // the one pinned on the dashboard card. Single-unit and unit-less (OEE)
-    // series are left untouched.
     const pinned = (() => {
       const units = new Set(
         productPinned
@@ -255,18 +294,7 @@ function TrendModal({
       return only.length > 0 ? only : productPinned;
     })();
 
-    // Production is stored in KG but charted in MT (kpi.unit is already "MT"
-    // from the transformer), so a KG row's value is divided by 1000 here to
-    // match the axis/tooltip label. Non-KG rows pass through. See lib/units.js.
-    const rowVal = (r) => {
-      const v = numOrNull(r?.actual_value);
-      return isKg(r?.unit_of_measurement) ? kgToTonnes(v) : v;
-    };
-
     if (isMonthly) {
-      // One point per month = the latest available MTD record in that
-      // month (last day of a completed month; latest day of the running
-      // month). Group MTD rows by YYYY-MM, keep the max-date row each.
       const byMonth = new Map();
       for (const r of pinned) {
         if (r.granularity !== "MONTH") continue;
@@ -279,9 +307,6 @@ function TrendModal({
       labels = months;
       values = months.map((m) => rowVal(byMonth.get(m)));
     } else if (range === "year") {
-      // Year/YTD disabled (realdata.md §3) — no yearly granularity in the
-      // real data. Match MONTH so a stale "year" range still renders a series
-      // instead of going blank; the Year preset itself is disabled upstream.
       const byYear = new Map();
       for (const r of pinned) {
         if (r.granularity !== "MONTH") continue;
@@ -307,6 +332,649 @@ function TrendModal({
 
   const chartType = pickChartType(kpi.id, kpi.unit, kpi.name);
 
+  return (
+    <ModalFrame
+      open={open}
+      onClose={onClose}
+      kpi={kpi}
+      headerExtras={
+        <TimeRangeSelect
+          preset={range}
+          presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
+          from={from}
+          to={to}
+          onPresetChange={(p) => {
+            onRangeChange(p);
+            onFromChange("");
+            onToChange("");
+          }}
+          onFromChange={(v) => {
+            onFromChange(v);
+            onRangeChange("custom");
+          }}
+          onToChange={(v) => {
+            onToChange(v);
+            onRangeChange("custom");
+          }}
+        />
+      }
+    >
+      <Box
+        sx={{
+          backgroundColor: theme.custom.surface.soft,
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1.25,
+          p: 2,
+          minHeight: 320,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {isLoading && values.length === 0 ? (
+          <ChartSkeleton />
+        ) : values.length === 0 ? (
+          <Typography sx={{ fontSize: 13, color: "text.disabled" }}>
+            No trend data for this period.
+          </Typography>
+        ) : chartType === "line" ? (
+          <LineChart
+            labels={labels}
+            values={values}
+            unit={kpi.unit}
+            target={kpi.target ?? null}
+          />
+        ) : chartType === "bar" ? (
+          <BarChart
+            labels={labels}
+            values={values}
+            unit={kpi.unit}
+            target={kpi.target ?? null}
+          />
+        ) : (
+          <ProgressChart
+            value={kpi.value}
+            unit={kpi.unit}
+            target={kpi.target ?? null}
+          />
+        )}
+      </Box>
+    </ModalFrame>
+  );
+}
+
+/* =========================================================================
+ * New OEE Trend modal — VIEW BY / COMPARE / OVERLAY pills on top of a
+ * MultiLineChart, with optional single-series overlay charts stacked
+ * below. The fetch is one trip per granularity (three for Shift), so
+ * round-trip count is bounded.
+ * ========================================================================= */
+
+const VIEW_BY_OPTIONS = [
+  { value: "overall", label: "Overall" },
+  { value: "machine", label: "Machine" },
+  { value: "sku", label: "SKU" },
+  { value: "shift", label: "Shift" },
+];
+
+const VIEW_BY_LABEL = Object.fromEntries(
+  VIEW_BY_OPTIONS.map((o) => [o.value, o.label]),
+);
+
+// Each VIEW BY level maps to one OEE kpi_name. SKU = OEE_s per the user's
+// spec; the system has no SKU-OEE kpi_name, so the closest match is the
+// sub_section OEE (Curing trench / Stock subsection).
+function viewByMainKpi(viewBy) {
+  if (viewBy === "machine") return "OEE_m";
+  if (viewBy === "sku") return "OEE_s";
+  return "OEE_o"; // overall + shift both read OEE_o
+}
+
+// Each overlay has one or more valid kpi_names. Availability picks the
+// suffix aligned with the active VIEW BY so a Machine comparison overlays
+// the per-machine Availability, etc. Production is section-conditional
+// (TBM/Curing read Production_product; Mixing/Stock read Production).
+const OVERLAY_BASE_KPI = {
+  Breakdown: "Breakdown",
+  Production: "Production",
+  Scrap: "Scrap",
+  Availability: "Availability",
+};
+
+const OVERLAY_AVAILABILITY_BY_VIEW = {
+  overall: "Availability_o",
+  shift: "Availability_o",
+  machine: "Availability_m",
+  sku: "Availability_s",
+};
+
+const PRODUCTION_KPI_BY_SECTION = {
+  TBM: "Production_product",
+  Curing: "Production_product",
+  Mixing: "Production",
+  Stock: "Production",
+};
+
+function overlayKpiName(overlayValue, viewBy, sectionName) {
+  if (overlayValue === "Availability") {
+    return OVERLAY_AVAILABILITY_BY_VIEW[viewBy] ?? "Availability_o";
+  }
+  if (overlayValue === "Production") {
+    return PRODUCTION_KPI_BY_SECTION[sectionName] ?? "Production";
+  }
+  return OVERLAY_BASE_KPI[overlayValue] ?? overlayValue;
+}
+
+const OVERLAY_OPTIONS = [
+  { value: "Breakdown", label: "+ Breakdown" },
+  { value: "Production", label: "+ Production" },
+  { value: "Scrap", label: "+ Scrap" },
+  { value: "Availability", label: "+ Availability" },
+];
+
+function OeeTrendModal({
+  open,
+  onClose,
+  plantId,
+  kpi,
+  section,
+  asOf,
+  range,
+  from,
+  to,
+  onRangeChange,
+  onFromChange,
+  onToChange,
+  theme,
+}) {
+  // Default VIEW BY = Overall. Other defaults are derived as the user
+  // makes picks (compare fills to "all", overlays starts empty).
+  const [viewBy, setViewBy] = useState("overall");
+  const [compare, setCompare] = useState([]);
+  const [overlays, setOverlays] = useState([]);
+
+  // Reset compare when VIEW BY flips — the previous selection's IDs may
+  // not exist in the new lens (machines vs sub_sections vs shifts).
+  const [prevViewBy, setPrevViewBy] = useState(viewBy);
+  if (prevViewBy !== viewBy) {
+    setPrevViewBy(viewBy);
+    setCompare([]);
+  }
+
+  // Date range resolution (mirrors the legacy modal so the URL/dash copy
+  // stays in sync — the user expects the Trend range to match the card).
+  const resolved = presetToDateRange({ preset: range, from, to }, asOf);
+  const anchorIso = asOf ?? resolved.to ?? null;
+  const monthlyFrom = anchorIso
+    ? `${anchorIso.slice(0, 4)}-01-01`
+    : resolved.from;
+  const monthlyTo = anchorIso ?? resolved.to;
+  const dailyFrom = anchorIso ? `${anchorIso.slice(0, 7)}-01` : resolved.from;
+  const dailyTo = anchorIso ?? resolved.to;
+  const isMonthly = range === "month" && !from && !to;
+  const isDailyTrend = range === "today" && !from && !to;
+  const rangeFrom = isDailyTrend
+    ? dailyFrom
+    : isMonthly
+      ? monthlyFrom
+      : resolved.from;
+  const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
+
+  // Shift view always uses SHIFT A/B/C granularity at the daily window
+  // we already resolved (one call per shift, three in parallel).
+  const isShift = viewBy === "shift";
+
+  // For Shift, the endpoint takes one granularity per call — fan out
+  // three calls in parallel and merge client-side. For everything else
+  // one trip covers main + overlays via drillKpis.
+  const sectionName = sectionIdToName(section);
+  const mainKpi = viewByMainKpi(viewBy);
+  const overlayKpis = overlays.map((o) =>
+    overlayKpiName(o, viewBy, sectionName),
+  );
+
+  // Single-trip payload (Overall / Machine / SKU).
+  const singlePayload = !isShift
+    ? {
+        plantId,
+        context: {
+          section: sectionName,
+          category: "Productivity",
+          granularity: "DAY",
+        },
+        from: rangeFrom,
+        to: rangeTo,
+        drillKpis: [mainKpi, ...overlayKpis],
+        drillOnly: true,
+        limit: 10000,
+      }
+    : null;
+
+  // Three-trip payloads (Shift A / B / C).
+  const shiftPayloads = isShift
+    ? ["SHIFT A", "SHIFT B", "SHIFT C"].map((gran) => ({
+        plantId,
+        context: {
+          section: sectionName,
+          category: "Productivity",
+          granularity: gran,
+        },
+        from: rangeFrom,
+        to: rangeTo,
+        // Overlay series don't carry shift semantics (the gold rows for
+        // Breakdown/Production/Scrap/Availability are DAY-only); we still
+        // ask for them so the user keeps their pick, and we drop them
+        // server-side if no shift rows exist — the empty overlay chart
+        // surface below handles the no-data path.
+        drillKpis: ["OEE_o", ...overlayKpis],
+        drillOnly: true,
+        limit: 10000,
+        _shift: gran,
+      }))
+    : [];
+
+  const { data: singleRows, isLoading: singleLoading } = usePolledQuery(
+    () =>
+      singlePayload
+        ? client
+            .post("/dashboard/kpi-data", singlePayload)
+            .then((r) => r.data ?? r)
+        : Promise.resolve([]),
+    {
+      enabled: Boolean(singlePayload),
+      interval: 0,
+      deps: [JSON.stringify(singlePayload)],
+    },
+  );
+
+  const shiftQueries = usePolledQuery(
+    () =>
+      Promise.all(
+        shiftPayloads.map((p) =>
+          client.post("/dashboard/kpi-data", p).then((r) => r.data ?? r),
+        ),
+      ),
+    {
+      enabled: shiftPayloads.length > 0,
+      interval: 0,
+      deps: [JSON.stringify(shiftPayloads)],
+    },
+  );
+  const shiftResults = useMemo(
+    () => (Array.isArray(shiftQueries?.data) ? shiftQueries.data : []),
+    // Depend on the whole query object — narrowing to `?.data` would
+    // flag as a more-specific dependency than the inferred source.
+    [shiftQueries],
+  );
+  const shiftLoading = shiftQueries?.isLoading ?? false;
+
+  // Split singleRows by kpi_name into mainRows + overlay rows.
+  const mainRows = useMemo(() => {
+    if (isShift) {
+      // Shift results come as [rowsA, rowsB, rowsC] — pick OEE_o rows
+      // per shift (rows are already granularity-pinned by the payload).
+      const out = [];
+      for (const arr of shiftResults) {
+        if (Array.isArray(arr)) {
+          for (const r of arr) if (r.kpi_name === "OEE_o") out.push(r);
+        }
+      }
+      return out;
+    }
+    if (!Array.isArray(singleRows)) return [];
+    return singleRows.filter((r) => r.kpi_name === mainKpi);
+  }, [isShift, shiftResults, singleRows, mainKpi]);
+
+  const overlayRowsByKpi = useMemo(() => {
+    const out = {};
+    if (!overlays.length) return out;
+    if (isShift) {
+      // Across the three shift calls: same overlay kpi appears under
+      // each granularity (the server returns whatever rows exist; shift
+      // rows rarely carry Breakdown/Production, but we don't reject them
+      // — we just render whatever came back). Concatenate.
+      for (const arr of shiftResults) {
+        if (!Array.isArray(arr)) continue;
+        for (const r of arr) {
+          if (r.kpi_name === mainKpi) continue;
+          if (!out[r.kpi_name]) out[r.kpi_name] = [];
+          out[r.kpi_name].push(r);
+        }
+      }
+      return out;
+    }
+    if (!Array.isArray(singleRows)) return out;
+    for (const r of singleRows) {
+      if (r.kpi_name === mainKpi) continue;
+      if (!out[r.kpi_name]) out[r.kpi_name] = [];
+      out[r.kpi_name].push(r);
+    }
+    return out;
+  }, [overlays, isShift, shiftResults, singleRows, mainKpi]);
+
+  // Build COMPARE options from the main rows. For Shift view the options
+  // are fixed at A / B / C; for the other views they come from the data
+  // so a brand-new machine in the gold layer shows up automatically.
+  const compareOptions = useMemo(() => {
+    if (viewBy === "shift") {
+      return [
+        { value: "Shift A", label: "Shift A" },
+        { value: "Shift B", label: "Shift B" },
+        { value: "Shift C", label: "Shift C" },
+      ];
+    }
+    if (viewBy === "machine") {
+      const set = new Set();
+      for (const r of mainRows) if (r.machine) set.add(r.machine);
+      return [...set].sort().map((m) => ({ value: m, label: m }));
+    }
+    if (viewBy === "sku") {
+      const set = new Set();
+      for (const r of mainRows) if (r.sub_section) set.add(r.sub_section);
+      return [...set].sort().map((s) => ({ value: s, label: s }));
+    }
+    return [];
+  }, [viewBy, mainRows]);
+
+  // Default-fill compare when the user hasn't picked anything yet. The
+  // filter prunes stale IDs after a viewBy switch.
+  const activeCompare = useMemo(() => {
+    const validIds = new Set(compareOptions.map((o) => o.value));
+    const filtered = (compare ?? []).filter((c) => validIds.has(c));
+    return filtered.length > 0 ? filtered : compareOptions.map((o) => o.value);
+  }, [compare, compareOptions]);
+
+  // For Shift, the data is per-shift; for the others we group rows by
+  // the COMPARE field. buildMainChart turns either shape into one
+  // (labels, series) bundle ready for MultiLineChart.
+  const mainChart = useMemo(
+    () => buildMainChart({ mainRows, viewBy, activeCompare }),
+    [mainRows, viewBy, activeCompare],
+  );
+
+  // The chart title reflects the active VIEW BY lens.
+  const mainTitle = useMemo(() => {
+    const lens = VIEW_BY_LABEL[viewBy] ?? "Overall";
+    return `${lens} · OEE — Daily`;
+  }, [viewBy]);
+
+  // Per-overlay single-series chart data.
+  const overlayCharts = useMemo(() => {
+    const out = [];
+    for (const overlayValue of overlays) {
+      const kpiName = overlayKpiName(overlayValue, viewBy, sectionName);
+      const rows = overlayRowsByKpi[kpiName] ?? [];
+      const series = buildOverlaySeries(rows);
+      const meta = OVERLAY_OPTIONS.find((o) => o.value === overlayValue);
+      const displayLabel = meta?.label?.replace(/^\+\s*/, "") ?? overlayValue;
+      out.push({
+        key: overlayValue,
+        title: displayLabel,
+        unit: overlayUnit(overlayValue),
+        labels: series.labels,
+        values: series.values,
+      });
+    }
+    return out;
+  }, [overlays, viewBy, sectionName, overlayRowsByKpi]);
+
+  const loading = isShift ? shiftLoading : singleLoading;
+  const hasMainData = mainChart.series.length > 0;
+  const showCompare = viewBy !== "overall";
+
+  return (
+    <ModalFrame
+      open={open}
+      onClose={onClose}
+      kpi={kpi}
+      headerExtras={
+        <TimeRangeSelect
+          preset={range}
+          presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
+          from={from}
+          to={to}
+          onPresetChange={(p) => {
+            onRangeChange(p);
+            onFromChange("");
+            onToChange("");
+          }}
+          onFromChange={(v) => {
+            onFromChange(v);
+            onRangeChange("custom");
+          }}
+          onToChange={(v) => {
+            onToChange(v);
+            onRangeChange("custom");
+          }}
+        />
+      }
+    >
+      <Stack spacing={2}>
+        <Stack spacing={1.25}>
+          <SingleSelectRow
+            label="View by"
+            value={viewBy}
+            onChange={setViewBy}
+            options={VIEW_BY_OPTIONS}
+          />
+          {showCompare && (
+            <MultiSelectPills
+              label="Compare"
+              options={compareOptions}
+              value={activeCompare}
+              onChange={setCompare}
+            />
+          )}
+          <MultiSelectPills
+            label="Overlay"
+            options={OVERLAY_OPTIONS}
+            value={overlays}
+            onChange={setOverlays}
+          />
+        </Stack>
+
+        {/* Main chart — VIEW BY lens, one line per COMPARE item. */}
+        <ChartPanel
+          theme={theme}
+          title={mainTitle}
+          loading={loading}
+          empty={!hasMainData}
+          emptyMessage={
+            loading
+              ? "Loading…"
+              : "No OEE data for this combination — try another VIEW BY or date range."
+          }
+        >
+          {hasMainData && (
+            <MultiLineChart
+              labels={mainChart.labels}
+              series={mainChart.series}
+              unit="%"
+            />
+          )}
+        </ChartPanel>
+
+        {/* Overlay charts — one per picked overlay, in picker order. */}
+        {overlayCharts.map((c) => (
+          <ChartPanel
+            key={c.key}
+            theme={theme}
+            title={c.title}
+            loading={loading}
+            empty={c.values.every((v) => v == null)}
+            emptyMessage={`No ${c.title.toLowerCase()} data for this period.`}
+          >
+            <LineChart labels={c.labels} values={c.values} unit={c.unit} />
+          </ChartPanel>
+        ))}
+      </Stack>
+    </ModalFrame>
+  );
+}
+
+/* =========================================================================
+ * Small helpers + shared frame.
+ * ========================================================================= */
+
+// Build the (labels, series) bundle for the main chart.
+// - shift view: one series per shift (Shift A / B / C)
+// - machine view: one series per distinct `machine` value
+// - sku view: one series per distinct `sub_section` value
+// - overall view: a single "Overall" series
+function buildMainChart({ mainRows, viewBy, activeCompare }) {
+  if (viewBy === "shift") {
+    // Rows carry granularity = SHIFT A/B/C. Group by date, then split
+    // by granularity. Each series gets one value per date.
+    const dateSet = new Set();
+    for (const r of mainRows) if (r.date) dateSet.add(r.date);
+    const dates = [...dateSet].sort();
+    const labels = dates.map((d) => toDisplayDate(d) ?? "");
+
+    const byShift = new Map();
+    for (const r of mainRows) {
+      const shift = granularityToShiftLabel(r.granularity);
+      if (!shift) continue;
+      if (!byShift.has(shift)) byShift.set(shift, new Map());
+      byShift.get(shift).set(r.date, numOrNull(r.actual_value));
+    }
+
+    const order = ["Shift A", "Shift B", "Shift C"];
+    const series = order
+      .filter((s) => activeCompare.includes(s))
+      .map((s) => ({
+        name: s,
+        values: dates.map((d) => byShift.get(s)?.get(d) ?? null),
+      }));
+    return { labels, series };
+  }
+
+  if (viewBy === "machine") {
+    return buildGroupedSeries({
+      rows: mainRows,
+      groupField: "machine",
+      activeCompare,
+    });
+  }
+  if (viewBy === "sku") {
+    return buildGroupedSeries({
+      rows: mainRows,
+      groupField: "sub_section",
+      activeCompare,
+    });
+  }
+
+  // Overall: a single series named "Overall". The end of compare[] is
+  // ignored (compare row isn't even shown in this mode).
+  const dateSet = new Set();
+  for (const r of mainRows) if (r.date) dateSet.add(r.date);
+  const dates = [...dateSet].sort();
+  const labels = dates.map((d) => toDisplayDate(d) ?? "");
+  const byDate = new Map(
+    mainRows.map((r) => [r.date, numOrNull(r.actual_value)]),
+  );
+  const values = dates.map((d) => byDate.get(d) ?? null);
+  return {
+    labels,
+    series: [{ name: "Overall", values }],
+  };
+}
+
+function buildGroupedSeries({ rows, groupField, activeCompare }) {
+  const dateSet = new Set();
+  for (const r of rows) if (r.date) dateSet.add(r.date);
+  const dates = [...dateSet].sort();
+  const labels = dates.map((d) => toDisplayDate(d) ?? "");
+
+  const byKey = new Map();
+  for (const r of rows) {
+    const k = r[groupField];
+    if (!k) continue;
+    if (!byKey.has(k)) byKey.set(k, new Map());
+    byKey.get(k).set(r.date, numOrNull(r.actual_value));
+  }
+
+  // Sort the active list by the natural order of the underlying distinct
+  // values (so TBM-03 comes before TBM-04 even when the user only picked
+  // those two out of ten).
+  const allIds = [...byKey.keys()].sort();
+  const ordered = allIds.filter((id) => activeCompare.includes(id));
+
+  const series = ordered.map((id) => ({
+    name: id,
+    values: dates.map((d) => byKey.get(id)?.get(d) ?? null),
+  }));
+  return { labels, series };
+}
+
+function buildOverlaySeries(rows) {
+  const dateSet = new Set();
+  for (const r of rows) if (r.date) dateSet.add(r.date);
+  const dates = [...dateSet].sort();
+  const labels = dates.map((d) => toDisplayDate(d) ?? "");
+  const byDate = new Map(rows.map((r) => [r.date, numOrNull(r.actual_value)]));
+  const values = dates.map((d) => byDate.get(d) ?? null);
+  return { labels, values };
+}
+
+function granularityToShiftLabel(g) {
+  if (g === "SHIFT A" || g === "Shift A") return "Shift A";
+  if (g === "SHIFT B" || g === "Shift B") return "Shift B";
+  if (g === "SHIFT C" || g === "Shift C") return "Shift C";
+  return null;
+}
+
+function overlayUnit(overlayValue) {
+  if (overlayValue === "Availability") return "%";
+  if (overlayValue === "Breakdown") return " min";
+  // Production + Scrap: units come from the row (handled in LineChart
+  // already) — pass empty so the existing chart formatting kicks in.
+  return "";
+}
+
+function numOrNull(v) {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number.parseFloat(v);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+/** Normalize a date (ISO yyyy-mm-dd or DD-MM-YYYY) to sortable YYYYMMDD. */
+function dateKey(d) {
+  if (typeof d !== "string") return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.replaceAll("-", "");
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(d);
+  return m ? `${m[3]}${m[2]}${m[1]}` : "";
+}
+
+/** Month bucket "YYYY-MM" from either date format. */
+function monthKey(d) {
+  const k = dateKey(d);
+  return k ? `${k.slice(0, 4)}-${k.slice(4, 6)}` : "";
+}
+
+function sectionIdToName(id) {
+  return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
+}
+
+function categoryIdToName(id) {
+  return (
+    {
+      p: "Productivity",
+      q: "Quality",
+      c: "Cost",
+      m: "Morale",
+      s: "Safety",
+      i: "Inventory",
+    }[id] ?? id
+  );
+}
+
+/* =========================================================================
+ * Frame: title + close + TimeRangeSelect + body. Shared by both paths so
+ * the visual shell is identical regardless of which trend view is open.
+ * ========================================================================= */
+
+function ModalFrame({ open, onClose, kpi, headerExtras, children }) {
   return (
     <Dialog
       open={open}
@@ -350,113 +1018,111 @@ function TrendModal({
         dividers
         sx={{ display: "flex", flexDirection: "column", gap: 2 }}
       >
-        <Box>
-          <TimeRangeSelect
-            preset={range}
-            // dashboard_doc.md §1: the Trend modal labels its presets
-            // Daily / Monthly / Yearly (vs the header's Today/Month/Year).
-            // ids stay today/month/year so the granularity mapping below
-            // (Daily / MTD / YTD) is unchanged.
-            presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
-            from={from}
-            to={to}
-            onPresetChange={(p) => {
-              setRange(p);
-              setFrom("");
-              setTo("");
-            }}
-            onFromChange={(v) => {
-              setFrom(v);
-              setRange("custom");
-            }}
-            onToChange={(v) => {
-              setTo(v);
-              setRange("custom");
-            }}
-          />
-        </Box>
-
-        <Box
-          sx={{
-            backgroundColor: theme.custom.surface.soft,
-            border: 1,
-            borderColor: "divider",
-            borderRadius: 1.25,
-            p: 2,
-            minHeight: 320,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {isLoading && values.length === 0 ? (
-            <ChartSkeleton />
-          ) : values.length === 0 ? (
-            <Typography sx={{ fontSize: 13, color: "text.disabled" }}>
-              No trend data for this period.
-            </Typography>
-          ) : chartType === "line" ? (
-            <LineChart
-              labels={labels}
-              values={values}
-              unit={kpi.unit}
-              target={kpi.target ?? null}
-            />
-          ) : chartType === "bar" ? (
-            <BarChart
-              labels={labels}
-              values={values}
-              unit={kpi.unit}
-              target={kpi.target ?? null}
-            />
-          ) : (
-            <ProgressChart
-              value={kpi.value}
-              unit={kpi.unit}
-              target={kpi.target ?? null}
-            />
-          )}
-        </Box>
+        {headerExtras}
+        {children}
       </DialogContent>
     </Dialog>
   );
 }
 
-function sectionIdToName(id) {
-  return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
-}
-
-function categoryIdToName(id) {
+// A bordered panel that hosts one chart, with title + skeleton/empty states.
+// Reused by the OEE modal for the main chart and every overlay chart.
+function ChartPanel({ theme, title, loading, empty, emptyMessage, children }) {
   return (
-    {
-      p: "Productivity",
-      q: "Quality",
-      c: "Cost",
-      m: "Morale",
-      s: "Safety",
-      i: "Inventory",
-    }[id] ?? id
+    <Box>
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: "primary.main",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+          mb: 1,
+        }}
+      >
+        {title}
+      </Typography>
+      <Box
+        sx={{
+          backgroundColor: theme.custom.surface.soft,
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1.25,
+          p: 2,
+          minHeight: 320,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {loading && empty ? (
+          <ChartSkeleton />
+        ) : empty ? (
+          <Typography sx={{ fontSize: 13, color: "text.disabled" }}>
+            {emptyMessage}
+          </Typography>
+        ) : (
+          children
+        )}
+      </Box>
+    </Box>
   );
 }
 
-function numOrNull(v) {
-  if (v == null) return null;
-  const n = typeof v === "number" ? v : Number.parseFloat(v);
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
-}
-
-/** Normalize a date (ISO yyyy-mm-dd or DD-MM-YYYY) to sortable YYYYMMDD. */
-function dateKey(d) {
-  if (typeof d !== "string") return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.replaceAll("-", "");
-  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(d);
-  return m ? `${m[3]}${m[2]}${m[1]}` : "";
-}
-
-/** Month bucket "YYYY-MM" from either date format. */
-function monthKey(d) {
-  const k = dateKey(d);
-  return k ? `${k.slice(0, 4)}-${k.slice(4, 6)}` : "";
+// Local single-select pill row — mirrors the legacy modal's exclusive
+// ToggleButtonGroup look without dragging the Production-drill helper
+// across folders. Inline here because TrendModal is the only consumer.
+function SingleSelectRow({ label, value, onChange, options }) {
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1.5}
+      sx={{ flexWrap: "wrap" }}
+    >
+      <Typography
+        sx={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          minWidth: 76,
+        }}
+      >
+        {label}
+      </Typography>
+      <ToggleButtonGroup
+        size="small"
+        value={value}
+        exclusive
+        onChange={(_, next) => {
+          if (next) onChange(next);
+        }}
+        sx={{
+          "& .MuiToggleButton-root": {
+            px: 1.5,
+            py: 0.25,
+            fontSize: 12,
+            textTransform: "none",
+            fontWeight: 600,
+            border: "1.25px solid",
+            borderColor: "divider",
+          },
+          "& .Mui-selected": {
+            borderColor: `${"primary.main"} !important`,
+            color: "primary.main",
+          },
+        }}
+      >
+        {options.map((opt) => (
+          <ToggleButton key={opt.value} value={opt.value}>
+            {opt.label}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    </Stack>
+  );
 }
 
 function ChartSkeleton() {

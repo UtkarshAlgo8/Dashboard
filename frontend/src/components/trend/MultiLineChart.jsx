@@ -1,0 +1,141 @@
+import { useMemo } from "react";
+import { Box, useTheme } from "@mui/material";
+import Highcharts from "highcharts";
+import HighchartsReactImport from "highcharts-react-official";
+
+// highcharts-react-official 3.x ships as a UMD bundle — normalise both
+// the direct default and the wrapped default. Mirrors LineChart.jsx so
+// the two siblings share an import shape.
+const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
+
+/**
+ * Multi-series line chart for the Trend modal's VIEW BY × COMPARE view.
+ * Sibling to LineChart.jsx (single-series, kept for non-OEE trends).
+ *
+ *   labels  - x-axis category labels (strings, parallel to values[])
+ *   series  - array of { name, values } where values[i] is the y at labels[i]
+ *             (nulls allowed — gaps render as breaks in the line)
+ *   unit    - optional unit suffix on tooltips + y-axis labels
+ *   target  - optional dashed amber plot line
+ *   colors  - optional override of the brand palette, one per series
+ *
+ * Highcharts natively supports multi-series; we just feed the array in
+ * instead of a hard-coded single entry. Legend renders inline (the
+ * existing ChartLegend.jsx is single-series, so the legend ships as a
+ * Highcharts native one here).
+ */
+function MultiLineChart({ labels, series, unit, target, colors }) {
+  const theme = useTheme();
+
+  const palette = useMemo(() => {
+    if (Array.isArray(colors) && colors.length) return colors;
+    // Stable brand palette — pulled once via theme, not per render, so
+    // HMR / theme swaps don't reshuffle series colours.
+    const b = theme.custom.brand;
+    return [b.blue, b.orange, b.green, b.purple, b.teal, b.cyan];
+  }, [colors, theme]);
+
+  const options = useMemo(() => {
+    const grid = theme.palette.divider;
+    const text = theme.palette.text.secondary;
+    const amber = theme.custom.brand.amber;
+
+    const cleanedSeries = (Array.isArray(series) ? series : []).map((s, i) => {
+      const color = palette[i % palette.length];
+      const values = (s.values ?? []).map((v) =>
+        typeof v === "number" && Number.isFinite(v) ? v : null,
+      );
+      return {
+        name: s.name ?? `Series ${i + 1}`,
+        data: values,
+        color,
+      };
+    });
+
+    return {
+      chart: {
+        type: "line",
+        height: 320,
+        spacing: [16, 12, 12, 8],
+        backgroundColor: "transparent",
+        style: { fontFamily: theme.typography.fontFamily },
+      },
+      title: { text: null },
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+      legend: {
+        // Inline legend — Highcharts renders the colour swatch + name
+        // for each series automatically. Single-series hides itself
+        // gracefully (Highcharts skips the legend block when only one
+        // series exists), so this works for the Overall view too.
+        enabled: true,
+        itemStyle: {
+          color: text,
+          fontSize: "11px",
+          fontWeight: 600,
+        },
+        itemHoverStyle: { color: text },
+        symbolWidth: 12,
+        symbolHeight: 12,
+      },
+      xAxis: {
+        categories: labels,
+        lineColor: grid,
+        tickColor: grid,
+        labels: { style: { color: text, fontSize: "11px" } },
+      },
+      yAxis: {
+        title: { text: null },
+        gridLineColor: grid,
+        labels: {
+          style: { color: text, fontSize: "11px" },
+          formatter: function () {
+            return unit ? `${this.value}${unit}` : this.value;
+          },
+        },
+        plotLines:
+          target == null
+            ? []
+            : [
+                {
+                  value: target,
+                  color: amber,
+                  width: 1.5,
+                  dashStyle: "Dash",
+                  zIndex: 4,
+                  label: {
+                    text: `Target ${target}${unit ?? ""}`,
+                    align: "right",
+                    style: {
+                      color: amber,
+                      fontSize: "11px",
+                      fontWeight: "600",
+                    },
+                  },
+                },
+              ],
+      },
+      tooltip: {
+        shared: true,
+        useHTML: false,
+        valueSuffix: unit ? ` ${unit}` : "",
+      },
+      plotOptions: {
+        line: {
+          lineWidth: 2.5,
+          marker: { enabled: true, radius: 3.5, lineWidth: 0 },
+          states: { hover: { lineWidth: 3 } },
+        },
+      },
+      series: cleanedSeries,
+    };
+  }, [labels, series, unit, target, theme, palette]);
+
+  return (
+    <Box sx={{ width: "100%" }}>
+      <HighchartsReact highcharts={Highcharts} options={options} />
+    </Box>
+  );
+}
+
+export default MultiLineChart;
