@@ -9,15 +9,20 @@ import HighchartsReactImport from "highcharts-react-official";
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
 /**
- * Multi-series line chart for the Trend modal's VIEW BY × COMPARE view.
- * Sibling to LineChart.jsx (single-series, kept for non-OEE trends).
+ * Multi-series line chart for the Trend modal's VIEW BY × COMPARE view,
+ * and the combined OVERLAY chart. Sibling to LineChart.jsx (single-series,
+ * kept for non-OEE trends).
  *
- *   labels  - x-axis category labels (strings, parallel to values[])
- *   series  - array of { name, values } where values[i] is the y at labels[i]
- *             (nulls allowed — gaps render as breaks in the line)
- *   unit    - optional unit suffix on tooltips + y-axis labels
- *   target  - optional dashed amber plot line
- *   colors  - optional override of the brand palette, one per series
+ *   labels   - x-axis category labels (strings, parallel to values[])
+ *   series   - array of { name, values, unit? } where values[i] is the y at
+ *              labels[i] (nulls allowed — gaps render as breaks in the line).
+ *              Each series can carry its own `unit`; the legend suffix and
+ *              tooltip both pick it up. Falls back to the top-level `unit`
+ *              prop when a series doesn't declare one — that's the OEE
+ *              chart's case (all series are %).
+ *   unit     - global unit suffix; overridden per-series when set
+ *   target   - optional dashed amber plot line
+ *   colors   - optional override of the brand palette, one per series
  *
  * Highcharts natively supports multi-series; we just feed the array in
  * instead of a hard-coded single entry. Legend renders inline (the
@@ -40,15 +45,25 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
     const text = theme.palette.text.secondary;
     const amber = theme.custom.brand.amber;
 
+    // Per-series unit wins over the global one; missing falls through.
+    // The legend entry appends the unit so the user can tell a "%" line
+    // from a "min" line without consulting the tooltip.
     const cleanedSeries = (Array.isArray(series) ? series : []).map((s, i) => {
       const color = palette[i % palette.length];
+      const seriesUnit = s.unit ?? unit ?? "";
       const values = (s.values ?? []).map((v) =>
         typeof v === "number" && Number.isFinite(v) ? v : null,
       );
+      const legendName = seriesUnit
+        ? `${s.name ?? `Series ${i + 1}`} (${seriesUnit})`
+        : (s.name ?? `Series ${i + 1}`);
       return {
-        name: s.name ?? `Series ${i + 1}`,
+        name: legendName,
         data: values,
         color,
+        tooltip: {
+          valueSuffix: seriesUnit ? ` ${seriesUnit}` : "",
+        },
       };
     });
 
@@ -89,6 +104,9 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
         gridLineColor: grid,
         labels: {
           style: { color: text, fontSize: "11px" },
+          // The combined-overlay chart mixes units (%, min, MT, …) on
+          // a single axis, so the axis label stays unitless. Per-series
+          // tooltips carry the unit; the legend does too.
           formatter: function () {
             return unit ? `${this.value}${unit}` : this.value;
           },
@@ -118,7 +136,6 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       tooltip: {
         shared: true,
         useHTML: false,
-        valueSuffix: unit ? ` ${unit}` : "",
       },
       plotOptions: {
         line: {

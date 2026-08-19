@@ -40,12 +40,12 @@ import {
  * Two paths share this modal:
  *
  *   1. OEE path — VIEW BY / COMPARE / OVERLAY pills on top of a
- *      MultiLineChart, with optional overlay charts stacked below.
- *      Multi-series chart + multi-axis overlays.
+ *      multi-series main chart (one line per COMPARE item), with an
+ *      optional combined-overlay chart below showing every picked
+ *      overlay kpi on the same axes plus a legend.
  *
  *   2. Legacy single-series path — every other KPI (Production, Scrap,
- *      Downtime, …) keeps the original single-line behaviour. Render
- *      decision lives in `renderTrend()` below.
+ *      Downtime, …) keeps the original single-line behaviour.
  *
  * v2 fetch: use kpi.rawName (actual gold_dummy kpi_name like "OEE_o")
  * so we bypass the stale KPI_NAME_BY_ID map in getTrend. Falls back to
@@ -709,25 +709,45 @@ function OeeTrendModal({
     return `${lens} · OEE — Daily`;
   }, [viewBy]);
 
-  // Per-overlay single-series chart data.
-  const overlayCharts = useMemo(() => {
-    const out = [];
-    for (const overlayValue of overlays) {
+  // Combined overlay chart — one line per picked overlay, sharing the
+  // same date axis. The labels come from the union of all overlay
+  // rows' dates so a sparse kpi doesn't shorten the axis. Each series
+  // carries its own unit suffix (MultiLineChart renders it in the
+  // legend and tooltip).
+  const overlayChart = useMemo(() => {
+    if (overlays.length === 0) {
+      return { labels: [], series: [] };
+    }
+    // Collect the union of dates across every picked overlay so the
+    // x-axis is consistent regardless of which kpi has data.
+    const dateSet = new Set();
+    const perOverlayRows = overlays.map((overlayValue) => {
       const kpiName = overlayKpiName(overlayValue, viewBy, sectionName);
       const rows = overlayRowsByKpi[kpiName] ?? [];
-      const series = buildOverlaySeries(rows);
+      for (const r of rows) if (r.date) dateSet.add(r.date);
+      return { overlayValue, rows };
+    });
+    const dates = [...dateSet].sort();
+    const labels = dates.map((d) => toDisplayDate(d) ?? "");
+
+    const series = perOverlayRows.map(({ overlayValue, rows }) => {
       const meta = OVERLAY_OPTIONS.find((o) => o.value === overlayValue);
       const displayLabel = meta?.label?.replace(/^\+\s*/, "") ?? overlayValue;
-      out.push({
-        key: overlayValue,
-        title: displayLabel,
+      const byDate = new Map(
+        rows.map((r) => [r.date, numOrNull(r.actual_value)]),
+      );
+      const values = dates.map((d) => byDate.get(d) ?? null);
+      return {
+        name: displayLabel,
+        values,
         unit: overlayUnit(overlayValue),
-        labels: series.labels,
-        values: series.values,
-      });
-    }
-    return out;
+      };
+    });
+    return { labels, series };
   }, [overlays, viewBy, sectionName, overlayRowsByKpi]);
+
+  const overlayLabels = overlayChart.labels;
+  const overlaySeries = overlayChart.series;
 
   const loading = isShift ? shiftLoading : singleLoading;
   const hasMainData = mainChart.series.length > 0;
@@ -805,19 +825,26 @@ function OeeTrendModal({
           )}
         </ChartPanel>
 
-        {/* Overlay charts — one per picked overlay, in picker order. */}
-        {overlayCharts.map((c) => (
+        {/* Combined overlay chart — one line per picked overlay kpi,
+            legend names carry each line's unit (%, min, MT, …). Units
+            differ across overlays so this is a correlation view, not a
+            magnitude view; the per-series tooltip shows the value with
+            its own unit suffix. */}
+        {overlays.length > 0 && (
           <ChartPanel
-            key={c.key}
             theme={theme}
-            title={c.title}
+            title="Overlays · Daily"
             loading={loading}
-            empty={c.values.every((v) => v == null)}
-            emptyMessage={`No ${c.title.toLowerCase()} data for this period.`}
+            empty={overlaySeries.every((s) => s.values.every((v) => v == null))}
+            emptyMessage={
+              loading
+                ? "Loading…"
+                : "No overlay data for this combination — try a different VIEW BY or date range."
+            }
           >
-            <LineChart labels={c.labels} values={c.values} unit={c.unit} />
+            <MultiLineChart labels={overlayLabels} series={overlaySeries} />
           </ChartPanel>
-        ))}
+        )}
       </Stack>
     </ModalFrame>
   );
@@ -917,16 +944,6 @@ function buildGroupedSeries({ rows, groupField, activeCompare }) {
   return { labels, series };
 }
 
-function buildOverlaySeries(rows) {
-  const dateSet = new Set();
-  for (const r of rows) if (r.date) dateSet.add(r.date);
-  const dates = [...dateSet].sort();
-  const labels = dates.map((d) => toDisplayDate(d) ?? "");
-  const byDate = new Map(rows.map((r) => [r.date, numOrNull(r.actual_value)]));
-  const values = dates.map((d) => byDate.get(d) ?? null);
-  return { labels, values };
-}
-
 function granularityToShiftLabel(g) {
   if (g === "SHIFT A" || g === "Shift A") return "Shift A";
   if (g === "SHIFT B" || g === "Shift B") return "Shift B";
@@ -934,11 +951,16 @@ function granularityToShiftLabel(g) {
   return null;
 }
 
+// Per-overlay unit suffix for the combined-overlay chart's legend +
+// tooltip. Mixed units on one axis is a correlation view, not a
+// magnitude view, so a "%" line and a "min" line share the y-axis;
+// the legend entry ("Availability (%)" / "Breakdown (min)") and
+// per-series tooltip tell the user which is which. Production +
+// Scrap carry varying units (MT/NOS/KG depending on the card pin);
+// we leave them unitless and let the tooltip show the raw value.
 function overlayUnit(overlayValue) {
   if (overlayValue === "Availability") return "%";
-  if (overlayValue === "Breakdown") return " min";
-  // Production + Scrap: units come from the row (handled in LineChart
-  // already) — pass empty so the existing chart formatting kicks in.
+  if (overlayValue === "Breakdown") return "min";
   return "";
 }
 
