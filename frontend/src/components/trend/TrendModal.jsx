@@ -585,6 +585,13 @@ function OeeTrendModal({
       enabled: Boolean(singlePayload),
       interval: 0,
       deps: [JSON.stringify(singlePayload)],
+      // Toggling an overlay mutates the payload (drillKpis adds the
+      // overlay kpi_name). Without keepPreviousData, usePolledQuery
+      // nulls `data` on deps change, which blanks the main OEE chart
+      // for the round-trip duration. Keep the previous data so the
+      // main chart stays rendered; only the new overlay chart shows
+      // its own skeleton until the response lands.
+      keepPreviousData: true,
     },
   );
 
@@ -599,6 +606,9 @@ function OeeTrendModal({
       enabled: shiftPayloads.length > 0,
       interval: 0,
       deps: [JSON.stringify(shiftPayloads)],
+      // Same reasoning as the single-trip above — switching overlays
+      // while on the Shift lens must not blank the existing series.
+      keepPreviousData: true,
     },
   );
   const shiftResults = useMemo(
