@@ -34,14 +34,18 @@ function num(v) {
  *   Passenger/LT/SUV Radial for TBM+Curing, the sub-section's types for
  *   Stock) filters the `product_type` column.
  *
+ * Curing also has a trench tier (Production_s, grouped by sub_section);
+ * the Curing drill exposes that as a fourth "Trench" lens alongside
+ * Machine / SKU / Machine + SKU. Other sections get only the base three.
+ *
  * Values are read VERBATIM from the matching stored row — actual_value
  * and threshold_value as-is, in the row's own unit. We never sum across
  * the time window (snapshot mode collapses to the latest day to match
  * the card) and never convert between units (each unit is its own stored
  * row). Achievement = Actual ÷ Planned.
  *
- * View By toggle (Machine | SKU | Machine + SKU) picks which kpi_name to
- * read; the Unit toggle picks which stored unit row to read.
+ * View By toggle (Machine | SKU | Machine + SKU | Trench) picks which
+ * kpi_name to read; the Unit toggle picks which stored unit row to read.
  */
 
 const SECTION_TITLE = {
@@ -57,6 +61,15 @@ const SECTION_NAME = {
   cur: "Curing",
   stk: "Stock",
 };
+
+// Base View By options for every section. Curing appends a "Trench" lens
+// at runtime (TRENCH_VIEW_BY_OPTION below).
+const BASE_VIEW_BY_OPTIONS = [
+  { value: "machine", label: "Machine" },
+  { value: "sku", label: "SKU" },
+  { value: "both", label: "Machine + SKU" },
+];
+const TRENCH_VIEW_BY_OPTION = { value: "trench", label: "Trench" };
 
 // realdata.md §7: units are READ FROM THE DATA, not hardcoded. The real
 // units are %, KG, M, NOS (the dummy's MT/Batches/units don't exist), and
@@ -83,12 +96,6 @@ function deriveUnitOptions(rows, sectionName, ptFilter) {
     .sort((a, b) => a.localeCompare(b))
     .map((u) => ({ value: u, label: displayUnit(u) }));
 }
-
-const VIEW_BY_OPTIONS = [
-  { value: "machine", label: "Machine" },
-  { value: "sku", label: "SKU" },
-  { value: "both", label: "Machine + SKU" },
-];
 
 // Aggregate ("sum") product types whose SKU-level drill children are stored
 // under the finer tyre-category names. When the user has the aggregate
@@ -123,14 +130,14 @@ function ProductionDrillPanel({
   unitPin = null,
   isLoading = false,
 }) {
-  const [viewBy, setViewBy] = useState("machine");
-  // dashboard_doc.md §7: Curing only — a trench (Tredge) level sits ABOVE
-  // the press/SKU table. Selecting a Tredge filters the press/SKU lenses to
-  // that sub_section (Production_m / _m_sku / _sku_m all carry sub_section =
-  // Tredge N). Other sections have no trench tier (selectedTredge stays
-  // null and the table shows all rows, unchanged).
   const isCuring = section === "cur";
-  const [selectedTredge, setSelectedTredge] = useState(null);
+  // Curing drill offers a "Trench" lens alongside Machine / SKU /
+  // Machine + SKU; other sections get the base three. Default view is
+  // Machine so a fresh open matches the non-Curing behaviour.
+  const viewByOptions = isCuring
+    ? [...BASE_VIEW_BY_OPTIONS, TRENCH_VIEW_BY_OPTION]
+    : BASE_VIEW_BY_OPTIONS;
+  const [viewBy, setViewBy] = useState("machine");
 
   const sectionName = SECTION_NAME[section] ?? section;
   const ptFilterForUnits = prodSub ? prodSub : null;
@@ -159,16 +166,21 @@ function ProductionDrillPanel({
   const sectionTitle = SECTION_TITLE[section] ?? section;
 
   // Pick which kpi_name backs the table based on viewBy.
-  const kpiName =
-    viewBy === "machine"
+  // Trench (Curing only) reads the trench-level Production_s roll-up via
+  // tredgeRows — see trenchPayload below — and skips this paginated path.
+  const isTrenchView = viewBy === "trench";
+  const kpiName = isTrenchView
+    ? "Production_s"
+    : viewBy === "machine"
       ? "Production_m"
       : viewBy === "sku"
         ? "Production_sku"
         : "Production_m_sku";
 
   // The dimensions this lens groups by — one result row per distinct value.
-  const groupBy =
-    viewBy === "machine"
+  const groupBy = isTrenchView
+    ? ["sub_section"]
+    : viewBy === "machine"
       ? ["machine"]
       : viewBy === "sku"
         ? ["itemcode"]
@@ -177,8 +189,8 @@ function ProductionDrillPanel({
   // ---- Server-side pagination -------------------------------------------
   // Each lens (Machine / SKU / Machine+SKU) is its OWN paginated API call,
   // advancing OFFSET for Prev/Next. The server applies the section / product /
-  // granularity / unit / trench filters AND the group-by roll-up, so one
-  // returned row is exactly one displayed row.
+  // granularity / unit filters AND the group-by roll-up, so one returned row
+  // is exactly one displayed row.
   //
   // The roll-up has to happen server-side. Gold stores one row per
   // (machine, itemcode, DAY), so paging the RAW rows slices days: a page of 25
@@ -201,7 +213,7 @@ function ProductionDrillPanel({
   // Reset to page 1 whenever the lens or any scope filter changes — done
   // during render (React's "adjust state on prop change" pattern) so a stale
   // deep page never shows for a different list.
-  const pageKey = `${kpiName}|${activeUnit}|${prodSub}|${granularity}|${selectedTredge}|${sectionName}|${subSection}|${from}|${to}`;
+  const pageKey = `${kpiName}|${activeUnit}|${prodSub}|${granularity}|${sectionName}|${subSection}|${from}|${to}`;
   const [prevPageKey, setPrevPageKey] = useState(pageKey);
   if (prevPageKey !== pageKey) {
     setPrevPageKey(pageKey);
@@ -217,8 +229,6 @@ function ProductionDrillPanel({
       ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
       ...(prodSub ? { product_type: prodSub } : {}),
       ...(!isCuring && subSection ? { sub_section: subSection } : {}),
-      // Curing trench drill (§7): scope the page to the picked Tredge.
-      ...(isCuring && selectedTredge ? { sub_section: selectedTredge } : {}),
     },
     from,
     to,
@@ -253,9 +263,10 @@ function ProductionDrillPanel({
   }, [pageData]);
 
   // Curing trench list (§7): one row per Tredge (Production_s). Grouped
-  // server-side for the same reason the table above is — the raw rows are one
-  // per (Tredge, DAY), so a wide range used to overflow the 100-row fetch and
-  // silently drop trenches off the end of the list.
+  // server-side for the same reason the table above is — the raw rows are
+  // one per (Tredge, DAY), so a wide range used to overflow the 100-row
+  // fetch and silently drop trenches off the end of the list. The Curing
+  // drill's "Trench" lens reads this same list — no separate fetch.
   const trenchPayload = isCuring
     ? {
         plantId,
@@ -322,15 +333,21 @@ function ProductionDrillPanel({
   const pageStart = page * pageSize;
   const loading = isLoading || pageLoading;
 
-  // Curing trench tier (§7): until a Tredge is selected, show the
-  // trench-wise list (Production_s). Selecting one reveals its press/SKU
-  // table below. Other sections skip this and go straight to the table.
-  const showTrenchPicker = isCuring && tredgeRows.length > 0;
   const cardRef = useRef(null);
 
+  // Active table source: trench view shows the flat trench list (no pager),
+  // other views show the paginated press/SKU rows.
+  const activeRows = isTrenchView ? tredgeRows : rows;
+
   // Excel rows: shape by the active view-by so columns match the table.
-  const excelHeaders =
-    viewBy === "machine"
+  const excelHeaders = isTrenchView
+    ? [
+        "Trench",
+        `Planned (${unitLabel})`,
+        `Actual (${unitLabel})`,
+        "Achievement %",
+      ]
+    : viewBy === "machine"
       ? [
           "Machine",
           `Planned (${unitLabel})`,
@@ -351,9 +368,17 @@ function ProductionDrillPanel({
             `Actual (${unitLabel})`,
             "Achievement %",
           ];
-  const excelRows = rows.map((r) => {
+  const excelRows = activeRows.map((r) => {
     const ach =
       r.planned > 0 ? Number(((r.actual / r.planned) * 100).toFixed(2)) : "";
+    if (isTrenchView) {
+      return {
+        Trench: r.tredge,
+        [`Planned (${unitLabel})`]: r.planned,
+        [`Actual (${unitLabel})`]: r.actual,
+        "Achievement %": ach,
+      };
+    }
     if (viewBy === "machine") {
       return {
         Machine: r.machine,
@@ -379,7 +404,10 @@ function ProductionDrillPanel({
     };
   });
 
-  if (rows.length === 0 && !showTrenchPicker) {
+  // Empty guard: nothing to render when both the press/SKU page and the
+  // trench list are empty. The skeleton handles the loading case.
+  const hasAnyRows = rows.length > 0 || tredgeRows.length > 0;
+  if (!hasAnyRows) {
     if (loading) {
       return <DrillSkeleton title rows={5} cols={5} />;
     }
@@ -424,154 +452,68 @@ function ProductionDrillPanel({
         />
       </Stack>
 
-      {/* Curing trench tier (§7): Tredge-wise list (Production_s). Click a
-          Tredge to drill into its presses / SKUs. */}
-      {showTrenchPicker && (
-        <TrenchPicker
-          rows={tredgeRows}
-          selected={selectedTredge}
-          onSelect={(t) => setSelectedTredge((cur) => (cur === t ? null : t))}
-          unit={unitLabel}
-          fmt={fmt}
+      <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
+        <ToggleGroup
+          label="View by"
+          value={viewBy}
+          onChange={setViewBy}
+          options={viewByOptions}
         />
-      )}
+        {/* realdata.md §7: a multi-unit KPI shows the toggle; a
+            single-unit one just displays its unit (no toggle). */}
+        {unitOptions.length > 1 && (
+          <ToggleGroup
+            label="Unit"
+            value={activeUnit}
+            onChange={setUnit}
+            options={unitOptions}
+          />
+        )}
+      </Stack>
 
-      {/* Press/SKU breakdown — for Curing, only after a Tredge is picked. */}
-      {(!showTrenchPicker || selectedTredge) && (
-        <>
-          <Stack
-            direction="row"
-            spacing={3}
-            alignItems="center"
-            flexWrap="wrap"
-          >
-            <ToggleGroup
-              label="View by"
-              value={viewBy}
-              onChange={setViewBy}
-              options={VIEW_BY_OPTIONS}
+      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
+        <Box sx={{ flex: 1 }} />
+        <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+          {activeRows.length === 0
+            ? "0 rows"
+            : isTrenchView
+              ? `${activeRows.length} trenches`
+              : `${pageStart + 1}–${pageStart + activeRows.length} · page ${page + 1}`}
+          {prodSub ? ` · ${prodSub}` : ""}
+        </Typography>
+      </Stack>
+
+      {loading && activeRows.length === 0 ? (
+        <DrillSkeleton rows={6} cols={5} />
+      ) : activeRows.length > 0 ? (
+        <Box ref={cardRef}>
+          <ResultTable
+            rows={activeRows}
+            viewBy={viewBy}
+            unit={unitLabel}
+            fmt={fmt}
+          />
+          {/* Pager only matters for paginated lenses — the trench list is
+              a single flat fetch that already fits on one page. */}
+          {!isTrenchView && (
+            <TablePager
+              page={page}
+              pageSize={pageSize}
+              hasMore={hasMore}
+              onPageChange={setPage}
+              onPageSizeChange={handlePageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              disabled={loading}
             />
-            {/* realdata.md §7: a multi-unit KPI shows the toggle; a
-                single-unit one just displays its unit (no toggle). */}
-            {unitOptions.length > 1 && (
-              <ToggleGroup
-                label="Unit"
-                value={activeUnit}
-                onChange={setUnit}
-                options={unitOptions}
-              />
-            )}
-          </Stack>
-
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1.5}
-            flexWrap="wrap"
-          >
-            <Box sx={{ flex: 1 }} />
-            <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-              {rows.length === 0
-                ? "0 rows"
-                : `${pageStart + 1}–${pageStart + rows.length} · page ${page + 1}`}
-              {selectedTredge ? ` in ${selectedTredge}` : ""}
-              {prodSub ? ` · ${prodSub}` : ""}
-            </Typography>
-          </Stack>
-
-          {loading && rows.length === 0 ? (
-            <DrillSkeleton rows={6} cols={5} />
-          ) : rows.length > 0 ? (
-            <Box ref={cardRef}>
-              <ResultTable
-                rows={rows}
-                viewBy={viewBy}
-                unit={unitLabel}
-                fmt={fmt}
-              />
-              {/* Always shown once there are rows — even on a single short
-                  page the size control is the way to widen the page. */}
-              <TablePager
-                page={page}
-                pageSize={pageSize}
-                hasMore={hasMore}
-                onPageChange={setPage}
-                onPageSizeChange={handlePageSize}
-                pageSizeOptions={PAGE_SIZE_OPTIONS}
-                disabled={loading}
-              />
-            </Box>
-          ) : (
-            <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
-              <Typography sx={{ fontSize: 13 }}>
-                No press / SKU rows for {selectedTredge ?? sectionName} in this
-                fetch.
-              </Typography>
-            </Box>
           )}
-        </>
+        </Box>
+      ) : (
+        <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
+          <Typography sx={{ fontSize: 13 }}>
+            No rows for {sectionName} in this fetch.
+          </Typography>
+        </Box>
       )}
-    </Stack>
-  );
-}
-
-/**
- * Curing trench tier (§7): one clickable row per Tredge (Production_s).
- * Selecting a Tredge drills into its presses / SKUs below.
- */
-function TrenchPicker({ rows, selected, onSelect, unit, fmt }) {
-  const theme = useTheme();
-  const columns = [
-    { key: "tredge", label: "Tredge", align: "left" },
-    {
-      key: "planned",
-      label: `Planned (${unit})`,
-      filterable: false,
-      value: (r) => r.planned,
-      render: (r) => fmt(r.planned),
-    },
-    {
-      key: "actual",
-      label: `Actual (${unit})`,
-      filterable: false,
-      value: (r) => r.actual,
-      render: (r) => fmt(r.actual),
-    },
-    {
-      key: "achievement",
-      label: "Achievement",
-      filterable: false,
-      value: (r) => achievementOf(r) ?? -1,
-      render: (r) => <AchievementCell row={r} />,
-    },
-  ];
-  return (
-    <Stack spacing={1}>
-      <Typography
-        sx={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: "text.disabled",
-          textTransform: "uppercase",
-          letterSpacing: 0.4,
-        }}
-      >
-        Trench-wise — click to drill into presses
-      </Typography>
-      <DataTable
-        columns={columns}
-        rows={rows}
-        getRowKey={(r) => r.tredge}
-        onRowClick={(r) => onSelect(r.tredge)}
-        rowSx={(r) =>
-          selected === r.tredge
-            ? { backgroundColor: `${theme.custom.brand.orange}1f` }
-            : {}
-        }
-        maxHeight={320}
-        searchPlaceholder="Search trench…"
-        emptyMessage="No trenches."
-      />
     </Stack>
   );
 }
@@ -656,6 +598,9 @@ function ResultTable({ rows, viewBy, unit, fmt }) {
       ),
     });
   }
+  if (viewBy === "trench") {
+    idCols.push({ key: "tredge", label: "Trench", align: "left" });
+  }
   const columns = [
     ...idCols,
     {
@@ -685,9 +630,17 @@ function ResultTable({ rows, viewBy, unit, fmt }) {
     <DataTable
       columns={columns}
       rows={rows}
-      getRowKey={(r) => `${r.machine ?? ""}||${r.itemcode ?? ""}`}
+      // Trench rows carry `tredge` instead of machine/itemcode — key off
+      // the identifier the row actually has so React doesn't fall over.
+      getRowKey={(r) =>
+        viewBy === "trench"
+          ? (r.tredge ?? "")
+          : `${r.machine ?? ""}||${r.itemcode ?? ""}`
+      }
       maxHeight={380}
-      searchPlaceholder="Search this page…"
+      searchPlaceholder={
+        viewBy === "trench" ? "Search trench…" : "Search this page…"
+      }
       emptyMessage="No rows on this page."
     />
   );
