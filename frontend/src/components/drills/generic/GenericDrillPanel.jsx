@@ -56,18 +56,18 @@ function TableDrill({ drill }) {
         }}
       >
         <Table
-        size="small"
-        stickyHeader
-        sx={(t) => ({
-          "& .MuiTableCell-root": {
-            border: "1px solid",
-            borderColor: t.palette.divider,
-          },
-          "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
-          },
-        })}
-      >
+          size="small"
+          stickyHeader
+          sx={(t) => ({
+            "& .MuiTableCell-root": {
+              borderBottom: "1px solid",
+              borderColor: t.palette.divider,
+            },
+            "& thead .MuiTableCell-root": {
+              backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
+            },
+          })}
+        >
           <TableHead>
             <TableRow>
               {cols.map((c) => (
@@ -104,7 +104,20 @@ function TableDrill({ drill }) {
               </TableRow>
             ) : (
               rows.map((row, ri) => (
-                <TableRow key={ri} hover>
+                <TableRow
+                  key={ri}
+                  hover
+                  sx={{
+                    backgroundColor: (t) =>
+                      ri % 2 === 0
+                        ? "background.paper"
+                        : (t.custom?.table?.alternateRow ??
+                          "rgba(0, 119, 182, 0.04)"),
+                    "&:hover": {
+                      backgroundColor: (t) => t.palette.action.hover,
+                    },
+                  }}
+                >
                   {row.map((cell, ci) => (
                     <TableCell
                       key={ci}

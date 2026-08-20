@@ -81,11 +81,11 @@ function DailyInventoryTable({ history }) {
           stickyHeader
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
               borderColor: t.palette.divider,
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom.surface.soft,
+              backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
             },
           })}
         >
@@ -98,8 +98,21 @@ function DailyInventoryTable({ history }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {reversed.map((row) => (
-              <TableRow key={row.date} hover>
+            {reversed.map((row, i) => (
+              <TableRow
+                key={row.date}
+                hover
+                sx={{
+                  backgroundColor: (t) =>
+                    i % 2 === 0
+                      ? "background.paper"
+                      : (t.custom?.table?.alternateRow ??
+                        "rgba(0, 119, 182, 0.04)"),
+                  "&:hover": {
+                    backgroundColor: (t) => t.palette.action.hover,
+                  },
+                }}
+              >
                 <TableCell
                   sx={{
                     fontSize: 12,

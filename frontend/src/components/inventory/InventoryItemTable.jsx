@@ -102,11 +102,11 @@ function InventoryItemTable({ bar }) {
           stickyHeader
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
               borderColor: t.palette.divider,
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom.surface.soft,
+              backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
             },
           })}
         >
@@ -118,8 +118,21 @@ function InventoryItemTable({ bar }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {bar.items.map((it) => (
-              <TableRow key={it.itemCode} hover>
+            {bar.items.map((it, i) => (
+              <TableRow
+                key={it.itemCode}
+                hover
+                sx={{
+                  backgroundColor: (t) =>
+                    i % 2 === 0
+                      ? "background.paper"
+                      : (t.custom?.table?.alternateRow ??
+                        "rgba(0, 119, 182, 0.04)"),
+                  "&:hover": {
+                    backgroundColor: (t) => t.palette.action.hover,
+                  },
+                }}
+              >
                 <TableCell sx={{ fontSize: 13, fontFamily: "monospace" }}>
                   {it.itemCode}
                 </TableCell>

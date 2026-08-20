@@ -225,7 +225,7 @@ function DataTable({
           stickyHeader={stickyHeader}
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
               borderColor: t.palette.divider,
             },
             "& thead .MuiTableCell-root": {
@@ -264,10 +264,17 @@ function DataTable({
               processed.map((row, i) => (
                 <TableRow
                   key={getRowKey ? getRowKey(row, i) : i}
-                  hover={Boolean(onRowClick)}
+                  hover
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   sx={{
                     cursor: onRowClick ? "pointer" : "default",
+                    backgroundColor: (t) =>
+                      i % 2 === 0
+                        ? "background.paper"
+                        : (t.custom?.table?.alternateRow ?? "rgba(0, 119, 182, 0.04)"),
+                    "&:hover": {
+                      backgroundColor: (t) => t.palette.action.hover,
+                    },
                     ...(rowSx ? rowSx(row) : {}),
                   }}
                 >

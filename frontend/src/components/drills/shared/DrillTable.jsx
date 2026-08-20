@@ -103,11 +103,11 @@ export function DrillTable({
           stickyHeader
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
               borderColor: t.palette.divider,
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom.surface.soft,
+              backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
             },
           })}
         >
@@ -155,9 +155,16 @@ export function DrillTable({
                 return (
                   <TableRow
                     key={ri}
+                    hover
                     sx={{
-                      backgroundColor:
-                        ri % 2 === 0 ? "transparent" : "action.hover",
+                      backgroundColor: (t) =>
+                        ri % 2 === 0
+                          ? "background.paper"
+                          : (t.custom?.table?.alternateRow ??
+                            "rgba(0, 119, 182, 0.04)"),
+                      "&:hover": {
+                        backgroundColor: (t) => t.palette.action.hover,
+                      },
                     }}
                   >
                     {cells.map((cell, ci) => (
