@@ -16,6 +16,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import ParamChip from "./ParamChip.jsx";
 import { EmptyState, useToast } from "@/components/common";
 import TablePager from "@/components/tables/TablePager.jsx";
+import TableLegend from "@/components/tables/TableLegend.jsx";
 import { TableSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getScrapTraceability } from "@/api/drills.js";
@@ -247,11 +248,44 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
             flexWrap="wrap"
             sx={{ mt: 1.5 }}
           >
-            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-              {rows.length === 0
-                ? "0 rows"
-                : `${pageStart + 1}–${pageStart + rows.length}`}
-            </Typography>
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              useFlexGap
+              flexWrap="wrap"
+            >
+              <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+                {rows.length === 0
+                  ? "0 rows"
+                  : `${pageStart + 1}–${pageStart + rows.length}`}
+              </Typography>
+              <TableLegend
+                items={[
+                  {
+                    label: "Shift A",
+                    color: theme.custom.brand.blue,
+                    variant: "pill",
+                  },
+                  {
+                    label: "Shift B",
+                    color: theme.custom.brand.amber,
+                    variant: "pill",
+                  },
+                  {
+                    label: "Shift C",
+                    color: theme.custom.brand.purple,
+                    variant: "pill",
+                  },
+                  {
+                    label: "Out-of-Range Param",
+                    color: theme.custom.brand.red,
+                    variant: "square",
+                  },
+                ]}
+                sx={{ py: 0 }}
+              />
+            </Stack>
             <TablePager
               page={page}
               pageSize={pageSize}

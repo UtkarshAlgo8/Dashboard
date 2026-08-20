@@ -10,6 +10,7 @@ import {
   Typography,
 } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import TableLegend from "@/components/tables/TableLegend.jsx";
 
 /**
  * Reusable drill data table — matches artifact DTable style.
@@ -24,6 +25,7 @@ import CardDownloadButton from "@/components/CardDownloadButton.jsx";
  *   downloadHeaders    - optional override of `cols` for the Excel export
  *                        only. The rendered table still uses `cols`.
  *   downloadSheetName  - worksheet name (default "Data").
+ *   legend             - optional custom legend or false to hide
  *
  * @param {string}   title      - panel title (shown above table)
  * @param {string[]} cols       - column headers
@@ -40,6 +42,7 @@ export function DrillTable({
   downloadFilename,
   downloadHeaders,
   downloadSheetName,
+  legend,
 }) {
   const tableRef = useRef(null);
   const excelHeaders = downloadHeaders ?? cols ?? [];
@@ -200,8 +203,46 @@ export function DrillTable({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {legend ? (
+        typeof legend === "string" ? (
+          <TableLegend preset={legend} />
+        ) : Array.isArray(legend) ? (
+          <TableLegend items={legend} />
+        ) : (
+          legend
+        )
+      ) : hasStatusCells(rows, rowMapper) ? (
+        <TableLegend preset="status" />
+      ) : null}
     </Stack>
   );
+}
+
+function hasStatusCells(rows, rowMapper) {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  const statusValues = [
+    "OK",
+    "Closed",
+    "High",
+    "Low",
+    "Scrapped",
+    "Escalate",
+    "Below",
+    "Open",
+    "Alert",
+    "Monitor",
+  ];
+  return rows.some((row, ri) => {
+    const cells = rowMapper
+      ? rowMapper(row, ri)
+      : Array.isArray(row)
+        ? row
+        : Object.values(row);
+    return cells.some(
+      (cell) => typeof cell === "string" && statusValues.includes(cell),
+    );
+  });
 }
 
 function getStatusColor(s) {

@@ -23,6 +23,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import TableLegend from "./TableLegend.jsx";
 
 /**
  * Reusable data table with a search bar, click-to-sort column headers and a
@@ -52,6 +53,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
  *   emptyMessage
  *   stickyHeader = true, maxHeight
  *   toolbarRight             — extra node rendered on the right of the search row
+ *   legend                   — preset ("threshold"|"status"|"shifts"), items array, or node
  */
 function DataTable({
   columns,
@@ -65,6 +67,7 @@ function DataTable({
   stickyHeader = true,
   maxHeight = 380,
   toolbarRight = null,
+  legend = null,
 }) {
   const theme = useTheme();
   const [query, setQuery] = useState("");
@@ -293,6 +296,15 @@ function DataTable({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {legend &&
+        (typeof legend === "string" ? (
+          <TableLegend preset={legend} />
+        ) : Array.isArray(legend) ? (
+          <TableLegend items={legend} />
+        ) : (
+          legend
+        ))}
     </Stack>
   );
 }
