@@ -229,10 +229,17 @@ function DataTable({
           sx={(t) => ({
             "& .MuiTableCell-root": {
               borderBottom: "1px solid",
+              borderRight: "1px solid",
               borderColor: t.palette.divider,
+              "&:last-child": {
+                borderRight: "none",
+              },
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
+              backgroundColor:
+                t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+              borderBottom: "2px solid",
+              borderColor: t.palette.divider,
             },
           })}
         >
@@ -339,10 +346,15 @@ function HeaderCell({
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
-        borderBottom: 1,
+        color: "text.primary",
+        backgroundColor: (t) =>
+          t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+        borderBottom: 2,
+        borderRight: 1,
         borderColor: "divider",
+        "&:last-child": {
+          borderRight: "none",
+        },
         whiteSpace: "nowrap",
         minWidth: col.minWidth,
       }}
