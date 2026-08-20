@@ -287,7 +287,18 @@ function SubsectionTable({ rows, selected, onSelect }) {
     <TableContainer
       sx={{ border: 1, borderColor: "divider", borderRadius: 1.25 }}
     >
-      <Table size="small">
+      <Table
+        size="small"
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            borderBottom: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
+          },
+        })}
+      >
         <TableHead>
           <TableRow>
             <Th align="left">Subsection</Th>
@@ -295,7 +306,7 @@ function SubsectionTable({ rows, selected, onSelect }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((r) => {
+          {rows.map((r, i) => {
             const isSel = selected === r.sub;
             return (
               <TableRow
@@ -306,7 +317,16 @@ function SubsectionTable({ rows, selected, onSelect }) {
                   cursor: "pointer",
                   backgroundColor: isSel
                     ? `${theme.custom.brand.orange}1f`
-                    : undefined,
+                    : (t) =>
+                        i % 2 === 0
+                          ? "background.paper"
+                          : (t.custom?.table?.alternateRow ??
+                            "rgba(0, 119, 182, 0.04)"),
+                  "&:hover": {
+                    backgroundColor: isSel
+                      ? `${theme.custom.brand.orange}2f`
+                      : (t) => t.palette.action.hover,
+                  },
                 }}
               >
                 <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
@@ -340,7 +360,19 @@ function DetailTable({ rows, viewBy }) {
         borderRadius: 1.25,
       }}
     >
-      <Table size="small" stickyHeader>
+      <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            borderBottom: "1px solid",
+            borderColor: t.palette.divider,
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
+          },
+        })}
+      >
         <TableHead>
           <TableRow>
             {showReason && <Th align="left">Reason</Th>}
@@ -351,7 +383,20 @@ function DetailTable({ rows, viewBy }) {
         </TableHead>
         <TableBody>
           {rows.map((r, i) => (
-            <TableRow key={i} hover>
+            <TableRow
+              key={i}
+              hover
+              sx={{
+                backgroundColor: (t) =>
+                  i % 2 === 0
+                    ? "background.paper"
+                    : (t.custom?.table?.alternateRow ??
+                      "rgba(0, 119, 182, 0.04)"),
+                "&:hover": {
+                  backgroundColor: (t) => t.palette.action.hover,
+                },
+              }}
+            >
               {showReason && (
                 <TableCell sx={{ fontSize: 13 }}>{r.reason}</TableCell>
               )}

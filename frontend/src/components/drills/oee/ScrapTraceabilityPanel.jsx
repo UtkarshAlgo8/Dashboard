@@ -283,11 +283,11 @@ function TraceabilityTable({ rows }) {
         stickyHeader
         sx={(t) => ({
           "& .MuiTableCell-root": {
-            border: "1px solid",
+            borderBottom: "1px solid",
             borderColor: t.palette.divider,
           },
           "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
+            backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
           },
         })}
       >
@@ -303,8 +303,21 @@ function TraceabilityTable({ rows }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.productionId} hover>
+          {rows.map((r, i) => (
+            <TableRow
+              key={r.productionId}
+              hover
+              sx={{
+                backgroundColor: (t) =>
+                  i % 2 === 0
+                    ? "background.paper"
+                    : (t.custom?.table?.alternateRow ??
+                      "rgba(0, 119, 182, 0.04)"),
+                "&:hover": {
+                  backgroundColor: (t) => t.palette.action.hover,
+                },
+              }}
+            >
               <TableCell sx={{ fontSize: 12, fontFamily: "monospace" }}>
                 {r.productionId}
               </TableCell>

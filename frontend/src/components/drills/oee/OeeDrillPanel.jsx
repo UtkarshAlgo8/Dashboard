@@ -669,7 +669,18 @@ function TrenchTable({ tredges, selected, onSelect }) {
       <TableContainer
         sx={{ border: 1, borderColor: "divider", borderRadius: 1.25 }}
       >
-        <Table size="small">
+        <Table
+          size="small"
+          sx={(t) => ({
+            "& .MuiTableCell-root": {
+              borderBottom: "1px solid",
+              borderColor: t.palette.divider,
+            },
+            "& thead .MuiTableCell-root": {
+              backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
+            },
+          })}
+        >
           <TableHead>
             <TableRow>
               <TrenchTh align="left">Tredge</TrenchTh>
@@ -680,7 +691,7 @@ function TrenchTable({ tredges, selected, onSelect }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {tredges.map((t) => {
+            {tredges.map((t, i) => {
               const isSel = selected === t.id;
               return (
                 <TableRow
@@ -691,7 +702,16 @@ function TrenchTable({ tredges, selected, onSelect }) {
                     cursor: "pointer",
                     backgroundColor: isSel
                       ? `${theme.custom.brand.orange}1f`
-                      : undefined,
+                      : (th) =>
+                          i % 2 === 0
+                            ? "background.paper"
+                            : (th.custom?.table?.alternateRow ??
+                              "rgba(0, 119, 182, 0.04)"),
+                    "&:hover": {
+                      backgroundColor: isSel
+                        ? `${theme.custom.brand.orange}2f`
+                        : (th) => th.palette.action.hover,
+                    },
                   }}
                 >
                   <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
