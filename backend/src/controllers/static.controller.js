@@ -37,7 +37,7 @@ export const PLANTS = [
   },
   {
     id: "chennai",
-    name: "Chennai Plant",
+    name: "Chennai Tyre Plant",
     sub: "Tamil Nadu",
     location: "Chennai",
     state: "Tamil Nadu",
@@ -51,7 +51,7 @@ export const PLANTS = [
   },
   {
     id: "laksar",
-    name: "Laksar Plant",
+    name: "Laksar Tyre Plant",
     sub: "Haridwar, Uttarakhand",
     location: "Laksar",
     state: "Uttarakhand",
@@ -65,7 +65,7 @@ export const PLANTS = [
   },
   {
     id: "mysore",
-    name: "Mysore Plant",
+    name: "Mysore Tyre Plant",
     sub: "Karnataka",
     location: "Mysore",
     state: "Karnataka",

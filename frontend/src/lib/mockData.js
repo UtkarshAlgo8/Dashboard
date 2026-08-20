@@ -19,7 +19,7 @@
 export const PLANTS = [
   {
     id: "chennai",
-    name: "Chennai Plant",
+    name: "Chennai Tyre Plant",
     sub: "Tamil Nadu",
     sx: 202.0,
     sy: 446.6,
@@ -39,7 +39,7 @@ export const PLANTS = [
   },
   {
     id: "laksar",
-    name: "Laksar Plant",
+    name: "Laksar Tyre Plant",
     sub: "Haridwar, Uttarakhand",
     sx: 167.6,
     sy: 170.2,
@@ -49,7 +49,7 @@ export const PLANTS = [
   },
   {
     id: "mysore",
-    name: "Mysore Plant",
+    name: "Mysore Tyre Plant",
     sub: "Karnataka",
     sx: 163.0,
     sy: 441.0,

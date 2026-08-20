@@ -92,7 +92,7 @@ const PLANT_SCOPES = {
   chennai: {
     id: "chennai",
     code: PLANT_CHENNAI,
-    name: "Chennai Plant",
+    name: "Chennai Tyre Plant",
     // Default selection, not a fixed filter — CTP runs PCR and TBR, so it
     // opens unfiltered and the user narrows from `tyreTypes`.
     tyreType: TYRE_TYPE_ALL,
@@ -108,7 +108,16 @@ const PLANT_ALIASES = new Map([
   ["btp", "banmore"],
   ["chennai", "chennai"],
   ["chennai plant", "chennai"],
+  ["chennai tyre plant", "chennai"],
   ["ctp", "chennai"],
+  ["laksar", "laksar"],
+  ["laksar plant", "laksar"],
+  ["laksar tyre plant", "laksar"],
+  ["ltp", "laksar"],
+  ["mysore", "mysore"],
+  ["mysore plant", "mysore"],
+  ["mysore tyre plant", "mysore"],
+  ["mtp", "mysore"],
 ]);
 
 export function normalizePlantId(value = "banmore") {
