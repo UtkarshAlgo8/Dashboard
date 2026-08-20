@@ -164,7 +164,33 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
             {kpi.unit}
           </Typography>
         </Stack>
-        <Sparkline data={kpi.spark} color={sparkColor} />
+        {Array.isArray(kpi.spark) && kpi.spark.length >= 2 ? (
+          <Tooltip title="Trend" arrow>
+            <Box
+              onClick={(e) => {
+                e.stopPropagation();
+                onTrendOpen(kpi.id);
+              }}
+              sx={{
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                p: 0.5,
+                m: -0.5,
+                borderRadius: 1,
+                transition: "opacity 0.15s, background-color 0.15s",
+                "&:hover": {
+                  opacity: 0.8,
+                  backgroundColor: "action.hover",
+                },
+              }}
+            >
+              <Sparkline data={kpi.spark} color={sparkColor} />
+            </Box>
+          </Tooltip>
+        ) : (
+          <Sparkline data={kpi.spark} color={sparkColor} />
+        )}
       </Stack>
 
       {/* Footer row: spike %. new_change.md C18 display rules — a missing

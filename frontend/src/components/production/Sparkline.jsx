@@ -8,7 +8,13 @@
  * @param {number} [props.height=20]
  * @param {string} [props.color] - CSS color (theme palette ref OK).
  */
-function Sparkline({ data, width = 70, height = 20, color = "currentColor" }) {
+function Sparkline({
+  data,
+  width = 70,
+  height = 20,
+  color = "currentColor",
+  onClick,
+}) {
   if (!Array.isArray(data) || data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -22,7 +28,15 @@ function Sparkline({ data, width = 70, height = 20, color = "currentColor" }) {
     .join(" ");
 
   return (
-    <svg width={width} height={height} style={{ display: "block" }}>
+    <svg
+      width={width}
+      height={height}
+      style={{
+        display: "block",
+        cursor: onClick ? "pointer" : "inherit",
+      }}
+      onClick={onClick}
+    >
       <polyline
         points={points}
         fill="none"

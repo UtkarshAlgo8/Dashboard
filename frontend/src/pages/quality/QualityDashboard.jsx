@@ -965,7 +965,19 @@ function QKpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
           <span style={{fontSize:22,fontWeight:700,color:C.tx}}>{v}</span>
           {kpi.u&&<span style={{fontSize:12,color:C.mu}}>{kpi.u}</span>}
         </div>
-        {kpi.sp&&<Spark data={kpi.sp} color={stCol}/>}
+        {kpi.sp && (
+          <span
+            onClick={canTrend ? trendClick : undefined}
+            title={canTrend ? "View Trend (Daily / Monthly / Yearly)" : undefined}
+            style={{
+              cursor: canTrend ? "pointer" : "default",
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+          >
+            <Spark data={kpi.sp} color={stCol} />
+          </span>
+        )}
       </div>
       <div style={{marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         {kpi.target&&<span style={{fontSize:12,color:C.mu}}>Target: {kpi.target}</span>}
