@@ -22,6 +22,7 @@ import { getScrapTraceability } from "@/api/drills.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { BANBURY_PARAM_RANGES } from "@/lib/mockData.js";
 import { buildCsv, downloadCsv } from "@/lib/csv.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 const SHIFT_COLOR_KEY = { A: "blue", B: "amber", C: "purple" };
 
@@ -312,10 +313,10 @@ function TraceabilityTable({ rows }) {
               </TableCell>
               <TableCell sx={{ fontSize: 13 }}>{r.operator}</TableCell>
               <TableCell align="center" sx={{ fontSize: 13 }}>
-                {r.produced}
+                {formatIndianNumber(r.produced)}
               </TableCell>
               <TableCell align="center" sx={{ fontSize: 13, fontWeight: 600 }}>
-                {r.scrap}
+                {formatIndianNumber(r.scrap)}
               </TableCell>
               <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>
                 {formatDateTime(r.dateTime)}

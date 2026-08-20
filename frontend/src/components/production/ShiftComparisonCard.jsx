@@ -16,6 +16,7 @@ import {
 import { buildDatePayload } from "@/lib/timeRange.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
@@ -380,6 +381,6 @@ function dateKey(d) {
 function fmtQty(v) {
   if (v == null) return "—";
   return Math.abs(v) < 1000 && !Number.isInteger(v)
-    ? v.toFixed(1)
-    : Math.round(v).toLocaleString();
+    ? formatIndianNumber(v, { decimals: 1 })
+    : formatIndianNumber(Math.round(v));
 }

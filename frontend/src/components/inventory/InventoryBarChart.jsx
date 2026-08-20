@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 const H = 130;
 const PAD = { top: 20, bottom: 40 };
@@ -118,7 +119,7 @@ function BarGroup({ bar, max, selected, onClick }) {
           mb: 0.25,
         }}
       >
-        {bar.today}
+        {typeof bar.today === "number" ? formatIndianNumber(bar.today) : bar.today}
       </Typography>
       <Stack
         direction="row"

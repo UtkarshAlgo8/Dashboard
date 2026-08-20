@@ -23,7 +23,7 @@ import {
 export const PLANTS = [
   {
     id: "banmore",
-    name: "Banmore Plant",
+    name: "Banmore Tyre Plant",
     sub: "Gwalior, Madhya Pradesh",
     location: "Banmore",
     state: "Madhya Pradesh",

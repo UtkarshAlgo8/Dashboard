@@ -1,5 +1,6 @@
 import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Suggestions drill — kpi_name = Suggestions_category.
@@ -33,7 +34,13 @@ export default function SuggestionsDrillPanel({
       const sub = Math.round(submitted);
       const impl = Math.round(submitted * 0.6);
       const pending = sub - impl;
-      return [cat, String(sub), String(impl), String(pending), "—"];
+      return [
+        cat,
+        formatIndianNumber(sub),
+        formatIndianNumber(impl),
+        formatIndianNumber(pending),
+        "—",
+      ];
     });
 
   return (

@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 const COLS = [
   { key: "fg", label: "FG" },
@@ -111,7 +112,7 @@ function DailyInventoryTable({ history }) {
                 </TableCell>
                 {COLS.map((c) => (
                   <TableCell key={c.key} align="center" sx={{ fontSize: 12 }}>
-                    {row[c.key]}
+                    {typeof row[c.key] === "number" ? formatIndianNumber(row[c.key]) : (row[c.key] ?? "—")}
                   </TableCell>
                 ))}
               </TableRow>

@@ -29,7 +29,7 @@ export const PLANTS = [
   },
   {
     id: "banmore",
-    name: "Banmore Plant",
+    name: "Banmore Tyre Plant",
     sub: "Gwalior, Madhya Pradesh",
     sx: 169.7,
     sy: 228.6,
@@ -3046,7 +3046,7 @@ export { OTHER_TAB_KPIS_BY_SECTION };
 export const MOCK_USER = {
   name: "Rakesh Patel",
   role: "Plant Head",
-  plant: "Banmore Plant",
+  plant: "Banmore Tyre Plant",
   email: "rakesh.patel@jktyre.example",
   phone: "+91 98765 43210",
   employeeId: "JK-PH-00142",

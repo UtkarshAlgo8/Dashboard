@@ -36,7 +36,7 @@ const dashboardPending = new Map();
 // ---------- state shape & actions ----------
 
 const initialState = {
-  section: "mix",
+  section: "cur",
   subSection: null,
   productType: null,
   // new_change.md C8/C9: the pinned unit_of_measurement. Multi-unit
