@@ -66,13 +66,18 @@ function LineChart({ labels, values, unit, target }) {
       legend: { enabled: false },
       xAxis: {
         categories: labels,
+        gridLineWidth: 1,
+        gridLineColor: colors.grid,
+        gridLineDashStyle: "Solid",
         lineColor: colors.grid,
         tickColor: colors.grid,
         labels: { style: { color: colors.text, fontSize: "11px" } },
       },
       yAxis: {
         title: { text: null },
+        gridLineWidth: 1,
         gridLineColor: colors.grid,
+        gridLineDashStyle: "Solid",
         labels: {
           style: { color: colors.text, fontSize: "11px" },
           formatter: function () {
