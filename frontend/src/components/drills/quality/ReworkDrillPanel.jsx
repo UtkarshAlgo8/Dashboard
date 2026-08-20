@@ -1,5 +1,6 @@
 import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Rework drill panel — Rework detail.
@@ -8,11 +9,11 @@ import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
  * Static artifact data for Phase 1.
  */
 const REWORK_DATA = [
-  ["MS149", "Banbury 1", "Viscosity NC", 5, "In progress"],
-  ["ML405", "Banbury 2", "Off-Spec", 3, "Pending"],
-  ["MT273", "Banbury 3", "Cure Rate NC", 4, "In progress"],
-  ["MB614", "Banbury 4", "Contaminated", 2, "Pending"],
-  ["MS66", "Banbury 5", "Viscosity NC", 3, "In progress"],
+  ["MS149", "Banbury 1", "Viscosity NC", "5", "In progress"],
+  ["ML405", "Banbury 2", "Off-Spec", "3", "Pending"],
+  ["MT273", "Banbury 3", "Cure Rate NC", "4", "In progress"],
+  ["MB614", "Banbury 4", "Contaminated", "2", "Pending"],
+  ["MS66", "Banbury 5", "Viscosity NC", "3", "In progress"],
 ];
 
 export default function ReworkDrillPanel({ drillRows }) {
@@ -22,7 +23,7 @@ export default function ReworkDrillPanel({ drillRows }) {
           r.itemCode ?? "—",
           r.machine ?? "—",
           r.productType ?? r.drillDown?.[0] ?? "—",
-          r.actual ?? "—",
+          typeof r.actual === "number" ? formatIndianNumber(r.actual) : (r.actual ?? "—"),
           r.status ?? "Pending",
         ])
       : REWORK_DATA;

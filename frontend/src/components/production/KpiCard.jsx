@@ -11,6 +11,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import Sparkline from "./Sparkline.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * KPI card — CR-08 update.
@@ -155,7 +156,7 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
       >
         <Stack direction="row" alignItems="baseline" spacing={0.5}>
           <Typography sx={{ fontSize: 28, fontWeight: 700, lineHeight: 1 }}>
-            {kpi.value}
+            {formatIndianNumber(kpi.value)}
           </Typography>
           <Typography
             sx={{ fontSize: 12, color: "text.disabled", fontWeight: 500 }}

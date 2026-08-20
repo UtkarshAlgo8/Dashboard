@@ -3,6 +3,7 @@ import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { EmptyState } from "@/components/common";
 import DataTable from "@/components/tables/DataTable.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Per-machine sub-drill panel (BRD FR-P38 through FR-P42).
@@ -228,14 +229,34 @@ function DetailTable({
 const AVAILABILITY_COLUMNS = [
   { key: "reasonCategory", label: "Category", align: "center" },
   { key: "reason", label: "Reason", align: "center" },
-  { key: "events", label: "Events", filterable: false },
-  { key: "durationMin", label: "Duration (min)", filterable: false },
+  {
+    key: "events",
+    label: "Events",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.events),
+  },
+  {
+    key: "durationMin",
+    label: "Duration (min)",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.durationMin),
+  },
 ];
 
 const PERFORMANCE_COLUMNS = [
   { key: "reason", label: "Reason", align: "center" },
-  { key: "events", label: "Events", filterable: false },
-  { key: "durationMin", label: "Duration (min)", filterable: false },
+  {
+    key: "events",
+    label: "Events",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.events),
+  },
+  {
+    key: "durationMin",
+    label: "Duration (min)",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.durationMin),
+  },
 ];
 
 // Timestamp-wise (By date) variants: one row per dated record — Events is
@@ -244,20 +265,40 @@ const AVAILABILITY_DATE_COLUMNS = [
   { key: "date", label: "Date", align: "center" },
   { key: "reasonCategory", label: "Category", align: "center" },
   { key: "reason", label: "Reason", align: "center" },
-  { key: "durationMin", label: "Duration (min)", filterable: false },
+  {
+    key: "durationMin",
+    label: "Duration (min)",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.durationMin),
+  },
 ];
 
 const PERFORMANCE_DATE_COLUMNS = [
   { key: "date", label: "Date", align: "center" },
   { key: "reason", label: "Reason", align: "center" },
-  { key: "durationMin", label: "Duration (min)", filterable: false },
+  {
+    key: "durationMin",
+    label: "Duration (min)",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.durationMin),
+  },
 ];
 
 const DEFECT_COLUMNS = [
   { key: "itemCode", label: "Item Code", align: "center" },
   { key: "defectType", label: "Defect Type", align: "center" },
-  { key: "qty", label: "Defect Qty", filterable: false },
-  { key: "totalProduced", label: "Total Produced", filterable: false },
+  {
+    key: "qty",
+    label: "Defect Qty",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.qty),
+  },
+  {
+    key: "totalProduced",
+    label: "Total Produced",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.totalProduced),
+  },
   {
     key: "rate",
     label: "Rate %",
@@ -269,7 +310,12 @@ const DEFECT_COLUMNS = [
 
 const SCRAP_COLUMNS = [
   { key: "itemCode", label: "Item Code", align: "center" },
-  { key: "qty", label: "Scrap Qty (kg)", filterable: false },
+  {
+    key: "qty",
+    label: "Scrap Qty (kg)",
+    filterable: false,
+    render: (r) => formatIndianNumber(r.qty),
+  },
   {
     key: "traceable",
     label: "Trace",

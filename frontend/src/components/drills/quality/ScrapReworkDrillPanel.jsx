@@ -16,6 +16,7 @@ import {
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { snapshotLatest } from "@/lib/drillDate.js";
 import { canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 // changes.md §1/§8: match granularity spelling-tolerantly ("Daily" vs the
@@ -315,7 +316,7 @@ function SubsectionTable({ rows, selected, onSelect }) {
                   align="center"
                   sx={{ fontSize: 13, fontWeight: 600 }}
                 >
-                  {Math.round(r.total).toLocaleString()}
+                  {formatIndianNumber(Math.round(r.total))}
                 </TableCell>
               </TableRow>
             );
@@ -365,7 +366,7 @@ function DetailTable({ rows, viewBy }) {
                 </TableCell>
               )}
               <TableCell align="center" sx={{ fontSize: 13, fontWeight: 600 }}>
-                {Math.round(r.qty).toLocaleString()}
+                {formatIndianNumber(Math.round(r.qty))}
               </TableCell>
             </TableRow>
           ))}

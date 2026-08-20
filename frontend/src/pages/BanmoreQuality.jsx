@@ -9,7 +9,7 @@ import QualityDashboard from "@/pages/quality/QualityDashboard.jsx";
  */
 const BANMORE_PLANT = {
   id: "banmore",
-  name: "Banmore Plant",
+  name: "Banmore Tyre Plant",
   sub: "Gwalior, Madhya Pradesh",
   oe: 91.5,
   otif: 94.3,

@@ -12,6 +12,7 @@ import {
   useTheme,
 } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Item-level Live Inventory table per BRD FR-P65 + summary strip
@@ -64,7 +65,7 @@ function InventoryItemTable({ bar }) {
                 color: theme.palette.primary.main,
               }}
             >
-              {total.toLocaleString()}{" "}
+              {formatIndianNumber(total)}{" "}
               <Typography
                 component="span"
                 sx={{ fontSize: 12, color: "text.disabled" }}
@@ -128,7 +129,7 @@ function InventoryItemTable({ bar }) {
                   align="center"
                   sx={{ fontSize: 16, fontWeight: 700 }}
                 >
-                  {it.liveStock.toLocaleString()}{" "}
+                  {formatIndianNumber(it.liveStock)}{" "}
                   <Typography
                     component="span"
                     sx={{

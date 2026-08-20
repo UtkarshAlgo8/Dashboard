@@ -1,5 +1,6 @@
 import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Training drill — kpi_name = Training_area.
@@ -39,8 +40,8 @@ export default function TrainingDrillPanel({ drillRows, granularity = "DAY" }) {
           : "—";
       return [
         area,
-        plan != null ? plan.toFixed(1) : "—",
-        actual != null ? actual.toFixed(1) : "—",
+        plan != null ? formatIndianNumber(plan, { decimals: 1 }) : "—",
+        actual != null ? formatIndianNumber(actual, { decimals: 1 }) : "—",
         compliance,
       ];
     });

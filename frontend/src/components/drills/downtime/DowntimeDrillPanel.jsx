@@ -3,26 +3,31 @@ import { Box, Stack, Typography } from "@mui/material";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import DataTable from "@/components/tables/DataTable.jsx";
 import { snapshotLatest } from "@/lib/drillDate.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 const DOWNTIME_COLUMNS = [
   { key: "code", label: "Code Category", align: "left" },
   { key: "machine", label: "Equipment", align: "left" },
   { key: "reason", label: "Delay Reason", align: "left" },
-  { key: "events", label: "Events" },
+  {
+    key: "events",
+    label: "Events",
+    render: (r) => formatIndianNumber(r.events),
+  },
   {
     key: "totalMin",
     label: "Total DT (Min)",
     filterable: false,
     value: (r) => r.totalHrs * 60,
-    render: (r) => Math.round(r.totalMin),
+    render: (r) => formatIndianNumber(Math.round(r.totalMin)),
   },
   {
     key: "totalHrs",
     label: "Total DT (Hr)",
     filterable: false,
     value: (r) => r.totalHrs,
-    render: (r) => r.totalHrs.toFixed(2),
+    render: (r) => formatIndianNumber(r.totalHrs, { decimals: 2 }),
   },
 ];
 

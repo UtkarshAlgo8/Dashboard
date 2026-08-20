@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Stack, Typography, Box } from "@mui/material";
 import { Donut } from "@/components/drills/shared/Donut.jsx";
 import { Stat } from "@/components/drills/shared/Stat.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
@@ -38,12 +39,12 @@ export default function BudgetDrillPanel({ drillRows }) {
           rows={[
             {
               Metric: "Allocated Consumables",
-              Value: allocated.toFixed(1),
+              Value: formatIndianNumber(allocated, { decimals: 1 }),
               Unit: "₹ L",
             },
             {
               Metric: "Spent Consumables",
-              Value: spent.toFixed(1),
+              Value: formatIndianNumber(spent, { decimals: 1 }),
               Unit: "₹ L",
             },
             { Metric: "Consumed", Value: `${consumedPct}`, Unit: "%" },
@@ -69,11 +70,11 @@ export default function BudgetDrillPanel({ drillRows }) {
         <Stack spacing={1}>
           <Stat
             label="Allocated Consumables"
-            value={`₹${allocated.toFixed(1)} L`}
+            value={`₹${formatIndianNumber(allocated, { decimals: 1 })} L`}
           />
           <Stat
             label="Spent Consumables"
-            value={`₹${spent.toFixed(1)} L`}
+            value={`₹${formatIndianNumber(spent, { decimals: 1 })} L`}
             accent="amber"
           />
         </Stack>

@@ -84,7 +84,7 @@ const PLANT_SCOPES = {
   banmore: {
     id: "banmore",
     code: PLANT_BANMORE,
-    name: "Banmore Plant",
+    name: "Banmore Tyre Plant",
     tyreType: "PCR",
     tyreTypes: TYRE_TYPES_SINGLE_LINE,
     sqlTable: null,
@@ -104,6 +104,7 @@ const PLANT_SCOPES = {
 const PLANT_ALIASES = new Map([
   ["banmore", "banmore"],
   ["banmore plant", "banmore"],
+  ["banmore tyre plant", "banmore"],
   ["btp", "banmore"],
   ["chennai", "chennai"],
   ["chennai plant", "chennai"],

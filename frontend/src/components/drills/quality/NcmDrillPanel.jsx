@@ -5,6 +5,7 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import { toDrillRows } from "@/lib/kpi-transformer.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
@@ -65,7 +66,7 @@ const COLUMNS = [
     label: "Hold Quantity",
     minWidth: 140,
     // Sort/filter on the number, render the thousands-separated string.
-    render: (r) => Math.round(r.actual).toLocaleString(),
+    render: (r) => formatIndianNumber(Math.round(r.actual)),
     value: (r) => r.actual,
     filterable: false,
   },
