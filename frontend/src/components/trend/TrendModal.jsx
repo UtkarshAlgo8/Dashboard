@@ -1011,9 +1011,15 @@ function ModalFrame({ open, onClose, kpi, headerExtras, children }) {
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="md"
+      maxWidth={false}
       fullWidth
-      PaperProps={{ sx: { borderRadius: 2 } }}
+      PaperProps={{
+        sx: {
+          width: { xs: "95vw", sm: "85vw", md: "75vw" },
+          maxWidth: "75vw",
+          borderRadius: 2,
+        },
+      }}
     >
       <DialogTitle sx={{ pr: 6, pb: 1 }}>
         <Typography
