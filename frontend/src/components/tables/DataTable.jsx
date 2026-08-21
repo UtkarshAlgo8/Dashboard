@@ -169,48 +169,69 @@ function DataTable({
     Object.values(colFilters).filter((s) => s && s.size > 0).length +
     (query.trim() ? 1 : 0);
 
+  const legendNode = legend ? (
+    typeof legend === "string" ? (
+      <TableLegend preset={legend} />
+    ) : Array.isArray(legend) ? (
+      <TableLegend items={legend} />
+    ) : (
+      legend
+    )
+  ) : null;
+
   return (
     <Stack spacing={1}>
-      {search && (
-        <Stack direction="row" spacing={1} alignItems="center">
-          <TextField
-            size="small"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            sx={{ maxWidth: 320, "& .MuiOutlinedInput-root": { fontSize: 13 } }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ fontSize: 16, color: "text.disabled" }} />
-                </InputAdornment>
-              ),
-              endAdornment: query ? (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setQuery("")}>
-                    <CloseIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </InputAdornment>
-              ) : null,
-            }}
-          />
-          {activeFilterCount > 0 && (
-            <Typography
-              onClick={() => {
-                setQuery("");
-                setColFilters({});
-              }}
-              sx={{
-                fontSize: 12,
-                color: "primary.main",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Clear filters
-            </Typography>
+      {(search || legendNode || toolbarRight) && (
+        <Stack
+          direction="row"
+          spacing={1.5}
+          alignItems="center"
+          useFlexGap
+          flexWrap="wrap"
+        >
+          {search && (
+            <>
+              <TextField
+                size="small"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                sx={{ maxWidth: 320, "& .MuiOutlinedInput-root": { fontSize: 13 } }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 16, color: "text.disabled" }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: query ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setQuery("")}>
+                        <CloseIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }}
+              />
+              {activeFilterCount > 0 && (
+                <Typography
+                  onClick={() => {
+                    setQuery("");
+                    setColFilters({});
+                  }}
+                  sx={{
+                    fontSize: 12,
+                    color: "primary.main",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Clear filters
+                </Typography>
+              )}
+            </>
           )}
           <Box sx={{ flex: 1 }} />
+          {legendNode}
           {toolbarRight}
         </Stack>
       )}
@@ -303,15 +324,6 @@ function DataTable({
           </TableBody>
         </Table>
       </TableContainer>
-
-      {legend &&
-        (typeof legend === "string" ? (
-          <TableLegend preset={legend} />
-        ) : Array.isArray(legend) ? (
-          <TableLegend items={legend} />
-        ) : (
-          legend
-        ))}
     </Stack>
   );
 }

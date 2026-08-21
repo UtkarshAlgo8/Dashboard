@@ -75,10 +75,11 @@ function LegendMark({ color, variant }) {
     return (
       <Box
         sx={{
-          width: 8,
-          height: 8,
+          width: 10,
+          height: 10,
           borderRadius: 0.5,
           backgroundColor: color,
+          flexShrink: 0,
         }}
       />
     );
@@ -88,10 +89,11 @@ function LegendMark({ color, variant }) {
     return (
       <Box
         sx={{
-          width: 14,
-          height: 6,
+          width: 16,
+          height: 8,
           borderRadius: 999,
           backgroundColor: color,
+          flexShrink: 0,
         }}
       />
     );
@@ -101,22 +103,24 @@ function LegendMark({ color, variant }) {
     return (
       <Box
         sx={{
-          width: 12,
+          width: 14,
           height: 0,
           borderTop: `2px dashed ${color}`,
+          flexShrink: 0,
         }}
       />
     );
   }
 
-  // Default "dot"
+  // Default "dot" (color circle)
   return (
     <Box
       sx={{
-        width: 7,
-        height: 7,
+        width: 10,
+        height: 10,
         borderRadius: "50%",
         backgroundColor: color,
+        flexShrink: 0,
       }}
     />
   );

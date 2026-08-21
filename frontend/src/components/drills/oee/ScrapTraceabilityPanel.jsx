@@ -185,7 +185,9 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        spacing={1}
+        spacing={1.5}
+        useFlexGap
+        flexWrap="wrap"
         sx={{ mb: 1.5 }}
       >
         <Box>
@@ -196,15 +198,48 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
             Traceability — {itemCode}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<DownloadIcon />}
-          onClick={handleDownload}
-          disabled={loadedRows.length === 0}
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1.5}
+          useFlexGap
+          flexWrap="wrap"
         >
-          Download Traceability Report
-        </Button>
+          <TableLegend
+            items={[
+              {
+                label: "Shift A",
+                color: theme.custom.brand.blue,
+                variant: "pill",
+              },
+              {
+                label: "Shift B",
+                color: theme.custom.brand.amber,
+                variant: "pill",
+              },
+              {
+                label: "Shift C",
+                color: theme.custom.brand.purple,
+                variant: "pill",
+              },
+              {
+                label: "Out-of-Range Param",
+                color: theme.custom.brand.red,
+                variant: "square",
+              },
+            ]}
+            sx={{ py: 0 }}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownload}
+            disabled={loadedRows.length === 0}
+          >
+            Download Traceability Report
+          </Button>
+        </Stack>
       </Stack>
 
       {isLoadingPage ? (
@@ -248,44 +283,11 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
             flexWrap="wrap"
             sx={{ mt: 1.5 }}
           >
-            <Stack
-              direction="row"
-              spacing={2}
-              alignItems="center"
-              useFlexGap
-              flexWrap="wrap"
-            >
-              <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-                {rows.length === 0
-                  ? "0 rows"
-                  : `${pageStart + 1}–${pageStart + rows.length}`}
-              </Typography>
-              <TableLegend
-                items={[
-                  {
-                    label: "Shift A",
-                    color: theme.custom.brand.blue,
-                    variant: "pill",
-                  },
-                  {
-                    label: "Shift B",
-                    color: theme.custom.brand.amber,
-                    variant: "pill",
-                  },
-                  {
-                    label: "Shift C",
-                    color: theme.custom.brand.purple,
-                    variant: "pill",
-                  },
-                  {
-                    label: "Out-of-Range Param",
-                    color: theme.custom.brand.red,
-                    variant: "square",
-                  },
-                ]}
-                sx={{ py: 0 }}
-              />
-            </Stack>
+            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+              {rows.length === 0
+                ? "0 rows"
+                : `${pageStart + 1}–${pageStart + rows.length}`}
+            </Typography>
             <TablePager
               page={page}
               pageSize={pageSize}
