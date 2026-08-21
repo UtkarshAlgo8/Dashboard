@@ -119,7 +119,7 @@ function TrendModal({
       />
     );
   }
-  if (kpi.id === "production") {
+  if (kpi.id === "prod" || kpi.id === "production") {
     return (
       <ProductionTrendModal
         open={open}
