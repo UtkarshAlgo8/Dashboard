@@ -98,24 +98,47 @@ function TrendModal({
 
   if (!kpi) return null;
 
-  // Route OEE to the new pills UI; everything else keeps the legacy form.
-  return kpi.id === "oee" ? (
-    <OeeTrendModal
-      open={open}
-      onClose={onClose}
-      plantId={plantId}
-      kpi={kpi}
-      section={section}
-      asOf={asOf}
-      range={range}
-      from={from}
-      to={to}
-      onRangeChange={setRange}
-      onFromChange={setFrom}
-      onToChange={setTo}
-      theme={theme}
-    />
-  ) : (
+  // Route OEE / Production to the multi-series pills UI; everything
+  // else keeps the legacy single-series form.
+  if (kpi.id === "oee") {
+    return (
+      <OeeTrendModal
+        open={open}
+        onClose={onClose}
+        plantId={plantId}
+        kpi={kpi}
+        section={section}
+        asOf={asOf}
+        range={range}
+        from={from}
+        to={to}
+        onRangeChange={setRange}
+        onFromChange={setFrom}
+        onToChange={setTo}
+        theme={theme}
+      />
+    );
+  }
+  if (kpi.id === "production") {
+    return (
+      <ProductionTrendModal
+        open={open}
+        onClose={onClose}
+        plantId={plantId}
+        kpi={kpi}
+        section={section}
+        asOf={asOf}
+        range={range}
+        from={from}
+        to={to}
+        onRangeChange={setRange}
+        onFromChange={setFrom}
+        onToChange={setTo}
+        theme={theme}
+      />
+    );
+  }
+  return (
     <LegacyTrendModal
       open={open}
       onClose={onClose}
@@ -409,10 +432,10 @@ function LegacyTrendModal({
 }
 
 /* =========================================================================
- * New OEE Trend modal — VIEW BY / COMPARE / OVERLAY pills on top of a
- * MultiLineChart, with optional single-series overlay charts stacked
- * below. One trip per OEE Trend open — the SHIFT three-trip fan-out
- * was removed in CR-08.
+ * Multi-series trend modal — shared implementation for the OEE and
+ * Production trend paths. Parameterised by a `seriesConfig` (see the
+ * config block above) so the same UI handles both KPIs; only the data
+ * layer differs. Specs/cr/CR-08 + CR-09.
  * ========================================================================= */
 
 const VIEW_BY_OPTIONS = [
@@ -425,15 +448,17 @@ const VIEW_BY_LABEL = Object.fromEntries(
   VIEW_BY_OPTIONS.map((o) => [o.value, o.label]),
 );
 
-// Each VIEW BY level maps to one OEE kpi_name. "Product Type" reads
-// OEE_o and groups client-side by the `tyre_type` gold column (the
-// product_type column is NULL for OEE rows — Q-OEE-01 in
-// docs/open-questions.md). "Machine" reads OEE_m (one row per
-// machine/day). "Overall" reads OEE_o (section-level).
-function viewByMainKpi(viewBy) {
-  if (viewBy === "machine") return "OEE_m";
-  return "OEE_o"; // overall + product_type
-}
+// Production adds SKU to the lens set — CR-09.
+const PRODUCTION_VIEW_BY_OPTIONS = [
+  { value: "overall", label: "Overall" },
+  { value: "product_type", label: "Product Type" },
+  { value: "machine", label: "Machine" },
+  { value: "sku", label: "SKU" },
+];
+
+const PRODUCTION_VIEW_BY_LABEL = Object.fromEntries(
+  PRODUCTION_VIEW_BY_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 // Each overlay has one or more valid kpi_names. Availability picks the
 // suffix aligned with the active VIEW BY so a Machine comparison overlays
@@ -476,7 +501,73 @@ const OVERLAY_OPTIONS = [
   { value: "Availability", label: "+ Availability" },
 ];
 
-function OeeTrendModal({
+/* =========================================================================
+ * Multi-series modal config — drives the shared `MultiSeriesTrendModal`
+ * for the OEE and Production trend paths. Everything that varies between
+ * the two lenses is captured here so the modal implementation stays
+ * generic. See specs/cr/CR-09-production-plot.md.
+ *
+ * shape:
+ *   viewByOptions             [{ value, label }]
+ *   defaultViewBy             "overall"
+ *   mainKpiName(viewBy, sec)  → string   (single kpi_name per fetch)
+ *   groupField(viewBy)        → string | null  (chart line grouping)
+ *   machineFilterVisibility   (viewBy) → boolean
+ *   skuFilterVisibility       (viewBy) → boolean
+ *   showCompare               (viewBy) → boolean
+ *   showOverlay               boolean
+ *   mainUnit                  string   (chart y-axis unit)
+ *   mainTitleSuffix           string   (e.g. "OEE", "Production — MT")
+ *   viewByLabel               (viewBy) → string
+ * ========================================================================= */
+
+const OEE_SERIES_CONFIG = {
+  viewByOptions: VIEW_BY_OPTIONS,
+  defaultViewBy: "overall",
+  // OEE m/o — see Q-OEE-01 for product_type handling.
+  mainKpiName: (viewBy) => (viewBy === "machine" ? "OEE_m" : "OEE_o"),
+  // Q-OEE-01: product_type column is NULL for OEE rows; we group by
+  // tyre_type client-side. Pill label says "Product Type", data says
+  // tyre_type.
+  groupField: (viewBy) =>
+    ({ machine: "machine", product_type: "tyre_type" })[viewBy] ?? null,
+  machineFilterVisibility: (viewBy) =>
+    viewBy === "machine" || viewBy === "product_type",
+  skuFilterVisibility: () => false,
+  showCompare: (viewBy) => viewBy === "product_type",
+  showOverlay: true,
+  mainUnit: "%",
+  mainTitleSuffix: "OEE",
+  viewByLabel: (viewBy) => VIEW_BY_LABEL[viewBy] ?? "Overall",
+};
+
+function buildProductionSeriesConfig(sectionName, kpi) {
+  return {
+    viewByOptions: PRODUCTION_VIEW_BY_OPTIONS,
+    defaultViewBy: "overall",
+    // All four viewBys use the same section-conditional kpi_name.
+    mainKpiName: () => PRODUCTION_KPI_BY_SECTION[sectionName] ?? "Production",
+    // Production rows DO carry product_type (NOT in
+    // PRODUCT_AGNOSTIC_KPIS), so the "Product Type" pill groups by
+    // the real product_type column. SKU groups by sub_section.
+    groupField: (viewBy) =>
+      ({
+        machine: "machine",
+        product_type: "product_type",
+        sku: "sub_section",
+      })[viewBy] ?? null,
+    machineFilterVisibility: (viewBy) =>
+      viewBy === "machine" || viewBy === "product_type",
+    skuFilterVisibility: (viewBy) => viewBy === "sku",
+    showCompare: (viewBy) => viewBy === "product_type",
+    showOverlay: false,
+    mainUnit: kpi?.unit ?? "",
+    mainTitleSuffix: kpi?.name ?? "Production",
+    viewByLabel: (viewBy) => PRODUCTION_VIEW_BY_LABEL[viewBy] ?? "Overall",
+  };
+}
+
+function MultiSeriesTrendModal({
   open,
   onClose,
   plantId,
@@ -490,17 +581,19 @@ function OeeTrendModal({
   onFromChange,
   onToChange,
   theme,
+  config,
 }) {
-  // Default VIEW BY = Overall. Other defaults are derived as the user
-  // makes picks (compare fills to "all", overlays starts empty).
-  const [viewBy, setViewBy] = useState("overall");
+  // Default VIEW BY from the config; compare + overlays start empty;
+  // machines + sku filters start empty (= all rows pass through).
+  const [viewBy, setViewBy] = useState(config.defaultViewBy);
   const [compare, setCompare] = useState([]);
   const [overlays, setOverlays] = useState([]);
-  // Multi-select Machines filter — scopes which machines' rows feed
-  // the chart. Empty = all machines. Visible only when viewBy is
-  // Machine or Product Type (hidden for Overall since OEE_o is
-  // already section-aggregated).
+  // Multi-select filters — scope which machines' / sub_sections' rows
+  // feed the chart. Empty = all rows pass. Visibility per viewBy is
+  // config-driven; both states are always present so React hook order
+  // is stable across viewBy changes.
   const [machines, setMachines] = useState([]);
+  const [sku, setSku] = useState([]);
 
   // Reset compare when VIEW BY flips — the previous selection's IDs may
   // not exist in the new lens (machines vs sub_sections vs shifts).
@@ -529,13 +622,14 @@ function OeeTrendModal({
       : resolved.from;
   const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
 
-  // One trip covers main + overlays via drillKpis. (The previous Shift
-  // lens fanned out three calls — removed in CR-08.)
+  // One trip covers main + (optional) overlays via drillKpis. The
+  // kpi_name comes from the config so the same modal handles both
+  // OEE and Production.
   const sectionName = sectionIdToName(section);
-  const mainKpi = viewByMainKpi(viewBy);
-  const overlayKpis = overlays.map((o) =>
-    overlayKpiName(o, viewBy, sectionName),
-  );
+  const mainKpi = config.mainKpiName(viewBy, sectionName);
+  const overlayKpis = config.showOverlay
+    ? overlays.map((o) => overlayKpiName(o, viewBy, sectionName))
+    : [];
 
   const singlePayload = {
     plantId,
@@ -546,7 +640,7 @@ function OeeTrendModal({
     },
     from: rangeFrom,
     to: rangeTo,
-    drillKpis: [mainKpi, ...overlayKpis],
+    drillKpis: overlayKpis.length > 0 ? [mainKpi, ...overlayKpis] : [mainKpi],
     drillOnly: true,
     limit: 10000,
   };
@@ -570,8 +664,8 @@ function OeeTrendModal({
     },
   );
 
-  // Distinct machine values from the loaded rows — the Autocomplete
-  // options for the Machines filter. Empty while loading.
+  // Distinct machine + SKU (sub_section) values from the loaded rows —
+  // the Autocomplete options for each filter. Empty while loading.
   const machineOptions = useMemo(() => {
     if (!Array.isArray(singleRows)) return [];
     const set = new Set();
@@ -579,23 +673,35 @@ function OeeTrendModal({
     return [...set].sort();
   }, [singleRows]);
 
-  // Split singleRows by kpi_name into mainRows + overlay rows.
+  const skuOptions = useMemo(() => {
+    if (!Array.isArray(singleRows)) return [];
+    const set = new Set();
+    for (const r of singleRows) if (r.sub_section) set.add(r.sub_section);
+    return [...set].sort();
+  }, [singleRows]);
+
+  // Split singleRows by kpi_name into mainRows + (optional) overlay rows.
   const mainRows = useMemo(() => {
     if (!Array.isArray(singleRows)) return [];
     return singleRows.filter((r) => r.kpi_name === mainKpi);
   }, [singleRows, mainKpi]);
 
-  // Apply the Machines filter to mainRows before grouping. Empty
-  // selection = all machines pass through.
+  // Apply the Machines + SKU filters to mainRows before grouping.
+  // Empty selection in either = all rows pass through that filter.
   const filteredMainRows = useMemo(() => {
-    if (machines.length === 0) return mainRows;
-    const allowed = new Set(machines);
-    return mainRows.filter((r) => allowed.has(r.machine));
-  }, [mainRows, machines]);
+    if (machines.length === 0 && sku.length === 0) return mainRows;
+    const allowedMachines = machines.length > 0 ? new Set(machines) : null;
+    const allowedSku = sku.length > 0 ? new Set(sku) : null;
+    return mainRows.filter((r) => {
+      if (allowedMachines && !allowedMachines.has(r.machine)) return false;
+      if (allowedSku && !allowedSku.has(r.sub_section)) return false;
+      return true;
+    });
+  }, [mainRows, machines, sku]);
 
   const overlayRowsByKpi = useMemo(() => {
     const out = {};
-    if (!overlays.length) return out;
+    if (!config.showOverlay || !overlays.length) return out;
     if (!Array.isArray(singleRows)) return out;
     for (const r of singleRows) {
       if (r.kpi_name === mainKpi) continue;
@@ -603,26 +709,23 @@ function OeeTrendModal({
       out[r.kpi_name].push(r);
     }
     return out;
-  }, [overlays, singleRows, mainKpi]);
+  }, [overlays, singleRows, mainKpi, config.showOverlay]);
 
-  // Build COMPARE options from the filtered main rows. For Machine view
-  // the COMPARE row is hidden (the Machines filter takes its role) so
-  // the options aren't used, but we still build them for the default-
-  // fill behaviour. For Product Type they group by `tyre_type`; for
-  // Overall, the row is hidden and the options stay empty.
+  // Build COMPARE options from the filtered main rows. Group by the
+  // active viewBy's field so a brand-new value in the gold layer
+  // shows up automatically. The row is hidden when
+  // config.showCompare(viewBy) is false (Machine / SKU views — the
+  // matching filter takes its role; Overall — no grouping).
   const compareOptions = useMemo(() => {
-    if (viewBy === "product_type") {
-      const set = new Set();
-      for (const r of filteredMainRows) if (r.tyre_type) set.add(r.tyre_type);
-      return [...set].sort().map((t) => ({ value: t, label: t }));
+    const field = config.groupField(viewBy);
+    if (!field) return [];
+    const set = new Set();
+    for (const r of filteredMainRows) {
+      const v = r[field];
+      if (v) set.add(v);
     }
-    if (viewBy === "machine") {
-      const set = new Set();
-      for (const r of filteredMainRows) if (r.machine) set.add(r.machine);
-      return [...set].sort().map((m) => ({ value: m, label: m }));
-    }
-    return [];
-  }, [viewBy, filteredMainRows]);
+    return [...set].sort().map((v) => ({ value: v, label: v }));
+  }, [config, viewBy, filteredMainRows]);
 
   // Default-fill compare when the user hasn't picked anything yet. The
   // filter prunes stale IDs after a viewBy switch.
@@ -636,23 +739,28 @@ function OeeTrendModal({
   // buildMainChart turns the shape into one (labels, series) bundle
   // ready for MultiLineChart.
   const mainChart = useMemo(
-    () => buildMainChart({ mainRows: filteredMainRows, viewBy, activeCompare }),
-    [filteredMainRows, viewBy, activeCompare],
+    () =>
+      buildMainChart({
+        mainRows: filteredMainRows,
+        groupField: config.groupField(viewBy),
+        activeCompare,
+      }),
+    [filteredMainRows, config, viewBy, activeCompare],
   );
 
-  // The chart title reflects the active VIEW BY lens.
+  // The chart title reflects the active VIEW BY lens + the KPI's
+  // unit/suffix (e.g. "Product Type · OEE — Daily" / "Machine ·
+  // Production — MT — Daily").
   const mainTitle = useMemo(() => {
-    const lens = VIEW_BY_LABEL[viewBy] ?? "Overall";
-    return `${lens} · OEE — Daily`;
-  }, [viewBy]);
+    const lens = config.viewByLabel(viewBy);
+    return `${lens} · ${config.mainTitleSuffix} — Daily`;
+  }, [config, viewBy]);
 
   // Combined overlay chart — one line per picked overlay, sharing the
-  // same date axis. The labels come from the union of all overlay
-  // rows' dates so a sparse kpi doesn't shorten the axis. Each series
-  // carries its own unit suffix (MultiLineChart renders it in the
-  // legend and tooltip).
+  // same date axis. Only built when overlays are enabled in config;
+  // empty otherwise (the overlay chart panel is also hidden).
   const overlayChart = useMemo(() => {
-    if (overlays.length === 0) {
+    if (!config.showOverlay || overlays.length === 0) {
       return { labels: [], series: [] };
     }
     // Collect the union of dates across every picked overlay so the
@@ -681,21 +789,17 @@ function OeeTrendModal({
       };
     });
     return { labels, series };
-  }, [overlays, viewBy, sectionName, overlayRowsByKpi]);
+  }, [overlays, viewBy, sectionName, overlayRowsByKpi, config.showOverlay]);
 
   const overlayLabels = overlayChart.labels;
   const overlaySeries = overlayChart.series;
 
   const loading = singleLoading;
   const hasMainData = mainChart.series.length > 0;
-  // COMPARE picks which grouping values draw as lines. For Machine
-  // view the Machines filter takes that role, so COMPARE hides; for
-  // Overall the row is also hidden.
-  const showCompare = viewBy === "product_type";
-  // Machines filter scopes the data; only meaningful when the chart
-  // is split by Machine or Product Type. Hidden for Overall since
-  // OEE_o is section-aggregated.
-  const showMachinesFilter = viewBy === "machine" || viewBy === "product_type";
+  // COMPARE + filter visibility are config-driven per view-by.
+  const showCompare = config.showCompare(viewBy);
+  const showMachinesFilter = config.machineFilterVisibility(viewBy);
+  const showSkuFilter = config.skuFilterVisibility(viewBy);
 
   return (
     <ModalFrame
@@ -730,45 +834,25 @@ function OeeTrendModal({
             label="View by"
             value={viewBy}
             onChange={setViewBy}
-            options={VIEW_BY_OPTIONS}
+            options={config.viewByOptions}
           />
           {showMachinesFilter && (
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={1.5}
-              sx={{ flexWrap: "wrap" }}
-            >
-              <Typography
-                sx={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "text.disabled",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.6,
-                  minWidth: 76,
-                }}
-              >
-                Machines
-              </Typography>
-              <Autocomplete
-                multiple
-                size="small"
-                sx={{ minWidth: 240, maxWidth: 360 }}
-                options={machineOptions}
-                value={machines}
-                onChange={(_, next) => setMachines(next)}
-                disableCloseOnSelect
-                disabled={machineOptions.length === 0}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    placeholder={machines.length === 0 ? "All machines" : ""}
-                    variant="outlined"
-                  />
-                )}
-              />
-            </Stack>
+            <FilterRow
+              label="Machines"
+              options={machineOptions}
+              value={machines}
+              onChange={setMachines}
+              placeholder="All machines"
+            />
+          )}
+          {showSkuFilter && (
+            <FilterRow
+              label="SKU"
+              options={skuOptions}
+              value={sku}
+              onChange={setSku}
+              placeholder="All SKUs"
+            />
           )}
           {showCompare && (
             <MultiSelectPills
@@ -778,12 +862,14 @@ function OeeTrendModal({
               onChange={setCompare}
             />
           )}
-          <MultiSelectPills
-            label="Overlay"
-            options={OVERLAY_OPTIONS}
-            value={overlays}
-            onChange={setOverlays}
-          />
+          {config.showOverlay && (
+            <MultiSelectPills
+              label="Overlay"
+              options={OVERLAY_OPTIONS}
+              value={overlays}
+              onChange={setOverlays}
+            />
+          )}
         </Stack>
 
         {/* Main chart — VIEW BY lens, one line per COMPARE item. */}
@@ -795,14 +881,14 @@ function OeeTrendModal({
           emptyMessage={
             loading
               ? "Loading…"
-              : "No OEE data for this combination — try another VIEW BY or date range."
+              : "No data for this combination — try another VIEW BY or date range."
           }
         >
           {hasMainData && (
             <MultiLineChart
               labels={mainChart.labels}
               series={mainChart.series}
-              unit="%"
+              unit={config.mainUnit}
             />
           )}
         </ChartPanel>
@@ -811,8 +897,9 @@ function OeeTrendModal({
             legend names carry each line's unit (%, min, MT, …). Units
             differ across overlays so this is a correlation view, not a
             magnitude view; the per-series tooltip shows the value with
-            its own unit suffix. */}
-        {overlays.length > 0 && (
+            its own unit suffix. Only rendered when overlays are enabled
+            in config (OEE only — Production has no overlay row). */}
+        {config.showOverlay && overlays.length > 0 && (
           <ChartPanel
             theme={theme}
             title="Overlays · Daily"
@@ -832,28 +919,35 @@ function OeeTrendModal({
   );
 }
 
+// Thin wrappers — each one supplies its seriesConfig and delegates to
+// the shared implementation. Keeps the per-KPI data layer (kpi_name
+// mapping, group fields, filter visibility, overlay presence) in one
+// place per KPI.
+function OeeTrendModal(props) {
+  return <MultiSeriesTrendModal {...props} config={OEE_SERIES_CONFIG} />;
+}
+
+function ProductionTrendModal(props) {
+  const sectionName = sectionIdToName(props.section);
+  const config = buildProductionSeriesConfig(sectionName, props.kpi);
+  return <MultiSeriesTrendModal {...props} config={config} />;
+}
+
 /* =========================================================================
  * Small helpers + shared frame.
  * ========================================================================= */
 
 // Build the (labels, series) bundle for the main chart.
-// - product_type view: one series per distinct `tyre_type` value
-//   (Q-OEE-01 — `product_type` is NULL for OEE rows so we group by
-//   `tyre_type`).
-// - machine view: one series per distinct `machine` value
-// - overall view: a single "Overall" series
-function buildMainChart({ mainRows, viewBy, activeCompare }) {
-  if (viewBy === "product_type") {
+// - groupField provided → one series per distinct value of that
+//   field (machine / sub_section / tyre_type / product_type, per
+//   the calling config).
+// - groupField null → a single "Overall" series (the section
+//   aggregate).
+function buildMainChart({ mainRows, groupField, activeCompare }) {
+  if (groupField) {
     return buildGroupedSeries({
       rows: mainRows,
-      groupField: "tyre_type",
-      activeCompare,
-    });
-  }
-  if (viewBy === "machine") {
-    return buildGroupedSeries({
-      rows: mainRows,
-      groupField: "machine",
+      groupField,
       activeCompare,
     });
   }
@@ -1120,6 +1214,53 @@ function ChartSkeleton() {
     >
       <JKLoader />
     </Box>
+  );
+}
+
+// Local multi-select dropdown filter — MUI `Autocomplete multiple` in
+// the same row shape as `SingleSelectRow` / `MultiSelectPills`. Used
+// for the Machines + SKU scopes on the OEE and Production trend
+// modals. Inline here because TrendModal is the only consumer for
+// now; promote to common/ if a second consumer appears (per
+// conventions.md "Shared component library").
+function FilterRow({ label, options, value, onChange, placeholder }) {
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1.5}
+      sx={{ flexWrap: "wrap" }}
+    >
+      <Typography
+        sx={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          minWidth: 76,
+        }}
+      >
+        {label}
+      </Typography>
+      <Autocomplete
+        multiple
+        size="small"
+        sx={{ minWidth: 240, maxWidth: 360 }}
+        options={options}
+        value={value}
+        onChange={(_, next) => onChange(next)}
+        disableCloseOnSelect
+        disabled={options.length === 0}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            placeholder={value.length === 0 ? placeholder : ""}
+            variant="outlined"
+          />
+        )}
+      />
+    </Stack>
   );
 }
 

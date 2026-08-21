@@ -7,6 +7,13 @@
 
 > **Change log**
 >
+> - CR-09 (2026-08-21) — Production KPI gets the multi-series
+>   treatment: View By `Overall / Product Type / Machine / SKU`,
+>   Machines + SKU filters, no overlay. Extracted
+>   `MultiSeriesTrendModal` so OEE and Production share the
+>   pills/filter/chart machinery; only the data layer (kpi_name
+>   mapping, group fields, filter visibility, overlay presence)
+>   differs.
 > - CR-08 (2026-08-21) — View By reduced to `Overall / Product Type /
 Machine` (drop SKU + Shift). Added multi-select Machines filter
 >   that scopes which machines feed the chart. COMPARE row hidden
@@ -107,7 +114,8 @@ Manually authored for visual sensibility, not from a generator.
       `≠ banmore` (Banmore is PCR-only).
   - Time range selector (4 presets + From/To); state local to the
     modal, defaults to "month".
-  - For OEE (kpi.id === "oee"): `OeeTrendModal` path with
+  - For OEE (kpi.id === "oee"): `OeeTrendModal` →
+    `MultiSeriesTrendModal` with the OEE seriesConfig:
     - **View By pills**: `Overall | Product Type | Machine`.
       Overall reads OEE_o; Product Type reads OEE_o and groups
       client-side by `tyre_type` (Q-OEE-01 — `product_type` is
@@ -123,8 +131,24 @@ Manually authored for visual sensibility, not from a generator.
     - **Overlay row** (multi-select pills): one or more of
       `+ Breakdown / + Production / + Scrap / + Availability`,
       rendered as a combined overlay chart below the main chart.
-  - For every other KPI: legacy single-series path via
-    `pickChartType` (line / bar / progress).
+  - For Production (kpi.id === "production"):
+    `ProductionTrendModal` → `MultiSeriesTrendModal` with the
+    Production seriesConfig:
+    - **View By pills**: `Overall | Product Type | Machine | SKU`.
+      All four read the section-conditional production kpi_name
+      (TBM/Curing → `Production_product`; Mixing/Stock →
+      `Production`); grouping happens client-side by the
+      corresponding gold field.
+    - **Machines filter** (multi-select): same UX as OEE;
+      visible for View By = Machine or Product Type.
+    - **SKU filter** (multi-select): scopes which `sub_section`
+      values feed the chart. Visible only for View By = SKU.
+    - **Compare row** (multi-select pills): visible only for
+      View By = Product Type.
+    - **No overlay row** (the combined-overlay chart panel is
+      also hidden).
+  - For every other KPI (Scrap, FTQ, MTBF, Downtime, …): legacy
+    single-series path via `pickChartType` (line / bar / progress).
   - No insight panel, no per-statistic tiles, no chart-type badge
     (explicitly excluded by FR-X15 / FR-X16).
   - Escape key + click-outside + X all close (MUI Dialog handles
@@ -186,6 +210,17 @@ clears it.
   - View By = Machine shows one line per machine; the COMPARE
     row is hidden; the Machines filter is visible and selecting
     2 machines narrows the chart to those 2.
+- For Production cards:
+  - View By = Overall shows a single "Overall" line.
+  - View By = Product Type shows one line per `product_type`;
+    COMPARE row is visible; Machines filter is visible.
+  - View By = Machine shows one line per machine; COMPARE row
+    is hidden; Machines filter is visible and selecting 2
+    machines narrows the chart to those 2.
+  - View By = SKU shows one line per `sub_section`; COMPARE row
+    is hidden; SKU filter is visible and selecting 2 SKUs
+    narrows the chart to those 2.
+  - No OVERLAY row anywhere.
 - `npm run check` exits zero.
 - Manual click-through.
 - Commit lands → `logs/history.md`.
