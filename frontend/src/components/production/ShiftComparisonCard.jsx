@@ -1,6 +1,7 @@
-import { useRef } from "react";
-import { Box, Stack, Tooltip, Typography } from "@mui/material";
-import DataTable from "@/components/tables/DataTable.jsx";
+import { useMemo, useRef } from "react";
+import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
+import Highcharts from "highcharts";
+import HighchartsReactImport from "highcharts-react-official";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import {
@@ -20,10 +21,12 @@ import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
+const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
+
 /**
  * Shift Comparison card — appears below KPI grid, Productivity tab only.
  *
- * quality-change.md §1: the table shows QUANTITY KPIs only — Production,
+ * quality-change.md §1: the chart shows QUANTITY KPIs only — Production,
  * Scrap, Rework — never rates (OEE/FTQ/%).
  *
  * new_change.md C11: shifts are VALUES OF `granularity` (SHIFT A/B/C) and
@@ -330,7 +333,7 @@ export default function ShiftComparisonCard({
         <CardDownloadButton
           cardRef={cardRef}
           rows={shiftRows}
-          headers={["Shift", "Production", "Scrap", "Rework"]}
+          headers={shiftColumns.map((c) => c.label)}
           filename={`shift-comparison-${(section ?? "section").toLowerCase().replace(/\s+/g, "-")}`}
           sheetName="ShiftComparison"
           sx={{ mt: 0.25 }}
@@ -348,17 +351,203 @@ export default function ShiftComparisonCard({
           <JKLoader />
         </Box>
       ) : (
-        <DataTable
+        <ShiftComparisonChart
           columns={shiftColumns}
           rows={shiftRows}
-          getRowKey={(r) => r.shift}
-          search={false}
-          maxHeight={260}
           emptyMessage="No shift data."
         />
       )}
     </Box>
   );
+}
+
+/**
+ * Dynamic grouped column chart for Shift Comparison.
+ *
+ * Dynamically derives X-axis categories from the shift column and
+ * grouped bar series from all metric columns.
+ */
+function ShiftComparisonChart({
+  columns,
+  rows,
+  emptyMessage = "No shift data.",
+}) {
+  const theme = useTheme();
+
+  const shiftCol = columns.find((c) => c.key === "shift") || columns[0];
+  const metricColumns = columns.filter((c) => c !== shiftCol);
+  const categories = rows.map((r) => r[shiftCol?.key] ?? r.shift ?? "");
+
+  const hasData = rows.some((row) =>
+    metricColumns.some((col) => {
+      const v = row[col.key];
+      return typeof v === "number" && Number.isFinite(v);
+    }),
+  );
+
+  const series = useMemo(() => {
+    return metricColumns.map((col, index) => {
+      const color = resolveMetricColor(col.key, index, theme);
+      const data = rows.map((r) => {
+        const val = r[col.key];
+        return typeof val === "number" && Number.isFinite(val) ? val : null;
+      });
+      return {
+        name: col.label,
+        data,
+        color,
+      };
+    });
+  }, [metricColumns, rows, theme]);
+
+  const options = useMemo(() => {
+    const grid = theme.palette.divider;
+    const text = theme.palette.text.secondary;
+    const textPrimary = theme.palette.text.primary;
+
+    return {
+      chart: {
+        type: "column",
+        height: 280,
+        spacing: [16, 12, 12, 8],
+        backgroundColor: "transparent",
+        style: { fontFamily: theme.typography.fontFamily },
+      },
+      title: { text: null },
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+      xAxis: {
+        categories,
+        lineColor: grid,
+        tickColor: grid,
+        labels: {
+          style: {
+            color: textPrimary,
+            fontSize: "12px",
+            fontWeight: 600,
+          },
+        },
+      },
+      yAxis: {
+        title: { text: null },
+        gridLineColor: grid,
+        labels: {
+          style: { color: text, fontSize: "11px" },
+          formatter: function () {
+            return formatIndianNumber(this.value);
+          },
+        },
+      },
+      tooltip: {
+        shared: true,
+        useHTML: true,
+        backgroundColor: theme.palette.background.paper,
+        borderColor: grid,
+        borderRadius: 8,
+        shadow: true,
+        formatter: function () {
+          let s = `<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:${textPrimary}">${this.x}</div>`;
+          (this.points ?? []).forEach((point) => {
+            const val = point.y != null ? formatIndianNumber(point.y) : "—";
+            s +=
+              `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:3px;color:${text}">` +
+              `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${point.color};flex-shrink:0;"></span>` +
+              `<span>${point.series.name}:</span> <b style="color:${textPrimary}">${val}</b>` +
+              `</div>`;
+          });
+          return s;
+        },
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 3,
+          borderWidth: 0,
+          pointPadding: 0.08,
+          groupPadding: 0.15,
+          dataLabels: {
+            enabled: true,
+            crop: false,
+            overflow: "none",
+            style: {
+              fontSize: "10px",
+              fontWeight: "600",
+              color: text,
+              textOutline: "none",
+              fontFamily: theme.typography.fontFamily,
+            },
+            formatter: function () {
+              if (this.y == null) return null;
+              return formatIndianNumber(this.y);
+            },
+          },
+        },
+      },
+      legend: {
+        enabled: true,
+        align: "center",
+        verticalAlign: "bottom",
+        itemStyle: {
+          color: text,
+          fontSize: "12px",
+          fontWeight: 500,
+        },
+        itemHoverStyle: { color: textPrimary },
+        symbolWidth: 10,
+        symbolHeight: 10,
+        symbolRadius: 2,
+      },
+      series,
+    };
+  }, [categories, series, theme]);
+
+  if (!hasData) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 180,
+          color: "text.disabled",
+          fontSize: 13,
+        }}
+      >
+        {emptyMessage}
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ width: "100%" }}>
+      <HighchartsReact highcharts={Highcharts} options={options} />
+    </Box>
+  );
+}
+
+/**
+ * Intelligent color resolver with brand palette fallback.
+ */
+function resolveMetricColor(key, index, theme) {
+  const k = String(key).toLowerCase();
+  if (k.includes("prod") || k.includes("actual") || k.includes("output")) {
+    return theme.palette.primary.main;
+  }
+  if (k.includes("scrap") || k.includes("defect") || k.includes("loss")) {
+    return theme.custom.brand.red;
+  }
+  if (k.includes("rework") || k.includes("hold") || k.includes("alert")) {
+    return theme.custom.brand.amber;
+  }
+  const palette = [
+    theme.palette.primary.main,
+    theme.custom.brand.red,
+    theme.custom.brand.amber,
+    theme.custom.brand.green,
+    theme.custom.brand.purple,
+    theme.custom.brand.teal,
+    theme.custom.brand.cyan,
+  ];
+  return palette[index % palette.length];
 }
 
 /** Athena serializes measures as strings; coerce to number|null. */
