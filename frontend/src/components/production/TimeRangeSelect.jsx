@@ -66,6 +66,11 @@ function TimeRangeSelect({
   asOf = null,
   month = null,
   onMonthChange,
+  // CR-10 / Q-LP-01: when true, the Year pill is omitted entirely (the
+  // landing page drops Year from the visible preset row; Year remains
+  // reachable via the custom-range dialog). Defaults to false so the
+  // production dashboard is unchanged.
+  hideYear = false,
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [monthAnchor, setMonthAnchor] = useState(null);
@@ -108,7 +113,11 @@ function TimeRangeSelect({
             }}
           >
             {SHIFT_OPTIONS.map((opt) => (
-              <MenuItem key={opt.id} value={opt.id} sx={{ fontSize: 12, py: 0.5 }}>
+              <MenuItem
+                key={opt.id}
+                value={opt.id}
+                sx={{ fontSize: 12, py: 0.5 }}
+              >
                 {opt.label}
               </MenuItem>
             ))}
@@ -149,31 +158,35 @@ function TimeRangeSelect({
           },
         }}
       >
-        {PRESETS.map((p) => {
-          const useMonthMenu = p.id === "month" && monthMenuEnabled;
-          return (
-            <ToggleButton
-              key={p.id}
-              value={p.id}
-              disabled={p.disabled}
-              onClick={
-                useMonthMenu
-                  ? (e) => {
-                      setMonthAnchor(e.currentTarget);
-                      if (preset !== "month") onPresetChange("month");
-                    }
-                  : undefined
-              }
-            >
-              {useMonthMenu && preset === "month"
-                ? selectedMonthLabel
-                : (presetLabels?.[p.id] ?? p.label)}
-              {useMonthMenu && (
-                <KeyboardArrowDownIcon sx={{ fontSize: 16, ml: 0.25, mr: -0.75 }} />
-              )}
-            </ToggleButton>
-          );
-        })}
+        {(hideYear ? PRESETS.filter((p) => p.id !== "year") : PRESETS).map(
+          (p) => {
+            const useMonthMenu = p.id === "month" && monthMenuEnabled;
+            return (
+              <ToggleButton
+                key={p.id}
+                value={p.id}
+                disabled={p.disabled}
+                onClick={
+                  useMonthMenu
+                    ? (e) => {
+                        setMonthAnchor(e.currentTarget);
+                        if (preset !== "month") onPresetChange("month");
+                      }
+                    : undefined
+                }
+              >
+                {useMonthMenu && preset === "month"
+                  ? selectedMonthLabel
+                  : (presetLabels?.[p.id] ?? p.label)}
+                {useMonthMenu && (
+                  <KeyboardArrowDownIcon
+                    sx={{ fontSize: 16, ml: 0.25, mr: -0.75 }}
+                  />
+                )}
+              </ToggleButton>
+            );
+          },
+        )}
       </ToggleButtonGroup>
 
       <Menu

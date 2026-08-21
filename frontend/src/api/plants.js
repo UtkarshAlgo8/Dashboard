@@ -14,11 +14,22 @@ import {
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
 /**
+ * Plant list for the landing page (one card per plant, with the
+ * per-plant landing KPIs). CR-10: now optionally time-range aware —
+ * pass `{ range, from, to }` to scope Cured Tire Production and
+ * Scrap Percentage. OEE / OTIF / Yield stay current-snapshot.
+ *
+ * @param {{ range?: string, from?: string, to?: string }} [timeRange]
  * @returns {Promise<typeof PLANTS>}
  */
-export function getPlants() {
+export function getPlants(timeRange = {}) {
   if (USE_MOCK) return mockDelay(PLANTS);
-  return client.get("/plants");
+  const q = buildQuery({
+    range: timeRange.range ?? "",
+    from: timeRange.from ?? "",
+    to: timeRange.to ?? "",
+  });
+  return client.get(`/plants${q}`);
 }
 
 /**
@@ -108,10 +119,25 @@ export function getAsOf(plantId) {
 export function getSectionOee(plantId, granularity, from = null, to = null) {
   if (USE_MOCK) {
     return mockDelay({
-      Mixing: { oee: 84.9, availability: 88.4, performance: 96.7, quality: 99.5 },
-      Stock: { oee: 80.2, availability: 85.1, performance: 94.8, quality: 99.3 },
+      Mixing: {
+        oee: 84.9,
+        availability: 88.4,
+        performance: 96.7,
+        quality: 99.5,
+      },
+      Stock: {
+        oee: 80.2,
+        availability: 85.1,
+        performance: 94.8,
+        quality: 99.3,
+      },
       TBM: { oee: 82.6, availability: 87.2, performance: 95.1, quality: 99.6 },
-      Curing: { oee: 86.1, availability: 90.0, performance: 96.2, quality: 99.7 },
+      Curing: {
+        oee: 86.1,
+        availability: 90.0,
+        performance: 96.2,
+        quality: 99.7,
+      },
     });
   }
   const q = buildQuery({ granularity, from, to });

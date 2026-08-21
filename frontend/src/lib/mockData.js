@@ -26,6 +26,10 @@ export const PLANTS = [
     oee: 94.2,
     otif: 96.8,
     yield: 98.5,
+    // CR-10: landing KPIs scoped to the active time-range window.
+    curedTyreProduction: 8420,
+    scrap: 38,
+    scrapPct: 0.45,
   },
   {
     id: "banmore",
@@ -36,6 +40,9 @@ export const PLANTS = [
     oee: 91.5,
     otif: 94.3,
     yield: 97.8,
+    curedTyreProduction: 4280,
+    scrap: 21,
+    scrapPct: 0.49,
   },
   {
     id: "laksar",
@@ -46,6 +53,9 @@ export const PLANTS = [
     oee: 93.1,
     otif: 95.6,
     yield: 98.1,
+    curedTyreProduction: 7610,
+    scrap: 31,
+    scrapPct: 0.41,
   },
   {
     id: "mysore",
@@ -56,6 +66,9 @@ export const PLANTS = [
     oee: 92.6,
     otif: 95.1,
     yield: 98.0,
+    curedTyreProduction: 6840,
+    scrap: 28,
+    scrapPct: 0.41,
   },
 ];
 

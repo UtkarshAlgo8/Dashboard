@@ -3,6 +3,14 @@
 **Phase:** 1
 **Route:** `/`
 **Status:** ready
+> **Change log**
+> - CR-10 (2026-08-21) — adds a time-range filter to `LandingHeader`
+>   (Today / Month pills + custom-range dialog; Year dropped from the
+>   visible pills but reachable via custom) and two new per-plant KPIs
+>   on `PlantCard`: "Cured Tire Production" (NOS + MT toggle) and
+>   "Scrap Percentage" (= total Scrap / total Cured Tire Production
+>   × 100). See `specs/cr/CR-10-landing-time-filter-and-kpis.md`.
+>   Related OQR entries: Q-KPI-02, Q-LP-01, Q-LP-02.
 **Blast radius:** YELLOW — one feature, single page, mock data only
 
 ## Prerequisites
@@ -44,11 +52,16 @@ only active interactions in Phase 1.
   ("FY 2025-26") + avatar (initials "PH" in orange accent per
   `FR-L1`–`FR-L3`). Avatar click is a no-op in spec 03 (user menu is
   spec 14).
-- `PlantCard.jsx` — single plant card. Renders name, sub-location, 3
-  headline KPIs (OE / OTIF / Yield). Banmore: active + clickable;
-  others: reduced opacity, non-clickable, MUI Tooltip "Phase 2 — not
-  yet available". Hover raises (shadow + border accent). Selected
-  state = stronger accent border (`FR-L9`–`FR-L12`).
+- `PlantCard.jsx` — single plant card. Renders name, sub-location, 5
+  headline KPIs: OE / OTIF / Yield (top row) and Cured Tire Production
+  + Scrap Percentage (bottom row). The Cured Tire Production tile
+  carries a small NOS / MT toggle (state local to PlantCard). The
+  Scrap Percentage tile shows "—" with an inline tooltip when Cured
+  Tire Production is 0 in the selected window. Banmore: active +
+  clickable; others: reduced opacity, non-clickable, MUI Tooltip
+  "Phase 2 — not yet available". Hover raises (shadow + border
+  accent). Selected state = stronger accent border
+  (`FR-L9`–`FR-L12`). CR-10 added the 4th + 5th KPIs.
 - `PlantCardList.jsx` — vertical list wrapper.
 - `FunctionTile.jsx` — single tile (icon + label). Production: full
   saturation, clickable. Quality + Engineering: visible-but-disabled
@@ -65,10 +78,14 @@ only active interactions in Phase 1.
 
 **New page** in `src/pages/`:
 - `LandingPage.jsx` — composes the above. Owns `hov` and `sel`
-  state (hovered plant id, selected plant id). Fetches plants via
-  `usePolledQuery(getPlants, { interval: 0 })` (the plant list
-  doesn't change at runtime — polling would be wasted). Fetches
-  functions via the same pattern.
+  state (hovered plant id, selected plant id) plus the time-range
+  state (`range / from / to`, default `range="today"`) threaded to
+  `getPlants` as query params and down to `LandingHeader`. Fetches
+  plants via `usePolledQuery(getPlants, { interval: 0 })` (the plant
+  list doesn't change at runtime — polling would be wasted; the
+  KPI values change with each new time-range pick). Fetches
+  functions via the same pattern. CR-10 added the time-range
+  state + the new query params.
 
 **New data**:
 - `src/lib/indiaMap.js` — already extracted from
@@ -96,10 +113,15 @@ only active interactions in Phase 1.
 
 ## Data
 
-- Reads from: `getPlants()`, `getFunctions()` via `usePolledQuery`
-  with `interval: 0` (one-shot, no polling).
+- Reads from: `getPlants(range, from, to)`, `getFunctions()` via
+  `usePolledQuery` with `interval: 0` (one-shot, no polling; the
+  plant list is static but the KPI values change with each
+  time-range pick). CR-10 extended `getPlants` to accept the
+  time-range trio and to return `curedTyreProduction / scrap /
+  scrapPct` per plant.
 - Writes to: none.
-- Local state: `hov`, `sel` (plant ids; `null` when none).
+- Local state: `hov`, `sel` (plant ids; `null` when none);
+  `range / from / to` for the time picker (default `range="today"`).
 
 ## States
 
@@ -124,6 +146,14 @@ only active interactions in Phase 1.
 
 - `/` renders the LandingHeader + 4 plant cards + India map without
   console errors.
+- `LandingHeader` shows a Today / Month preset row + a "Filter Date"
+  custom-range button. Selecting a preset or applying a custom range
+  updates every `PlantCard` immediately. Year is not a visible
+  preset but is reachable via the custom dialog.
+- `PlantCard` shows 5 KPI tiles per plant: OE / OTIF / Yield + Cured
+  Tire Production (with NOS / MT toggle) + Scrap Percentage. Scrap
+  Percentage computes from the formula above; shows "—" with a
+  tooltip when the denominator is 0.
 - Banmore card is interactive; clicking selects it and reveals the
   function-tiles strip beneath the cards.
 - Other 3 plant cards render at reduced opacity, non-clickable, with

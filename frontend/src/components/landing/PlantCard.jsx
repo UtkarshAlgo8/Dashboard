@@ -1,9 +1,17 @@
+import { useState } from "react";
 import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Single plant card. Active plants get hover-lift + select
  * interactivity; disabled plants render dimmed with a Tooltip
  * (Q-NAV-01). A left stripe + KPI pills are colour-coded by OEE health.
+ *
+ * CR-10: 5 KPI tiles (was 3). Top row keeps OEE / OTIF / Yield
+ * (current-snapshot). Bottom row adds Cured Tire Production (with a
+ * NOS / MT toggle mirroring the production dashboard's BATCH / MT
+ * pattern) and Scrap Percentage (computed from total Scrap /
+ * Cured Tire Production × 100 — see Q-LP-02 for the MT derivation).
  */
 function statusColor(theme, v) {
   const value = numericPercent(v);
@@ -17,6 +25,10 @@ function numericPercent(value) {
   const n = typeof value === "number" ? value : Number.parseFloat(value);
   return Number.isFinite(n) ? n : null;
 }
+
+// CR-10 / Q-LP-02: average mass per cured tire (kg). Mirrors the
+// backend placeholder; revisit when gold carries a true mass field.
+const AVG_MASS_PER_TIRE_KG = 10;
 
 function PlantCard({
   plant,
@@ -119,22 +131,28 @@ function PlantCard({
         )}
       </Stack>
 
-      <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-        <KpiCell
-          label="OEE"
-          value={plant.oee}
-          color={statusColor(theme, plant.oee)}
-        />
-        <KpiCell
-          label="OTIF"
-          value={plant.otif}
-          color={statusColor(theme, plant.otif)}
-        />
-        <KpiCell
-          label="Yield"
-          value={plant.yield}
-          color={statusColor(theme, plant.yield)}
-        />
+      <Stack spacing={1} sx={{ mt: 1.5 }}>
+        <Stack direction="row" spacing={1}>
+          <KpiCell
+            label="OEE"
+            value={plant.oee}
+            color={statusColor(theme, plant.oee)}
+          />
+          <KpiCell
+            label="OTIF"
+            value={plant.otif}
+            color={statusColor(theme, plant.otif)}
+          />
+          <KpiCell
+            label="Yield"
+            value={plant.yield}
+            color={statusColor(theme, plant.yield)}
+          />
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          <KpiCellCuredTyre nos={plant.curedTyreProduction} />
+          <KpiCellScrapPct pct={plant.scrapPct} />
+        </Stack>
       </Stack>
     </Box>
   );
@@ -196,6 +214,167 @@ function KpiCell({ label, value, color }) {
         {label}
       </Typography>
     </Box>
+  );
+}
+
+// CR-10: Cured Tire Production tile. NOS is the raw sum from the
+// backend; MT is derived client-side (NOS * AVG_MASS_PER_TIRE_KG /
+// 1000). Small NOS / MT pill toggle mirrors the production dashboard's
+// BATCH / MT pattern. State lives inside the cell so the toggle
+// doesn't disturb sibling tiles.
+function KpiCellCuredTyre({ nos }) {
+  const [unit, setUnit] = useState("nos");
+  const hasValue = typeof nos === "number" && Number.isFinite(nos) && nos >= 0;
+  const mt = hasValue ? (nos * AVG_MASS_PER_TIRE_KG) / 1000 : null;
+  const displayValue = unit === "nos" ? nos : mt;
+  const unitLabel = unit === "nos" ? "NOS" : "MT";
+  return (
+    <Box
+      sx={{
+        flex: 1,
+        textAlign: "center",
+        py: 0.75,
+        borderRadius: 1.25,
+        backgroundColor: "action.hover",
+        position: "relative",
+      }}
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          display: "flex",
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1,
+          overflow: "hidden",
+          backgroundColor: "background.paper",
+        }}
+      >
+        {[
+          { id: "nos", label: "NOS" },
+          { id: "mt", label: "MT" },
+        ].map((opt) => {
+          const active = unit === opt.id;
+          return (
+            <Box
+              key={opt.id}
+              component="button"
+              type="button"
+              onClick={() => setUnit(opt.id)}
+              sx={{
+                fontSize: 9,
+                fontWeight: 700,
+                px: 0.5,
+                py: 0.1,
+                color: active ? "primary.main" : "text.disabled",
+                backgroundColor: active ? "primary.light" : "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                letterSpacing: 0.4,
+              }}
+            >
+              {opt.label}
+            </Box>
+          );
+        })}
+      </Box>
+      <Typography
+        sx={{
+          fontSize: 18,
+          fontWeight: 700,
+          lineHeight: 1,
+          color: hasValue ? "text.primary" : "text.disabled",
+        }}
+      >
+        {hasValue && displayValue != null
+          ? formatIndianNumber(Math.round(displayValue))
+          : "NA"}
+        {hasValue && (
+          <Typography
+            component="span"
+            sx={{ fontSize: 11, color: "text.disabled", ml: 0.25 }}
+          >
+            {unitLabel}
+          </Typography>
+        )}
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: 10,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          mt: 0.5,
+        }}
+      >
+        Cured Tire
+      </Typography>
+    </Box>
+  );
+}
+
+// CR-10: Scrap Percentage tile. Shows "—" with an inline tooltip
+// when the denominator (Cured Tire Production) is 0 in the selected
+// window — the backend sets scrapPct to null in that case.
+function KpiCellScrapPct({ pct }) {
+  const hasValue = typeof pct === "number" && Number.isFinite(pct) && pct >= 0;
+  const body = (
+    <Box
+      sx={{
+        flex: 1,
+        textAlign: "center",
+        py: 0.75,
+        borderRadius: 1.25,
+        backgroundColor: "action.hover",
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 18,
+          fontWeight: 700,
+          lineHeight: 1,
+          color: hasValue
+            ? pct >= 1
+              ? "warning.main"
+              : "text.primary"
+            : "text.disabled",
+        }}
+      >
+        {hasValue ? pct.toFixed(2) : "—"}
+        {hasValue && (
+          <Typography
+            component="span"
+            sx={{ fontSize: 11, color: "text.disabled", ml: 0.25 }}
+          >
+            %
+          </Typography>
+        )}
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: 10,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          mt: 0.5,
+        }}
+      >
+        Scrap %
+      </Typography>
+    </Box>
+  );
+  if (hasValue) return body;
+  return (
+    <Tooltip
+      title="No Cured Tire production in the selected window — Scrap % needs a denominator."
+      placement="top"
+      arrow
+    >
+      <Box sx={{ flex: 1 }}>{body}</Box>
+    </Tooltip>
   );
 }
 

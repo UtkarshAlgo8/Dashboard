@@ -26,9 +26,23 @@ function LandingPage() {
   const navigate = useNavigate();
   const theme = useTheme();
 
-  const { data: plants, isLoading: plantsLoading } = usePolledQuery(getPlants, {
-    interval: 0,
-  });
+  // CR-10: time-range state for the landing-page KPIs. The picker's
+  // Today/Month pills + Filter Date dialog drive these three. OEE /
+  // OTIF / Yield stay current-snapshot on the backend (no time
+  // filter applied to them); Cured Tire Production and Scrap
+  // Percentage are time-range aware.
+  const [range, setRange] = useState("today");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const { data: plants, isLoading: plantsLoading } = usePolledQuery(
+    () => getPlants({ range, from, to }),
+    {
+      // Re-fetch when the time range changes; otherwise no polling.
+      interval: 0,
+      deps: [range, from, to],
+    },
+  );
   const { data: functions } = usePolledQuery(getFunctions, { interval: 0 });
 
   const [hov, setHov] = useState(null);
@@ -71,7 +85,14 @@ function LandingPage() {
         flexDirection: "column",
       }}
     >
-      <LandingHeader />
+      <LandingHeader
+        range={range}
+        from={from}
+        to={to}
+        onRangeChange={setRange}
+        onFromChange={setFrom}
+        onToChange={setTo}
+      />
 
       <Box sx={{ flex: 1, px: 3, py: 3 }}>
         {plantsLoading ||

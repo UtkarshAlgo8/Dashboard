@@ -1,14 +1,28 @@
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
+import TimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import jkLogo from "@/assets/jk-logo.png";
 
 /**
  * Landing-page top header — matches the dashboard header chrome:
  * small logo + bold divider + single "All Dashboards" heading on the
- * left, FY pill + user avatar on the right. Sticky to the viewport top.
+ * left, time-range picker + FY pill + user avatar on the right.
+ * Sticky to the viewport top.
+ *
+ * CR-10: the time-range picker is owned by `LandingPage` (state lives
+ * there). `LandingHeader` is presentational — it renders the picker
+ * with `hideYear` (Q-LP-01) so the landing page shows Today + Month
+ * pills only; Year is reachable via the custom-range dialog.
  */
-function LandingHeader() {
+function LandingHeader({
+  range,
+  from,
+  to,
+  onRangeChange,
+  onFromChange,
+  onToChange,
+}) {
   const theme = useTheme();
   return (
     <Box
@@ -35,7 +49,12 @@ function LandingHeader() {
           component="img"
           src={jkLogo}
           alt="JK Tyre & Industries Ltd."
-          sx={{ height: 22, width: "auto", objectFit: "contain", display: "block" }}
+          sx={{
+            height: 22,
+            width: "auto",
+            objectFit: "contain",
+            display: "block",
+          }}
         />
         <Box
           sx={{
@@ -57,8 +76,18 @@ function LandingHeader() {
         </Typography>
       </Stack>
 
-      {/* Right: FY pill + avatar */}
+      {/* Right: time-range picker + FY pill + avatar */}
       <Stack direction="row" alignItems="center" spacing={1.5}>
+        <TimeRangeSelect
+          preset={range}
+          from={from}
+          to={to}
+          onPresetChange={onRangeChange}
+          onFromChange={onFromChange}
+          onToChange={onToChange}
+          hideYear
+          presetLabels={{ today: "Today", month: "Month", year: "Year" }}
+        />
         <Box
           sx={{
             fontSize: 12,

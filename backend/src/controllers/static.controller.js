@@ -7,8 +7,15 @@ import {
   plantDepartmentPredicate,
   plantSqlTable,
   emptyColumnPredicate,
+  GRAN_DAY,
   GRAN_MONTH,
 } from "../utils/normalize.js";
+
+// CR-10 / Q-LP-02 placeholder. Plant-aggregate Cured Tire Production's
+// MT display is computed as `curedTyreProduction * AVG_MASS_PER_TIRE_KG
+// / 1000`. Gold carries only NOS for Curing Production_product; revisit
+// when the gold layer carries a true mass field or per-tire-mass lookup.
+const AVG_MASS_PER_TIRE_KG = 10;
 
 /**
  * Lookup data + handlers. Labels/coordinates are app configuration; KPI
@@ -156,6 +163,104 @@ async function landingOeePForPlant(plantId) {
   return rows.length ? percentOrNull(rows[0].actual_value) : null;
 }
 
+/**
+ * CR-10: resolve a landing-page time-range (`{ range, from, to }`) to a
+ * YYYYMMDD date window for SQL `BETWEEN`. Defaults to "today" when no
+ * range is given. `from`/`to` come in as ISO yyyy-mm-dd (per the
+ * frontend DateRangeFilterDialog contract) and are normalised to
+ * YYYYMMDD for the gold date column.
+ */
+function resolveLandingWindow(timeRange) {
+  const today = new Date();
+  const yyyy = today.getUTCFullYear();
+  const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(today.getUTCDate()).padStart(2, "0");
+  const todayKey = `${yyyy}${mm}${dd}`;
+  const monthStart = `${yyyy}01`;
+  const yearStart = `${yyyy}01`;
+
+  if (!timeRange || !timeRange.range || timeRange.range === "today") {
+    return { from: todayKey, to: todayKey };
+  }
+  if (timeRange.range === "month") {
+    return { from: monthStart, to: todayKey };
+  }
+  if (timeRange.range === "year") {
+    return { from: yearStart, to: todayKey };
+  }
+  if (
+    timeRange.range === "custom" &&
+    timeRange.from &&
+    timeRange.to
+  ) {
+    const norm = (iso) => {
+      if (!iso) return "";
+      // ISO yyyy-mm-dd → yyyymmdd
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso.replaceAll("-", "");
+      // DD-MM-YYYY → yyyymmdd
+      const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(iso);
+      return m ? `${m[3]}${m[2]}${m[1]}` : "";
+    };
+    return { from: norm(timeRange.from), to: norm(timeRange.to) };
+  }
+  return { from: todayKey, to: todayKey };
+}
+
+/**
+ * CR-10: time-range-aware landing KPIs. Sums Cured Tire Production
+ * (Production_product × product_type="Cured Tyre" × section="Curing",
+ * all machines/SKUs) and plant-wide Scrap in the active window.
+ * Returns the NOS sum and the Scrap Percentage (null when Cured Tire
+ * Production is 0 — the "—" tile state). The MT figure is derived
+ * client-side via AVG_MASS_PER_TIRE_KG (Q-LP-02).
+ */
+async function landingTimeAwareKpisForPlant(plantId, timeRange) {
+  const { from, to } = resolveLandingWindow(timeRange);
+  if (!from || !to) {
+    return { curedTyreProduction: 0, scrap: 0, scrapPct: null };
+  }
+  const fromEsc = escapeLiteral(from);
+  const toEsc = escapeLiteral(to);
+
+  const curedTyreSql = `
+    SELECT COALESCE(SUM(actual_value), 0) AS total
+    FROM ${plantSqlTable(plantId)}
+    WHERE ${plantDepartmentPredicate(plantId)}
+      AND kpi_name = ${escapeLiteral("Production_product")}
+      AND section = ${escapeLiteral("Curing")}
+      AND product_type = ${escapeLiteral("Cured Tyre")}
+      AND ${emptyColumnPredicate("machine")}
+      AND ${emptyColumnPredicate("sub_section")}
+      AND granularity = ${escapeLiteral(GRAN_DAY)}
+      AND ${DATE_YYYYMMDD} BETWEEN ${fromEsc} AND ${toEsc}
+  `.trim();
+
+  const scrapSql = `
+    SELECT COALESCE(SUM(actual_value), 0) AS total
+    FROM ${plantSqlTable(plantId)}
+    WHERE ${plantDepartmentPredicate(plantId)}
+      AND kpi_name = ${escapeLiteral("Scrap")}
+      AND ${emptyColumnPredicate("machine")}
+      AND ${emptyColumnPredicate("sub_section")}
+      AND granularity = ${escapeLiteral(GRAN_DAY)}
+      AND ${DATE_YYYYMMDD} BETWEEN ${fromEsc} AND ${toEsc}
+  `.trim();
+
+  const [curedTyreRows, scrapRows] = await Promise.all([
+    runQuery(curedTyreSql),
+    runQuery(scrapSql),
+  ]);
+
+  const curedTyreProduction = Number(curedTyreRows[0]?.total ?? 0);
+  const scrap = Number(scrapRows[0]?.total ?? 0);
+  const scrapPct =
+    curedTyreProduction > 0
+      ? Math.round((scrap / curedTyreProduction) * 1000) / 10
+      : null;
+
+  return { curedTyreProduction, scrap, scrapPct };
+}
+
 async function landingKpisForPlant(plantId) {
   const sql = `
     SELECT metric, actual_value
@@ -199,9 +304,14 @@ async function landingKpisForPlant(plantId) {
   return out;
 }
 
-export async function getPlants(_req, res, next) {
+export async function getPlants(req, res, next) {
   try {
-    const summaries = await cached(
+    const timeRange = {
+      range: typeof req.query.range === "string" ? req.query.range : "today",
+      from: typeof req.query.from === "string" ? req.query.from : "",
+      to: typeof req.query.to === "string" ? req.query.to : "",
+    };
+    const staticSummaries = await cached(
       buildCacheKey("/plants:landing-live-kpis", {}),
       async () => {
         const enabled = PLANTS.filter((p) => p.enabled);
@@ -216,9 +326,27 @@ export async function getPlants(_req, res, next) {
       },
       CACHE_TTL.STATIC_LOOKUPS,
     );
+    // Time-aware KPIs are NOT cached at this layer (window changes per
+    // user pick). Cheap query; per-plant fan-out.
+    const enabled = PLANTS.filter((p) => p.enabled);
+    const timeAwareEntries = await Promise.all(
+      enabled.map(async (p) => {
+        const plantId = normalizePlantId(p.id);
+        if (!plantId) {
+          return [p.id, { curedTyreProduction: 0, scrap: 0, scrapPct: null }];
+        }
+        return [p.id, await landingTimeAwareKpisForPlant(plantId, timeRange)];
+      }),
+    );
+    const timeAwareSummaries = Object.fromEntries(timeAwareEntries);
     const data = PLANTS.map((p) => ({
       ...p,
-      ...(summaries[p.id] ?? { oee: null, otif: null, yield: null }),
+      ...(staticSummaries[p.id] ?? { oee: null, otif: null, yield: null }),
+      ...(timeAwareSummaries[p.id] ?? {
+        curedTyreProduction: 0,
+        scrap: 0,
+        scrapPct: null,
+      }),
     }));
     res.json({ data });
   } catch (err) {
