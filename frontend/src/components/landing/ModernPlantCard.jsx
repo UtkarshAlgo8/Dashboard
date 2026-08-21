@@ -1,12 +1,12 @@
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 
 /**
- * Modern Glassmorphic Plant Card matching the inspiration design
- * Displays:
- * - Plant code badge (e.g. CTP, BTP, LTP, RTP)
- * - Plant location & state
- * - Live status badge with pulsing beacon
- * - 4 Key KPI metrics (OEE, OTIF, YIELD, PQR) with sparkline trends
+ * Modern Glassmorphic Plant Card with True Glassmorphism & Ambient Glow
+ * Features:
+ * - Multi-layer frosted glass with 24px blur and saturation boost
+ * - Specular top-edge glass reflections
+ * - Dynamic ambient neon glow on focus and hover
+ * - High-contrast KPI glass tiles with depth inset
  */
 function ModernPlantCard({
   plant,
@@ -27,28 +27,42 @@ function ModernPlantCard({
       onClick={active ? onSelect : undefined}
       sx={{
         position: "relative",
-        borderRadius: "14px",
+        borderRadius: "16px",
         p: 2.2,
-        backgroundColor: highlighted
-          ? "rgba(255, 255, 255, 0.92)"
-          : "rgba(255, 255, 255, 0.82)",
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
+        background: highlighted
+          ? "linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 246, 255, 0.92) 100%)"
+          : "linear-gradient(135deg, rgba(255, 255, 255, 0.86) 0%, rgba(245, 248, 255, 0.78) 100%)",
+        backdropFilter: "blur(24px) saturate(190%)",
+        WebkitBackdropFilter: "blur(24px) saturate(190%)",
         border: "1px solid",
         borderColor: highlighted
-          ? "rgba(0, 150, 255, 0.6)"
-          : "rgba(255, 255, 255, 0.8)",
+          ? "rgba(0, 150, 255, 0.7)"
+          : "rgba(255, 255, 255, 0.75)",
         boxShadow: highlighted
-          ? "0 12px 32px rgba(0, 30, 80, 0.18), 0 0 0 1px rgba(0, 150, 255, 0.3)"
-          : "0 6px 20px rgba(0, 0, 0, 0.06)",
+          ? "0 20px 45px -10px rgba(0, 100, 255, 0.28), 0 0 25px rgba(0, 180, 255, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.9)"
+          : "0 10px 30px -10px rgba(0, 15, 45, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.8)",
         cursor: active ? "pointer" : "default",
-        opacity: active ? 1 : 0.7,
-        transform: highlighted ? "translateY(-3px) scale(1.01)" : "translateY(0)",
-        transition: "all 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
+        opacity: active ? 1 : 0.65,
+        transform: highlighted ? "translateY(-4px) scale(1.015)" : "translateY(0)",
+        transition: "all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        overflow: "hidden",
+        /* Specular Glass Top-Edge Shine */
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          top: 0,
+          left: "5%",
+          right: "5%",
+          height: "1px",
+          background: highlighted
+            ? "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(0,180,255,0.8) 50%, rgba(255,255,255,0) 100%)"
+            : "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0) 100%)",
+          pointerEvents: "none",
+        },
         "&:hover": active
           ? {
-              backgroundColor: "rgba(255, 255, 255, 0.95)",
-              boxShadow: "0 12px 32px rgba(0, 30, 80, 0.18)",
+              boxShadow:
+                "0 20px 45px -10px rgba(0, 100, 255, 0.28), 0 0 25px rgba(0, 180, 255, 0.2)",
             }
           : undefined,
       }}
@@ -64,15 +78,16 @@ function ModernPlantCard({
         <Stack direction="row" alignItems="center" spacing={1.2}>
           <Box
             sx={{
-              px: 1.2,
+              px: 1.25,
               py: 0.35,
-              borderRadius: "6px",
-              backgroundColor: "#FFF2EC",
-              border: "1px solid #FFE0D1",
+              borderRadius: "7px",
+              background: "linear-gradient(135deg, #FFF2EC 0%, #FFE5D6 100%)",
+              border: "1px solid #FFD0B8",
               color: "#E65100",
               fontSize: 12,
               fontWeight: 800,
               letterSpacing: 0.5,
+              boxShadow: "0 2px 6px rgba(230, 81, 0, 0.12)",
             }}
           >
             {plant.code || plant.id.toUpperCase()}
@@ -81,7 +96,7 @@ function ModernPlantCard({
             sx={{
               fontSize: 15,
               fontWeight: 700,
-              color: "#1E293B",
+              color: "#0F172A",
               display: "flex",
               alignItems: "baseline",
               gap: "6px",
@@ -90,7 +105,7 @@ function ModernPlantCard({
             {plant.name.replace(" Tyre Plant", "").replace(" Plant", "")}
             <Typography
               component="span"
-              sx={{ fontSize: 13, fontWeight: 400, color: "#64748B" }}
+              sx={{ fontSize: 13, fontWeight: 500, color: "#64748B" }}
             >
               {plant.sub}
             </Typography>
@@ -100,18 +115,29 @@ function ModernPlantCard({
         {/* Live Indicator + Arrow */}
         <Stack direction="row" alignItems="center" spacing={1}>
           {active ? (
-            <Stack direction="row" alignItems="center" spacing={0.6}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.7}
+              sx={{
+                px: 1,
+                py: 0.3,
+                borderRadius: "20px",
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+              }}
+            >
               <Box
                 sx={{
                   width: 7,
                   height: 7,
                   borderRadius: "50%",
                   backgroundColor: "#EF4444",
-                  boxShadow: "0 0 8px #EF4444",
+                  boxShadow: "0 0 10px #EF4444",
                   animation: "livePulse 1.8s infinite",
                   "@keyframes livePulse": {
                     "0%": { opacity: 1, transform: "scale(1)" },
-                    "50%": { opacity: 0.4, transform: "scale(0.85)" },
+                    "50%": { opacity: 0.3, transform: "scale(0.8)" },
                     "100%": { opacity: 1, transform: "scale(1)" },
                   },
                 }}
@@ -132,10 +158,11 @@ function ModernPlantCard({
               sx={{
                 fontSize: 10,
                 fontWeight: 700,
-                px: 0.8,
-                py: 0.2,
-                borderRadius: "4px",
+                px: 0.9,
+                py: 0.3,
+                borderRadius: "5px",
                 backgroundColor: "#F1F5F9",
+                border: "1px solid #E2E8F0",
                 color: "#64748B",
                 textTransform: "uppercase",
               }}
@@ -148,6 +175,7 @@ function ModernPlantCard({
               color: highlighted ? "#0284C7" : "#94A3B8",
               fontSize: 16,
               lineHeight: 1,
+              fontWeight: 700,
               transition: "transform 0.2s ease, color 0.2s ease",
               transform: highlighted ? "translateX(3px)" : "none",
             }}
@@ -169,47 +197,59 @@ function ModernPlantCard({
           label="OEE"
           value={plant.oee}
           isPositive={plant.oee >= 90}
+          highlighted={highlighted}
         />
         <KpiBlock
           label="OTIF"
           value={plant.otif}
           isPositive={plant.otif >= 95}
+          highlighted={highlighted}
         />
         <KpiBlock
           label="YIELD"
           value={plant.yield}
           isPositive={plant.yield >= 97}
+          highlighted={highlighted}
         />
         <KpiBlock
           label="PQR"
           value={plant.pqr || 95.0}
           isPositive={plant.pqr ? plant.pqr >= 95 : true}
+          highlighted={highlighted}
         />
       </Box>
     </Box>
   );
 }
 
-function KpiBlock({ label, value, isPositive = true }) {
+function KpiBlock({ label, value, isPositive = true, highlighted = false }) {
   const displayVal = typeof value === "number" ? value.toFixed(1) : value;
 
   return (
     <Box
       sx={{
-        backgroundColor: "rgba(255, 255, 255, 0.7)",
-        border: "1px solid rgba(226, 232, 240, 0.8)",
-        borderRadius: "10px",
+        backgroundColor: highlighted
+          ? "rgba(255, 255, 255, 0.85)"
+          : "rgba(255, 255, 255, 0.65)",
+        backdropFilter: "blur(12px)",
+        border: "1px solid",
+        borderColor: highlighted
+          ? "rgba(0, 160, 255, 0.2)"
+          : "rgba(226, 232, 240, 0.8)",
+        borderRadius: "11px",
         p: 1.2,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
+        boxShadow: "0 2px 6px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+        transition: "all 0.2s ease",
       }}
     >
       <Typography
         sx={{
           fontSize: 10,
           fontWeight: 700,
-          color: "#94A3B8",
+          color: "#64748B",
           letterSpacing: 0.6,
           textTransform: "uppercase",
           mb: 0.5,

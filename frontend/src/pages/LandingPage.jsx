@@ -196,10 +196,10 @@ function LandingPage() {
                 gap: 2,
                 /* Smooth gradient mask to blend with satellite map on large screens */
                 background: {
-                  xs: "rgba(11, 19, 43, 0.75)",
-                  md: "linear-gradient(to right, rgba(11, 19, 43, 0.05) 0%, rgba(11, 19, 43, 0.4) 15%, rgba(11, 19, 43, 0.65) 100%)",
+                  xs: "rgba(11, 19, 43, 0.85)",
+                  md: "linear-gradient(to right, rgba(11, 19, 43, 0) 0%, rgba(11, 19, 43, 0.35) 15%, rgba(11, 19, 43, 0.72) 100%)",
                 },
-                backdropFilter: "blur(2px)",
+                backdropFilter: "blur(4px)",
                 "&::-webkit-scrollbar": {
                   width: "6px",
                 },

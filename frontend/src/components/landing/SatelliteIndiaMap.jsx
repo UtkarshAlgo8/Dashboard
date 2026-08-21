@@ -131,6 +131,17 @@ function SatelliteIndiaMap({
 
       const el = document.createElement("div");
       const root = createRoot(el);
+      const isFocused = hov === plant.id || sel === plant.id;
+
+      // Render content immediately on initial creation
+      root.render(
+        <MapPlantMarker
+          plant={plant}
+          isFocused={isFocused}
+          onClick={() => onSelect && onSelect(plant.id)}
+          onMouseEnter={() => onHover && onHover(plant.id)}
+        />
+      );
 
       const marker = new maplibregl.Marker({ element: el, anchor: "bottom-left" })
         .setLngLat([plant.lng, plant.lat])
@@ -140,7 +151,7 @@ function SatelliteIndiaMap({
     });
 
     markerEntriesRef.current = newEntries;
-  }, [mapLoaded, plants]);
+  }, [mapLoaded, plants, onHover, onSelect]);
 
   // 3. Update Marker Props (isFocused) without re-creating roots
   useEffect(() => {
