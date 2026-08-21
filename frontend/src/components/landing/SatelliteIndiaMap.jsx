@@ -154,8 +154,11 @@ function SatelliteIndiaMap({
 
   // 3. Update Marker Props (isFocused) without re-creating roots
   useEffect(() => {
-    markerEntriesRef.current.forEach(({ plant, root }) => {
+    markerEntriesRef.current.forEach(({ plant, root, marker }) => {
       const isFocused = hov === plant.id || sel === plant.id;
+      if (marker && marker.getElement()) {
+        marker.getElement().style.zIndex = isFocused ? "50" : "1";
+      }
       root.render(
         <MapPlantMarker
           plant={plant}

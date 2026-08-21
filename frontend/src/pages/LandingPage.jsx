@@ -39,7 +39,7 @@ const PLANT_GEO = {
     code: "LTP",
     lat: 29.7428,
     lng: 78.0264,
-    badgeSide: "right",
+    badgeSide: "left",
   },
   mysore: {
     code: "RTP",
