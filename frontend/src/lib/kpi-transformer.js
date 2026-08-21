@@ -1168,8 +1168,16 @@ function selectSeries(
   // (gold rows already fetched by landingKpiNames). The existing card
   // builder consumes the synthesised rows verbatim — value/spark/etc.
   // fall out of the normal SUM aggregation.
+  //
+  // The synthesised granularity matches the dominant source granularity
+  // (most rows in the 6 reasons share the same granularity — the
+  // dashboard's active preset pins it). Without this, atGranularity
+  // would filter the synthesised rows out and the card would render
+  // the "—" placeholder even though the chart (which doesn't gate on
+  // granularity) renders correctly.
   if (name === TOTAL_DOWNTIME_NAME) {
     const perDate = new Map();
+    const granularityCount = new Map();
     for (const reason of DOWNTIME_REASONS) {
       const g = groups.get(reason);
       if (!g) continue;
@@ -1186,7 +1194,26 @@ function selectSeries(
             granularity: r.granularity,
             unit_of_measurement: r.unit_of_measurement,
           });
+        if (r.granularity) {
+          granularityCount.set(
+            r.granularity,
+            (granularityCount.get(r.granularity) ?? 0) + 1,
+          );
+        }
       }
+    }
+    // Pin granularity to the most common one across the inputs so
+    // atGranularity's filter matches the synthesised rows.
+    let pinnedGranularity = "";
+    let bestCount = 0;
+    for (const [g, c] of granularityCount) {
+      if (c > bestCount) {
+        pinnedGranularity = g;
+        bestCount = c;
+      }
+    }
+    for (const row of perDate.values()) {
+      row.granularity = row.granularity ?? pinnedGranularity;
     }
     const synthesized = [...perDate.values()].sort((a, b) => {
       const ai = isoDate(a.date);
