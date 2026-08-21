@@ -143,7 +143,11 @@ function SatelliteIndiaMap({
         />
       );
 
-      const marker = new maplibregl.Marker({ element: el, anchor: "bottom-left" })
+      const isLeft = plant.badgeSide === "left";
+      const marker = new maplibregl.Marker({
+        element: el,
+        anchor: isLeft ? "bottom-right" : "bottom-left",
+      })
         .setLngLat([plant.lng, plant.lat])
         .addTo(map);
 
