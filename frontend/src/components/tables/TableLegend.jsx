@@ -13,13 +13,7 @@ import { Box, Stack, Typography, useTheme } from "@mui/material";
  * @param {"flex-start"|"center"|"flex-end"|"space-between"} [props.align]
  * @param {object} [props.sx]
  */
-function TableLegend({
-  items,
-  preset,
-  title,
-  align = "flex-start",
-  sx = {},
-}) {
+function TableLegend({ items, preset, title, align = "flex-start", sx = {} }) {
   const theme = useTheme();
 
   const resolvedItems = items ?? (preset ? getPresetItems(preset, theme) : []);
@@ -60,8 +54,10 @@ function TableLegend({
           spacing={0.75}
           alignItems="center"
         >
-          <LegendMark color={it.color} variant={it.variant ?? "dot"} />
-          <Typography sx={{ fontSize: 11, color: "text.secondary" }}>
+          <LegendMark color={it.color} variant={it.variant ?? "square"} />
+          <Typography
+            sx={{ fontSize: 12, fontWeight: 500, color: "text.secondary" }}
+          >
             {it.label}
           </Typography>
         </Stack>
@@ -71,20 +67,6 @@ function TableLegend({
 }
 
 function LegendMark({ color, variant }) {
-  if (variant === "square") {
-    return (
-      <Box
-        sx={{
-          width: 10,
-          height: 10,
-          borderRadius: 0.5,
-          backgroundColor: color,
-          flexShrink: 0,
-        }}
-      />
-    );
-  }
-
   if (variant === "pill") {
     return (
       <Box
@@ -112,13 +94,13 @@ function LegendMark({ color, variant }) {
     );
   }
 
-  // Default "dot" (color circle)
+  // Default squarish mark (matching chart legend)
   return (
     <Box
       sx={{
         width: 10,
         height: 10,
-        borderRadius: "50%",
+        borderRadius: "2px",
         backgroundColor: color,
         flexShrink: 0,
       }}
@@ -133,17 +115,17 @@ function getPresetItems(preset, theme) {
         {
           label: "Target Met",
           color: theme.custom.brand.green,
-          variant: "dot",
+          variant: "square",
         },
         {
           label: "Warning",
           color: theme.custom.brand.amber,
-          variant: "dot",
+          variant: "square",
         },
         {
           label: "Critical",
           color: theme.custom.brand.red,
-          variant: "dot",
+          variant: "square",
         },
       ];
     case "status":
@@ -151,17 +133,17 @@ function getPresetItems(preset, theme) {
         {
           label: "OK / Closed",
           color: theme.palette.success.main,
-          variant: "dot",
+          variant: "square",
         },
         {
           label: "Alert / Monitor",
           color: theme.palette.warning.main,
-          variant: "dot",
+          variant: "square",
         },
         {
           label: "Action Required / Open",
           color: theme.palette.error.main,
-          variant: "dot",
+          variant: "square",
         },
       ];
     case "shifts":

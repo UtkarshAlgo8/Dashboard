@@ -296,6 +296,10 @@ export default function ShiftComparisonCard({
         borderColor: "divider",
         borderRadius: 1.25,
         p: 2,
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 380,
       }}
     >
       <Stack
@@ -345,7 +349,8 @@ export default function ShiftComparisonCard({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            minHeight: 160,
+            flex: 1,
+            minHeight: 180,
           }}
         >
           <JKLoader />
@@ -408,8 +413,7 @@ function ShiftComparisonChart({
     return {
       chart: {
         type: "column",
-        height: 280,
-        spacing: [16, 12, 12, 8],
+        spacing: [8, 8, 8, 8],
         backgroundColor: "transparent",
         style: { fontFamily: theme.typography.fontFamily },
       },
@@ -431,6 +435,7 @@ function ShiftComparisonChart({
       yAxis: {
         title: { text: null },
         gridLineColor: grid,
+        maxPadding: 0.05,
         labels: {
           style: { color: text, fontSize: "11px" },
           formatter: function () {
@@ -484,8 +489,10 @@ function ShiftComparisonChart({
       },
       legend: {
         enabled: true,
-        align: "center",
-        verticalAlign: "bottom",
+        align: "right",
+        verticalAlign: "top",
+        layout: "horizontal",
+        y: -6,
         itemStyle: {
           color: text,
           fontSize: "12px",
@@ -507,6 +514,7 @@ function ShiftComparisonChart({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          flex: 1,
           minHeight: 180,
           color: "text.disabled",
           fontSize: 13,
@@ -518,8 +526,36 @@ function ShiftComparisonChart({
   }
 
   return (
-    <Box sx={{ width: "100%" }}>
-      <HighchartsReact highcharts={Highcharts} options={options} />
+    <Box
+      sx={{
+        width: "100%",
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 340,
+        "& .highcharts-container": {
+          width: "100% !important",
+          height: "100% !important",
+        },
+        "& .highcharts-root": {
+          width: "100% !important",
+          height: "100% !important",
+        },
+      }}
+    >
+      <HighchartsReact
+        highcharts={Highcharts}
+        options={options}
+        containerProps={{
+          style: {
+            width: "100%",
+            height: "100%",
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+          },
+        }}
+      />
     </Box>
   );
 }

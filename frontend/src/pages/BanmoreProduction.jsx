@@ -185,8 +185,7 @@ function BanmoreProduction() {
   );
   const oeeGran = dashboard.granularity ?? "MONTH";
   const { data: sectionOeeData, isLoading: sectionOeeLoading } = usePolledQuery(
-    () =>
-      getSectionOee(plantId, oeeGran, dashboard.from, dashboard.to),
+    () => getSectionOee(plantId, oeeGran, dashboard.from, dashboard.to),
     {
       interval: 0,
       enabled: hasDateRange,
@@ -390,9 +389,7 @@ function BanmoreProduction() {
   ];
   // changes.md §4: Stock has NO synthetic "Overall" product — only the real
   // product rows of the sub-section, in the data's own spelling.
-  const stockProductOptions = [
-    ...nonStockProductOptions,
-  ];
+  const stockProductOptions = [...nonStockProductOptions];
   // TBM / Curing / Mixing: always offer the FULL canonical product-type set
   // (PROD_SUB_OPTIONS) unioned with whatever the data actually holds, so every
   // product type stays selectable even when it has no rows in the current
@@ -480,7 +477,10 @@ function BanmoreProduction() {
 
   useEffect(() => {
     if (isStock || navProductOptions.length === 0) return;
-    if (!dashboard.productType || !navProductOptions.includes(dashboard.productType)) {
+    if (
+      !dashboard.productType ||
+      !navProductOptions.includes(dashboard.productType)
+    ) {
       setFilter(
         { productType: navProductOptions[0], unitOfMeasurement: null },
         false,
@@ -567,7 +567,8 @@ function BanmoreProduction() {
     // presetToDateRange returns granularity="DAY" for a custom range; a
     // bare {preset} would drop the range and yield null → the "Daily"
     // fallback that never matches the real "DAY" rows.
-    return presetToDateRange({ ...timeRange, preset }, effectiveAsOf).granularity;
+    return presetToDateRange({ ...timeRange, preset }, effectiveAsOf)
+      .granularity;
   };
 
   // Handlers ONLY update the UI state (pure functional updater so the
@@ -820,244 +821,261 @@ function BanmoreProduction() {
               position: "relative",
               display: "flex",
               flexDirection: "column",
+              height: exporting ? "auto" : "100%",
               minHeight: 0,
               minWidth: 0,
             }}
           >
-          <Box
-            sx={{
-              backgroundColor: "background.paper",
-              border: dashboard.category === "i" ? 0 : 1,
-              borderColor: "divider",
-              borderRadius: dashboard.category === "i" ? 0 : 1.25,
-              boxShadow:
-                dashboard.category === "i" ? "none" : theme.custom.shadow,
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              minHeight: 0,
-              overflow: exporting
-                ? "visible"
-                : dashboard.category === "i"
-                  ? "hidden"
-                  : "auto",
-            }}
-          >
-            {dashboard.category === "i" ? (
-              <InventoryPage plantId={plantId} />
-            ) : (
-              <>
-                {/* Section header row — title (left) + nav controls (right)
+            <Box
+              sx={{
+                backgroundColor: "background.paper",
+                border: dashboard.category === "i" ? 0 : 1,
+                borderColor: "divider",
+                borderRadius: dashboard.category === "i" ? 0 : 1.25,
+                boxShadow:
+                  dashboard.category === "i" ? "none" : theme.custom.shadow,
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+                height: exporting ? "auto" : "100%",
+                minHeight: 0,
+                overflow: exporting
+                  ? "visible"
+                  : dashboard.category === "i"
+                    ? "hidden"
+                    : "auto",
+              }}
+            >
+              {dashboard.category === "i" ? (
+                <InventoryPage plantId={plantId} />
+              ) : (
+                <>
+                  {/* Section header row — title (left) + nav controls (right)
                     on ONE line, styled like the top nav bar with a
                     full-width border-bottom. The card has no padding, so
                     this row's own px insets the content while the border
                     still spans edge-to-edge. */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 1.5,
-                    flexWrap: "wrap",
-                    px: 2,
-                    py: 1.25,
-                    borderBottom: 1,
-                    borderColor: "divider",
-                  }}
-                >
-                  <Typography
-                    sx={{ fontSize: 17, fontWeight: 700, whiteSpace: "nowrap" }}
-                  >
-                    {SECTION_TITLE[dashboard.section] ?? sectionName}
-                  </Typography>
-
-                  {/* Right: nav controls. Stock → sub-section selector;
-                      Mixing/TBM/Curing (Productivity & Quality) → product
-                      type pills. */}
                   <Box
                     sx={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 1,
+                      justifyContent: "space-between",
+                      gap: 1.5,
                       flexWrap: "wrap",
-                      justifyContent: "flex-end",
+                      px: 2,
+                      py: 1.25,
+                      borderBottom: 1,
+                      borderColor: "divider",
                     }}
                   >
-                    {isStock ? (
-                      <NavTabs
-                        items={STOCK_SUBSECTIONS.map((s) => ({
-                          id: s,
-                          label: s,
-                        }))}
-                        value={activeSubSection}
-                        onChange={onStockSubChange}
-                        layoutId="stockSubFill"
-                      />
-                    ) : (
-                      (dashboard.category === "p" ||
-                        dashboard.category === "q") &&
-                        navProductOptions.length > 0 && (
-                        <NavTabs
-                          items={navProductOptions.map((o) => ({
-                            id: o,
-                            label: o,
-                          }))}
-                          // Selecting a product type sends it to the backend
-                          // (server-side filter / real API call).
-                          value={activeProductType}
-                          onChange={(v) => setFilter({ productType: v }, false)}
-                          layoutId="prodTypeFill"
-                        />
-                      )
-                    )}
-                  </Box>
-                </Box>
-
-                {/* Stock product-type pills — second row (BRD §13.3 two-step:
-                    sub-section first, then product type). changes.md §4: only
-                    the real products of the sub-section, no synthetic Overall. */}
-                {(isStock || unitOptionsForProduct.length > 1) &&
-                  dashboard.category === "p" && (
-                    <Box
+                    <Typography
                       sx={{
-                        px: 2,
-                        py: 1.25,
-                        borderBottom: 1,
-                        borderColor: "divider",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 2,
-                        flexWrap: "wrap",
+                        fontSize: 17,
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {isStock && (
+                      {SECTION_TITLE[dashboard.section] ?? sectionName}
+                    </Typography>
+
+                    {/* Right: nav controls. Stock → sub-section selector;
+                      Mixing/TBM/Curing (Productivity & Quality) → product
+                      type pills. */}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        flexWrap: "wrap",
+                        justifyContent: "flex-end",
+                      }}
+                    >
+                      {isStock ? (
                         <NavTabs
-                          items={stockProductOptions.map((o) => ({
-                            id: o,
-                            label: o,
+                          items={STOCK_SUBSECTIONS.map((s) => ({
+                            id: s,
+                            label: s,
                           }))}
-                          value={activeProductType}
-                          onChange={onStockProductChange}
-                          layoutId="stockProdFill"
+                          value={activeSubSection}
+                          onChange={onStockSubChange}
+                          layoutId="stockSubFill"
                         />
+                      ) : (
+                        (dashboard.category === "p" ||
+                          dashboard.category === "q") &&
+                        navProductOptions.length > 0 && (
+                          <NavTabs
+                            items={navProductOptions.map((o) => ({
+                              id: o,
+                              label: o,
+                            }))}
+                            // Selecting a product type sends it to the backend
+                            // (server-side filter / real API call).
+                            value={activeProductType}
+                            onChange={(v) =>
+                              setFilter({ productType: v }, false)
+                            }
+                            layoutId="prodTypeFill"
+                          />
+                        )
                       )}
-                      {/* new_change.md C8/C9: multi-unit series must pin a
+                    </Box>
+                  </Box>
+
+                  {/* Stock product-type pills — second row (BRD §13.3 two-step:
+                    sub-section first, then product type). changes.md §4: only
+                    the real products of the sub-section, no synthetic Overall. */}
+                  {(isStock || unitOptionsForProduct.length > 1) &&
+                    dashboard.category === "p" && (
+                      <Box
+                        sx={{
+                          px: 2,
+                          py: 1.25,
+                          borderBottom: 1,
+                          borderColor: "divider",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 2,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {isStock && (
+                          <NavTabs
+                            items={stockProductOptions.map((o) => ({
+                              id: o,
+                              label: o,
+                            }))}
+                            value={activeProductType}
+                            onChange={onStockProductChange}
+                            layoutId="stockProdFill"
+                          />
+                        )}
+                        {/* new_change.md C8/C9: multi-unit series must pin a
                           unit — KG and Batch (Mixing), M and NOS (Stock
                           Extruder / 3 Roll / Bead) are different measures of
                           the same production and are never combined. */}
-                      {unitOptionsForProduct.length > 1 && (
-                        <NavTabs
-                          items={unitOptionsForProduct.map((u) => ({
-                            id: u,
-                            // KG is pinned/filtered as-is, but shown as MT —
-                            // production is presented in tonnes. lib/units.js.
-                            label: displayUnit(u),
-                          }))}
-                          value={activeUnit}
-                          onChange={(u) =>
-                            setFilter({ unitOfMeasurement: u }, false)
-                          }
-                          layoutId="prodUnitFill"
-                        />
-                      )}
-                    </Box>
-                  )}
-
-                <KpiGrid
-                  kpis={kpis}
-                  // Per-panel loader suppressed: the single page-level overlay
-                  // (contentLoading) covers the whole body while data reloads.
-                  isLoading={false}
-                  error={kpiError}
-                  openDrillKpiId={openDrillKpiId}
-                  onDrillKpi={handleDrillKpi}
-                  onCloseDrill={handleCloseDrill}
-                  onTrendOpen={(kpi) => setTrendKpi(kpi)}
-                />
-
-                {/* Single drill panel for the currently selected card. */}
-                {openDrillKpiId &&
-                  (() => {
-                    const kpi = kpis.find(
-                      (k) => k.id === openDrillKpiId && k.drillable,
-                    );
-                    if (!kpi) return null;
-                    // new_change.md C3/C6: the drill window IS the card's
-                    // resolved day when the card anchored itself (C6);
-                    // otherwise it is the card's from/to window verbatim.
-                    const cardDate = kpi.resolvedDate ?? null;
-                    const useMonthRange =
-                      dashboard.category === "p" &&
-                      dashboard.granularity === "MONTH" &&
-                      [
-                        "mixOEE",
-                        "curOEE",
-                        "mixProd",
-                        "tbmProd",
-                        "stkProd",
-                        "curProd",
-                      ].includes(kpi.drillType);
-                    return (
-                      <Box sx={{ px: 2, pb: 2 }}>
-                        <DrillPanelRouter
-                          kpi={kpi}
-                          plantId={plantId}
-                          section={dashboard.section}
-                          sectionName={sectionName}
-                          subSection={pinnedSubSection}
-                          cardDate={cardDate}
-                          from={useMonthRange ? from : (cardDate ?? from)}
-                          to={useMonthRange ? to : (cardDate ?? to)}
-                          // The SELECTED window, never collapsed to the card's
-                          // anchor day. A panel that fetches dated DAY rows for
-                          // a MONTH card needs the whole month: `from`/`to`
-                          // above resolve to the card's own date, which for a
-                          // MONTH card is the 1st — so a DAY fetch built on
-                          // them returns only the 1st.
-                          windowFrom={from}
-                          windowTo={to}
-                          shift={dashboard.granularity}
-                          allDrillRows={drillRows}
-                          rawRows={rawRows}
-                          prodSub={activeProductType}
-                          unitPin={activeUnit}
-                          mode={dashboard.mode}
-                          // The panel owns its own in-place skeleton while the
-                          // drill fetch runs. The page-level overlay covers the
-                          // body only when the LANDING data is reloading, which
-                          // a drill never triggers.
-                          isLoading={isDrillLoading}
-                        />
+                        {unitOptionsForProduct.length > 1 && (
+                          <NavTabs
+                            items={unitOptionsForProduct.map((u) => ({
+                              id: u,
+                              // KG is pinned/filtered as-is, but shown as MT —
+                              // production is presented in tonnes. lib/units.js.
+                              label: displayUnit(u),
+                            }))}
+                            value={activeUnit}
+                            onChange={(u) =>
+                              setFilter({ unitOfMeasurement: u }, false)
+                            }
+                            layoutId="prodUnitFill"
+                          />
+                        )}
                       </Box>
-                    );
-                  })()}
+                    )}
 
-                {/* Shift Comparison — Productivity tab only, always pinned
+                  <KpiGrid
+                    kpis={kpis}
+                    // Per-panel loader suppressed: the single page-level overlay
+                    // (contentLoading) covers the whole body while data reloads.
+                    isLoading={false}
+                    error={kpiError}
+                    openDrillKpiId={openDrillKpiId}
+                    onDrillKpi={handleDrillKpi}
+                    onCloseDrill={handleCloseDrill}
+                    onTrendOpen={(kpi) => setTrendKpi(kpi)}
+                  />
+
+                  {/* Single drill panel for the currently selected card. */}
+                  {openDrillKpiId &&
+                    (() => {
+                      const kpi = kpis.find(
+                        (k) => k.id === openDrillKpiId && k.drillable,
+                      );
+                      if (!kpi) return null;
+                      // new_change.md C3/C6: the drill window IS the card's
+                      // resolved day when the card anchored itself (C6);
+                      // otherwise it is the card's from/to window verbatim.
+                      const cardDate = kpi.resolvedDate ?? null;
+                      const useMonthRange =
+                        dashboard.category === "p" &&
+                        dashboard.granularity === "MONTH" &&
+                        [
+                          "mixOEE",
+                          "curOEE",
+                          "mixProd",
+                          "tbmProd",
+                          "stkProd",
+                          "curProd",
+                        ].includes(kpi.drillType);
+                      return (
+                        <Box sx={{ px: 2, pb: 2 }}>
+                          <DrillPanelRouter
+                            kpi={kpi}
+                            plantId={plantId}
+                            section={dashboard.section}
+                            sectionName={sectionName}
+                            subSection={pinnedSubSection}
+                            cardDate={cardDate}
+                            from={useMonthRange ? from : (cardDate ?? from)}
+                            to={useMonthRange ? to : (cardDate ?? to)}
+                            // The SELECTED window, never collapsed to the card's
+                            // anchor day. A panel that fetches dated DAY rows for
+                            // a MONTH card needs the whole month: `from`/`to`
+                            // above resolve to the card's own date, which for a
+                            // MONTH card is the 1st — so a DAY fetch built on
+                            // them returns only the 1st.
+                            windowFrom={from}
+                            windowTo={to}
+                            shift={dashboard.granularity}
+                            allDrillRows={drillRows}
+                            rawRows={rawRows}
+                            prodSub={activeProductType}
+                            unitPin={activeUnit}
+                            mode={dashboard.mode}
+                            // The panel owns its own in-place skeleton while the
+                            // drill fetch runs. The page-level overlay covers the
+                            // body only when the LANDING data is reloading, which
+                            // a drill never triggers.
+                            isLoading={isDrillLoading}
+                          />
+                        </Box>
+                      );
+                    })()}
+
+                  {/* Shift Comparison — Productivity tab only, always pinned
                     at the bottom regardless of which card is drilled. */}
-                {dashboard.category === "p" && (
-                  <Box sx={{ px: 2, pb: 2 }}>
-                    {/* new_change.md C11/C12: the shift box follows the
+                  {dashboard.category === "p" && (
+                    <Box
+                      sx={{
+                        px: 2,
+                        pb: 2,
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        minHeight: 0,
+                      }}
+                    >
+                      {/* new_change.md C11/C12: the shift box follows the
                         active time filter (Today/day-wise → the three
                         SHIFT rows for that date; Month-wise / custom range
                         → the daily shift rows SUMMED) and the full
                         dashboard scope (section, sub-section, product,
                         unit). */}
-                    <ShiftComparisonCard
-                      plantId={plantId}
-                      section={sectionName}
-                      subSection={pinnedSubSection}
-                      productType={activeProductType}
-                      unit={activeUnit}
-                      mode={timeRange.preset === "today" ? "day" : "range"}
-                      date={timeRange.preset === "today" ? to : null}
-                      from={timeRange.preset === "today" ? null : from}
-                      to={timeRange.preset === "today" ? null : to}
-                    />
-                  </Box>
-                )}
-              </>
-            )}
-          </Box>
+                      <ShiftComparisonCard
+                        plantId={plantId}
+                        section={sectionName}
+                        subSection={pinnedSubSection}
+                        productType={activeProductType}
+                        unit={activeUnit}
+                        mode={timeRange.preset === "today" ? "day" : "range"}
+                        date={timeRange.preset === "today" ? to : null}
+                        from={timeRange.preset === "today" ? null : from}
+                        to={timeRange.preset === "today" ? null : to}
+                      />
+                    </Box>
+                  )}
+                </>
+              )}
+            </Box>
 
             {/* Section / product / sub-section / category change — cover the
                 content column only. The sidebar stays live so the user can see
