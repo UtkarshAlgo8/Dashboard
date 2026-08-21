@@ -24,6 +24,7 @@ import {
   landingKpiNames,
 } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
+import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 import { getAnchors } from "@/api/dashboard.js";
 import client from "@/api/client.js";
 
@@ -399,6 +400,31 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     ...(needsBaseline(state) ? { withBaseline: true } : {}),
   };
 
+  // CR-11 / Q-DT-01: the 6 OEE-availability-loss reasons only exist at
+  // DAY granularity in gold (no MONTH roll-up). The landing fetch above
+  // pins to state.granularity which is MONTH for the Month preset —
+  // the reasons come back empty and the TotalDowntime tile renders "—".
+  // Run a parallel DAY-granularity fetch for the 6 reasons and merge
+  // its rows into the data the transformer sees.
+  const includesTotalDowntime =
+    state.section === "mix" ||
+    state.section === "stk" ||
+    state.section === "tbm" ||
+    state.section === "cur";
+  const downtimePayload = includesTotalDowntime
+    ? {
+        plantId,
+        context: {
+          ...buildContext(state),
+          granularity: "DAY",
+        },
+        ...buildDatePayload(state),
+        landingKpis: [...DOWNTIME_REASONS],
+        drillOnly: true,
+        limit: 10000,
+      }
+    : null;
+
   // Never fetch without a resolved date window: a single day (Today) OR a
   // from/to range (Month/Year/custom). On first mount the window is null
   // until the page settles the as-of anchor + preset — gating here stops the
@@ -484,6 +510,23 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     },
   );
 
+  // CR-11: parallel DAY-granularity fetch for the 6 OEE-availability-loss
+  // reasons so the TotalDowntime tile renders for Month / Year / custom
+  // presets (where the main landing fetch at MONTH returns no reason rows).
+  const {
+    data: downtimeData,
+  } = usePolledQuery(
+    () =>
+      downtimePayload
+        ? fetchCachedDashboard(downtimePayload)
+        : Promise.resolve(null),
+    {
+      enabled: Boolean(downtimePayload),
+      interval: 0,
+      deps: [JSON.stringify(downtimePayload)],
+    },
+  );
+
   // new_change.md C6/C14: each KPI's own newest DAY date + the sections whose
   // latest day is still in progress. Fetched once and memoized in the api
   // module, so mounting this hook costs no extra request.
@@ -497,14 +540,21 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // Merge: landing always present; drill children appended when a card
   // is drilled. The transformer and panels both read from this combined
   // list — landing rows feed the 4 KPI cards, drill rows feed the panel.
+  // CR-11: the parallel downtime rows (DAY granularity, 6 reasons) are
+  // appended so the TotalDowntime tile can synthesise per-date sums.
   const landingRows = Array.isArray(landingData?.rows)
     ? landingData.rows
     : null;
   const drillDataRows = Array.isArray(drillData?.rows) ? drillData.rows : null;
+  const downtimeRows = Array.isArray(downtimeData?.rows)
+    ? downtimeData.rows
+    : null;
   const data = landingRows
-    ? state.drillKpis && drillDataRows
-      ? [...landingRows, ...drillDataRows]
-      : landingRows
+    ? [
+        ...landingRows,
+        ...(state.drillKpis && drillDataRows ? drillDataRows : []),
+        ...(downtimeRows ?? []),
+      ]
     : null;
   // new_change.md C10: either fetch hitting the row cap makes the totals on
   // screen incomplete — surface it rather than showing a partial sum as final.
