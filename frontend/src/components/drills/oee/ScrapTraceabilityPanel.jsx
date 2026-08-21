@@ -16,12 +16,14 @@ import DownloadIcon from "@mui/icons-material/Download";
 import ParamChip from "./ParamChip.jsx";
 import { EmptyState, useToast } from "@/components/common";
 import TablePager from "@/components/tables/TablePager.jsx";
+import TableLegend from "@/components/tables/TableLegend.jsx";
 import { TableSkeleton } from "@/components/drills/DrillSkeletons.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getScrapTraceability } from "@/api/drills.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { BANBURY_PARAM_RANGES } from "@/lib/mockData.js";
 import { buildCsv, downloadCsv } from "@/lib/csv.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 const SHIFT_COLOR_KEY = { A: "blue", B: "amber", C: "purple" };
 
@@ -246,11 +248,44 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
             flexWrap="wrap"
             sx={{ mt: 1.5 }}
           >
-            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-              {rows.length === 0
-                ? "0 rows"
-                : `${pageStart + 1}–${pageStart + rows.length}`}
-            </Typography>
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              useFlexGap
+              flexWrap="wrap"
+            >
+              <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+                {rows.length === 0
+                  ? "0 rows"
+                  : `${pageStart + 1}–${pageStart + rows.length}`}
+              </Typography>
+              <TableLegend
+                items={[
+                  {
+                    label: "Shift A",
+                    color: theme.custom.brand.blue,
+                    variant: "pill",
+                  },
+                  {
+                    label: "Shift B",
+                    color: theme.custom.brand.amber,
+                    variant: "pill",
+                  },
+                  {
+                    label: "Shift C",
+                    color: theme.custom.brand.purple,
+                    variant: "pill",
+                  },
+                  {
+                    label: "Out-of-Range Param",
+                    color: theme.custom.brand.red,
+                    variant: "square",
+                  },
+                ]}
+                sx={{ py: 0 }}
+              />
+            </Stack>
             <TablePager
               page={page}
               pageSize={pageSize}
@@ -282,11 +317,18 @@ function TraceabilityTable({ rows }) {
         stickyHeader
         sx={(t) => ({
           "& .MuiTableCell-root": {
-            border: "1px solid",
+            borderBottom: "1px solid",
+            borderRight: "1px solid",
             borderColor: t.palette.divider,
+            "&:last-child": {
+              borderRight: "none",
+            },
           },
           "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
+            backgroundColor:
+              t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+            borderBottom: "2px solid",
+            borderColor: t.palette.divider,
           },
         })}
       >
@@ -302,8 +344,21 @@ function TraceabilityTable({ rows }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.productionId} hover>
+          {rows.map((r, i) => (
+            <TableRow
+              key={r.productionId}
+              hover
+              sx={{
+                backgroundColor: (t) =>
+                  i % 2 === 0
+                    ? "background.paper"
+                    : (t.custom?.table?.alternateRow ??
+                      "rgba(0, 119, 182, 0.04)"),
+                "&:hover": {
+                  backgroundColor: (t) => t.palette.action.hover,
+                },
+              }}
+            >
               <TableCell sx={{ fontSize: 12, fontFamily: "monospace" }}>
                 {r.productionId}
               </TableCell>
@@ -312,10 +367,10 @@ function TraceabilityTable({ rows }) {
               </TableCell>
               <TableCell sx={{ fontSize: 13 }}>{r.operator}</TableCell>
               <TableCell align="center" sx={{ fontSize: 13 }}>
-                {r.produced}
+                {formatIndianNumber(r.produced)}
               </TableCell>
               <TableCell align="center" sx={{ fontSize: 13, fontWeight: 600 }}>
-                {r.scrap}
+                {formatIndianNumber(r.scrap)}
               </TableCell>
               <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>
                 {formatDateTime(r.dateTime)}
@@ -346,10 +401,15 @@ function Th({ children, align = "center" }) {
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
-        borderBottom: 1,
+        color: "text.primary",
+        backgroundColor: (t) =>
+          t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+        borderBottom: 2,
+        borderRight: 1,
         borderColor: "divider",
+        "&:last-child": {
+          borderRight: "none",
+        },
         whiteSpace: "nowrap",
       }}
     >

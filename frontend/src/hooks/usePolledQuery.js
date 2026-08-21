@@ -51,14 +51,20 @@ export function usePolledQuery(fetcher, options = {}) {
     staleTime = 0,
   } = options;
 
-  const cachedEntry =
-    cacheKey && staleTime > 0 ? queryCache.get(cacheKey) : null;
-  const initialData =
-    cachedEntry && cachedEntry.expiresAt > Date.now() ? cachedEntry.data : null;
-
-  const [data, setData] = useState(initialData);
+  const [data, setData] = useState(() => {
+    const cachedEntry =
+      cacheKey && staleTime > 0 ? queryCache.get(cacheKey) : null;
+    return cachedEntry && cachedEntry.expiresAt > Date.now()
+      ? cachedEntry.data
+      : null;
+  });
   const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(enabled && initialData == null);
+  const [isLoading, setIsLoading] = useState(() => {
+    const cachedEntry =
+      cacheKey && staleTime > 0 ? queryCache.get(cacheKey) : null;
+    const hasFreshData = cachedEntry && cachedEntry.expiresAt > Date.now();
+    return enabled && !hasFreshData;
+  });
 
   const tokenRef = useRef(0);
   const fetcherRef = useRef(fetcher);
@@ -72,8 +78,7 @@ export function usePolledQuery(fetcher, options = {}) {
 
   const run = useCallback(() => {
     const myToken = ++tokenRef.current;
-    const hit =
-      cacheKey && staleTime > 0 ? queryCache.get(cacheKey) : null;
+    const hit = cacheKey && staleTime > 0 ? queryCache.get(cacheKey) : null;
     const freshHit = hit && hit.expiresAt > Date.now();
     if (freshHit) {
       setData(hit.data);

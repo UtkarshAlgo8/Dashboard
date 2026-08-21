@@ -95,13 +95,18 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       },
       xAxis: {
         categories: labels,
+        gridLineWidth: 1,
+        gridLineColor: grid,
+        gridLineDashStyle: "Solid",
         lineColor: grid,
         tickColor: grid,
         labels: { style: { color: text, fontSize: "11px" } },
       },
       yAxis: {
         title: { text: null },
+        gridLineWidth: 1,
         gridLineColor: grid,
+        gridLineDashStyle: "Solid",
         labels: {
           style: { color: text, fontSize: "11px" },
           // The combined-overlay chart mixes units (%, min, MT, …) on

@@ -19,6 +19,8 @@ const C = {
   ac: "#0077B6",
   aL: "rgba(0,119,182,0.07)",
   aB: "rgba(0,119,182,0.28)",
+  rowAlt: "rgba(0, 119, 182, 0.04)",
+  thBg: "#EAEDF3",
   tl: "#1A9A3E",
   bl: "#2563EB",
   rd: "#DC2626",
@@ -54,6 +56,23 @@ const theme = createTheme({
     borderRadius: C.r,
   },
   components: {
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          borderBottom: `1px solid ${C.bd}`,
+          borderRight: `1px solid ${C.bd}`,
+          "&:last-child": {
+            borderRight: "none",
+          },
+        },
+        head: {
+          backgroundColor: C.thBg,
+          color: C.tx,
+          fontWeight: 700,
+          borderBottom: `2px solid ${C.bd}`,
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: { textTransform: "none" },
@@ -80,6 +99,7 @@ const theme = createTheme({
 theme.custom = {
   surface: { default: C.bg, paper: C.cd, soft: C.c2 },
   text: { strong: C.tx, medium: C.md, muted: C.mu },
+  table: { alternateRow: C.rowAlt, headerBg: C.thBg },
   brand: {
     orange: C.ac,
     orangeSoft: C.aL,

@@ -1,5 +1,6 @@
 import { Stack } from "@mui/material";
 import { DrillTable } from "@/components/drills/shared/DrillTable.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Specific Power drill — Machine-wise specific power.
@@ -19,7 +20,9 @@ function avg(arr) {
 }
 
 function fmt(v, d = 1) {
-  return typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
+  return typeof v === "number" && Number.isFinite(v)
+    ? formatIndianNumber(v, { decimals: d })
+    : "—";
 }
 
 export default function SpecificPowerDrillPanel({

@@ -53,7 +53,7 @@ function LandingHeader() {
             whiteSpace: "nowrap",
           }}
         >
-          All Dashboards
+          One JK One Dashboard
         </Typography>
       </Stack>
 

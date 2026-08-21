@@ -23,6 +23,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import TableLegend from "./TableLegend.jsx";
 
 /**
  * Reusable data table with a search bar, click-to-sort column headers and a
@@ -52,6 +53,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
  *   emptyMessage
  *   stickyHeader = true, maxHeight
  *   toolbarRight             — extra node rendered on the right of the search row
+ *   legend                   — preset ("threshold"|"status"|"shifts"), items array, or node
  */
 function DataTable({
   columns,
@@ -65,6 +67,7 @@ function DataTable({
   stickyHeader = true,
   maxHeight = 380,
   toolbarRight = null,
+  legend = null,
 }) {
   const theme = useTheme();
   const [query, setQuery] = useState("");
@@ -225,11 +228,18 @@ function DataTable({
           stickyHeader={stickyHeader}
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
+              borderRight: "1px solid",
               borderColor: t.palette.divider,
+              "&:last-child": {
+                borderRight: "none",
+              },
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom?.surface?.soft ?? t.palette.action.hover,
+              backgroundColor:
+                t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+              borderBottom: "2px solid",
+              borderColor: t.palette.divider,
             },
           })}
         >
@@ -264,10 +274,17 @@ function DataTable({
               processed.map((row, i) => (
                 <TableRow
                   key={getRowKey ? getRowKey(row, i) : i}
-                  hover={Boolean(onRowClick)}
+                  hover
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   sx={{
                     cursor: onRowClick ? "pointer" : "default",
+                    backgroundColor: (t) =>
+                      i % 2 === 0
+                        ? "background.paper"
+                        : (t.custom?.table?.alternateRow ?? "rgba(0, 119, 182, 0.04)"),
+                    "&:hover": {
+                      backgroundColor: (t) => t.palette.action.hover,
+                    },
                     ...(rowSx ? rowSx(row) : {}),
                   }}
                 >
@@ -286,6 +303,15 @@ function DataTable({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {legend &&
+        (typeof legend === "string" ? (
+          <TableLegend preset={legend} />
+        ) : Array.isArray(legend) ? (
+          <TableLegend items={legend} />
+        ) : (
+          legend
+        ))}
     </Stack>
   );
 }
@@ -320,10 +346,15 @@ function HeaderCell({
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
-        borderBottom: 1,
+        color: "text.primary",
+        backgroundColor: (t) =>
+          t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+        borderBottom: 2,
+        borderRight: 1,
         borderColor: "divider",
+        "&:last-child": {
+          borderRight: "none",
+        },
         whiteSpace: "nowrap",
         minWidth: col.minWidth,
       }}

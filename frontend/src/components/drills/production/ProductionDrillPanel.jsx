@@ -13,6 +13,7 @@ import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import client from "@/api/client.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
@@ -319,9 +320,11 @@ function ProductionDrillPanel({
     // (M, NOS) keep the original rounded-with-separators format.
     if (isKg(activeUnit)) {
       const t = kgToTonnes(v);
-      return Math.abs(t) < 1000 ? t.toFixed(2) : Math.round(t).toLocaleString();
+      return Math.abs(t) < 1000
+        ? formatIndianNumber(t, { decimals: 2 })
+        : formatIndianNumber(Math.round(t));
     }
-    return Math.round(v).toLocaleString();
+    return formatIndianNumber(Math.round(v));
   };
 
   const title = prodSub

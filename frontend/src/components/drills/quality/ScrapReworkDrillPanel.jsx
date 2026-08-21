@@ -16,6 +16,7 @@ import {
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { snapshotLatest } from "@/lib/drillDate.js";
 import { canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 // changes.md §1/§8: match granularity spelling-tolerantly ("Daily" vs the
@@ -286,7 +287,25 @@ function SubsectionTable({ rows, selected, onSelect }) {
     <TableContainer
       sx={{ border: 1, borderColor: "divider", borderRadius: 1.25 }}
     >
-      <Table size="small">
+      <Table
+        size="small"
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            borderBottom: "1px solid",
+            borderRight: "1px solid",
+            borderColor: t.palette.divider,
+            "&:last-child": {
+              borderRight: "none",
+            },
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor:
+              t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+            borderBottom: "2px solid",
+            borderColor: t.palette.divider,
+          },
+        })}
+      >
         <TableHead>
           <TableRow>
             <Th align="left">Subsection</Th>
@@ -294,7 +313,7 @@ function SubsectionTable({ rows, selected, onSelect }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((r) => {
+          {rows.map((r, i) => {
             const isSel = selected === r.sub;
             return (
               <TableRow
@@ -305,7 +324,16 @@ function SubsectionTable({ rows, selected, onSelect }) {
                   cursor: "pointer",
                   backgroundColor: isSel
                     ? `${theme.custom.brand.orange}1f`
-                    : undefined,
+                    : (t) =>
+                        i % 2 === 0
+                          ? "background.paper"
+                          : (t.custom?.table?.alternateRow ??
+                            "rgba(0, 119, 182, 0.04)"),
+                  "&:hover": {
+                    backgroundColor: isSel
+                      ? `${theme.custom.brand.orange}2f`
+                      : (t) => t.palette.action.hover,
+                  },
                 }}
               >
                 <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
@@ -315,7 +343,7 @@ function SubsectionTable({ rows, selected, onSelect }) {
                   align="center"
                   sx={{ fontSize: 13, fontWeight: 600 }}
                 >
-                  {Math.round(r.total).toLocaleString()}
+                  {formatIndianNumber(Math.round(r.total))}
                 </TableCell>
               </TableRow>
             );
@@ -339,7 +367,26 @@ function DetailTable({ rows, viewBy }) {
         borderRadius: 1.25,
       }}
     >
-      <Table size="small" stickyHeader>
+      <Table
+        size="small"
+        stickyHeader
+        sx={(t) => ({
+          "& .MuiTableCell-root": {
+            borderBottom: "1px solid",
+            borderRight: "1px solid",
+            borderColor: t.palette.divider,
+            "&:last-child": {
+              borderRight: "none",
+            },
+          },
+          "& thead .MuiTableCell-root": {
+            backgroundColor:
+              t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+            borderBottom: "2px solid",
+            borderColor: t.palette.divider,
+          },
+        })}
+      >
         <TableHead>
           <TableRow>
             {showReason && <Th align="left">Reason</Th>}
@@ -350,7 +397,20 @@ function DetailTable({ rows, viewBy }) {
         </TableHead>
         <TableBody>
           {rows.map((r, i) => (
-            <TableRow key={i} hover>
+            <TableRow
+              key={i}
+              hover
+              sx={{
+                backgroundColor: (t) =>
+                  i % 2 === 0
+                    ? "background.paper"
+                    : (t.custom?.table?.alternateRow ??
+                      "rgba(0, 119, 182, 0.04)"),
+                "&:hover": {
+                  backgroundColor: (t) => t.palette.action.hover,
+                },
+              }}
+            >
               {showReason && (
                 <TableCell sx={{ fontSize: 13 }}>{r.reason}</TableCell>
               )}
@@ -365,7 +425,7 @@ function DetailTable({ rows, viewBy }) {
                 </TableCell>
               )}
               <TableCell align="center" sx={{ fontSize: 13, fontWeight: 600 }}>
-                {Math.round(r.qty).toLocaleString()}
+                {formatIndianNumber(Math.round(r.qty))}
               </TableCell>
             </TableRow>
           ))}
@@ -384,8 +444,15 @@ function Th({ children, align = "center" }) {
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
+        color: "text.primary",
+        backgroundColor: (t) =>
+          t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+        borderBottom: 2,
+        borderRight: 1,
+        borderColor: "divider",
+        "&:last-child": {
+          borderRight: "none",
+        },
         whiteSpace: "nowrap",
       }}
     >

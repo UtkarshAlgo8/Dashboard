@@ -19,7 +19,7 @@
 export const PLANTS = [
   {
     id: "chennai",
-    name: "Chennai Plant",
+    name: "Chennai Tyre Plant",
     sub: "Tamil Nadu",
     sx: 202.0,
     sy: 446.6,
@@ -29,7 +29,7 @@ export const PLANTS = [
   },
   {
     id: "banmore",
-    name: "Banmore Plant",
+    name: "Banmore Tyre Plant",
     sub: "Gwalior, Madhya Pradesh",
     sx: 169.7,
     sy: 228.6,
@@ -39,7 +39,7 @@ export const PLANTS = [
   },
   {
     id: "laksar",
-    name: "Laksar Plant",
+    name: "Laksar Tyre Plant",
     sub: "Haridwar, Uttarakhand",
     sx: 167.6,
     sy: 170.2,
@@ -49,7 +49,7 @@ export const PLANTS = [
   },
   {
     id: "mysore",
-    name: "Mysore Plant",
+    name: "Mysore Tyre Plant",
     sub: "Karnataka",
     sx: 163.0,
     sy: 441.0,
@@ -3046,7 +3046,7 @@ export { OTHER_TAB_KPIS_BY_SECTION };
 export const MOCK_USER = {
   name: "Rakesh Patel",
   role: "Plant Head",
-  plant: "Banmore Plant",
+  plant: "Banmore Tyre Plant",
   email: "rakesh.patel@jktyre.example",
   phone: "+91 98765 43210",
   employeeId: "JK-PH-00142",

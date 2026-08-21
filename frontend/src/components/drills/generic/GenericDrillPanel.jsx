@@ -56,18 +56,25 @@ function TableDrill({ drill }) {
         }}
       >
         <Table
-        size="small"
-        stickyHeader
-        sx={(t) => ({
-          "& .MuiTableCell-root": {
-            border: "1px solid",
-            borderColor: t.palette.divider,
-          },
-          "& thead .MuiTableCell-root": {
-            backgroundColor: t.custom.surface.soft,
-          },
-        })}
-      >
+          size="small"
+          stickyHeader
+          sx={(t) => ({
+            "& .MuiTableCell-root": {
+              borderBottom: "1px solid",
+              borderRight: "1px solid",
+              borderColor: t.palette.divider,
+              "&:last-child": {
+                borderRight: "none",
+              },
+            },
+            "& thead .MuiTableCell-root": {
+              backgroundColor:
+                t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+              borderBottom: "2px solid",
+              borderColor: t.palette.divider,
+            },
+          })}
+        >
           <TableHead>
             <TableRow>
               {cols.map((c) => (
@@ -79,10 +86,15 @@ function TableDrill({ drill }) {
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: 0.6,
-                    color: "text.disabled",
-                    backgroundColor: "background.paper",
-                    borderBottom: 1,
+                    color: "text.primary",
+                    backgroundColor: (t) =>
+                      t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+                    borderBottom: 2,
+                    borderRight: 1,
                     borderColor: "divider",
+                    "&:last-child": {
+                      borderRight: "none",
+                    },
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -104,7 +116,20 @@ function TableDrill({ drill }) {
               </TableRow>
             ) : (
               rows.map((row, ri) => (
-                <TableRow key={ri} hover>
+                <TableRow
+                  key={ri}
+                  hover
+                  sx={{
+                    backgroundColor: (t) =>
+                      ri % 2 === 0
+                        ? "background.paper"
+                        : (t.custom?.table?.alternateRow ??
+                          "rgba(0, 119, 182, 0.04)"),
+                    "&:hover": {
+                      backgroundColor: (t) => t.palette.action.hover,
+                    },
+                  }}
+                >
                   {row.map((cell, ci) => (
                     <TableCell
                       key={ci}

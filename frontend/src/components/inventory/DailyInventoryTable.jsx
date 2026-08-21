@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 const COLS = [
   { key: "fg", label: "FG" },
@@ -81,11 +82,18 @@ function DailyInventoryTable({ history }) {
           stickyHeader
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
+              borderRight: "1px solid",
               borderColor: t.palette.divider,
+              "&:last-child": {
+                borderRight: "none",
+              },
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom.surface.soft,
+              backgroundColor:
+                t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+              borderBottom: "2px solid",
+              borderColor: t.palette.divider,
             },
           })}
         >
@@ -98,8 +106,21 @@ function DailyInventoryTable({ history }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {reversed.map((row) => (
-              <TableRow key={row.date} hover>
+            {reversed.map((row, i) => (
+              <TableRow
+                key={row.date}
+                hover
+                sx={{
+                  backgroundColor: (t) =>
+                    i % 2 === 0
+                      ? "background.paper"
+                      : (t.custom?.table?.alternateRow ??
+                        "rgba(0, 119, 182, 0.04)"),
+                  "&:hover": {
+                    backgroundColor: (t) => t.palette.action.hover,
+                  },
+                }}
+              >
                 <TableCell
                   sx={{
                     fontSize: 12,
@@ -111,7 +132,7 @@ function DailyInventoryTable({ history }) {
                 </TableCell>
                 {COLS.map((c) => (
                   <TableCell key={c.key} align="center" sx={{ fontSize: 12 }}>
-                    {row[c.key]}
+                    {typeof row[c.key] === "number" ? formatIndianNumber(row[c.key]) : (row[c.key] ?? "—")}
                   </TableCell>
                 ))}
               </TableRow>
@@ -132,10 +153,15 @@ function Th({ children, align = "center" }) {
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
-        borderBottom: 1,
+        color: "text.primary",
+        backgroundColor: (t) =>
+          t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+        borderBottom: 2,
+        borderRight: 1,
         borderColor: "divider",
+        "&:last-child": {
+          borderRight: "none",
+        },
         whiteSpace: "nowrap",
       }}
     >

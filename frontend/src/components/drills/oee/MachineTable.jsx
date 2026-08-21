@@ -59,6 +59,7 @@ function MachineTable({ machines, selectedCell, onSelectCell }) {
       maxHeight={340}
       searchPlaceholder="Search machine…"
       emptyMessage="No machines for this selection."
+      legend="threshold"
     />
   );
 }

@@ -10,6 +10,7 @@ import {
   Typography,
 } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import TableLegend from "@/components/tables/TableLegend.jsx";
 
 /**
  * Reusable drill data table — matches artifact DTable style.
@@ -24,6 +25,7 @@ import CardDownloadButton from "@/components/CardDownloadButton.jsx";
  *   downloadHeaders    - optional override of `cols` for the Excel export
  *                        only. The rendered table still uses `cols`.
  *   downloadSheetName  - worksheet name (default "Data").
+ *   legend             - optional custom legend or false to hide
  *
  * @param {string}   title      - panel title (shown above table)
  * @param {string[]} cols       - column headers
@@ -40,6 +42,7 @@ export function DrillTable({
   downloadFilename,
   downloadHeaders,
   downloadSheetName,
+  legend,
 }) {
   const tableRef = useRef(null);
   const excelHeaders = downloadHeaders ?? cols ?? [];
@@ -103,11 +106,18 @@ export function DrillTable({
           stickyHeader
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
+              borderRight: "1px solid",
               borderColor: t.palette.divider,
+              "&:last-child": {
+                borderRight: "none",
+              },
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom.surface.soft,
+              backgroundColor:
+                t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+              borderBottom: "2px solid",
+              borderColor: t.palette.divider,
             },
           })}
         >
@@ -122,10 +132,15 @@ export function DrillTable({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: 0.6,
-                    color: "text.disabled",
-                    backgroundColor: "background.paper",
-                    borderBottom: 1,
+                    color: "text.primary",
+                    backgroundColor: (t) =>
+                      t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+                    borderBottom: 2,
+                    borderRight: 1,
                     borderColor: "divider",
+                    "&:last-child": {
+                      borderRight: "none",
+                    },
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -155,9 +170,16 @@ export function DrillTable({
                 return (
                   <TableRow
                     key={ri}
+                    hover
                     sx={{
-                      backgroundColor:
-                        ri % 2 === 0 ? "transparent" : "action.hover",
+                      backgroundColor: (t) =>
+                        ri % 2 === 0
+                          ? "background.paper"
+                          : (t.custom?.table?.alternateRow ??
+                            "rgba(0, 119, 182, 0.04)"),
+                      "&:hover": {
+                        backgroundColor: (t) => t.palette.action.hover,
+                      },
                     }}
                   >
                     {cells.map((cell, ci) => (
@@ -193,8 +215,46 @@ export function DrillTable({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {legend ? (
+        typeof legend === "string" ? (
+          <TableLegend preset={legend} />
+        ) : Array.isArray(legend) ? (
+          <TableLegend items={legend} />
+        ) : (
+          legend
+        )
+      ) : hasStatusCells(rows, rowMapper) ? (
+        <TableLegend preset="status" />
+      ) : null}
     </Stack>
   );
+}
+
+function hasStatusCells(rows, rowMapper) {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  const statusValues = [
+    "OK",
+    "Closed",
+    "High",
+    "Low",
+    "Scrapped",
+    "Escalate",
+    "Below",
+    "Open",
+    "Alert",
+    "Monitor",
+  ];
+  return rows.some((row, ri) => {
+    const cells = rowMapper
+      ? rowMapper(row, ri)
+      : Array.isArray(row)
+        ? row
+        : Object.values(row);
+    return cells.some(
+      (cell) => typeof cell === "string" && statusValues.includes(cell),
+    );
+  });
 }
 
 function getStatusColor(s) {

@@ -45,7 +45,7 @@ const QUALITY_USER = {
 const LOGO = jkLogo;
 
 /* ─── LIGHT THEME ─── */
-const C={bg:"#F3F4F8",cd:"#FFFFFF",c2:"#F7F8FA",bd:"#E0E3EA",tx:"#1A1D26",md:"#4A5168",mu:"#8891A5",ac:"#E8651A",aL:"rgba(232,101,26,.07)",aB:"rgba(232,101,26,.28)",tl:"#1A9A3E",bl:"#2563EB",rd:"#DC2626",am:"#CA8A04",gn:"#1A9A3E",pp:"#7C3AED",cy:"#0D9488",sh:"0 1px 3px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04)",r:8};
+const C={bg:"#F3F4F8",cd:"#FFFFFF",c2:"#F7F8FA",bd:"#E0E3EA",tx:"#1A1D26",md:"#4A5168",mu:"#8891A5",ac:"#E8651A",aL:"rgba(232,101,26,.07)",aB:"rgba(232,101,26,.28)",rowAlt:"rgba(0,119,182,0.04)",thBg:"#EAEDF3",tl:"#1A9A3E",bl:"#2563EB",rd:"#DC2626",am:"#CA8A04",gn:"#1A9A3E",pp:"#7C3AED",cy:"#0D9488",sh:"0 1px 3px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04)",r:8};
 const rc=v=>v>=90?C.gn:v>=80?C.am:C.rd;
 const fmt=n=>typeof n==="number"?n.toLocaleString("en-IN"):n;
 
@@ -903,7 +903,7 @@ function DTable({cols,rows}){
   let disp=rows;
   if(sc!=null){disp=[...rows].sort((a,b)=>{const na=num(a[sc]),nb=num(b[sc]);let c2;if(na!=null&&nb!=null)c2=na-nb;else{const ta=txt(a[sc]),tb=txt(b[sc]);c2=ta<tb?-1:ta>tb?1:0;}return sd==="asc"?c2:-c2;});}
   const onH=i=>{if(sc===i)setSd(d=>d==="asc"?"desc":"asc");else{setSc(i);setSd("desc");}};
-  return(<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}><thead><tr>{cols.map((c,i)=>{const a=sc===i;return(<th key={i} onClick={()=>onH(i)} title="Click to sort" style={{textAlign:i===0?"left":"right",padding:"5px 8px",color:a?C.ac:C.mu,fontWeight:a?700:600,borderBottom:"1px solid "+C.bd,fontSize:13,cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>{c}<span style={{marginLeft:4,fontSize:9,opacity:a?1:.3}}>{a?(sd==="asc"?"▲":"▼"):"⇅"}</span></th>);})}</tr></thead><tbody>{disp.map((row,ri)=>(<tr key={ri} style={{background:ri%2===0?"transparent":C.c2}}>{row.map((cell,ci)=>{const isS=typeof cell==="string"&&["OK","High","Low","Alert","Below","Monitor","Escalate","Open","Closed","Scrapped","Electrical","Mechanical","Instrumentation"].includes(cell);const stC=isS?(["OK","Closed"].includes(cell)?C.gn:["High","Low","Scrapped","Escalate","Below","Open"].includes(cell)?C.rd:["Electrical","Mechanical","Instrumentation"].includes(cell)?C.bl:C.am):null;return(<td key={ci} style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:ci===0?"left":"right",color:stC||C.tx,fontWeight:stC?600:400}}>{isS?<span style={{padding:"2px 6px",borderRadius:999,fontSize:12,fontWeight:700,background:(stC||C.am)+"18",color:stC||C.am}}>{cell}</span>:cell}</td>);})}</tr>))}</tbody></table></div>);
+  return(<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}><thead><tr>{cols.map((c,i)=>{const a=sc===i;return(<th key={i} onClick={()=>onH(i)} title="Click to sort" style={{textAlign:i===0?"left":"right",padding:"6px 8px",background:C.thBg,color:a?C.ac:C.tx,fontWeight:700,borderBottom:"2px solid "+C.bd,borderRight:i===cols.length-1?"none":"1px solid "+C.bd,fontSize:13,cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>{c}<span style={{marginLeft:4,fontSize:9,opacity:a?1:.3}}>{a?(sd==="asc"?"▲":"▼"):"⇅"}</span></th>);})}</tr></thead><tbody>{disp.map((row,ri)=>(<tr key={ri} style={{background:ri%2===0?C.cd:C.rowAlt}}>{row.map((cell,ci)=>{const isS=typeof cell==="string"&&["OK","High","Low","Alert","Below","Monitor","Escalate","Open","Closed","Scrapped","Electrical","Mechanical","Instrumentation"].includes(cell);const stC=isS?(["OK","Closed"].includes(cell)?C.gn:["High","Low","Scrapped","Escalate","Below","Open"].includes(cell)?C.rd:["Electrical","Mechanical","Instrumentation"].includes(cell)?C.bl:C.am):null;return(<td key={ci} style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,borderRight:ci===row.length-1?"none":"1px solid "+C.bd,textAlign:ci===0?"left":"right",color:stC||C.tx,fontWeight:stC?600:400}}>{isS?<span style={{padding:"2px 6px",borderRadius:999,fontSize:12,fontWeight:700,background:(stC||C.am)+"18",color:stC||C.am}}>{cell}</span>:cell}</td>);})}</tr>))}</tbody></table></div>);
 }
 
 /* ─── STATUS PILL ─── */
@@ -965,7 +965,19 @@ function QKpiCard({kpi,isOpen,onToggle,onTrend,tyreType,plant}){
           <span style={{fontSize:22,fontWeight:700,color:C.tx}}>{v}</span>
           {kpi.u&&<span style={{fontSize:12,color:C.mu}}>{kpi.u}</span>}
         </div>
-        {kpi.sp&&<Spark data={kpi.sp} color={stCol}/>}
+        {kpi.sp && (
+          <span
+            onClick={canTrend ? trendClick : undefined}
+            title={canTrend ? "View Trend (Daily / Monthly / Yearly)" : undefined}
+            style={{
+              cursor: canTrend ? "pointer" : "default",
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+          >
+            <Spark data={kpi.sp} color={stCol} />
+          </span>
+        )}
       </div>
       <div style={{marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         {kpi.target&&<span style={{fontSize:12,color:C.mu}}>Target: {kpi.target}</span>}
@@ -1095,7 +1107,7 @@ function LiveProcessDrillPanel({kpi,date,shift,summaryRows}){
   },[cfg,date,shift,selectedSection]);
   if(!cfg)return null;
   if(error)return <Card title={cfg.title} accent={cfg.accent}><div style={{padding:14,color:C.rd,fontSize:13}}>Drill fetch failed: {error.message||"Request failed"}</div></Card>;
-  const rowStyle=(active,i)=>({background:active?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"});
+  const rowStyle=(active,i)=>({background:active?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"});
   return(<div style={{display:"grid",gap:10}}>
     <Card title={cfg.title} accent={cfg.accent}>
       <Breadcrumb path={cfg.path}/>
@@ -1154,7 +1166,7 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary})
         </div>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Process</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Scheduled</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Completed</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Rating</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Violations</th><th style={{textAlign:"center",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Status</th></tr></thead>
-          <tbody>{procs.map((r,i)=>(<tr key={i} onClick={()=>setSub(selProc===r.p?"":r.p)} style={{background:selProc===r.p?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+          <tbody>{procs.map((r,i)=>(<tr key={i} onClick={()=>setSub(selProc===r.p?"":r.p)} style={{background:selProc===r.p?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selProc===r.p?700:400,color:selProc===r.p?C.ac:C.tx}}>{r.p}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.sch}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.comp}</td>
@@ -1245,7 +1257,7 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary})
         <div style={{fontSize:13,fontWeight:600,color:C.md,marginBottom:6}}>Red Projects (Click to view Control Chart)</div>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Machine</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Size</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Parameter</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Cp</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Cpk</th><th style={{textAlign:"center",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Status</th></tr></thead>
-          <tbody>{projs.map((r,i)=>(<tr key={i} onClick={()=>setSub(selMc===r.mc?"":r.mc)} style={{background:selMc===r.mc?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+          <tbody>{projs.map((r,i)=>(<tr key={i} onClick={()=>setSub(selMc===r.mc?"":r.mc)} style={{background:selMc===r.mc?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selMc===r.mc?700:400,color:selMc===r.mc?C.ac:C.tx}}>{r.mc}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{r.sz}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{r.pm}</td>
@@ -1323,7 +1335,7 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary})
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:8}}><span style={{fontSize:12,color:C.mu}}>{"Audited via random sampling — values sourced from the Process Audit Logbook."}</span><a href="http://192.168.225.62:3000/process-audit-logbook" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:6,border:"1px solid "+C.am,background:C.am+"12",color:C.am,fontSize:12.5,fontWeight:700,textDecoration:"none"}}>{"↗"} Open Process Audit Logbook</a></div>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr>{["Process","Parameter","Actual","Limit","Machine","Batch","Status"].map((h,i)=>(<th key={i} style={{textAlign:i<2?"left":i===6?"center":"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>{h}</th>))}</tr></thead>
-          <tbody>{params.map((r,i)=>(<tr key={i} onClick={()=>r.st!=="Green"&&setSub(selPm===r.pm?"":r.pm)} style={{background:selPm===r.pm?C.aL:(i%2===0?"transparent":C.c2),cursor:r.st!=="Green"?"pointer":"default"}}>
+          <tbody>{params.map((r,i)=>(<tr key={i} onClick={()=>r.st!=="Green"&&setSub(selPm===r.pm?"":r.pm)} style={{background:selPm===r.pm?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:r.st!=="Green"?"pointer":"default"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selPm===r.pm?700:400,color:selPm===r.pm?C.ac:C.tx}}>{r.pr}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{r.pm}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:r.st==="Red"?C.rd:r.st==="Yellow"?C.am:C.gn}}>{r.ac}</td>
@@ -1403,7 +1415,7 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary})
           ? <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13.5}}>
               <thead><tr>{["Recipe / SKU","Size","Segment","Production Qty","Camouflage","Scrap","Buff","FTQ %","Status"].map((h,i)=>(<th key={i} style={{textAlign:i>=3&&i<=7?"right":i===8?"center":"left",padding:"6px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:12.5}}>{h}</th>))}</tr></thead>
               <tbody>{RECIPES.map((r,i)=>{const a=selR===r.k;const fq=ftqOf(r);return(
-                <tr key={i} onClick={()=>setSub(a?"":r.k)} style={{background:a?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+                <tr key={i} onClick={()=>setSub(a?"":r.k)} style={{background:a?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
                   <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,fontWeight:a?700:600,color:a?C.ac:C.bl}}>{r.r}<span style={{fontSize:11,color:C.am,marginLeft:5}}>{"▸"}</span></td>
                   <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,color:C.mu}}>{r.size}</td>
                   <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,color:C.mu}}>{r.seg}</td>
@@ -1478,7 +1490,7 @@ function ProcessDrillPanel({kpi,sub,setSub,onOpenSPC,date,shift,processSummary})
         </div>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr>{["Process","FTQ %","Rework Accepted","Disposition Released","SPR %","Pending"].map((h,i)=>(<th key={i} style={{textAlign:i===0?"left":i===5?"left":"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>{h}</th>))}</tr></thead>
-          <tbody>{procs.map((r,i)=>(<tr key={i} onClick={()=>setSub(selProc===r.p?"":r.p)} style={{background:selProc===r.p?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+          <tbody>{procs.map((r,i)=>(<tr key={i} onClick={()=>setSub(selProc===r.p?"":r.p)} style={{background:selProc===r.p?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selProc===r.p?700:400,color:selProc===r.p?C.ac:C.tx}}>{r.p}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.ftq}%</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.rw}%</td>
@@ -1741,7 +1753,7 @@ function ProductDrillPanel({kpi,sub,setSub,tyreType,plant}){
           <thead><tr>{["SKU","Size","Production Quantity",...stages,"Dispatch Yield"].map((h,i)=>(
             <th key={i} style={{textAlign:i<2?"left":"right",padding:"6px 7px",color:i>=3&&i<3+stages.length?C.md:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:11.5,whiteSpace:"nowrap",background:i>=3&&i<3+stages.length?tc+"0A":"transparent"}}>{h}</th>))}</tr></thead>
           <tbody>{rows.map((r,i)=>{const f=flow(r);return(
-            <tr key={i} style={{background:i%2===0?"transparent":C.c2}}>
+            <tr key={i} style={{background:i%2===0?C.cd:C.rowAlt}}>
               <td style={{padding:"7px 7px",borderBottom:"1px solid "+C.bd,fontWeight:600,color:C.tx}}>{r.sku}
                 {r.oe&&<span style={{marginLeft:5,padding:"1px 5px",borderRadius:3,background:C.am+"20",color:C.am,fontSize:9.5,fontWeight:800}}>{"OE"}</span>}</td>
               <td style={{padding:"7px 7px",borderBottom:"1px solid "+C.bd,color:C.mu}}>{r.size}</td>
@@ -1903,7 +1915,7 @@ function ProductDrillPanel({kpi,sub,setSub,tyreType,plant}){
                 <thead><tr>{["Tyre Size","Inspected",...SL_DEFECTS,"Total Defects","Defect %"].map((h,i)=>(
                   <th key={i} style={{textAlign:i<1?"left":"right",padding:"6px 7px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:11.5,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
                 <tbody>{SL_DATA.map((r,i)=>{const t=tot(r);return(
-                  <tr key={i} style={{background:i%2===0?"transparent":C.c2}}>
+                  <tr key={i} style={{background:i%2===0?C.cd:C.rowAlt}}>
                     <td style={{padding:"7px 7px",borderBottom:"1px solid "+C.bd,fontWeight:700,color:C.tx}}>{r.sku+" "+r.size}</td>
                     <td style={{padding:"7px 7px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.insp.toLocaleString("en-IN")}</td>
                     {SL_DEFECTS.map((k,j)=>{const v=r.d[k]||0;return(<td key={j} style={{padding:"7px 7px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:dc(v),fontWeight:v?700:400}}>{v||"—"}</td>);})}
@@ -1945,7 +1957,7 @@ function ProductDrillPanel({kpi,sub,setSub,tyreType,plant}){
         <Breadcrumb path={["Product","Scrap"]}/>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Defect</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Scrap Count</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Top Size</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Suspected Process</th></tr></thead>
-          <tbody>{defects.map((r,i)=>(<tr key={i} onClick={()=>setSub(selDef===r.d?"":r.d)} style={{background:selDef===r.d?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+          <tbody>{defects.map((r,i)=>(<tr key={i} onClick={()=>setSub(selDef===r.d?"":r.d)} style={{background:selDef===r.d?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selDef===r.d?700:400,color:selDef===r.d?C.ac:C.tx}}>{r.d}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700}}>{r.cnt}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{r.sz}</td>
@@ -1991,7 +2003,7 @@ function ProductDrillPanel({kpi,sub,setSub,tyreType,plant}){
         <Breadcrumb path={["Product","GT Weight Variation"]}/>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr>{["Size","Total","Within ±1%","Within ±2%","Within ±3%","TBM","Lot/Barcode","Status"].map((h,i)=>(<th key={i} style={{textAlign:i===0?"left":i===5?"left":i===6?"left":i===7?"center":"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>{h}</th>))}</tr></thead>
-          <tbody>{sizes.map((r,i)=>(<tr key={i} onClick={()=>r.st!=="Green"&&setSub(selSz===r.sz?"":r.sz)} style={{background:selSz===r.sz?C.aL:(i%2===0?"transparent":C.c2),cursor:r.st!=="Green"?"pointer":"default"}}>
+          <tbody>{sizes.map((r,i)=>(<tr key={i} onClick={()=>r.st!=="Green"&&setSub(selSz===r.sz?"":r.sz)} style={{background:selSz===r.sz?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:r.st!=="Green"?"pointer":"default"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selSz===r.sz?700:400,color:selSz===r.sz?C.ac:C.tx}}>{r.sz}{r.st!=="Green"&&<span style={{fontSize:12,color:C.am,marginLeft:6}}>{"▸"}</span>}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.tot}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:r.st==="Red"?C.rd:r.st==="Yellow"?C.am:C.gn}}>{r.cmp}</td>
@@ -2081,7 +2093,7 @@ function ProductDrillPanel({kpi,sub,setSub,tyreType,plant}){
         <div style={{fontSize:13,fontWeight:600,color:C.md,marginBottom:6}}>Rating Distribution</div>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr>{["Rating","Count","%"].map((h,i)=>(<th key={i} style={{textAlign:i===0?"left":"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>{h}</th>))}</tr></thead>
-          <tbody>{ratings.map((r,i)=>{const isD=r.rt.startsWith("D");return(<tr key={i} onClick={()=>isD&&setSub(selRt==="D"?"":"D")} style={{background:selRt==="D"&&isD?C.aL:(i%2===0?"transparent":C.c2),cursor:isD?"pointer":"default"}}>
+          <tbody>{ratings.map((r,i)=>{const isD=r.rt.startsWith("D");return(<tr key={i} onClick={()=>isD&&setSub(selRt==="D"?"":"D")} style={{background:selRt==="D"&&isD?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:isD?"pointer":"default"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:isD?700:400,color:isD?C.rd:C.tx}}>{r.rt}{isD&&<span style={{fontSize:12,color:C.am,marginLeft:6}}>{"▸"}</span>}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700,color:isD?C.rd:C.tx}}>{r.cnt}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right"}}>{r.pct}</td>
@@ -2154,7 +2166,7 @@ function LotHoldPanel({sub,setSub}){
     <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13.5}}>
       <thead><tr>{["Lot Number","Customer","Tire Size","Hold Date","Quantity Held","Defect / Hold Reason","Released","Rejected","Status"].map((h,i)=>(<th key={i} style={{textAlign:(i===4||i===6||i===7)?"right":"left",padding:"6px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:12.5,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
       <tbody>{LOT_HOLDS.map((l,i)=>(
-        <tr key={i} style={{background:i%2===0?"transparent":C.c2}}>
+        <tr key={i} style={{background:i%2===0?C.cd:C.rowAlt}}>
           <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd,fontFamily:"monospace",fontWeight:700,color:C.bl}}>{l.lot}</td>
           <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd}}>{l.cust}</td>
           <td style={{padding:"7px 8px",borderBottom:"1px solid "+C.bd}}>{l.size}</td>
@@ -2185,7 +2197,7 @@ function ComplaintDrillPanel({kpi,sub,setSub}){
         <Breadcrumb path={["Customer Complaint","ZKD"]}/>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>ZKD ID</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Size</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Defect</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Location</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Barcode</th><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Date</th></tr></thead>
-          <tbody>{zkds.map((r,i)=>(<tr key={i} onClick={()=>setSub(selZ===r.id?"":r.id)} style={{background:selZ===r.id?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+          <tbody>{zkds.map((r,i)=>(<tr key={i} onClick={()=>setSub(selZ===r.id?"":r.id)} style={{background:selZ===r.id?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selZ===r.id?700:400,color:selZ===r.id?C.ac:C.tx}}>{r.id}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{r.sz}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{r.df}</td>
@@ -2242,7 +2254,7 @@ function ComplaintDrillPanel({kpi,sub,setSub}){
         <Breadcrumb path={["Customer Complaint","OEM-wise"]}/>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr><th style={{textAlign:"left",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Customer/OEM</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Complaints</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Open</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Closed</th><th style={{textAlign:"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>Qty Affected</th></tr></thead>
-          <tbody>{oems.map((r,i)=>(<tr key={i} onClick={()=>setSub(selC===r.c?"":r.c)} style={{background:selC===r.c?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+          <tbody>{oems.map((r,i)=>(<tr key={i} onClick={()=>setSub(selC===r.c?"":r.c)} style={{background:selC===r.c?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selC===r.c?700:400,color:selC===r.c?C.ac:C.tx}}>{r.c}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",fontWeight:700}}>{r.cnt}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,textAlign:"right",color:C.am,fontWeight:600}}>{r.op}</td>
@@ -2280,7 +2292,7 @@ function ComplaintDrillPanel({kpi,sub,setSub}){
         <Breadcrumb path={["Customer Complaint","Open"]}/>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
           <thead><tr>{["ID","Customer","Location","Defect","Qty","Age (days)","Status"].map((h,i)=>(<th key={i} style={{textAlign:i===0?"left":i===1?"left":i===2?"left":i===3?"left":i===6?"center":"right",padding:"5px 8px",color:C.mu,fontWeight:600,borderBottom:"1px solid "+C.bd,fontSize:13}}>{h}</th>))}</tr></thead>
-          <tbody>{opens.map((c,i)=>{const age=[8,12,5][i]||7;return(<tr key={i} onClick={()=>setSub(selId===c.id?"":c.id)} style={{background:selId===c.id?C.aL:(i%2===0?"transparent":C.c2),cursor:"pointer"}}>
+          <tbody>{opens.map((c,i)=>{const age=[8,12,5][i]||7;return(<tr key={i} onClick={()=>setSub(selId===c.id?"":c.id)} style={{background:selId===c.id?C.aL:(i%2===0?C.cd:C.rowAlt),cursor:"pointer"}}>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd,fontWeight:selId===c.id?700:400,color:selId===c.id?C.ac:C.tx}}>{c.id}{<span style={{fontSize:12,color:C.am,marginLeft:6}}>{"▸"}</span>}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{c.cust}</td>
             <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.bd}}>{c.loc}</td>

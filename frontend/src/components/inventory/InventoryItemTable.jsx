@@ -12,6 +12,7 @@ import {
   useTheme,
 } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
  * Item-level Live Inventory table per BRD FR-P65 + summary strip
@@ -64,7 +65,7 @@ function InventoryItemTable({ bar }) {
                 color: theme.palette.primary.main,
               }}
             >
-              {total.toLocaleString()}{" "}
+              {formatIndianNumber(total)}{" "}
               <Typography
                 component="span"
                 sx={{ fontSize: 12, color: "text.disabled" }}
@@ -102,11 +103,18 @@ function InventoryItemTable({ bar }) {
           stickyHeader
           sx={(t) => ({
             "& .MuiTableCell-root": {
-              border: "1px solid",
+              borderBottom: "1px solid",
+              borderRight: "1px solid",
               borderColor: t.palette.divider,
+              "&:last-child": {
+                borderRight: "none",
+              },
             },
             "& thead .MuiTableCell-root": {
-              backgroundColor: t.custom.surface.soft,
+              backgroundColor:
+                t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+              borderBottom: "2px solid",
+              borderColor: t.palette.divider,
             },
           })}
         >
@@ -118,8 +126,21 @@ function InventoryItemTable({ bar }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {bar.items.map((it) => (
-              <TableRow key={it.itemCode} hover>
+            {bar.items.map((it, i) => (
+              <TableRow
+                key={it.itemCode}
+                hover
+                sx={{
+                  backgroundColor: (t) =>
+                    i % 2 === 0
+                      ? "background.paper"
+                      : (t.custom?.table?.alternateRow ??
+                        "rgba(0, 119, 182, 0.04)"),
+                  "&:hover": {
+                    backgroundColor: (t) => t.palette.action.hover,
+                  },
+                }}
+              >
                 <TableCell sx={{ fontSize: 13, fontFamily: "monospace" }}>
                   {it.itemCode}
                 </TableCell>
@@ -128,7 +149,7 @@ function InventoryItemTable({ bar }) {
                   align="center"
                   sx={{ fontSize: 16, fontWeight: 700 }}
                 >
-                  {it.liveStock.toLocaleString()}{" "}
+                  {formatIndianNumber(it.liveStock)}{" "}
                   <Typography
                     component="span"
                     sx={{
@@ -158,10 +179,15 @@ function Th({ children, align = "center" }) {
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: 0.6,
-        color: "text.disabled",
-        backgroundColor: "background.paper",
-        borderBottom: 1,
+        color: "text.primary",
+        backgroundColor: (t) =>
+          t.custom?.table?.headerBg ?? t.custom?.surface?.soft,
+        borderBottom: 2,
+        borderRight: 1,
         borderColor: "divider",
+        "&:last-child": {
+          borderRight: "none",
+        },
       }}
     >
       {children}
