@@ -97,7 +97,9 @@ function ModernPlantCard({
           : "0 10px 30px -10px rgba(0, 15, 45, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.8)",
         cursor: active ? "pointer" : "default",
         opacity: active ? 1 : 0.65,
-        transform: highlighted ? "translateY(-4px) scale(1.015)" : "translateY(0)",
+        transform: highlighted
+          ? "translateY(-4px) scale(1.015)"
+          : "translateY(0)",
         transition: "all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
         overflow: "hidden",
         /* Specular Glass Top-Edge Shine */

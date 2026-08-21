@@ -109,7 +109,8 @@ function SatelliteIndiaMap({
   // 2. Initialize Markers Once when map loads or plants list changes
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || !Array.isArray(plants) || plants.length === 0) return;
+    if (!map || !mapLoaded || !Array.isArray(plants) || plants.length === 0)
+      return;
 
     // Remove previous markers and roots
     markerEntriesRef.current.forEach(({ root, marker }) => {
@@ -134,7 +135,7 @@ function SatelliteIndiaMap({
           isFocused={isFocused}
           onClick={() => onSelect && onSelect(plant.id)}
           onMouseEnter={() => onHover && onHover(plant.id)}
-        />
+        />,
       );
 
       const isLeft = plant.badgeSide === "left";
@@ -161,7 +162,7 @@ function SatelliteIndiaMap({
           isFocused={isFocused}
           onClick={() => onSelect && onSelect(plant.id)}
           onMouseEnter={() => onHover && onHover(plant.id)}
-        />
+        />,
       );
     });
   }, [hov, sel, onHover, onSelect]);

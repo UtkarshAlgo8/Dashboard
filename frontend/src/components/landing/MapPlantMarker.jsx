@@ -9,12 +9,7 @@ import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
  * - Live mini beacon indicator & authentic KPI metrics (OEE, OTIF, YIELD)
  * - Smooth hover micro-interactions and depth shadows
  */
-function MapPlantMarker({
-  plant,
-  isFocused = false,
-  onClick,
-  onMouseEnter,
-}) {
+function MapPlantMarker({ plant, isFocused = false, onClick, onMouseEnter }) {
   const isLeft = plant.badgeSide === "left";
   const hasOee = plant.oee != null && Number.isFinite(Number(plant.oee));
   const isLive = plant.id === "banmore" || plant.id === "chennai";
@@ -90,7 +85,8 @@ function MapPlantMarker({
             borderRadius: "50%",
             border: `1.5px solid ${isFocused ? "rgba(239, 68, 68, 0.6)" : "rgba(0, 210, 255, 0.5)"}`,
             transform: "translate(-50%, 50%)",
-            animation: "radarPing 2.4s cubic-bezier(0, 0.2, 0.8, 1) infinite 1.2s",
+            animation:
+              "radarPing 2.4s cubic-bezier(0, 0.2, 0.8, 1) infinite 1.2s",
             pointerEvents: "none",
           }}
         />
@@ -157,7 +153,12 @@ function MapPlantMarker({
         }}
       >
         {/* Header Row: Plant Code + Live Beacon */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={1}
+        >
           <Typography
             sx={{
               fontSize: 13,
@@ -246,26 +247,65 @@ function MapPlantMarker({
           }}
         >
           <Box sx={{ textAlign: "center" }}>
-            <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+            <Typography
+              sx={{
+                fontSize: 8,
+                fontWeight: 700,
+                color: "#64748B",
+                textTransform: "uppercase",
+              }}
+            >
               OEE
             </Typography>
-            <Typography sx={{ fontSize: 11, fontWeight: 800, color: hasOee ? "#22C55E" : "#94A3B8" }}>
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: hasOee ? "#22C55E" : "#94A3B8",
+              }}
+            >
               {plant.oee != null ? `${plant.oee}%` : "—"}
             </Typography>
           </Box>
           <Box sx={{ textAlign: "center" }}>
-            <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+            <Typography
+              sx={{
+                fontSize: 8,
+                fontWeight: 700,
+                color: "#64748B",
+                textTransform: "uppercase",
+              }}
+            >
               OTIF
             </Typography>
-            <Typography sx={{ fontSize: 11, fontWeight: 800, color: plant.otif != null ? "#38BDF8" : "#94A3B8" }}>
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: plant.otif != null ? "#38BDF8" : "#94A3B8",
+              }}
+            >
               {plant.otif != null ? `${plant.otif}%` : "—"}
             </Typography>
           </Box>
           <Box sx={{ textAlign: "center" }}>
-            <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+            <Typography
+              sx={{
+                fontSize: 8,
+                fontWeight: 700,
+                color: "#64748B",
+                textTransform: "uppercase",
+              }}
+            >
               YIELD
             </Typography>
-            <Typography sx={{ fontSize: 11, fontWeight: 800, color: plant.yield != null ? "#38BDF8" : "#94A3B8" }}>
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: plant.yield != null ? "#38BDF8" : "#94A3B8",
+              }}
+            >
               {plant.yield != null ? `${plant.yield}%` : "—"}
             </Typography>
           </Box>

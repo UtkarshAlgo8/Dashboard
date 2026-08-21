@@ -52,9 +52,12 @@ const PLANT_GEO = {
 function LandingPage() {
   const navigate = useNavigate();
 
-  const { data: rawPlants, isLoading: plantsLoading } = usePolledQuery(getPlants, {
-    interval: 0,
-  });
+  const { data: rawPlants, isLoading: plantsLoading } = usePolledQuery(
+    getPlants,
+    {
+      interval: 0,
+    },
+  );
   const { data: functions } = usePolledQuery(getFunctions, { interval: 0 });
 
   const [hov, setHov] = useState(null);
@@ -215,4 +218,3 @@ function LandingPage() {
 }
 
 export default LandingPage;
-

@@ -174,7 +174,9 @@ function KpiPill({ label, value }) {
           {hasValue ? displayValue : "—"}
         </Typography>
         {hasValue && (
-          <Typography sx={{ fontSize: 12, color: "success.main" }}>%</Typography>
+          <Typography sx={{ fontSize: 12, color: "success.main" }}>
+            %
+          </Typography>
         )}
       </Stack>
     </Box>
@@ -194,9 +196,7 @@ function FunctionRow({ fn, active, onClick }) {
         py: 1.25,
         borderRadius: 1.25,
         cursor: active ? "pointer" : "default",
-        backgroundColor: active
-          ? theme.custom.brand.orangeSoft
-          : "transparent",
+        backgroundColor: active ? theme.custom.brand.orangeSoft : "transparent",
         border: 1,
         borderColor: active ? "transparent" : "divider",
         opacity: active ? 1 : 0.65,
