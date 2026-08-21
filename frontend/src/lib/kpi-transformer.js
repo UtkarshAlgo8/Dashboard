@@ -1539,7 +1539,15 @@ export function toKpiGrid(
     // (MTD), Year (YTD) — gold_dummy already stored the right
     // pre-aggregated value, no client roll-up needed.
     if (isSnapshot) {
-      let preRows = atGranularity(groupDesc, granularity);
+      // CR-11 / Q-DT-01: TotalDowntime synthesises per-date rows from
+      // the 6 OEE-availability-loss reasons (DAY granularity only in
+      // gold). Bypass atGranularity so the snapshot path doesn't filter
+      // them out for Month/Year/custom presets where the dashboard
+      // granularity is MONTH.
+      const isTotalDowntime = kpiDef.name === TOTAL_DOWNTIME_NAME;
+      let preRows = isTotalDowntime
+        ? groupDesc
+        : atGranularity(groupDesc, granularity);
       if (preRows.length === 0) {
         result.push(placeholderCard(kpiDef));
         continue;
@@ -1574,7 +1582,16 @@ export function toKpiGrid(
         continue;
       }
 
-      const value = Math.round(numericVals[0] * 100) / 100; // newest
+      // CR-11 / Q-DT-01: for TotalDowntime the synthesised rows are
+      // per-date sums, so the headline reads the SUM across the active
+      // window (today's value for Today, this-month's for Month, etc.)
+      // rather than just the latest day's value. Other KPIs keep the
+      // existing "newest" semantics.
+      const value = isTotalDowntime
+        ? Math.round(
+            numericVals.reduce((s, v) => s + v, 0) * 100,
+          ) / 100
+        : Math.round(numericVals[0] * 100) / 100;
       const sparkVals = numericVals.slice(0, sparkLength).reverse();
 
       // new_change.md C14 / spike defect S-3: the section's latest day is
@@ -1670,7 +1687,12 @@ export function toKpiGrid(
     // Aggregate path — sum / avg per spec §9 over the active range.
     // Use the active granularity (Daily by default; Shift A/B/C when
     // the user picked a specific shift), sort newest-first.
-    const dailyRows = atGranularity(groupDesc, granularity);
+    // CR-11: TotalDowntime synthesises DAY rows only — bypass
+    // atGranularity so Month/Year/custom presets don't filter them out.
+    const isTotalDowntimeAgg = kpiDef.name === TOTAL_DOWNTIME_NAME;
+    const dailyRows = isTotalDowntimeAgg
+      ? groupDesc
+      : atGranularity(groupDesc, granularity);
 
     if (dailyRows.length === 0) {
       result.push(placeholderCard(kpiDef));
