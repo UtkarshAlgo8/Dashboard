@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Stack, Typography, useTheme } from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 import { motion } from "framer-motion";
 
 /**
@@ -72,7 +72,6 @@ function ModernPlantCard({
   onSelect,
   index = 0,
 }) {
-  const theme = useTheme();
   const highlighted = active && (hovered || selected);
 
   return (

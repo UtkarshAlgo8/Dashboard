@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, useTheme } from "@mui/material";
+import { Box } from "@mui/material";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
 import LandingSkeleton from "@/components/landing/LandingSkeleton.jsx";
 import PlantCardList from "@/components/landing/PlantCardList.jsx";
@@ -51,7 +51,6 @@ const PLANT_GEO = {
 
 function LandingPage() {
   const navigate = useNavigate();
-  const theme = useTheme();
 
   const { data: rawPlants, isLoading: plantsLoading } = usePolledQuery(getPlants, {
     interval: 0,

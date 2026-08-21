@@ -22,7 +22,6 @@ const INITIAL_ZOOM = 4.1;
  */
 function SatelliteIndiaMap({
   plants = [],
-  activePlantIds = new Set(),
   hov = null,
   sel = null,
   onHover,
@@ -37,11 +36,6 @@ function SatelliteIndiaMap({
   // 1. Initialize Map Instance
   useEffect(() => {
     if (!mapContainerRef.current) return;
-
-    const isDesktop = window.innerWidth >= 900;
-    const defaultPadding = isDesktop
-      ? { right: 540, left: 40, top: 40, bottom: 40 }
-      : { right: 20, left: 20, top: 20, bottom: 20 };
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
