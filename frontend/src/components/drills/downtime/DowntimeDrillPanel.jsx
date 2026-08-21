@@ -1,54 +1,20 @@
-import { useMemo, useRef } from "react";
-import { Box, Stack, Typography } from "@mui/material";
+import { useMemo, useRef, useState } from "react";
+import {
+  Box,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  useTheme,
+} from "@mui/material";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import DataTable from "@/components/tables/DataTable.jsx";
-import { snapshotLatest } from "@/lib/drillDate.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 
-const DOWNTIME_COLUMNS = [
-  { key: "code", label: "Code Category", align: "left" },
-  { key: "machine", label: "Equipment", align: "left" },
-  { key: "reason", label: "Delay Reason", align: "left" },
-  {
-    key: "events",
-    label: "Events",
-    render: (r) => formatIndianNumber(r.events),
-  },
-  {
-    key: "totalMin",
-    label: "Total DT (Min)",
-    filterable: false,
-    value: (r) => r.totalHrs * 60,
-    render: (r) => formatIndianNumber(Math.round(r.totalMin)),
-  },
-  {
-    key: "totalHrs",
-    label: "Total DT (Hr)",
-    filterable: false,
-    value: (r) => r.totalHrs,
-    render: (r) => formatIndianNumber(r.totalHrs, { decimals: 2 }),
-  },
-];
-
-/**
- * Downtime drill — leaf table per dashboard_kpi_map_reference §11:
- *
- *   Downtime_category | Code · Machine · Reason · Frequency
- *                     · Total Min · Hrs/Day
- *
- * Source: gold `Downtime_category` rows already in hand via `rawRows`.
- * The remarks column stores both Code and Reason as
- * "BD-ELEC: Motor overload trip" — split on the first ":" to fill the
- * two columns. unit_of_measurement is hrs; Total DT (Min) = Hrs × 60.
- *
- * Scope (journey.md §15.5): Downtime is a MACHINE event — NOT
- * product-scoped — so we ignore the active product pill and pin section
- * only. Time (§3): in snapshot mode collapse to the latest available
- * date so the per-category minutes reconcile with the card; we sum
- * events WITHIN that day (multiple stoppages per reason) but never
- * across the trailing window.
- */
 const SECTION_NAME = {
   mix: "Mixing",
   tbm: "TBM",
@@ -56,70 +22,147 @@ const SECTION_NAME = {
   stk: "Stock",
 };
 
+/**
+ * Downtime drill panel — CR-11.
+ *
+ * Two-level drill for the Total Downtime tile:
+ *
+ *   Level 1 — Reason breakdown (default view):
+ *     6-row table: each OEE-availability-loss reason + its sum (min) +
+ *     % of total. Click a row to drill in.
+ *
+ *   Level 2 — Per-event rows for the selected reason:
+ *     (date, machine, value) for every row in the active window where
+ *     that reason fired. Sorted by value desc. Q-DT-02 logs that the
+ *     6 reasons are gold-level leaves — there's no further hierarchy
+ *     beyond the per-event table.
+ *
+ * Source: the 6 reason leaves are already in `rawRows` (the dashboard
+ * fetch includes them because landingKpiNames expands the virtual
+ * "TotalDowntime" kpi_name to the 6 reasons — Q-DT-01). The panel
+ * groups them here for Level 1 and filters for Level 2.
+ */
 function DowntimeDrillPanel({
   section,
   rawRows,
-  mode = "snapshot",
   granularity = "DAY",
   isLoading = false,
 }) {
+  const theme = useTheme();
   const sectionName = SECTION_NAME[section] ?? section;
-
   const cardRef = useRef(null);
+  const [selectedReason, setSelectedReason] = useState(null);
 
-  const grouped = useMemo(() => {
+  // Group the 6 reasons: sum per reason for the active window.
+  const reasonRows = useMemo(() => {
     if (!Array.isArray(rawRows)) return [];
-    const rows = snapshotLatest(
-      rawRows.filter(
+    const byReason = new Map();
+    for (const r of rawRows) {
+      if (r.section !== sectionName) continue;
+      if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
+      if (r.granularity !== granularity) continue;
+      const v = numOrNull(r.actual_value);
+      if (v == null) continue;
+      const prev = byReason.get(r.kpi_name) ?? 0;
+      byReason.set(r.kpi_name, prev + v);
+    }
+    const total = [...byReason.values()].reduce((s, v) => s + v, 0);
+    return DOWNTIME_REASONS.map((reason) => {
+      const sum = byReason.get(reason) ?? 0;
+      return {
+        reason,
+        sum,
+        pct: total > 0 ? Math.round((sum / total) * 1000) / 10 : 0,
+      };
+    }).sort((a, b) => b.sum - a.sum);
+  }, [rawRows, sectionName, granularity]);
+
+  const totalDowntime = reasonRows.reduce((s, r) => s + r.sum, 0);
+
+  // Level 2: per-event rows for the selected reason.
+  const eventRows = useMemo(() => {
+    if (!selectedReason || !Array.isArray(rawRows)) return [];
+    return rawRows
+      .filter(
         (r) =>
           r.section === sectionName &&
-          r.kpi_name === "Downtime_category" &&
+          r.kpi_name === selectedReason &&
           r.granularity === granularity,
-      ),
-      mode,
-    );
-    const groups = new Map();
-    for (const r of rows) {
-      const { code, reason } = parseRemarks(r.remarks);
-      const machine = r.machine && r.machine !== "nan" ? r.machine : "—";
-      const key = `${code}||${machine}||${reason}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          code,
-          machine,
-          reason,
-          events: 0,
-          totalHrs: 0,
-        });
-      }
-      const acc = groups.get(key);
-      acc.events += 1;
-      if (typeof r.actual_value === "number") acc.totalHrs += r.actual_value;
-    }
-    return [...groups.values()]
-      .map((g) => ({
-        code: g.code,
-        machine: g.machine,
-        reason: g.reason,
-        events: g.events,
-        totalMin: g.totalHrs * 60,
-        totalHrs: g.totalHrs,
+      )
+      .map((r) => ({
+        date: r.date,
+        machine: r.machine && r.machine !== "nan" ? r.machine : "—",
+        value: numOrNull(r.actual_value) ?? 0,
+        shift: r.granularity && r.granularity !== "DAY" ? r.granularity : "—",
       }))
-      .sort((a, b) => b.totalHrs - a.totalHrs);
-  }, [mode, rawRows, sectionName, granularity]);
+      .sort((a, b) => b.value - a.value);
+  }, [rawRows, sectionName, granularity, selectedReason]);
 
-  if (grouped.length === 0) {
+  if (reasonRows.every((r) => r.sum === 0)) {
     if (isLoading) {
-      return <DrillSkeleton title rows={6} cols={6} />;
+      return <DrillSkeleton title rows={6} cols={3} />;
     }
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>
-          No Downtime breakdown for {sectionName} in this date range.
+          No Downtime recorded for {sectionName} in this date range.
         </Typography>
       </Box>
     );
   }
+
+  const reasonColumns = [
+    {
+      key: "reason",
+      label: "Reason",
+      render: (r) => (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+            {r.reason}
+          </Typography>
+          <ChevronRightIcon sx={{ fontSize: 18, color: "text.disabled" }} />
+        </Stack>
+      ),
+    },
+    {
+      key: "sum",
+      label: "Total (min)",
+      align: "right",
+      render: (r) => formatIndianNumber(Math.round(r.sum)),
+    },
+    {
+      key: "pct",
+      label: "% of Total",
+      align: "right",
+      render: (r) => `${r.pct.toFixed(1)}%`,
+    },
+  ];
+
+  const eventColumns = [
+    {
+      key: "date",
+      label: "Date",
+      render: (r) => formatIsoDate(r.date),
+    },
+    {
+      key: "machine",
+      label: "Machine",
+    },
+    {
+      key: "value",
+      label: "Downtime (min)",
+      align: "right",
+      render: (r) => formatIndianNumber(Math.round(r.value)),
+    },
+    {
+      key: "shift",
+      label: "Shift",
+    },
+  ];
 
   return (
     <Stack spacing={1.5}>
@@ -129,55 +172,130 @@ function DowntimeDrillPanel({
         justifyContent="space-between"
         spacing={1}
       >
-        <Typography
-          sx={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: "primary.main",
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-          }}
-        >
-          Detailed Downtime Log
-        </Typography>
-        {/* Top-right download — menu offers PDF (visual) + Excel (rows). */}
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {selectedReason && (
+            <Tooltip title="Back to reasons" arrow>
+              <IconButton
+                size="small"
+                onClick={() => setSelectedReason(null)}
+                sx={{
+                  border: 1,
+                  borderColor: "divider",
+                  borderRadius: 1,
+                }}
+                aria-label="Back to reasons"
+              >
+                <ArrowBackIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Typography
+            sx={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "primary.main",
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+            }}
+          >
+            {selectedReason
+              ? `Events · ${selectedReason}`
+              : "Downtime · Reason Breakdown"}
+          </Typography>
+        </Stack>
         <CardDownloadButton
           cardRef={cardRef}
-          rows={grouped}
-          headers={[
-            "Code Category",
-            "Equipment",
-            "Delay Reason",
-            "Events",
-            "Total DT (Min)",
-            "Total DT (Hr)",
-          ]}
+          rows={selectedReason ? eventRows : reasonRows}
+          headers={
+            selectedReason
+              ? ["Date", "Machine", "Downtime (min)", "Shift"]
+              : ["Reason", "Total (min)", "% of Total"]
+          }
           filename={`drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
           sheetName="Downtime"
         />
       </Stack>
 
-      <Box ref={cardRef}>
-        <DataTable
-          columns={DOWNTIME_COLUMNS}
-          rows={grouped}
-          maxHeight={440}
-          searchPlaceholder="Search downtime…"
-          emptyMessage="No Downtime breakdown for this range."
-        />
+      <Box
+        ref={cardRef}
+        sx={{
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1.25,
+          p: 2,
+          backgroundColor: "background.paper",
+        }}
+      >
+        {selectedReason ? (
+          <DataTable
+            columns={eventColumns}
+            rows={eventRows}
+            getRowKey={(r, i) => `${r.date}-${r.machine}-${i}`}
+            maxHeight={440}
+            searchPlaceholder={`Search ${selectedReason} events…`}
+            emptyMessage={`No events recorded for ${selectedReason} in this range.`}
+          />
+        ) : (
+          <>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                mb: 1.5,
+                p: 1.5,
+                backgroundColor: theme.custom.surface.soft,
+                borderRadius: 1.25,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "text.disabled",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                  flex: 1,
+                }}
+              >
+                Total Downtime (selected window)
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "primary.main",
+                }}
+              >
+                {formatIndianNumber(Math.round(totalDowntime))} min
+              </Typography>
+            </Stack>
+            <DataTable
+              columns={reasonColumns}
+              rows={reasonRows}
+              getRowKey={(r) => r.reason}
+              onRowClick={(r) => setSelectedReason(r.reason)}
+              maxHeight={440}
+              searchPlaceholder="Search reasons…"
+              emptyMessage="No reasons in this range."
+            />
+          </>
+        )}
       </Box>
     </Stack>
   );
 }
 
-function parseRemarks(raw) {
-  if (!raw || raw === "nan") return { code: "—", reason: "—" };
-  const colonIdx = raw.indexOf(":");
-  if (colonIdx < 0) return { code: raw, reason: "—" };
-  return {
-    code: raw.slice(0, colonIdx).trim(),
-    reason: raw.slice(colonIdx + 1).trim(),
-  };
+function numOrNull(v) {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number.parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatIsoDate(d) {
+  if (!d || typeof d !== "string") return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(d);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : d;
 }
 
 export default DowntimeDrillPanel;

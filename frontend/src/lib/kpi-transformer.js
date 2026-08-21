@@ -22,6 +22,7 @@ import {
   toDisplayQuantity,
 } from "./units.js";
 import { toDisplayDate } from "./dateFormat.js";
+import { DOWNTIME_REASONS, TOTAL_DOWNTIME_NAME } from "./downtime.js";
 
 // changes.md §0: missing-value sentinels are the literal strings "nan"
 // AND "null" (not JS null), plus "". Treat all as empty everywhere.
@@ -286,6 +287,19 @@ const ALLOWED_KPIS = {
         agg: "SUM",
         drillType: "mixProd",
         drillTargets: ["Production_m", "Production_sku", "Production_m_sku"],
+      },
+      // CR-11: Total Downtime = sum of the 6 OEE-availability-loss
+      // reason leaves (Breakdown, No Schedule, Power Failure, Preventive
+      // Maintenance, Setup & Change, Operations/Material/Manpower). The
+      // card value/spark fall out of selectSeries' virtual-row synthesis
+      // (Q-DT-01).
+      {
+        id: "downtime",
+        name: TOTAL_DOWNTIME_NAME,
+        unit: "min",
+        agg: "SUM",
+        drillType: "downtime",
+        drillTargets: DOWNTIME_REASONS,
       },
       // Plan Compliance: no data yet → null card (§15).
       {
@@ -1011,6 +1025,9 @@ const DISPLAY_NAME = {
   Production_sku: "By SKU",
   Production_m_sku: "By Machine + SKU",
   Plan_Compliance: "Plan Compliance",
+  // CR-11: virtual kpi_name. The card shows the sum of the 6
+  // OEE-availability-loss reasons.
+  [TOTAL_DOWNTIME_NAME]: "Total Downtime",
   FTQ: "FTQ",
   Defect_Scrap: "Defect + Scrap",
   Scrap_Rate: "Scrap Rate",
@@ -1053,6 +1070,12 @@ export function landingKpiNames(section, category) {
   const defs = ALLOWED_KPIS[section]?.[category] ?? [];
   if (defs.length === 0) return [];
   const names = new Set(defs.map((k) => k.name));
+  // CR-11 / Q-DT-01: "TotalDowntime" is a frontend virtual kpi_name.
+  // When the def is registered, expand the fetch to its 6 reason leaves
+  // (real gold kpi_names) so the transformer can aggregate per date.
+  if (names.has(TOTAL_DOWNTIME_NAME)) {
+    for (const r of DOWNTIME_REASONS) names.add(r);
+  }
   if (section === "TBM" || section === "Curing") {
     names.add("Production_product");
   }
@@ -1139,6 +1162,39 @@ function selectSeries(
 ) {
   let name = kpiDef.name;
   let groupDesc = groups.get(name) ?? [];
+
+  // CR-11 / Q-DT-01: TotalDowntime is a virtual kpi_name. Synthesise
+  // per-date rows by summing the 6 OEE-availability-loss reason leaves
+  // (gold rows already fetched by landingKpiNames). The existing card
+  // builder consumes the synthesised rows verbatim — value/spark/etc.
+  // fall out of the normal SUM aggregation.
+  if (name === TOTAL_DOWNTIME_NAME) {
+    const perDate = new Map();
+    for (const reason of DOWNTIME_REASONS) {
+      const g = groups.get(reason);
+      if (!g) continue;
+      for (const r of g) {
+        const v = numberOrNull(r.actual_value);
+        if (v == null || r.date == null) continue;
+        const d = r.date;
+        const prev = perDate.get(d);
+        if (prev) prev.actual_value += v;
+        else
+          perDate.set(d, {
+            date: r.date,
+            actual_value: v,
+            granularity: r.granularity,
+            unit_of_measurement: r.unit_of_measurement,
+          });
+      }
+    }
+    const synthesized = [...perDate.values()].sort((a, b) =>
+      isoDate(b.date) !== isoDate(a.date)
+        ? isoDate(b.date) - isoDate(a.date)
+        : 0,
+    );
+    return { name: TOTAL_DOWNTIME_NAME, rows: synthesized };
+  }
 
   // new_change.md C7: the TBM/Curing Production card is product-wise —
   // read Production_product and pin product_type to the selection (or the
@@ -1342,6 +1398,12 @@ export function toKpiGrid(
   // Get allowed KPI names for this (section, category) combo only.
   const allowedKpis = ALLOWED_KPIS[section]?.[category] ?? [];
   const allowedNames = new Set(allowedKpis.map((k) => k.name));
+  // CR-11 / Q-DT-01: the virtual TotalDowntime tile is fed by the 6
+  // OEE-availability-loss reason leaves — those rows must survive the
+  // allow-list filter so selectSeries can aggregate them.
+  if (allowedNames.has(TOTAL_DOWNTIME_NAME)) {
+    for (const r of DOWNTIME_REASONS) allowedNames.add(r);
+  }
   // new_change.md C7: in TBM/Curing the Production CARD reads
   // Production_product, so those rows must survive the allow-list filter.
   if (section === "TBM" || section === "Curing") {
@@ -1370,7 +1432,9 @@ export function toKpiGrid(
     unitOfMeasurement,
     drilledKpiId,
     strictFilters: STRICT_FILTER_PLANTS.has(
-      String(plantId ?? "").trim().toLowerCase(),
+      String(plantId ?? "")
+        .trim()
+        .toLowerCase(),
     ),
   };
 

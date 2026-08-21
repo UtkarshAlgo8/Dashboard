@@ -30,6 +30,7 @@ import client from "@/api/client.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { isKg, kgToTonnes } from "@/lib/units.js";
+import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 import {
   denanDimension,
   isProductAgnosticKpi,
@@ -98,8 +99,8 @@ function TrendModal({
 
   if (!kpi) return null;
 
-  // Route OEE / Production to the multi-series pills UI; everything
-  // else keeps the legacy single-series form.
+  // Route OEE / Production / Downtime to the multi-series pills UI;
+  // everything else keeps the legacy single-series form.
   if (kpi.id === "oee") {
     return (
       <OeeTrendModal
@@ -122,6 +123,25 @@ function TrendModal({
   if (kpi.id === "prod" || kpi.id === "production") {
     return (
       <ProductionTrendModal
+        open={open}
+        onClose={onClose}
+        plantId={plantId}
+        kpi={kpi}
+        section={section}
+        asOf={asOf}
+        range={range}
+        from={from}
+        to={to}
+        onRangeChange={setRange}
+        onFromChange={setFrom}
+        onToChange={setTo}
+        theme={theme}
+      />
+    );
+  }
+  if (kpi.id === "downtime") {
+    return (
+      <DowntimeTrendModal
         open={open}
         onClose={onClose}
         plantId={plantId}
@@ -510,7 +530,7 @@ const OVERLAY_OPTIONS = [
  * shape:
  *   viewByOptions             [{ value, label }]
  *   defaultViewBy             "overall"
- *   mainKpiName(viewBy, sec)  → string   (single kpi_name per fetch)
+ *   mainKpiName(viewBy, sec)  → string | string[]   (one or many kpi_names per fetch)
  *   groupField(viewBy)        → string | null  (chart line grouping)
  *   machineFilterVisibility   (viewBy) → boolean
  *   skuFilterVisibility       (viewBy) → boolean
@@ -564,6 +584,35 @@ function buildProductionSeriesConfig(sectionName, kpi) {
     mainUnit: kpi?.unit ?? "",
     mainTitleSuffix: kpi?.name ?? "Production",
     viewByLabel: (viewBy) => PRODUCTION_VIEW_BY_LABEL[viewBy] ?? "Overall",
+  };
+}
+
+// CR-11: Downtime series config. mainKpiName returns the 6
+// availability-loss reason leaves (the MultiSeriesTrendModal
+// handles arrays — see line 631). Overall sums them per date; Reason
+// groups by kpi_name so each reason becomes its own line. No
+// overlay row (overlays don't carry reason semantics).
+const DOWNTIME_VIEW_BY_OPTIONS = [
+  { value: "overall", label: "Overall" },
+  { value: "reason", label: "Reason" },
+];
+const DOWNTIME_VIEW_BY_LABEL = Object.fromEntries(
+  DOWNTIME_VIEW_BY_OPTIONS.map((o) => [o.value, o.label]),
+);
+
+function buildDowntimeSeriesConfig() {
+  return {
+    viewByOptions: DOWNTIME_VIEW_BY_OPTIONS,
+    defaultViewBy: "overall",
+    mainKpiName: () => DOWNTIME_REASONS,
+    groupField: (viewBy) => (viewBy === "reason" ? "kpi_name" : null),
+    machineFilterVisibility: (viewBy) => viewBy === "reason",
+    skuFilterVisibility: () => false,
+    showCompare: () => false,
+    showOverlay: false,
+    mainUnit: "min",
+    mainTitleSuffix: "Downtime",
+    viewByLabel: (viewBy) => DOWNTIME_VIEW_BY_LABEL[viewBy] ?? "Overall",
   };
 }
 
@@ -623,10 +672,14 @@ function MultiSeriesTrendModal({
   const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
 
   // One trip covers main + (optional) overlays via drillKpis. The
-  // kpi_name comes from the config so the same modal handles both
-  // OEE and Production.
+  // kpi_name(s) come from the config so the same modal handles
+  // both OEE / Production (single kpi_name) and Downtime (array of
+  // 6 reason leaves — CR-11).
   const sectionName = sectionIdToName(section);
-  const mainKpi = config.mainKpiName(viewBy, sectionName);
+  const mainKpis = useMemo(() => {
+    const raw = config.mainKpiName(viewBy, sectionName);
+    return Array.isArray(raw) ? raw : [raw];
+  }, [config, viewBy, sectionName]);
   const overlayKpis = config.showOverlay
     ? overlays.map((o) => overlayKpiName(o, viewBy, sectionName))
     : [];
@@ -640,7 +693,8 @@ function MultiSeriesTrendModal({
     },
     from: rangeFrom,
     to: rangeTo,
-    drillKpis: overlayKpis.length > 0 ? [mainKpi, ...overlayKpis] : [mainKpi],
+    drillKpis:
+      overlayKpis.length > 0 ? [...mainKpis, ...overlayKpis] : mainKpis,
     drillOnly: true,
     limit: 10000,
   };
@@ -681,10 +735,17 @@ function MultiSeriesTrendModal({
   }, [singleRows]);
 
   // Split singleRows by kpi_name into mainRows + (optional) overlay rows.
+  // mainKpis may be an array (Downtime fetches 6 reasons in one call);
+  // filter via Set membership.
   const mainRows = useMemo(() => {
     if (!Array.isArray(singleRows)) return [];
-    return singleRows.filter((r) => r.kpi_name === mainKpi);
-  }, [singleRows, mainKpi]);
+    if (mainKpis.length === 1) {
+      const k = mainKpis[0];
+      return singleRows.filter((r) => r.kpi_name === k);
+    }
+    const allowed = new Set(mainKpis);
+    return singleRows.filter((r) => allowed.has(r.kpi_name));
+  }, [singleRows, mainKpis]);
 
   // Apply the Machines + SKU filters to mainRows before grouping.
   // Empty selection in either = all rows pass through that filter.
@@ -704,12 +765,12 @@ function MultiSeriesTrendModal({
     if (!config.showOverlay || !overlays.length) return out;
     if (!Array.isArray(singleRows)) return out;
     for (const r of singleRows) {
-      if (r.kpi_name === mainKpi) continue;
+      if (mainKpis.includes(r.kpi_name)) continue;
       if (!out[r.kpi_name]) out[r.kpi_name] = [];
       out[r.kpi_name].push(r);
     }
     return out;
-  }, [overlays, singleRows, mainKpi, config.showOverlay]);
+  }, [overlays, singleRows, mainKpis, config.showOverlay]);
 
   // Build COMPARE options from the filtered main rows. Group by the
   // active viewBy's field so a brand-new value in the gold layer
@@ -931,6 +992,12 @@ function ProductionTrendModal(props) {
   const sectionName = sectionIdToName(props.section);
   const config = buildProductionSeriesConfig(sectionName, props.kpi);
   return <MultiSeriesTrendModal {...props} config={config} />;
+}
+
+function DowntimeTrendModal(props) {
+  return (
+    <MultiSeriesTrendModal {...props} config={buildDowntimeSeriesConfig()} />
+  );
 }
 
 /* =========================================================================
