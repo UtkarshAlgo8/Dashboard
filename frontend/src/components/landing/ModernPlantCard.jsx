@@ -240,11 +240,11 @@ function ModernPlantCard({
         </Stack>
       </Stack>
 
-      {/* KPI Metrics Grid (4 columns) */}
+      {/* KPI Metrics Grid (3 columns) */}
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(3, 1fr)",
           gap: 1.2,
         }}
       >
@@ -268,13 +268,6 @@ function ModernPlantCard({
           isPositive={plant.yield >= 97}
           highlighted={highlighted}
           delay={0.26 + index * 0.08}
-        />
-        <KpiBlock
-          label="PQR"
-          value={plant.pqr || 95.0}
-          isPositive={plant.pqr ? plant.pqr >= 95 : true}
-          highlighted={highlighted}
-          delay={0.34 + index * 0.08}
         />
       </Box>
     </Box>

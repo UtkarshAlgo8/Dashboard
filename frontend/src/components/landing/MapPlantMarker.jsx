@@ -6,7 +6,7 @@ import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
  * Features:
  * - Concentric glowing radar waves rippling from the plant GPS base
  * - Aerospace-style Heads Up Display (HUD) glassmorphic card with cyan/red accents
- * - Live mini beacon indicator & high-contrast tabular metrics
+ * - Live mini beacon indicator & authentic KPI metrics (OEE, OTIF, YIELD)
  * - Smooth hover micro-interactions and depth shadows
  */
 function MapPlantMarker({
@@ -15,11 +15,9 @@ function MapPlantMarker({
   onClick,
   onMouseEnter,
 }) {
-  const isPos = plant.isPositive;
   const isLeft = plant.badgeSide === "left";
-  const changeColor = isPos ? "#4ADE80" : "#F87171";
-  const arrow = isPos ? "↗" : "↘";
-  const changeText = plant.change ? plant.change.replace(/[+-]/g, "").trim() : "";
+  const hasOee = plant.oee != null && Number.isFinite(Number(plant.oee));
+  const isLive = plant.id === "banmore" || plant.id === "chennai";
 
   return (
     <Box
@@ -33,7 +31,7 @@ function MapPlantMarker({
         cursor: "pointer",
         userSelect: "none",
         pointerEvents: "auto",
-        transform: isFocused ? "scale(1.15) translateY(-6px)" : "scale(1)",
+        transform: isFocused ? "scale(1.12) translateY(-6px)" : "scale(1)",
         transition: "all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
       }}
     >
@@ -90,7 +88,7 @@ function MapPlantMarker({
             width: isFocused ? 44 : 32,
             height: isFocused ? 44 : 32,
             borderRadius: "50%",
-            border: `1px solid ${isFocused ? "rgba(239, 68, 68, 0.6)" : "rgba(0, 210, 255, 0.5)"}`,
+            border: `1.5px solid ${isFocused ? "rgba(239, 68, 68, 0.6)" : "rgba(0, 210, 255, 0.5)"}`,
             transform: "translate(-50%, 50%)",
             animation: "radarPing 2.4s cubic-bezier(0, 0.2, 0.8, 1) infinite 1.2s",
             pointerEvents: "none",
@@ -136,8 +134,8 @@ function MapPlantMarker({
           py: 0.85,
           display: "flex",
           flexDirection: "column",
-          gap: 0.3,
-          minWidth: "128px",
+          gap: 0.4,
+          minWidth: "135px",
           boxShadow: isFocused
             ? "0 0 24px rgba(239, 68, 68, 0.35), 0 8px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15)"
             : "0 0 16px rgba(0, 160, 255, 0.18), 0 6px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
@@ -159,7 +157,7 @@ function MapPlantMarker({
         }}
       >
         {/* Header Row: Plant Code + Live Beacon */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
           <Typography
             sx={{
               fontSize: 13,
@@ -172,90 +170,106 @@ function MapPlantMarker({
             {plant.code || plant.id.toUpperCase()}
           </Typography>
 
-          {/* Live Mini Beacon */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0.5,
-            }}
-          >
+          {/* Live Mini Beacon / Phase 2 */}
+          {isLive ? (
             <Box
               sx={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                backgroundColor: "#22C55E",
-                boxShadow: "0 0 6px #22C55E",
-                animation: "pulseBeacon 1.8s infinite",
-                "@keyframes pulseBeacon": {
-                  "0%": { opacity: 1, transform: "scale(1)" },
-                  "50%": { opacity: 0.4, transform: "scale(0.8)" },
-                  "100%": { opacity: 1, transform: "scale(1)" },
-                },
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
               }}
-            />
+            >
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  backgroundColor: "#22C55E",
+                  boxShadow: "0 0 6px #22C55E",
+                  animation: "pulseBeacon 1.8s infinite",
+                  "@keyframes pulseBeacon": {
+                    "0%": { opacity: 1, transform: "scale(1)" },
+                    "50%": { opacity: 0.4, transform: "scale(0.8)" },
+                    "100%": { opacity: 1, transform: "scale(1)" },
+                  },
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  color: "#22C55E",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                LIVE
+              </Typography>
+            </Box>
+          ) : (
             <Typography
               sx={{
                 fontSize: 9,
-                fontWeight: 800,
-                color: "#22C55E",
-                letterSpacing: "0.5px",
+                fontWeight: 700,
+                color: "#94A3B8",
+                letterSpacing: "0.4px",
+                textTransform: "uppercase",
               }}
             >
-              LIVE
+              Phase 2
             </Typography>
-          </Box>
+          )}
         </Stack>
 
-        {/* Tyres Today */}
+        {/* Subtitle / Location */}
         <Typography
           sx={{
             fontSize: 11,
             fontWeight: 500,
-            color: "#E2E8F0",
+            color: "#CBD5E1",
             lineHeight: 1.2,
             whiteSpace: "nowrap",
           }}
         >
-          {plant.prodToday || ""}
+          {plant.sub || plant.name}
         </Typography>
 
-        {/* Revenue & Trend */}
-        <Box
+        {/* Real KPI Strip: OEE / OTIF / YIELD */}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
           sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 0.8,
-            fontSize: 11,
-            fontWeight: 600,
-            color: "#94A3B8",
-            lineHeight: 1.2,
             mt: 0.2,
+            pt: 0.4,
+            borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+            fontSize: 10,
           }}
         >
-          <span style={{ color: "#F1F5F9" }}>{plant.revenue || ""}</span>
-          <Box
-            sx={{
-              px: 0.6,
-              py: 0.15,
-              borderRadius: "4px",
-              background: isPos
-                ? "rgba(34, 197, 94, 0.15)"
-                : "rgba(239, 68, 68, 0.15)",
-              color: changeColor,
-              fontWeight: 700,
-              fontSize: 10,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "2px",
-            }}
-          >
-            <span>{arrow}</span>
-            <span>{changeText}</span>
+          <Box sx={{ textAlign: "center" }}>
+            <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+              OEE
+            </Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: hasOee ? "#22C55E" : "#94A3B8" }}>
+              {plant.oee != null ? `${plant.oee}%` : "—"}
+            </Typography>
           </Box>
-        </Box>
+          <Box sx={{ textAlign: "center" }}>
+            <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+              OTIF
+            </Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: plant.otif != null ? "#38BDF8" : "#94A3B8" }}>
+              {plant.otif != null ? `${plant.otif}%` : "—"}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: "center" }}>
+            <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+              YIELD
+            </Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: plant.yield != null ? "#38BDF8" : "#94A3B8" }}>
+              {plant.yield != null ? `${plant.yield}%` : "—"}
+            </Typography>
+          </Box>
+        </Stack>
       </Box>
     </Box>
   );

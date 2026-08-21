@@ -29,11 +29,6 @@ export const PLANTS = [
     oee: 94.2,
     otif: 96.8,
     yield: 98.5,
-    pqr: 96.2,
-    prodToday: "23,455 Tyres Today",
-    revenue: "₹ 8,21,00,000",
-    change: "+ 5.6%",
-    isPositive: true,
   },
   {
     id: "banmore",
@@ -47,11 +42,6 @@ export const PLANTS = [
     oee: 91.5,
     otif: 94.3,
     yield: 97.8,
-    pqr: 94.8,
-    prodToday: "18,240 Tyres Today",
-    revenue: "₹ 6,38,00,000",
-    change: "- 2.1%",
-    isPositive: false,
   },
   {
     id: "laksar",
@@ -65,11 +55,6 @@ export const PLANTS = [
     oee: 93.1,
     otif: 95.6,
     yield: 98.1,
-    pqr: 95.4,
-    prodToday: "20,112 Tyres Today",
-    revenue: "₹ 7,04,00,000",
-    change: "+ 3.4%",
-    isPositive: true,
   },
   {
     id: "mysore",
@@ -83,11 +68,6 @@ export const PLANTS = [
     oee: 92.6,
     otif: 95.1,
     yield: 98.0,
-    pqr: 95.0,
-    prodToday: "19,506 Tyres Today",
-    revenue: "₹ 6,83,00,000",
-    change: "- 1.8%",
-    isPositive: false,
   },
 ];
 
