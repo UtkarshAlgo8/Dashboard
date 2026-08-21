@@ -1188,11 +1188,15 @@ function selectSeries(
           });
       }
     }
-    const synthesized = [...perDate.values()].sort((a, b) =>
-      isoDate(b.date) !== isoDate(a.date)
-        ? isoDate(b.date) - isoDate(a.date)
-        : 0,
-    );
+    const synthesized = [...perDate.values()].sort((a, b) => {
+      const ai = isoDate(a.date);
+      const bi = isoDate(b.date);
+      // Newest first. ISO strings compare correctly lexicographically,
+      // so a numeric `bi - ai` would coerce to NaN — compare lexically.
+      if (ai < bi) return 1;
+      if (ai > bi) return -1;
+      return 0;
+    });
     return { name: TOTAL_DOWNTIME_NAME, rows: synthesized };
   }
 
