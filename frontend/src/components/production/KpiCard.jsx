@@ -78,7 +78,7 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
               size="small"
               onClick={(e) => {
                 e.stopPropagation();
-                onTrendOpen(kpi.id);
+                onTrendOpen(kpi);
               }}
               sx={{
                 width: 22,
@@ -169,7 +169,7 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
             <Box
               onClick={(e) => {
                 e.stopPropagation();
-                onTrendOpen(kpi.id);
+                onTrendOpen(kpi);
               }}
               sx={{
                 cursor: "pointer",
