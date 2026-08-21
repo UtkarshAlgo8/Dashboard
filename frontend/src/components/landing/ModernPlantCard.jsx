@@ -1,12 +1,66 @@
+import { useEffect, useState } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
+import { motion } from "framer-motion";
 
 /**
- * Modern Glassmorphic Plant Card with True Glassmorphism & Ambient Glow
+ * Animated Number component that smoothly counts up to target value
+ */
+function AnimatedNumber({ value, decimals = 1, suffix = "%" }) {
+  const [displayValue, setDisplayValue] = useState(0);
+  const target = typeof value === "number" ? value : parseFloat(value);
+
+  useEffect(() => {
+    if (isNaN(target) || target === null || target === undefined) return;
+
+    let startTimestamp = null;
+    const duration = 2200; // ms (2.2 seconds)
+
+    const step = (timestamp) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // Ease out cubic
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const current = progress === 1 ? target : target * easeOut;
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        window.requestAnimationFrame(step);
+      }
+    };
+
+    const animFrame = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(animFrame);
+  }, [target]);
+
+  if (value === null || value === undefined || isNaN(target)) {
+    return <span>NA</span>;
+  }
+
+  return (
+    <>
+      {displayValue.toFixed(decimals)}
+      <Typography
+        component="span"
+        sx={{
+          fontSize: 11,
+          fontWeight: 700,
+          ml: 0.3,
+          color: "inherit",
+        }}
+      >
+        {suffix}
+      </Typography>
+    </>
+  );
+}
+
+/**
+ * Modern Glassmorphic Plant Card with Micro-Animations & Data Viz
  * Features:
- * - Multi-layer frosted glass with 24px blur and saturation boost
- * - Specular top-edge glass reflections
- * - Dynamic ambient neon glow on focus and hover
- * - High-contrast KPI glass tiles with depth inset
+ * - Animated counting-up KPI percentages
+ * - Dynamic SVG sparklines that draw themselves from left to right on load
+ * - True Glassmorphism with 24px blur & specular glass top-edge reflection
+ * - Ambient neon glow & smooth hover micro-interactions
  */
 function ModernPlantCard({
   plant,
@@ -16,6 +70,7 @@ function ModernPlantCard({
   onHover,
   onLeave,
   onSelect,
+  index = 0,
 }) {
   const theme = useTheme();
   const highlighted = active && (hovered || selected);
@@ -198,32 +253,45 @@ function ModernPlantCard({
           value={plant.oee}
           isPositive={plant.oee >= 90}
           highlighted={highlighted}
+          delay={0.1 + index * 0.08}
         />
         <KpiBlock
           label="OTIF"
           value={plant.otif}
           isPositive={plant.otif >= 95}
           highlighted={highlighted}
+          delay={0.18 + index * 0.08}
         />
         <KpiBlock
           label="YIELD"
           value={plant.yield}
           isPositive={plant.yield >= 97}
           highlighted={highlighted}
+          delay={0.26 + index * 0.08}
         />
         <KpiBlock
           label="PQR"
           value={plant.pqr || 95.0}
           isPositive={plant.pqr ? plant.pqr >= 95 : true}
           highlighted={highlighted}
+          delay={0.34 + index * 0.08}
         />
       </Box>
     </Box>
   );
 }
 
-function KpiBlock({ label, value, isPositive = true, highlighted = false }) {
-  const displayVal = typeof value === "number" ? value.toFixed(1) : value;
+function KpiBlock({
+  label,
+  value,
+  isPositive = true,
+  highlighted = false,
+  delay = 0.1,
+}) {
+  const strokeColor = isPositive ? "#22C55E" : "#EF4444";
+  const pathData = isPositive
+    ? "M 2,9 Q 16,12 30,5 T 58,3"
+    : "M 2,3 Q 16,2 30,7 T 58,10";
 
   return (
     <Box
@@ -241,7 +309,8 @@ function KpiBlock({ label, value, isPositive = true, highlighted = false }) {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        boxShadow: "0 2px 6px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+        boxShadow:
+          "0 2px 6px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
         transition: "all 0.2s ease",
       }}
     >
@@ -268,36 +337,28 @@ function KpiBlock({ label, value, isPositive = true, highlighted = false }) {
           alignItems: "baseline",
         }}
       >
-        {displayVal || "NA"}
-        <Typography
-          component="span"
-          sx={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: isPositive ? "#16A34A" : "#DC2626",
-            ml: 0.3,
-          }}
-        >
-          %
-        </Typography>
+        <AnimatedNumber value={value} decimals={1} suffix="%" />
       </Typography>
 
-      {/* Sparkline curve under metric */}
-      <Box sx={{ mt: 0.8, height: 12, width: "100%" }}>
+      {/* Animated Drawing Sparkline Curve */}
+      <Box sx={{ mt: 0.8, height: 12, width: "100%", overflow: "visible" }}>
         <svg
           viewBox="0 0 60 12"
           style={{ width: "100%", height: "100%", overflow: "visible" }}
         >
-          <path
-            d={
-              isPositive
-                ? "M 0,8 Q 15,12 30,5 T 60,3"
-                : "M 0,3 Q 15,2 30,7 T 60,10"
-            }
+          <motion.path
+            d={pathData}
             fill="none"
-            stroke={isPositive ? "#22C55E" : "#EF4444"}
-            strokeWidth="1.8"
+            stroke={strokeColor}
+            strokeWidth="2"
             strokeLinecap="round"
+            initial={{ pathLength: 0, opacity: 0.2 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{
+              duration: 2.2,
+              ease: [0.16, 1, 0.3, 1],
+              delay: 0.3 + delay,
+            }}
           />
         </svg>
       </Box>

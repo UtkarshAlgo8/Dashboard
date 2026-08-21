@@ -182,14 +182,14 @@ function SatelliteIndiaMap({
     if (targetId) {
       const plant = plants.find((p) => p.id === targetId);
       if (plant && plant.lng && plant.lat) {
-        // Cinematic 3D Fly-In with 50-degree pitch and subtle isometric bearing
+        // Fast, responsive 3D Fly-In with 50-degree pitch and subtle isometric bearing
         map.flyTo({
           center: [plant.lng, plant.lat],
           zoom: 8.2,
           pitch: 50,
           bearing: -12,
-          speed: 1.15,
-          curve: 1.35,
+          speed: 1.2,
+          curve: 1.3,
           padding: padding,
           essential: true,
         });
@@ -203,7 +203,7 @@ function SatelliteIndiaMap({
       zoom: INITIAL_ZOOM,
       pitch: 0,
       bearing: 0,
-      speed: 0.95,
+      speed: 1.0,
       curve: 1.25,
       padding: padding,
       essential: true,
