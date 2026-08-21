@@ -460,36 +460,47 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // DAY rows — see useLeafDayRows in OeeDrillPanel.
   const drillGranularity = state.granularity ?? "DAY";
   const drillDateSource =
-    state.category === "p" && state.granularity === "MONTH" && state.from && state.to
+    state.category === "p" &&
+    state.granularity === "MONTH" &&
+    state.from &&
+    state.to
       ? state
       : state.drillDate
         ? { date: state.drillDate }
         : state;
 
-  const drillPayload = state.drillKpis
-    ? {
-        plantId,
-        context: {
-          ...buildContext(state),
-          // changes.md §8: fall back to the real "DAY" granularity (not the
-          // stale "Daily" literal, which matches no real rows) when no
-          // shift/preset granularity is active (All-Shifts Today / custom
-          // range). The backend synonym map accepts either, but DAY keeps
-          // the drill children aligned with the aggregate DAY rows.
-          granularity: drillGranularity,
-        },
-        // new_change.md C1/C3/C6: the drill inherits the card's EXACT
-        // window, built the same way — range only, or a single date only.
-        // When the card anchored itself to its OWN latest day (C6), the
-        // drill is pinned to that day rather than the whole trailing
-        // window, so card and drill always land on the same date.
-        ...buildDatePayload(drillDateSource),
-        drillKpis: state.drillKpis,
-        parentFilters: state.parentFilters,
-        limit: 10000,
-        drillOnly: true,
-      }
-    : null;
+  // CR-11: the Total Downtime tile's drill targets ARE the 6 reason leaves,
+  // which the dedicated DAY fetch above already holds — and DowntimeDrillPanel
+  // now reads that feed directly. Re-fetching them here bought nothing and, at
+  // MONTH/YEAR granularity, returned nothing at all (no reason row is stored
+  // above DAY). Skip it.
+  const skipDrillFetch = state.drillSourceKpiId === "downtime";
+
+  const drillPayload =
+    state.drillKpis && !skipDrillFetch
+      ? {
+          plantId,
+          context: {
+            ...buildContext(state),
+            // changes.md §8: fall back to the real "DAY" granularity (not the
+            // stale "Daily" literal, which matches no real rows) when no
+            // shift/preset granularity is active (All-Shifts Today / custom
+            // range). The backend synonym map accepts either, but DAY keeps
+            // the drill children aligned with the aggregate DAY rows.
+            granularity: drillGranularity,
+          },
+          // new_change.md C1/C3/C6: the drill inherits the card's EXACT
+          // window, built the same way — range only, or a single date only.
+          // When the card anchored itself to its OWN latest day (C6), the
+          // drill is pinned to that day rather than the whole trailing
+          // window, so card and drill always land on the same date.
+          ...buildDatePayload(drillDateSource),
+          drillKpis: state.drillKpis,
+          parentFilters: state.parentFilters,
+          limit: 10000,
+          drillOnly: true,
+        }
+      : null;
 
   const {
     data: landingData,
@@ -519,9 +530,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // CR-11: parallel DAY-granularity fetch for the 6 OEE-availability-loss
   // reasons so the TotalDowntime tile renders for Month / Year / custom
   // presets (where the main landing fetch at MONTH returns no reason rows).
-  const {
-    data: downtimeData,
-  } = usePolledQuery(
+  const { data: downtimeData, isLoading: downtimeLoading } = usePolledQuery(
     () =>
       downtimePayload
         ? fetchCachedDashboard(downtimePayload)
@@ -546,8 +555,18 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // Merge: landing always present; drill children appended when a card
   // is drilled. The transformer and panels both read from this combined
   // list — landing rows feed the 4 KPI cards, drill rows feed the panel.
-  // CR-11: the parallel downtime rows (DAY granularity, 6 reasons) are
-  // appended so the TotalDowntime tile can synthesise per-date sums.
+  //
+  // CR-11: the dedicated downtime rows are deliberately NOT merged in here.
+  // They are DAY rows for the 6 reason leaves, and folding them into the one
+  // array everything reads broke two things at once:
+  //   1. OEE drill blank on Month/Year — OeeDrillPanel collapses `rawRows`
+  //      to its latest date, and the DAY reason dates run past the MONTH
+  //      rows' date, so every MONTH OEE row was filtered out.
+  //   2. Total Downtime doubling on click — drilling the tile (or OEE, whose
+  //      targets include all six reasons) fetches those same leaves again,
+  //      and the tile summed both copies.
+  // They travel separately instead: `downtimeRows` → toKpiGrid for the tile,
+  // and → DowntimeDrillPanel for the reason breakdown.
   const landingRows = Array.isArray(landingData?.rows)
     ? landingData.rows
     : null;
@@ -559,7 +578,6 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     ? [
         ...landingRows,
         ...(state.drillKpis && drillDataRows ? drillDataRows : []),
-        ...(downtimeRows ?? []),
       ]
     : null;
   // new_change.md C10: either fetch hitting the row cap makes the totals on
@@ -579,7 +597,13 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const isLoading = !hasDateRange || landingLoading;
   // Drill-only loading flag so drill panels can render a skeleton while
   // their fetch is in flight, without confusing it with landing reload.
-  const isDrillLoading = Boolean(drillPayload) && drillLoading;
+  // CR-11: the Total Downtime drill has no drillPayload of its own (see
+  // skipDrillFetch) — its panel is backed by the dedicated reason fetch, so
+  // report THAT as the in-flight state or the panel renders its empty message
+  // instead of a skeleton while the rows are still arriving.
+  const isDrillLoading = skipDrillFetch
+    ? Boolean(downtimePayload) && downtimeLoading
+    : Boolean(drillPayload) && drillLoading;
   const error = landingError || drillError || null;
 
   // When the latest landing data actually arrived from the backend, stamped
@@ -587,42 +611,52 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // data — no effect, no ref — so it advances with each fetch / filter change.
   const lastUpdatedAt = landingData?.fetchedAt ?? null;
 
-  const kpis = data
-    ? toKpiGrid(data, {
-        section: sectionIdToName(state.section),
-        category: state.category.toUpperCase(),
-        granularity: state.granularity ?? "DAY",
-        mode: state.mode ?? "snapshot",
-        // Decides strict vs soft filter pins — CTP strict, Banmore soft.
-        plantId,
-        // Equipment KPIs come back for every product type now (backend
-        // exemption); the transformer uses this to prefer the selected
-        // product's row when it exists and fall back to the line value.
-        productType: state.productType ?? null,
-        // new_change.md C8/C9: never combine two units of the same series.
-        unitOfMeasurement: state.unitOfMeasurement ?? null,
-        // The card whose drill is open — lets the transformer switch a
-        // multi-unit KPI (Production: Batch/KG) to its mass unit while
-        // drilled, and back to Batch when closed.
-        drilledKpiId: state.drillSourceKpiId ?? null,
-        // new_change.md C6: per-KPI anchors, applied to the DEFAULT view
-        // only — an explicit user date/range always wins (C1).
-        anchors,
-        useAnchors:
-          !state.userWindow && (state.mode ?? "snapshot") !== "aggregate",
-        // new_change.md C14/S-3: suppress the spike on an in-progress day.
-        partialDays,
-        // new_change.md C15/C16/C17: the real preceding window.
-        baselineRows: landingData?.baseline ?? null,
-        baselineWindow: landingData?.baselineWindow ?? null,
-        // new_change.md C10.
-        truncated,
-      })
-    : [];
+  // CR-11: render the grid when EITHER feed has rows — a view whose only
+  // data is the dedicated reason fetch still has a Total Downtime tile.
+  const kpis =
+    data || downtimeRows
+      ? toKpiGrid(data ?? [], {
+          section: sectionIdToName(state.section),
+          category: state.category.toUpperCase(),
+          granularity: state.granularity ?? "DAY",
+          mode: state.mode ?? "snapshot",
+          // Decides strict vs soft filter pins — CTP strict, Banmore soft.
+          plantId,
+          // Equipment KPIs come back for every product type now (backend
+          // exemption); the transformer uses this to prefer the selected
+          // product's row when it exists and fall back to the line value.
+          productType: state.productType ?? null,
+          // new_change.md C8/C9: never combine two units of the same series.
+          unitOfMeasurement: state.unitOfMeasurement ?? null,
+          // The card whose drill is open — lets the transformer switch a
+          // multi-unit KPI (Production: Batch/KG) to its mass unit while
+          // drilled, and back to Batch when closed.
+          drilledKpiId: state.drillSourceKpiId ?? null,
+          // new_change.md C6: per-KPI anchors, applied to the DEFAULT view
+          // only — an explicit user date/range always wins (C1).
+          anchors,
+          useAnchors:
+            !state.userWindow && (state.mode ?? "snapshot") !== "aggregate",
+          // new_change.md C14/S-3: suppress the spike on an in-progress day.
+          partialDays,
+          // new_change.md C15/C16/C17: the real preceding window.
+          baselineRows: landingData?.baseline ?? null,
+          baselineWindow: landingData?.baselineWindow ?? null,
+          // new_change.md C10.
+          truncated,
+          // CR-11 / Q-DT-01: the ONLY feed for the Total Downtime tile.
+          downtimeRows,
+        })
+      : [];
   const drillRows = data && state.drillKpis !== null ? toDrillRows(data) : null;
 
   useEffect(() => {
-    if (!hasDateRange || isLoading || !Array.isArray(kpis) || kpis.length === 0) {
+    if (
+      !hasDateRange ||
+      isLoading ||
+      !Array.isArray(kpis) ||
+      kpis.length === 0
+    ) {
       return;
     }
     const candidates = kpis
@@ -630,7 +664,11 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
         (kpi) =>
           kpi?.drillable &&
           Array.isArray(kpi.drillTargets) &&
-          kpi.drillTargets.length > 0,
+          kpi.drillTargets.length > 0 &&
+          // CR-11: the Total Downtime drill fires no fetch of its own
+          // (skipDrillFetch), so warming a cache key for it is pure waste —
+          // and it would evict a key a real drill still needs.
+          kpi.id !== "downtime",
       )
       .slice(0, 3);
 
@@ -657,13 +695,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
         // Prefetch is opportunistic; the foreground drill fetch still owns UX.
       });
     }
-  }, [
-    hasDateRange,
-    isLoading,
-    kpis,
-    plantId,
-    state,
-  ]);
+  }, [hasDateRange, isLoading, kpis, plantId, state]);
 
   const setFilter = useCallback((payload, resetDrill = false) => {
     dispatch({ type: "SET_FILTER", payload, resetDrill });
@@ -699,6 +731,9 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     kpis,
     drillRows,
     rawRows: data ?? null,
+    // CR-11: the 6 OEE-availability-loss reason leaves at DAY granularity,
+    // kept out of `rawRows` on purpose (see the merge note above).
+    downtimeRows,
     // new_change.md C10 — true means the row cap was hit and any total on
     // screen is INCOMPLETE.
     truncated,

@@ -156,6 +156,7 @@ function BanmoreProduction() {
     kpis,
     drillRows,
     rawRows,
+    downtimeRows,
     isLoading: kpiLoading,
     isDrillLoading,
     lastUpdatedAt,
@@ -1028,6 +1029,10 @@ function BanmoreProduction() {
                             shift={dashboard.granularity}
                             allDrillRows={drillRows}
                             rawRows={rawRows}
+                            // CR-11: the 6 reason leaves at DAY granularity,
+                            // from their own fetch — never merged into
+                            // rawRows (see useDashboardFetch).
+                            downtimeRows={downtimeRows}
                             prodSub={activeProductType}
                             unitPin={activeUnit}
                             mode={dashboard.mode}
@@ -1168,6 +1173,7 @@ function DrillPanelRouter({
   shift,
   allDrillRows,
   rawRows,
+  downtimeRows,
   prodSub,
   unitPin,
   mode,
@@ -1248,11 +1254,16 @@ function DrillPanelRouter({
       );
     case "downtime":
       return (
+        // CR-11: the 6 reason leaves exist at DAY granularity only (no MONTH
+        // roll-up in gold), so this panel reads its OWN feed and is pinned to
+        // DAY. Handing it `rawRows` + the card's granularity blanked the
+        // breakdown on every preset but Today, since no reason row is stored
+        // at MONTH.
         <DowntimeDrillPanel
           section={section}
-          rawRows={rawRows}
+          rawRows={downtimeRows}
           mode={mode}
-          granularity={granularity}
+          granularity="DAY"
           isLoading={isLoading}
         />
       );

@@ -1109,12 +1109,13 @@ export function landingKpiNames(section, category) {
   const defs = ALLOWED_KPIS[section]?.[category] ?? [];
   if (defs.length === 0) return [];
   const names = new Set(defs.map((k) => k.name));
-  // CR-11 / Q-DT-01: "TotalDowntime" is a frontend virtual kpi_name.
-  // When the def is registered, expand the fetch to its 6 reason leaves
-  // (real gold kpi_names) so the transformer can aggregate per date.
-  if (names.has(TOTAL_DOWNTIME_NAME)) {
-    for (const r of DOWNTIME_REASONS) names.add(r);
-  }
+  // CR-11 / Q-DT-01: "TotalDowntime" is a frontend virtual kpi_name and is
+  // NOT expanded here. The 6 reason leaves sit at drill_down_level=2 — the
+  // landing band never returns them — so they come from the dedicated DAY
+  // fetch in useDashboardFetch and reach toKpiGrid via `downtimeRows`.
+  // Expanding them here only inflated the landing payload with names the
+  // LANDING_PREDICATE cannot match.
+  names.delete(TOTAL_DOWNTIME_NAME);
   if (section === "TBM" || section === "Curing") {
     names.add("Production_product");
   }
@@ -1197,16 +1198,25 @@ const STRICT_FILTER_PLANTS = new Set(["chennai", "ctp"]);
 function selectSeries(
   groups,
   kpiDef,
-  { section, productType, unitOfMeasurement, drilledKpiId, strictFilters },
+  {
+    section,
+    productType,
+    unitOfMeasurement,
+    drilledKpiId,
+    strictFilters,
+    downtimeByReason = null,
+  },
 ) {
   let name = kpiDef.name;
   let groupDesc = groups.get(name) ?? [];
 
   // CR-11 / Q-DT-01: TotalDowntime is a virtual kpi_name. Synthesise
-  // per-date rows by summing the 6 OEE-availability-loss reason leaves
-  // (gold rows already fetched by landingKpiNames). The existing card
-  // builder consumes the synthesised rows verbatim — value/spark/etc.
-  // fall out of the normal SUM aggregation.
+  // per-date rows by summing the 6 OEE-availability-loss reason leaves,
+  // read ONLY from `downtimeByReason` — the dedicated DAY fetch, indexed
+  // by toKpiGrid. Never from `groups`: a reason/OEE drill puts a second
+  // copy of the same leaves in the shared row array, and summing both
+  // doubled the tile. The existing card builder consumes the synthesised
+  // rows verbatim — value/spark/etc. fall out of the normal SUM.
   //
   // The synthesised granularity matches the dominant source granularity
   // (most rows in the 6 reasons share the same granularity — the
@@ -1215,10 +1225,11 @@ function selectSeries(
   // the "—" placeholder even though the chart (which doesn't gate on
   // granularity) renders correctly.
   if (name === TOTAL_DOWNTIME_NAME) {
+    if (!downtimeByReason) return { name: TOTAL_DOWNTIME_NAME, rows: [] };
     const perDate = new Map();
     const granularityCount = new Map();
     for (const reason of DOWNTIME_REASONS) {
-      const g = groups.get(reason);
+      const g = downtimeByReason.get(reason);
       if (!g) continue;
       for (const r of g) {
         const v = numberOrNull(r.actual_value);
@@ -1395,7 +1406,14 @@ function atGranularity(rows, granularity) {
  */
 function baselineAggregate(baselineGroups, kpiDef, narrowOpts, granularity) {
   if (!baselineGroups) return null;
-  const { name, rows } = selectSeries(baselineGroups, kpiDef, narrowOpts);
+  // CR-11: the dedicated reason fetch asks for no baseline window, so there
+  // are no PRECEDING-window reason rows. Blank the current window's copy
+  // rather than let selectSeries hand the same minutes back as the baseline
+  // (which would read as a flat 0 % trend on the Total Downtime tile).
+  const { name, rows } = selectSeries(baselineGroups, kpiDef, {
+    ...narrowOpts,
+    downtimeByReason: null,
+  });
   const values = atGranularity(rows, granularity)
     .map((r) => numberOrNull(r.actual_value))
     .filter((v) => v !== null);
@@ -1448,9 +1466,24 @@ export function toKpiGrid(
     // (Banmore) — see STRICT_FILTER_PLANTS and selectSeries. Defaults to
     // the soft path, so an omitted plantId can never blank a card.
     plantId = null,
+    // CR-11 / Q-DT-01: the 6 OEE-availability-loss reason leaves, from
+    // their OWN dedicated DAY-granularity fetch. Kept OUT of `rows` on
+    // purpose: `rows` is the array every drill panel also reads, and DAY
+    // reason rows mixed into a MONTH landing set moved the panels' "latest
+    // date" onto a day with no landing rows (blank OEE drill), while a
+    // reason-drill fetch returned the SAME leaves a second time and the
+    // tile summed both copies (2x). This is the ONLY feed for the
+    // TotalDowntime tile — see selectSeries.
+    downtimeRows = null,
   } = {},
 ) {
-  if (!Array.isArray(rows) || rows.length === 0) return [];
+  // CR-11: an empty landing band is not an empty grid when the dedicated
+  // reason fetch returned rows — the Total Downtime tile is fed only by
+  // `downtimeRows`, so bail out only when BOTH feeds are empty.
+  const hasLandingRows = Array.isArray(rows) && rows.length > 0;
+  const hasDowntimeRows =
+    Array.isArray(downtimeRows) && downtimeRows.length > 0;
+  if (!hasLandingRows && !hasDowntimeRows) return [];
 
   // Two execution modes:
   //   "snapshot"  — use the LATEST row at `granularity` and take
@@ -1468,12 +1501,11 @@ export function toKpiGrid(
   // Get allowed KPI names for this (section, category) combo only.
   const allowedKpis = ALLOWED_KPIS[section]?.[category] ?? [];
   const allowedNames = new Set(allowedKpis.map((k) => k.name));
-  // CR-11 / Q-DT-01: the virtual TotalDowntime tile is fed by the 6
-  // OEE-availability-loss reason leaves — those rows must survive the
-  // allow-list filter so selectSeries can aggregate them.
-  if (allowedNames.has(TOTAL_DOWNTIME_NAME)) {
-    for (const r of DOWNTIME_REASONS) allowedNames.add(r);
-  }
+  // CR-11 / Q-DT-01: the 6 reason leaves are deliberately NOT allow-listed
+  // here. They arrive via `downtimeRows`, not `rows` — and any copy of them
+  // that IS in `rows` (a reason drill, or the OEE drill, whose targets
+  // include all six) must never reach the tile, or the same minutes get
+  // counted twice.
   // new_change.md C7: in TBM/Curing the Production CARD reads
   // Production_product, so those rows must survive the allow-list filter.
   if (section === "TBM" || section === "Curing") {
@@ -1490,7 +1522,23 @@ export function toKpiGrid(
   // spec §6) come back with section="nan"; they bypass the section check.
   const groupOpts = { section, allowedNames, plantLevelNames };
   const groups = buildKpiGroups(rows, groupOpts);
-  if (groups.size === 0) return [];
+  // CR-11: scope the dedicated reason rows to this section the same way
+  // buildKpiGroups scopes `rows`, then index them by reason kpi_name.
+  const downtimeByReason = new Map();
+  if (Array.isArray(downtimeRows)) {
+    const reasonNames = new Set(DOWNTIME_REASONS);
+    for (const r of downtimeRows) {
+      if (!r || !reasonNames.has(r.kpi_name)) continue;
+      if (r.section !== section) continue;
+      const bucket = downtimeByReason.get(r.kpi_name);
+      if (bucket) bucket.push(r);
+      else downtimeByReason.set(r.kpi_name, [r]);
+    }
+  }
+  // A section with landing rows OR reason rows still has a grid to draw.
+  // Gating on `groups` alone would drop the whole grid — Total Downtime
+  // tile included — on a view whose only data is the dedicated reason fetch.
+  if (groups.size === 0 && downtimeByReason.size === 0) return [];
   // C16: the baseline rows go through the SAME grouping + narrowing, so the
   // only difference between the two windows is the date.
   const baselineGroups = Array.isArray(baselineRows)
@@ -1501,6 +1549,7 @@ export function toKpiGrid(
     productType,
     unitOfMeasurement,
     drilledKpiId,
+    downtimeByReason,
     strictFilters: STRICT_FILTER_PLANTS.has(
       String(plantId ?? "")
         .trim()
@@ -1588,9 +1637,7 @@ export function toKpiGrid(
       // rather than just the latest day's value. Other KPIs keep the
       // existing "newest" semantics.
       const value = isTotalDowntime
-        ? Math.round(
-            numericVals.reduce((s, v) => s + v, 0) * 100,
-          ) / 100
+        ? Math.round(numericVals.reduce((s, v) => s + v, 0) * 100) / 100
         : Math.round(numericVals[0] * 100) / 100;
       const sparkVals = numericVals.slice(0, sparkLength).reverse();
 

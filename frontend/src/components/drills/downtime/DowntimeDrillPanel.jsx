@@ -37,10 +37,12 @@ const SECTION_NAME = {
  *     6 reasons are gold-level leaves — there's no further hierarchy
  *     beyond the per-event table.
  *
- * Source: the 6 reason leaves are already in `rawRows` (the dashboard
- * fetch includes them because landingKpiNames expands the virtual
- * "TotalDowntime" kpi_name to the 6 reasons — Q-DT-01). The panel
- * groups them here for Level 1 and filters for Level 2.
+ * Source: `rawRows` here is the DEDICATED reason feed (useDashboardFetch's
+ * `downtimeRows`) — a DAY-granularity fetch of the 6 leaves, deliberately
+ * kept out of the shared dashboard row array (Q-DT-01). The panel groups
+ * them here for Level 1 and filters for Level 2. `granularity` is always
+ * DAY: gold stores no reason row above DAY, so following the card onto
+ * MONTH would blank the breakdown.
  */
 function DowntimeDrillPanel({
   section,
