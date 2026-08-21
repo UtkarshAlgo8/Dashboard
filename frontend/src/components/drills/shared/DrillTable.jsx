@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import {
+  Box,
   Stack,
   Table,
   TableBody,
@@ -63,33 +64,60 @@ export function DrillTable({
     return out;
   });
 
+  const legendNode = legend ? (
+    typeof legend === "string" ? (
+      <TableLegend preset={legend} />
+    ) : Array.isArray(legend) ? (
+      <TableLegend items={legend} />
+    ) : (
+      legend
+    )
+  ) : hasStatusCells(rows, rowMapper) ? (
+    <TableLegend preset="status" />
+  ) : null;
+
   return (
     <Stack spacing={1.25} sx={{ position: "relative" }}>
-      {title && (
+      {(title || downloadFilename || legendNode) && (
         <Stack
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          spacing={1}
+          spacing={1.5}
+          useFlexGap
+          flexWrap="wrap"
         >
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: accent ? `${accent}.main` : "text.primary",
-            }}
-          >
-            {title}
-          </Typography>
-          {downloadFilename && (
-            <CardDownloadButton
-              cardRef={tableRef}
-              rows={excelRows}
-              headers={excelHeaders}
-              filename={downloadFilename}
-              sheetName={downloadSheetName}
-            />
+          {title ? (
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: accent ? `${accent}.main` : "text.primary",
+              }}
+            >
+              {title}
+            </Typography>
+          ) : (
+            <Box />
           )}
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1.5}
+            useFlexGap
+            flexWrap="wrap"
+          >
+            {legendNode}
+            {downloadFilename && (
+              <CardDownloadButton
+                cardRef={tableRef}
+                rows={excelRows}
+                headers={excelHeaders}
+                filename={downloadFilename}
+                sheetName={downloadSheetName}
+              />
+            )}
+          </Stack>
         </Stack>
       )}
       <TableContainer
@@ -215,18 +243,6 @@ export function DrillTable({
           </TableBody>
         </Table>
       </TableContainer>
-
-      {legend ? (
-        typeof legend === "string" ? (
-          <TableLegend preset={legend} />
-        ) : Array.isArray(legend) ? (
-          <TableLegend items={legend} />
-        ) : (
-          legend
-        )
-      ) : hasStatusCells(rows, rowMapper) ? (
-        <TableLegend preset="status" />
-      ) : null}
     </Stack>
   );
 }

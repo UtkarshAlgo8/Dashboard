@@ -67,6 +67,10 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       };
     });
 
+    const showDataLabels =
+      labels.length > 0 &&
+      (labels.length <= 15 || labels.length * cleanedSeries.length <= 45);
+
     return {
       chart: {
         type: "line",
@@ -147,6 +151,26 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
           lineWidth: 2.5,
           marker: { enabled: true, radius: 3.5, lineWidth: 0 },
           states: { hover: { lineWidth: 3 } },
+          dataLabels: {
+            enabled: showDataLabels,
+            allowOverlap: false,
+            crop: false,
+            overflow: "justify",
+            padding: 3,
+            style: {
+              fontSize: "10px",
+              fontWeight: "600",
+              color: text,
+              textOutline: "none",
+              fontFamily: theme.typography.fontFamily,
+            },
+            formatter: function () {
+              if (this.y == null) return null;
+              return typeof this.y === "number" && !Number.isInteger(this.y)
+                ? this.y.toFixed(1)
+                : this.y;
+            },
+          },
         },
       },
       series: cleanedSeries,
