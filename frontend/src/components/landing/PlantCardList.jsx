@@ -1,9 +1,8 @@
 import { Stack } from "@mui/material";
-import PlantCard from "./PlantCard.jsx";
+import ModernPlantCard from "./ModernPlantCard.jsx";
 
 /**
- * Vertical list of plant cards. Banmore is the only active plant in
- * Phase 1 (Q-NAV-01); others render disabled.
+ * Vertical list of plant cards.
  */
 function PlantCardList({
   plants,
@@ -15,11 +14,11 @@ function PlantCardList({
   onSelect,
 }) {
   return (
-    <Stack spacing={1.5}>
+    <Stack spacing={2} sx={{ width: "100%" }}>
       {plants.map((plant) => {
         const active = activePlantIds.has(plant.id);
         return (
-          <PlantCard
+          <ModernPlantCard
             key={plant.id}
             plant={plant}
             active={active}
@@ -36,3 +35,4 @@ function PlantCardList({
 }
 
 export default PlantCardList;
+
