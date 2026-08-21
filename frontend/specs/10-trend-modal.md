@@ -5,7 +5,15 @@
 **Status:** ready
 **Blast radius:** YELLOW — cross-cutting (every KPI card uses it)
 
+> **Change log**
+>
+> - CR-08 (2026-08-21) — View By reduced to `Overall / Product Type /
+Machine` (drop SKU + Shift). Added multi-select Machines filter
+>   that scopes which machines feed the chart. COMPARE row hidden
+>   for Machine view (filter takes its role); kept for Product Type.
+
 ## Prerequisites
+
 - Specs 01–09 — landed; KPI grid + Trend icon already in place
   (currently toasts "spec 10")
 
@@ -50,6 +58,7 @@ this spec replaces that with the modal per BRD §9.3.
 
 Implemented as `pickChartType(kpiId, unit, value)` in
 `src/components/trend/pickChartType.js`. For Phase 1 KPIs:
+
 - `oee`, `plan-compliance` → line
 - `production`, `downtime` → bar
 - counters → progress (no counters in Phase 1, but the function
@@ -61,6 +70,7 @@ Implemented as `pickChartType(kpiId, unit, value)` in
 `${compound}/${kpiId}/${range}`. Each entry: `{ labels, values }`.
 
 For Phase 1, four ranges are seeded per (compound, KPI):
+
 - `today` — 8 hourly points
 - `week` — 7 daily points
 - `month` — 12 trailing-3-day points (so the line is readable)
@@ -72,6 +82,7 @@ Manually authored for visual sensibility, not from a generator.
 ### API
 
 `src/api/trends.js` — implement:
+
 - `getTrend({ plantId, kpiId, range, from, to, compound })` →
   `Promise<{ labels: string[], values: number[] }>`. Custom date
   range (`from`/`to`) falls back to `month` for Phase 1.
@@ -92,11 +103,28 @@ Manually authored for visual sensibility, not from a generator.
 - **`TrendModal.jsx`** — MUI `Dialog` (full-screen on tablet, large
   centered on desktop). Contents:
   - Header: "KPI TREND ANALYSIS" small caps label + KPI name large
-    + close X. PCR/TBR pill only if `tyreType !== "all"` AND plant
-    `≠ banmore` (Banmore is PCR-only).
+    - close X. PCR/TBR pill only if `tyreType !== "all"` AND plant
+      `≠ banmore` (Banmore is PCR-only).
   - Time range selector (4 presets + From/To); state local to the
     modal, defaults to "month".
-  - Chart area: renders the selected variant via `pickChartType`.
+  - For OEE (kpi.id === "oee"): `OeeTrendModal` path with
+    - **View By pills**: `Overall | Product Type | Machine`.
+      Overall reads OEE_o; Product Type reads OEE_o and groups
+      client-side by `tyre_type` (Q-OEE-01 — `product_type` is
+      NULL for OEE rows); Machine reads OEE_m and groups by
+      `machine`.
+    - **Machines filter** (multi-select `Autocomplete`): scopes
+      which machines' rows feed the chart. Empty = all machines.
+      Visible only when View By = Machine or Product Type (hidden
+      for Overall since OEE_o is section-aggregated).
+    - **Compare row** (multi-select pills): visible only when
+      View By = Product Type, so the user can pick which product
+      types draw as lines.
+    - **Overlay row** (multi-select pills): one or more of
+      `+ Breakdown / + Production / + Scrap / + Availability`,
+      rendered as a combined overlay chart below the main chart.
+  - For every other KPI: legacy single-series path via
+    `pickChartType` (line / bar / progress).
   - No insight panel, no per-statistic tiles, no chart-type badge
     (explicitly excluded by FR-X15 / FR-X16).
   - Escape key + click-outside + X all close (MUI Dialog handles
@@ -111,8 +139,8 @@ clears it.
 ## Reuse check
 
 - [x] `TimeRangeSelect` from `src/components/production/` is reused
-  as-is — same control, different host. Spec 04 already kept its
-  state lifted via props; the modal just provides a different parent.
+      as-is — same control, different host. Spec 04 already kept its
+      state lifted via props; the modal just provides a different parent.
 - [x] `useToast` for the rare error path.
 - No new common primitive needed yet.
 
@@ -151,6 +179,13 @@ clears it.
 - OEE + Plan Compliance render as line charts; Production +
   Downtime render as bar charts. Charts include target line +
   BEST/WORST markers per `FR-X14`.
+- For OEE cards:
+  - View By = Overall shows a single "Overall" line.
+  - View By = Product Type shows one line per `tyre_type`; the
+    COMPARE row is visible and the Machines filter is visible.
+  - View By = Machine shows one line per machine; the COMPARE
+    row is hidden; the Machines filter is visible and selecting
+    2 machines narrows the chart to those 2.
 - `npm run check` exits zero.
 - Manual click-through.
 - Commit lands → `logs/history.md`.

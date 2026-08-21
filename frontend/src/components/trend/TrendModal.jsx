@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import {
+  Autocomplete,
   Box,
   Dialog,
   DialogContent,
   DialogTitle,
   IconButton,
   Stack,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -39,10 +41,12 @@ import {
  *
  * Two paths share this modal:
  *
- *   1. OEE path — VIEW BY / COMPARE / OVERLAY pills on top of a
- *      multi-series main chart (one line per COMPARE item), with an
- *      optional combined-overlay chart below showing every picked
- *      overlay kpi on the same axes plus a legend.
+ *   1. OEE path — VIEW BY pills (Overall / Product Type / Machine) on
+ *      top of a multi-series main chart (one line per grouping value),
+ *      plus an optional Machines filter that scopes which machines
+ *      feed the chart and an optional combined-overlay chart below
+ *      showing every picked overlay kpi on the same axes plus a legend.
+ *      Spec: specs/10-trend-modal.md. Change log: specs/cr/CR-08.
  *
  *   2. Legacy single-series path — every other KPI (Production, Scrap,
  *      Downtime, …) keeps the original single-line behaviour.
@@ -407,28 +411,28 @@ function LegacyTrendModal({
 /* =========================================================================
  * New OEE Trend modal — VIEW BY / COMPARE / OVERLAY pills on top of a
  * MultiLineChart, with optional single-series overlay charts stacked
- * below. The fetch is one trip per granularity (three for Shift), so
- * round-trip count is bounded.
+ * below. One trip per OEE Trend open — the SHIFT three-trip fan-out
+ * was removed in CR-08.
  * ========================================================================= */
 
 const VIEW_BY_OPTIONS = [
   { value: "overall", label: "Overall" },
+  { value: "product_type", label: "Product Type" },
   { value: "machine", label: "Machine" },
-  { value: "sku", label: "SKU" },
-  { value: "shift", label: "Shift" },
 ];
 
 const VIEW_BY_LABEL = Object.fromEntries(
   VIEW_BY_OPTIONS.map((o) => [o.value, o.label]),
 );
 
-// Each VIEW BY level maps to one OEE kpi_name. SKU = OEE_s per the user's
-// spec; the system has no SKU-OEE kpi_name, so the closest match is the
-// sub_section OEE (Curing trench / Stock subsection).
+// Each VIEW BY level maps to one OEE kpi_name. "Product Type" reads
+// OEE_o and groups client-side by the `tyre_type` gold column (the
+// product_type column is NULL for OEE rows — Q-OEE-01 in
+// docs/open-questions.md). "Machine" reads OEE_m (one row per
+// machine/day). "Overall" reads OEE_o (section-level).
 function viewByMainKpi(viewBy) {
   if (viewBy === "machine") return "OEE_m";
-  if (viewBy === "sku") return "OEE_s";
-  return "OEE_o"; // overall + shift both read OEE_o
+  return "OEE_o"; // overall + product_type
 }
 
 // Each overlay has one or more valid kpi_names. Availability picks the
@@ -444,9 +448,8 @@ const OVERLAY_BASE_KPI = {
 
 const OVERLAY_AVAILABILITY_BY_VIEW = {
   overall: "Availability_o",
-  shift: "Availability_o",
+  product_type: "Availability_o",
   machine: "Availability_m",
-  sku: "Availability_s",
 };
 
 const PRODUCTION_KPI_BY_SECTION = {
@@ -493,6 +496,11 @@ function OeeTrendModal({
   const [viewBy, setViewBy] = useState("overall");
   const [compare, setCompare] = useState([]);
   const [overlays, setOverlays] = useState([]);
+  // Multi-select Machines filter — scopes which machines' rows feed
+  // the chart. Empty = all machines. Visible only when viewBy is
+  // Machine or Product Type (hidden for Overall since OEE_o is
+  // already section-aggregated).
+  const [machines, setMachines] = useState([]);
 
   // Reset compare when VIEW BY flips — the previous selection's IDs may
   // not exist in the new lens (machines vs sub_sections vs shifts).
@@ -521,66 +529,33 @@ function OeeTrendModal({
       : resolved.from;
   const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
 
-  // Shift view always uses SHIFT A/B/C granularity at the daily window
-  // we already resolved (one call per shift, three in parallel).
-  const isShift = viewBy === "shift";
-
-  // For Shift, the endpoint takes one granularity per call — fan out
-  // three calls in parallel and merge client-side. For everything else
-  // one trip covers main + overlays via drillKpis.
+  // One trip covers main + overlays via drillKpis. (The previous Shift
+  // lens fanned out three calls — removed in CR-08.)
   const sectionName = sectionIdToName(section);
   const mainKpi = viewByMainKpi(viewBy);
   const overlayKpis = overlays.map((o) =>
     overlayKpiName(o, viewBy, sectionName),
   );
 
-  // Single-trip payload (Overall / Machine / SKU).
-  const singlePayload = !isShift
-    ? {
-        plantId,
-        context: {
-          section: sectionName,
-          category: "Productivity",
-          granularity: "DAY",
-        },
-        from: rangeFrom,
-        to: rangeTo,
-        drillKpis: [mainKpi, ...overlayKpis],
-        drillOnly: true,
-        limit: 10000,
-      }
-    : null;
-
-  // Three-trip payloads (Shift A / B / C).
-  const shiftPayloads = isShift
-    ? ["SHIFT A", "SHIFT B", "SHIFT C"].map((gran) => ({
-        plantId,
-        context: {
-          section: sectionName,
-          category: "Productivity",
-          granularity: gran,
-        },
-        from: rangeFrom,
-        to: rangeTo,
-        // Overlay series don't carry shift semantics (the gold rows for
-        // Breakdown/Production/Scrap/Availability are DAY-only); we still
-        // ask for them so the user keeps their pick, and we drop them
-        // server-side if no shift rows exist — the empty overlay chart
-        // surface below handles the no-data path.
-        drillKpis: ["OEE_o", ...overlayKpis],
-        drillOnly: true,
-        limit: 10000,
-        _shift: gran,
-      }))
-    : [];
+  const singlePayload = {
+    plantId,
+    context: {
+      section: sectionName,
+      category: "Productivity",
+      granularity: "DAY",
+    },
+    from: rangeFrom,
+    to: rangeTo,
+    drillKpis: [mainKpi, ...overlayKpis],
+    drillOnly: true,
+    limit: 10000,
+  };
 
   const { data: singleRows, isLoading: singleLoading } = usePolledQuery(
     () =>
-      singlePayload
-        ? client
-            .post("/dashboard/kpi-data", singlePayload)
-            .then((r) => r.data ?? r)
-        : Promise.resolve([]),
+      client
+        .post("/dashboard/kpi-data", singlePayload)
+        .then((r) => r.data ?? r),
     {
       enabled: Boolean(singlePayload),
       interval: 0,
@@ -595,65 +570,32 @@ function OeeTrendModal({
     },
   );
 
-  const shiftQueries = usePolledQuery(
-    () =>
-      Promise.all(
-        shiftPayloads.map((p) =>
-          client.post("/dashboard/kpi-data", p).then((r) => r.data ?? r),
-        ),
-      ),
-    {
-      enabled: shiftPayloads.length > 0,
-      interval: 0,
-      deps: [JSON.stringify(shiftPayloads)],
-      // Same reasoning as the single-trip above — switching overlays
-      // while on the Shift lens must not blank the existing series.
-      keepPreviousData: true,
-    },
-  );
-  const shiftResults = useMemo(
-    () => (Array.isArray(shiftQueries?.data) ? shiftQueries.data : []),
-    // Depend on the whole query object — narrowing to `?.data` would
-    // flag as a more-specific dependency than the inferred source.
-    [shiftQueries],
-  );
-  const shiftLoading = shiftQueries?.isLoading ?? false;
+  // Distinct machine values from the loaded rows — the Autocomplete
+  // options for the Machines filter. Empty while loading.
+  const machineOptions = useMemo(() => {
+    if (!Array.isArray(singleRows)) return [];
+    const set = new Set();
+    for (const r of singleRows) if (r.machine) set.add(r.machine);
+    return [...set].sort();
+  }, [singleRows]);
 
   // Split singleRows by kpi_name into mainRows + overlay rows.
   const mainRows = useMemo(() => {
-    if (isShift) {
-      // Shift results come as [rowsA, rowsB, rowsC] — pick OEE_o rows
-      // per shift (rows are already granularity-pinned by the payload).
-      const out = [];
-      for (const arr of shiftResults) {
-        if (Array.isArray(arr)) {
-          for (const r of arr) if (r.kpi_name === "OEE_o") out.push(r);
-        }
-      }
-      return out;
-    }
     if (!Array.isArray(singleRows)) return [];
     return singleRows.filter((r) => r.kpi_name === mainKpi);
-  }, [isShift, shiftResults, singleRows, mainKpi]);
+  }, [singleRows, mainKpi]);
+
+  // Apply the Machines filter to mainRows before grouping. Empty
+  // selection = all machines pass through.
+  const filteredMainRows = useMemo(() => {
+    if (machines.length === 0) return mainRows;
+    const allowed = new Set(machines);
+    return mainRows.filter((r) => allowed.has(r.machine));
+  }, [mainRows, machines]);
 
   const overlayRowsByKpi = useMemo(() => {
     const out = {};
     if (!overlays.length) return out;
-    if (isShift) {
-      // Across the three shift calls: same overlay kpi appears under
-      // each granularity (the server returns whatever rows exist; shift
-      // rows rarely carry Breakdown/Production, but we don't reject them
-      // — we just render whatever came back). Concatenate.
-      for (const arr of shiftResults) {
-        if (!Array.isArray(arr)) continue;
-        for (const r of arr) {
-          if (r.kpi_name === mainKpi) continue;
-          if (!out[r.kpi_name]) out[r.kpi_name] = [];
-          out[r.kpi_name].push(r);
-        }
-      }
-      return out;
-    }
     if (!Array.isArray(singleRows)) return out;
     for (const r of singleRows) {
       if (r.kpi_name === mainKpi) continue;
@@ -661,31 +603,26 @@ function OeeTrendModal({
       out[r.kpi_name].push(r);
     }
     return out;
-  }, [overlays, isShift, shiftResults, singleRows, mainKpi]);
+  }, [overlays, singleRows, mainKpi]);
 
-  // Build COMPARE options from the main rows. For Shift view the options
-  // are fixed at A / B / C; for the other views they come from the data
-  // so a brand-new machine in the gold layer shows up automatically.
+  // Build COMPARE options from the filtered main rows. For Machine view
+  // the COMPARE row is hidden (the Machines filter takes its role) so
+  // the options aren't used, but we still build them for the default-
+  // fill behaviour. For Product Type they group by `tyre_type`; for
+  // Overall, the row is hidden and the options stay empty.
   const compareOptions = useMemo(() => {
-    if (viewBy === "shift") {
-      return [
-        { value: "Shift A", label: "Shift A" },
-        { value: "Shift B", label: "Shift B" },
-        { value: "Shift C", label: "Shift C" },
-      ];
+    if (viewBy === "product_type") {
+      const set = new Set();
+      for (const r of filteredMainRows) if (r.tyre_type) set.add(r.tyre_type);
+      return [...set].sort().map((t) => ({ value: t, label: t }));
     }
     if (viewBy === "machine") {
       const set = new Set();
-      for (const r of mainRows) if (r.machine) set.add(r.machine);
+      for (const r of filteredMainRows) if (r.machine) set.add(r.machine);
       return [...set].sort().map((m) => ({ value: m, label: m }));
     }
-    if (viewBy === "sku") {
-      const set = new Set();
-      for (const r of mainRows) if (r.sub_section) set.add(r.sub_section);
-      return [...set].sort().map((s) => ({ value: s, label: s }));
-    }
     return [];
-  }, [viewBy, mainRows]);
+  }, [viewBy, filteredMainRows]);
 
   // Default-fill compare when the user hasn't picked anything yet. The
   // filter prunes stale IDs after a viewBy switch.
@@ -695,12 +632,12 @@ function OeeTrendModal({
     return filtered.length > 0 ? filtered : compareOptions.map((o) => o.value);
   }, [compare, compareOptions]);
 
-  // For Shift, the data is per-shift; for the others we group rows by
-  // the COMPARE field. buildMainChart turns either shape into one
-  // (labels, series) bundle ready for MultiLineChart.
+  // Group filtered rows by the active VIEW BY's grouping field.
+  // buildMainChart turns the shape into one (labels, series) bundle
+  // ready for MultiLineChart.
   const mainChart = useMemo(
-    () => buildMainChart({ mainRows, viewBy, activeCompare }),
-    [mainRows, viewBy, activeCompare],
+    () => buildMainChart({ mainRows: filteredMainRows, viewBy, activeCompare }),
+    [filteredMainRows, viewBy, activeCompare],
   );
 
   // The chart title reflects the active VIEW BY lens.
@@ -749,9 +686,16 @@ function OeeTrendModal({
   const overlayLabels = overlayChart.labels;
   const overlaySeries = overlayChart.series;
 
-  const loading = isShift ? shiftLoading : singleLoading;
+  const loading = singleLoading;
   const hasMainData = mainChart.series.length > 0;
-  const showCompare = viewBy !== "overall";
+  // COMPARE picks which grouping values draw as lines. For Machine
+  // view the Machines filter takes that role, so COMPARE hides; for
+  // Overall the row is also hidden.
+  const showCompare = viewBy === "product_type";
+  // Machines filter scopes the data; only meaningful when the chart
+  // is split by Machine or Product Type. Hidden for Overall since
+  // OEE_o is section-aggregated.
+  const showMachinesFilter = viewBy === "machine" || viewBy === "product_type";
 
   return (
     <ModalFrame
@@ -788,6 +732,44 @@ function OeeTrendModal({
             onChange={setViewBy}
             options={VIEW_BY_OPTIONS}
           />
+          {showMachinesFilter && (
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1.5}
+              sx={{ flexWrap: "wrap" }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "text.disabled",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                  minWidth: 76,
+                }}
+              >
+                Machines
+              </Typography>
+              <Autocomplete
+                multiple
+                size="small"
+                sx={{ minWidth: 240, maxWidth: 360 }}
+                options={machineOptions}
+                value={machines}
+                onChange={(_, next) => setMachines(next)}
+                disableCloseOnSelect
+                disabled={machineOptions.length === 0}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder={machines.length === 0 ? "All machines" : ""}
+                    variant="outlined"
+                  />
+                )}
+              />
+            </Stack>
+          )}
           {showCompare && (
             <MultiSelectPills
               label="Compare"
@@ -855,48 +837,23 @@ function OeeTrendModal({
  * ========================================================================= */
 
 // Build the (labels, series) bundle for the main chart.
-// - shift view: one series per shift (Shift A / B / C)
+// - product_type view: one series per distinct `tyre_type` value
+//   (Q-OEE-01 — `product_type` is NULL for OEE rows so we group by
+//   `tyre_type`).
 // - machine view: one series per distinct `machine` value
-// - sku view: one series per distinct `sub_section` value
 // - overall view: a single "Overall" series
 function buildMainChart({ mainRows, viewBy, activeCompare }) {
-  if (viewBy === "shift") {
-    // Rows carry granularity = SHIFT A/B/C. Group by date, then split
-    // by granularity. Each series gets one value per date.
-    const dateSet = new Set();
-    for (const r of mainRows) if (r.date) dateSet.add(r.date);
-    const dates = [...dateSet].sort();
-    const labels = dates.map((d) => toDisplayDate(d) ?? "");
-
-    const byShift = new Map();
-    for (const r of mainRows) {
-      const shift = granularityToShiftLabel(r.granularity);
-      if (!shift) continue;
-      if (!byShift.has(shift)) byShift.set(shift, new Map());
-      byShift.get(shift).set(r.date, numOrNull(r.actual_value));
-    }
-
-    const order = ["Shift A", "Shift B", "Shift C"];
-    const series = order
-      .filter((s) => activeCompare.includes(s))
-      .map((s) => ({
-        name: s,
-        values: dates.map((d) => byShift.get(s)?.get(d) ?? null),
-      }));
-    return { labels, series };
+  if (viewBy === "product_type") {
+    return buildGroupedSeries({
+      rows: mainRows,
+      groupField: "tyre_type",
+      activeCompare,
+    });
   }
-
   if (viewBy === "machine") {
     return buildGroupedSeries({
       rows: mainRows,
       groupField: "machine",
-      activeCompare,
-    });
-  }
-  if (viewBy === "sku") {
-    return buildGroupedSeries({
-      rows: mainRows,
-      groupField: "sub_section",
       activeCompare,
     });
   }
@@ -942,13 +899,6 @@ function buildGroupedSeries({ rows, groupField, activeCompare }) {
     values: dates.map((d) => byKey.get(id)?.get(d) ?? null),
   }));
   return { labels, series };
-}
-
-function granularityToShiftLabel(g) {
-  if (g === "SHIFT A" || g === "Shift A") return "Shift A";
-  if (g === "SHIFT B" || g === "Shift B") return "Shift B";
-  if (g === "SHIFT C" || g === "Shift C") return "Shift C";
-  return null;
 }
 
 // Per-overlay unit suffix for the combined-overlay chart's legend +
