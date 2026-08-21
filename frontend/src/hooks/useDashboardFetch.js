@@ -406,6 +406,12 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // the reasons come back empty and the TotalDowntime tile renders "—".
   // Run a parallel DAY-granularity fetch for the 6 reasons and merge
   // its rows into the data the transformer sees.
+  //
+  // The 6 reasons live at drill_down_level=2 — they're NOT in the
+  // backend's LANDING_PREDICATE — so we must fetch them via drillKpis
+  // (not landingKpis). drillOnly=true + drillKpis=names is the only
+  // path that returns drill-level rows. landingKpis is intentionally
+  // omitted (the backend ignores it under drillOnly=true anyway).
   const includesTotalDowntime =
     state.section === "mix" ||
     state.section === "stk" ||
@@ -419,7 +425,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
           granularity: "DAY",
         },
         ...buildDatePayload(state),
-        landingKpis: [...DOWNTIME_REASONS],
+        drillKpis: [...DOWNTIME_REASONS],
         drillOnly: true,
         limit: 10000,
       }
