@@ -480,6 +480,19 @@ const ALLOWED_KPIS = {
           "Production_m_sku",
         ],
       },
+      // CR-11: Total Downtime = sum of the 6 OEE-availability-loss
+      // reason leaves (Breakdown, No Schedule, Power Failure, Preventive
+      // Maintenance, Setup & Change, Operations/Material/Manpower). The
+      // card value/spark fall out of selectSeries' virtual-row synthesis
+      // (Q-DT-01).
+      {
+        id: "downtime",
+        name: TOTAL_DOWNTIME_NAME,
+        unit: "min",
+        agg: "SUM",
+        drillType: "downtime",
+        drillTargets: DOWNTIME_REASONS,
+      },
       {
         id: "comp",
         name: "Plan_Compliance",
@@ -661,6 +674,19 @@ const ALLOWED_KPIS = {
           "Production_sku",
           "Production_m_sku",
         ],
+      },
+      // CR-11: Total Downtime = sum of the 6 OEE-availability-loss
+      // reason leaves (Breakdown, No Schedule, Power Failure, Preventive
+      // Maintenance, Setup & Change, Operations/Material/Manpower). The
+      // card value/spark fall out of selectSeries' virtual-row synthesis
+      // (Q-DT-01).
+      {
+        id: "downtime",
+        name: TOTAL_DOWNTIME_NAME,
+        unit: "min",
+        agg: "SUM",
+        drillType: "downtime",
+        drillTargets: DOWNTIME_REASONS,
       },
       {
         id: "comp",
@@ -848,6 +874,19 @@ const ALLOWED_KPIS = {
         agg: "SUM",
         drillType: "stkProd",
         drillTargets: ["Production_m", "Production_sku", "Production_m_sku"],
+      },
+      // CR-11: Total Downtime = sum of the 6 OEE-availability-loss
+      // reason leaves (Breakdown, No Schedule, Power Failure, Preventive
+      // Maintenance, Setup & Change, Operations/Material/Manpower). The
+      // card value/spark fall out of selectSeries' virtual-row synthesis
+      // (Q-DT-01).
+      {
+        id: "downtime",
+        name: TOTAL_DOWNTIME_NAME,
+        unit: "min",
+        agg: "SUM",
+        drillType: "downtime",
+        drillTargets: DOWNTIME_REASONS,
       },
       {
         id: "comp",
