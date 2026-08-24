@@ -32,6 +32,8 @@ import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { isKg, kgToTonnes } from "@/lib/units.js";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 import {
+  canonicalizeProductType,
+  canonicalizeSubSection,
   denanDimension,
   isProductAgnosticKpi,
   preferScopedRows,
@@ -42,7 +44,7 @@ import {
  *
  * Two paths share this modal:
  *
- *   1. OEE path — VIEW BY pills (Overall / Product Type / Machine) on
+ *   1. OEE path — VIEW BY pills (Overall / Machine) on
  *      top of a multi-series main chart (one line per grouping value),
  *      plus an optional Machines filter that scopes which machines
  *      feed the chart and an optional combined-overlay chart below
@@ -109,6 +111,8 @@ function TrendModal({
         plantId={plantId}
         kpi={kpi}
         section={section}
+        subSection={subSection}
+        productType={productType}
         asOf={asOf}
         range={range}
         from={from}
@@ -128,6 +132,8 @@ function TrendModal({
         plantId={plantId}
         kpi={kpi}
         section={section}
+        subSection={subSection}
+        productType={productType}
         asOf={asOf}
         range={range}
         from={from}
@@ -147,6 +153,8 @@ function TrendModal({
         plantId={plantId}
         kpi={kpi}
         section={section}
+        subSection={subSection}
+        productType={productType}
         asOf={asOf}
         range={range}
         from={from}
@@ -458,9 +466,11 @@ function LegacyTrendModal({
  * layer differs. Specs/cr/CR-08 + CR-09.
  * ========================================================================= */
 
+// OEE has no product-type lens: product_type is a Production-only
+// dimension (the gold layer's OEE rows carry no product split, so the
+// pill only ever produced a tyre_type re-cut of the same numbers).
 const VIEW_BY_OPTIONS = [
   { value: "overall", label: "Overall" },
-  { value: "product_type", label: "Product Type" },
   { value: "machine", label: "Machine" },
 ];
 
@@ -493,7 +503,6 @@ const OVERLAY_BASE_KPI = {
 
 const OVERLAY_AVAILABILITY_BY_VIEW = {
   overall: "Availability_o",
-  product_type: "Availability_o",
   machine: "Availability_m",
 };
 
@@ -503,6 +512,16 @@ const PRODUCTION_KPI_BY_SECTION = {
   Mixing: "Production",
   Stock: "Production",
 };
+
+// The Production trend reads a different stored leaf per lens — the
+// base (section) row carries no machine and no itemcode, so grouping it
+// by those fields produced an empty chart. Same mapping as
+// ProductionDrillPanel: machine -> Production_m, SKU -> Production_sku.
+function productionKpiName(viewBy, sectionName) {
+  if (viewBy === "machine") return "Production_m";
+  if (viewBy === "sku") return "Production_sku";
+  return PRODUCTION_KPI_BY_SECTION[sectionName] ?? "Production";
+}
 
 function overlayKpiName(overlayValue, viewBy, sectionName) {
   if (overlayValue === "Availability") {
@@ -544,17 +563,13 @@ const OVERLAY_OPTIONS = [
 const OEE_SERIES_CONFIG = {
   viewByOptions: VIEW_BY_OPTIONS,
   defaultViewBy: "overall",
-  // OEE m/o — see Q-OEE-01 for product_type handling.
   mainKpiName: (viewBy) => (viewBy === "machine" ? "OEE_m" : "OEE_o"),
-  // Q-OEE-01: product_type column is NULL for OEE rows; we group by
-  // tyre_type client-side. Pill label says "Product Type", data says
-  // tyre_type.
-  groupField: (viewBy) =>
-    ({ machine: "machine", product_type: "tyre_type" })[viewBy] ?? null,
-  machineFilterVisibility: (viewBy) =>
-    viewBy === "machine" || viewBy === "product_type",
+  groupField: (viewBy) => (viewBy === "machine" ? "machine" : null),
+  machineFilterVisibility: (viewBy) => viewBy === "machine",
   skuFilterVisibility: () => false,
-  showCompare: (viewBy) => viewBy === "product_type",
+  // No product-type lens left, so there is nothing to compare — the
+  // Machines filter plays that role in the Machine view.
+  showCompare: () => false,
   showOverlay: true,
   mainUnit: "%",
   mainTitleSuffix: "OEE",
@@ -565,17 +580,18 @@ function buildProductionSeriesConfig(sectionName, kpi) {
   return {
     viewByOptions: PRODUCTION_VIEW_BY_OPTIONS,
     defaultViewBy: "overall",
-    // All four viewBys use the same section-conditional kpi_name.
-    mainKpiName: () => PRODUCTION_KPI_BY_SECTION[sectionName] ?? "Production",
+    mainKpiName: (viewBy) => productionKpiName(viewBy, sectionName),
     // Production rows DO carry product_type (NOT in
     // PRODUCT_AGNOSTIC_KPIS), so the "Product Type" pill groups by
-    // the real product_type column. SKU groups by sub_section.
+    // the real product_type column. SKU lives in `itemcode` on the
+    // Production_sku rows (NOT sub_section — that is the trench/line).
     groupField: (viewBy) =>
       ({
         machine: "machine",
         product_type: "product_type",
-        sku: "sub_section",
+        sku: "itemcode",
       })[viewBy] ?? null,
+    skuField: "itemcode",
     machineFilterVisibility: (viewBy) =>
       viewBy === "machine" || viewBy === "product_type",
     skuFilterVisibility: (viewBy) => viewBy === "sku",
@@ -622,6 +638,11 @@ function MultiSeriesTrendModal({
   plantId,
   kpi,
   section,
+  // The dashboard's active scope. The trend must show the SAME slice the
+  // user is looking at: a Stock sub-section tab ("4 Roll") and a product
+  // pill ("Belt Mother Roll") both narrow the chart.
+  subSection = null,
+  productType = null,
   asOf,
   range,
   from,
@@ -632,9 +653,27 @@ function MultiSeriesTrendModal({
   theme,
   config,
 }) {
+  // A dimension pinned on the dashboard is no longer a lens worth
+  // offering — every row in the chart already carries that one value.
+  // Only the dimensions NOT filtered outside stay as VIEW BY choices.
+  const viewByOptions = useMemo(
+    () =>
+      config.viewByOptions.filter(
+        (o) => !(o.value === "product_type" && productType),
+      ),
+    [config.viewByOptions, productType],
+  );
+
   // Default VIEW BY from the config; compare + overlays start empty;
   // machines + sku filters start empty (= all rows pass through).
   const [viewBy, setViewBy] = useState(config.defaultViewBy);
+  // A pinned dimension can remove the lens that is currently active
+  // (open the modal, pick Product Type, change the pill outside). Fall
+  // back to the default lens rather than rendering an unselected row.
+  const viewByIsValid = viewByOptions.some((o) => o.value === viewBy);
+  if (!viewByIsValid && viewBy !== config.defaultViewBy) {
+    setViewBy(config.defaultViewBy);
+  }
   const [compare, setCompare] = useState([]);
   const [overlays, setOverlays] = useState([]);
   // Multi-select filters — scope which machines' / sub_sections' rows
@@ -690,6 +729,12 @@ function MultiSeriesTrendModal({
       section: sectionName,
       category: "Productivity",
       granularity: "DAY",
+      // Scope the request too, not just the rows we keep: an unscoped
+      // Stock SKU fetch runs close to the 10k row cap and would silently
+      // truncate days off the chart. The backend keeps product-agnostic
+      // KPIs (OEE / Downtime overlays) alive through these filters.
+      ...(subSection ? { sub_section: subSection } : {}),
+      ...(productType ? { product_type: productType } : {}),
     },
     from: rangeFrom,
     to: rangeTo,
@@ -718,34 +763,77 @@ function MultiSeriesTrendModal({
     },
   );
 
-  // Distinct machine + SKU (sub_section) values from the loaded rows —
-  // the Autocomplete options for each filter. Empty while loading.
+  // Apply the dashboard's scope to every row before anything reads them,
+  // so the filter options, the chart and the overlays all describe the
+  // same slice the user has selected outside. A row that carries NO value
+  // for a pinned dimension is kept — those are the section-level roll-ups
+  // that belong to every slice; only a row explicitly belonging to another
+  // sub-section / product is dropped.
+  const scopedRows = useMemo(() => {
+    if (!Array.isArray(singleRows)) return [];
+    const pinnedSub = canonicalizeSubSection(subSection);
+    const pinnedProduct = canonicalizeProductType(productType);
+    if (!pinnedSub && !pinnedProduct) return singleRows;
+    const matches = (rowValue, pinned, canon) => {
+      if (!pinned) return true;
+      const v = canon(rowValue);
+      if (v == null) return true;
+      return v.toLowerCase() === pinned.toLowerCase();
+    };
+    return singleRows.filter(
+      (r) =>
+        matches(r.sub_section, pinnedSub, canonicalizeSubSection) &&
+        matches(r.product_type, pinnedProduct, canonicalizeProductType),
+    );
+  }, [singleRows, subSection, productType]);
+
+  // Distinct machine + SKU values from the scoped rows — the Autocomplete
+  // options for each filter. Empty while loading.
   const machineOptions = useMemo(() => {
-    if (!Array.isArray(singleRows)) return [];
     const set = new Set();
-    for (const r of singleRows) if (r.machine) set.add(r.machine);
+    for (const r of scopedRows) if (r.machine) set.add(r.machine);
     return [...set].sort();
-  }, [singleRows]);
+  }, [scopedRows]);
 
+  // Which column holds the SKU identity is config-driven — Production
+  // stores it in `itemcode`.
+  const skuField = config.skuField ?? "sub_section";
   const skuOptions = useMemo(() => {
-    if (!Array.isArray(singleRows)) return [];
     const set = new Set();
-    for (const r of singleRows) if (r.sub_section) set.add(r.sub_section);
+    for (const r of scopedRows) if (r[skuField]) set.add(r[skuField]);
     return [...set].sort();
-  }, [singleRows]);
+  }, [scopedRows, skuField]);
 
-  // Split singleRows by kpi_name into mainRows + (optional) overlay rows.
+  // Split the scoped rows by kpi_name into mainRows + (optional) overlay rows.
   // mainKpis may be an array (Downtime fetches 6 reasons in one call);
   // filter via Set membership.
-  const mainRows = useMemo(() => {
-    if (!Array.isArray(singleRows)) return [];
+  const rawMainRows = useMemo(() => {
     if (mainKpis.length === 1) {
       const k = mainKpis[0];
-      return singleRows.filter((r) => r.kpi_name === k);
+      return scopedRows.filter((r) => r.kpi_name === k);
     }
     const allowed = new Set(mainKpis);
-    return singleRows.filter((r) => allowed.has(r.kpi_name));
-  }, [singleRows, mainKpis]);
+    return scopedRows.filter((r) => allowed.has(r.kpi_name));
+  }, [scopedRows, mainKpis]);
+
+  // Production stores the same quantity under two units (e.g. nos + kg)
+  // as separate rows. Without a pin they collide on (group, date) and
+  // the chart shows whichever row arrived last. Pin to the unit the
+  // card was opened with; fall back to every row when nothing matches.
+  const mainRows = useMemo(() => {
+    const pin = canonicalUnit(kpi?.unit);
+    if (!pin) return rawMainRows;
+    const units = new Set(
+      rawMainRows
+        .map((r) => canonicalUnit(r.unit_of_measurement))
+        .filter(Boolean),
+    );
+    if (units.size <= 1) return rawMainRows;
+    const only = rawMainRows.filter(
+      (r) => canonicalUnit(r.unit_of_measurement) === pin,
+    );
+    return only.length > 0 ? only : rawMainRows;
+  }, [rawMainRows, kpi?.unit]);
 
   // Apply the Machines + SKU filters to mainRows before grouping.
   // Empty selection in either = all rows pass through that filter.
@@ -755,22 +843,21 @@ function MultiSeriesTrendModal({
     const allowedSku = sku.length > 0 ? new Set(sku) : null;
     return mainRows.filter((r) => {
       if (allowedMachines && !allowedMachines.has(r.machine)) return false;
-      if (allowedSku && !allowedSku.has(r.sub_section)) return false;
+      if (allowedSku && !allowedSku.has(r[skuField])) return false;
       return true;
     });
-  }, [mainRows, machines, sku]);
+  }, [mainRows, machines, sku, skuField]);
 
   const overlayRowsByKpi = useMemo(() => {
     const out = {};
     if (!config.showOverlay || !overlays.length) return out;
-    if (!Array.isArray(singleRows)) return out;
-    for (const r of singleRows) {
+    for (const r of scopedRows) {
       if (mainKpis.includes(r.kpi_name)) continue;
       if (!out[r.kpi_name]) out[r.kpi_name] = [];
       out[r.kpi_name].push(r);
     }
     return out;
-  }, [overlays, singleRows, mainKpis, config.showOverlay]);
+  }, [overlays, scopedRows, mainKpis, config.showOverlay]);
 
   // Build COMPARE options from the filtered main rows. Group by the
   // active viewBy's field so a brand-new value in the gold layer
@@ -861,6 +948,14 @@ function MultiSeriesTrendModal({
   const showCompare = config.showCompare(viewBy);
   const showMachinesFilter = config.machineFilterVisibility(viewBy);
   const showSkuFilter = config.skuFilterVisibility(viewBy);
+  // Spell out the inherited scope so the numbers aren't silently narrower
+  // than the section header suggests.
+  const scopeLabel = [
+    canonicalizeSubSection(subSection),
+    canonicalizeProductType(productType),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <ModalFrame
@@ -895,8 +990,13 @@ function MultiSeriesTrendModal({
             label="View by"
             value={viewBy}
             onChange={setViewBy}
-            options={config.viewByOptions}
+            options={viewByOptions}
           />
+          {scopeLabel && (
+            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+              Scoped to {scopeLabel} — set on the dashboard.
+            </Typography>
+          )}
           {showMachinesFilter && (
             <FilterRow
               label="Machines"
