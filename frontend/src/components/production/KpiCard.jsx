@@ -64,55 +64,52 @@ function KpiCard({
 
   // Calculate Progress % & formatted value
   const numVal =
-    typeof kpi.value === "number" ? kpi.value : parseFloat(kpi.value);
-  let progressPct;
-  let formattedVal;
+    typeof kpi.value === "number"
+      ? kpi.value
+      : kpi.value != null && kpi.value !== ""
+        ? parseFloat(kpi.value)
+        : null;
 
-  if (kpiId.includes("oee") || kpiName.includes("oee")) {
-    progressPct =
-      !isNaN(numVal) && numVal > 0 ? Math.min(100, Math.max(0, numVal)) : 88;
-    formattedVal = !isNaN(numVal) && numVal > 0 ? `${numVal}%` : "88%";
-  } else if (
-    kpiId.includes("comp") ||
-    kpiName.includes("compliance") ||
-    kpiName.includes("plan")
-  ) {
-    progressPct =
-      !isNaN(numVal) && numVal > 0 ? Math.min(100, Math.max(0, numVal)) : 94;
-    formattedVal = !isNaN(numVal) && numVal > 0 ? `${numVal}%` : "94%";
-  } else {
-    const target =
-      typeof kpi.target === "number" ? kpi.target : parseFloat(kpi.target);
-    if (!isNaN(target) && target > 0 && !isNaN(numVal) && numVal > 0) {
-      progressPct = Math.min(100, Math.max(0, (numVal / target) * 100));
+  let progressPct = 0;
+  let formattedVal = "–";
+
+  if (numVal != null && !isNaN(numVal)) {
+    if (kpiId.includes("oee") || kpiName.includes("oee")) {
+      progressPct = Math.min(100, Math.max(0, numVal));
+      formattedVal = `${Number.isInteger(numVal) ? numVal : numVal.toFixed(1)}%`;
+    } else if (
+      kpiId.includes("comp") ||
+      kpiName.includes("compliance") ||
+      kpiName.includes("plan")
+    ) {
+      progressPct = Math.min(100, Math.max(0, numVal));
+      formattedVal = `${Number.isInteger(numVal) ? numVal : numVal.toFixed(1)}%`;
     } else {
-      progressPct = 88;
+      const target =
+        typeof kpi.target === "number"
+          ? kpi.target
+          : kpi.target != null && kpi.target !== ""
+            ? parseFloat(kpi.target)
+            : null;
+      if (target != null && !isNaN(target) && target > 0) {
+        progressPct = Math.min(100, Math.max(0, (numVal / target) * 100));
+      } else {
+        progressPct = numVal > 0 ? 100 : 0;
+      }
+      formattedVal = formatIndianNumber(numVal);
     }
-    formattedVal =
-      !isNaN(numVal) && numVal > 0 ? formatIndianNumber(numVal) : "7,14,548";
   }
 
   // Trend formatting
   const trendUp = kpi.trend == null || kpi.trend >= 0;
-  let trendVal;
-  if (kpiId.includes("prod") || kpiName.includes("prod")) {
-    // Production displays absolute units diff e.g. "+16,275 Tyres"
-    if (kpi.trendValue != null && kpi.trendValue !== 0) {
-      trendVal = `${kpi.trendValue > 0 ? "+" : ""}${formatIndianNumber(kpi.trendValue)} Tyres`;
-    } else if (kpi.trend != null && kpi.trend !== 0 && !isNaN(numVal)) {
-      const absDiff = Math.round(numVal * (kpi.trend / 100));
-      trendVal = `${absDiff >= 0 ? "+" : ""}${formatIndianNumber(Math.abs(absDiff))} Tyres`;
-    } else {
-      trendVal = "+16,275 Tyres";
-    }
-  } else {
-    // OEE & Compliance display percentage
+  let trendVal = "–";
+  if (kpi.trendValue != null && !isNaN(kpi.trendValue)) {
     trendVal =
-      kpi.trend != null && kpi.trend !== 0
-        ? `${kpi.trend > 0 ? "+" : ""}${kpi.trend.toFixed(1)}%`
-        : "2.5%";
+      `${kpi.trendValue > 0 ? "+" : ""}${formatIndianNumber(kpi.trendValue)} ${kpiId.includes("prod") ? "Tyres" : ""}`.trim();
+  } else if (kpi.trend != null && !isNaN(kpi.trend)) {
+    trendVal = `${kpi.trend > 0 ? "+" : ""}${kpi.trend.toFixed(1)}%`;
   }
-  const trendLabel = kpi.trendBaseline ?? "vs Jul' 2026";
+  const trendLabel = kpi.trendBaseline ?? "vs prev";
 
   // Sparkline data
   const sparkData =

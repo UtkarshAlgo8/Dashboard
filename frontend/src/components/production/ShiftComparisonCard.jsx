@@ -222,18 +222,10 @@ export default function ShiftComparisonCard({
     readShift(qRowsFor("Rework", i), "Rework"),
   );
 
-  // Default values matching Adobe XD screenshot if no rows returned from backend
-  const displayProd = prodByShift.some((v) => v != null)
-    ? prodByShift.map((v) => (v == null ? 0 : v / 1000))
-    : [230, 245, 205];
-
-  const displayScrap = scrapByShift.some((v) => v != null)
-    ? scrapByShift.map((v) => (v == null ? 0 : v / 1000))
-    : [3.5, 3.8, 3.2];
-
-  const displayRework = reworkByShift.some((v) => v != null)
-    ? reworkByShift.map((v) => (v == null ? 0 : v / 1000))
-    : [10.5, 11.5, 9.5];
+  // Map shift metrics to thousands (k) or 0 if null
+  const displayProd = prodByShift.map((v) => (v == null ? 0 : v / 1000));
+  const displayScrap = scrapByShift.map((v) => (v == null ? 0 : v / 1000));
+  const displayRework = reworkByShift.map((v) => (v == null ? 0 : v / 1000));
 
   return (
     <Box

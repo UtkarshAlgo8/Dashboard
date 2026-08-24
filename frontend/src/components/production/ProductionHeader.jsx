@@ -52,6 +52,7 @@ function ProductionHeader({
   onExport,
   asOf = null,
   lastUpdatedAt = null,
+  categoryTabs = null,
   activeCategory = "p",
   onCategoryChange,
   tyreTypes = ["All", "PCR", "TBR"],
@@ -84,7 +85,15 @@ function ProductionHeader({
   const activeTyreId =
     typeof tyreType === "string" ? tyreType.toLowerCase() : "all";
 
-  const formattedCategories = DEFAULT_CATEGORY_TABS;
+  const formattedCategories =
+    Array.isArray(categoryTabs) && categoryTabs.length > 0
+      ? categoryTabs.map((t) => ({
+          id: t.id,
+          label: t.name || t.label,
+          disabled: t.enabled === false,
+          disabledTooltip: t.disabledTooltip ?? "Phase 2 — coming soon",
+        }))
+      : DEFAULT_CATEGORY_TABS;
 
   return (
     <Box component="header" sx={{ width: "100%" }}>

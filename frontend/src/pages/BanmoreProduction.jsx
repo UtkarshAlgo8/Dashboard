@@ -679,37 +679,110 @@ function BanmoreProduction() {
                       {`${SECTION_TITLE[dashboard.section] ?? sectionName} Production`}
                     </Typography>
 
-                    {/* Right: Sub-filter controls (Type & UoM) */}
+                    {/* Right: Context-Aware Sub-filter controls based on section */}
                     <Stack
                       direction="row"
                       alignItems="center"
                       spacing={2}
                       flexWrap="wrap"
                     >
-                      {/* 1. Type filter pills */}
-                      <NavTabs
-                        prefixLabel="Type"
-                        items={[
-                          { id: "all", label: "All" },
-                          { id: "Passenger Radial", label: "Passenger Radial" },
-                          { id: "LCV", label: "LCV" },
-                        ]}
-                        value={
-                          ["Passenger Radial", "LCV"].includes(
-                            activeProductType,
-                          )
-                            ? activeProductType
-                            : "all"
-                        }
-                        onChange={(v) =>
-                          setFilter(
-                            { productType: v === "all" ? null : v },
-                            false,
-                          )
-                        }
-                        layoutId="sectionProdTypeFill"
-                        size="lg"
-                      />
+                      {/* 1. Section-specific Sub-selectors / Product types */}
+                      {isStock ? (
+                        <>
+                          <NavTabs
+                            prefixLabel="Sub-Section"
+                            items={STOCK_SUBSECTIONS.map((s) => ({
+                              id: s,
+                              label: s,
+                            }))}
+                            value={activeSubSection}
+                            onChange={(s) =>
+                              setFilter(
+                                {
+                                  subSection: s,
+                                  productType: null,
+                                  unitOfMeasurement: null,
+                                },
+                                false,
+                              )
+                            }
+                            layoutId="stockSubSectionFill"
+                            size="lg"
+                          />
+                          {stockProductOptions.length > 0 && (
+                            <NavTabs
+                              prefixLabel="Product"
+                              items={[
+                                { id: "all", label: "All" },
+                                ...stockProductOptions.map((opt) => ({
+                                  id: opt,
+                                  label: opt,
+                                })),
+                              ]}
+                              value={activeProductType || "all"}
+                              onChange={(v) =>
+                                setFilter(
+                                  { productType: v === "all" ? null : v },
+                                  false,
+                                )
+                              }
+                              layoutId="stockProductTypeFill"
+                              size="lg"
+                            />
+                          )}
+                        </>
+                      ) : dashboard.section === "mix" ? (
+                        <NavTabs
+                          prefixLabel="Compound"
+                          items={[
+                            { id: "all", label: "All" },
+                            { id: "Master Compound", label: "Master Compound" },
+                            { id: "Final Compound", label: "Final Compound" },
+                          ]}
+                          value={
+                            ["Master Compound", "Final Compound"].includes(
+                              activeProductType,
+                            )
+                              ? activeProductType
+                              : "all"
+                          }
+                          onChange={(v) =>
+                            setFilter(
+                              { productType: v === "all" ? null : v },
+                              false,
+                            )
+                          }
+                          layoutId="sectionProdTypeFill"
+                          size="lg"
+                        />
+                      ) : (
+                        <NavTabs
+                          prefixLabel="Type"
+                          items={[
+                            { id: "all", label: "All" },
+                            {
+                              id: "Passenger Radial",
+                              label: "Passenger Radial",
+                            },
+                            { id: "LCV", label: "LCV" },
+                          ]}
+                          value={
+                            ["Passenger Radial", "LCV"].includes(
+                              activeProductType,
+                            )
+                              ? activeProductType
+                              : "all"
+                          }
+                          onChange={(v) =>
+                            setFilter(
+                              { productType: v === "all" ? null : v },
+                              false,
+                            )
+                          }
+                          layoutId="sectionProdTypeFill"
+                          size="lg"
+                        />
+                      )}
 
                       {/* 2. UoM filter pills */}
                       <NavTabs

@@ -16,7 +16,7 @@
  * Returns { kpis, drillRows, isLoading, error, state, setFilter,
  *          drillInto, resetDrill, resetAll }.
  */
-import { useEffect, useReducer, useCallback } from "react";
+import { useEffect, useReducer, useCallback, useMemo } from "react";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import {
   toKpiGrid,
@@ -675,12 +675,16 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const downtimeRows = Array.isArray(downtimeData?.rows)
     ? downtimeData.rows
     : null;
-  const data = landingRows
-    ? [
-        ...landingRows,
-        ...(state.drillKpis && drillDataRows ? drillDataRows : []),
-      ]
-    : null;
+  const data = useMemo(
+    () =>
+      landingRows
+        ? [
+            ...landingRows,
+            ...(state.drillKpis && drillDataRows ? drillDataRows : []),
+          ]
+        : null,
+    [landingRows, state.drillKpis, drillDataRows],
+  );
   // new_change.md C10: either fetch hitting the row cap makes the totals on
   // screen incomplete — surface it rather than showing a partial sum as final.
   const truncated =
@@ -714,41 +718,61 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
 
   // CR-11: render the grid when EITHER feed has rows — a view whose only
   // data is the dedicated reason fetch still has a Total Downtime tile.
-  const kpis =
-    data || downtimeRows
-      ? toKpiGrid(data ?? [], {
-          section: sectionIdToName(state.section),
-          category: state.category.toUpperCase(),
-          granularity: state.granularity ?? "DAY",
-          mode: state.mode ?? "snapshot",
-          // Decides strict vs soft filter pins — CTP strict, Banmore soft.
-          plantId,
-          // Equipment KPIs come back for every product type now (backend
-          // exemption); the transformer uses this to prefer the selected
-          // product's row when it exists and fall back to the line value.
-          productType: state.productType ?? null,
-          // new_change.md C8/C9: never combine two units of the same series.
-          unitOfMeasurement: state.unitOfMeasurement ?? null,
-          // The card whose drill is open — lets the transformer switch a
-          // multi-unit KPI (Production: Batch/KG) to its mass unit while
-          // drilled, and back to Batch when closed.
-          drilledKpiId: state.drillSourceKpiId ?? null,
-          // new_change.md C6: per-KPI anchors, applied to the DEFAULT view
-          // only — an explicit user date/range always wins (C1).
-          anchors,
-          useAnchors:
-            !state.userWindow && (state.mode ?? "snapshot") !== "aggregate",
-          // new_change.md C14/S-3: suppress the spike on an in-progress day.
-          partialDays,
-          // new_change.md C15/C16/C17: the real preceding window.
-          baselineRows: landingData?.baseline ?? null,
-          baselineWindow: landingData?.baselineWindow ?? null,
-          // new_change.md C10.
-          truncated,
-          // CR-11 / Q-DT-01: the ONLY feed for the Total Downtime tile.
-          downtimeRows,
-        })
-      : [];
+  const kpis = useMemo(
+    () =>
+      data || downtimeRows
+        ? toKpiGrid(data ?? [], {
+            section: sectionIdToName(state.section),
+            category: state.category.toUpperCase(),
+            granularity: state.granularity ?? "DAY",
+            mode: state.mode ?? "snapshot",
+            // Decides strict vs soft filter pins — CTP strict, Banmore soft.
+            plantId,
+            // Equipment KPIs come back for every product type now (backend
+            // exemption); the transformer uses this to prefer the selected
+            // product's row when it exists and fall back to the line value.
+            productType: state.productType ?? null,
+            // new_change.md C8/C9: never combine two units of the same series.
+            unitOfMeasurement: state.unitOfMeasurement ?? null,
+            // The card whose drill is open — lets the transformer switch a
+            // multi-unit KPI (Production: Batch/KG) to its mass unit while
+            // drilled, and back to Batch when closed.
+            drilledKpiId: state.drillSourceKpiId ?? null,
+            // new_change.md C6: per-KPI anchors, applied to the DEFAULT view
+            // only — an explicit user date/range always wins (C1).
+            anchors,
+            useAnchors:
+              !state.userWindow && (state.mode ?? "snapshot") !== "aggregate",
+            // new_change.md C14/S-3: suppress the spike on an in-progress day.
+            partialDays,
+            // new_change.md C15/C16/C17: the real preceding window.
+            baselineRows: landingData?.baseline ?? null,
+            baselineWindow: landingData?.baselineWindow ?? null,
+            // new_change.md C10.
+            truncated,
+            // CR-11 / Q-DT-01: the ONLY feed for the Total Downtime tile.
+            downtimeRows,
+          })
+        : [],
+    [
+      data,
+      downtimeRows,
+      state.section,
+      state.category,
+      state.granularity,
+      state.mode,
+      state.productType,
+      state.unitOfMeasurement,
+      state.drillSourceKpiId,
+      state.userWindow,
+      plantId,
+      anchors,
+      partialDays,
+      landingData?.baseline,
+      landingData?.baselineWindow,
+      truncated,
+    ],
+  );
   const drillRows = data && state.drillKpis !== null ? toDrillRows(data) : null;
 
   useEffect(() => {

@@ -33,8 +33,7 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
   const oeeNum = toNum(
     summary?.oeeP?.value ?? plant?.oee ?? summary?.oee?.value,
   );
-  const oee =
-    oeeNum == null || oeeNum === 91.5 ? 92.0 : Math.round(oeeNum * 10) / 10;
+  const oee = oeeNum == null ? null : Math.round(oeeNum * 10) / 10;
 
   return (
     <Box

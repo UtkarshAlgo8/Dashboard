@@ -1,10 +1,13 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const PORT = 9222;
 const TARGET_URL = 'http://localhost:5173/banmore/production';
-const OUTPUT_FILE = '/home/yugal/.gemini/antigravity/brain/7a86f00b-adc8-4534-89c5-f049bb880d58/live_ui_screenshot.png';
+const OUTPUT_FILE =
+  process.env.SCREENSHOT_OUTPUT ||
+  path.resolve(process.cwd(), 'live_ui_screenshot.png');
 
 async function fetchJson(url) {
   return new Promise((resolve, reject) => {
