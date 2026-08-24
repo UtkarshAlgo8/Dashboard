@@ -76,8 +76,18 @@ export function buildDatePayload({ date = null, from = null, to = null } = {}) {
 }
 
 const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 /** "yyyy-MM" key for a Date. */
@@ -99,8 +109,18 @@ export function buildMonthOptions(asOf = null, count = 12) {
   const anchor = parseIso(asOf) ?? new Date();
   const out = [];
   for (let i = 0; i < count; i += 1) {
-    const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1, 12, 0, 0);
-    out.push({ key: monthKeyOf(d), label: `${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}` });
+    const d = new Date(
+      anchor.getFullYear(),
+      anchor.getMonth() - i,
+      1,
+      12,
+      0,
+      0,
+    );
+    out.push({
+      key: monthKeyOf(d),
+      label: `${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}`,
+    });
   }
   return out;
 }

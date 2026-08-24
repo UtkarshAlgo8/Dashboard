@@ -18,5 +18,7 @@ const BANMORE_PLANT = {
 
 export default function BanmoreQuality() {
   const navigate = useNavigate();
-  return <QualityDashboard plant={BANMORE_PLANT} onBack={() => navigate("/")} />;
+  return (
+    <QualityDashboard plant={BANMORE_PLANT} onBack={() => navigate("/")} />
+  );
 }

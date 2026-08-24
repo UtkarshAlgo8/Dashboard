@@ -157,7 +157,9 @@ function KpiPill({ label, value }) {
           {hasValue ? displayValue : "NA"}
         </Typography>
         {hasValue && (
-          <Typography sx={{ fontSize: 12, color: "success.main" }}>%</Typography>
+          <Typography sx={{ fontSize: 12, color: "success.main" }}>
+            %
+          </Typography>
         )}
       </Stack>
     </Box>

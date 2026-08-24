@@ -23,7 +23,9 @@ export default function ReworkDrillPanel({ drillRows }) {
           r.itemCode ?? "—",
           r.machine ?? "—",
           r.productType ?? r.drillDown?.[0] ?? "—",
-          typeof r.actual === "number" ? formatIndianNumber(r.actual) : (r.actual ?? "—"),
+          typeof r.actual === "number"
+            ? formatIndianNumber(r.actual)
+            : (r.actual ?? "—"),
           r.status ?? "Pending",
         ])
       : REWORK_DATA;

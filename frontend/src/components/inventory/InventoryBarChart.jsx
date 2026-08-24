@@ -119,7 +119,9 @@ function BarGroup({ bar, max, selected, onClick }) {
           mb: 0.25,
         }}
       >
-        {typeof bar.today === "number" ? formatIndianNumber(bar.today) : bar.today}
+        {typeof bar.today === "number"
+          ? formatIndianNumber(bar.today)
+          : bar.today}
       </Typography>
       <Stack
         direction="row"

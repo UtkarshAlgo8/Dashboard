@@ -25,7 +25,9 @@ function InventoryPage({ plantId }) {
         <Typography sx={{ fontSize: 16, fontWeight: 700 }}>
           Inventory Dashboard
         </Typography>
-        <Typography sx={{ fontSize: 13, color: "text.secondary", maxWidth: 420 }}>
+        <Typography
+          sx={{ fontSize: 13, color: "text.secondary", maxWidth: 420 }}
+        >
           The inventory dashboard opens in a new tab.
         </Typography>
         {/* Rendered as an anchor (not an onClick) so the browser's native

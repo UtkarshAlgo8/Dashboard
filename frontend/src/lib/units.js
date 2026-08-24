@@ -55,6 +55,7 @@ export function displayUnit(unit) {
  * @returns {{ value: number|null, unit: string|null }}
  */
 export function toDisplayQuantity(value, rawUnit) {
-  if (!isKg(rawUnit)) return { value, unit: canonicalUnitLabel(rawUnit) ?? null };
+  if (!isKg(rawUnit))
+    return { value, unit: canonicalUnitLabel(rawUnit) ?? null };
   return { value: kgToTonnes(value), unit: "MT" };
 }

@@ -28,7 +28,8 @@ function IndiaMap({
   // The focused plant drives the zoom + info card: the HOVERED plant
   // takes priority, otherwise the SELECTED one — so the map stays zoomed
   // into a city while its card is selected, even after the mouse leaves.
-  const find = (id) => (id && plants ? (plants.find((p) => p.id === id) ?? null) : null);
+  const find = (id) =>
+    id && plants ? (plants.find((p) => p.id === id) ?? null) : null;
   const focusPlant = find(hov) ?? find(sel);
   const focusActive = focusPlant ? activePlantIds.has(focusPlant.id) : false;
   const zoomed = Boolean(focusPlant && focusActive);
@@ -71,7 +72,12 @@ function IndiaMap({
         preserveAspectRatio="xMidYMid meet"
         // overflow visible: the enlarged (zoomed) map isn't cropped at the
         // box edges — it extends outward instead of being cut.
-        style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
+        style={{
+          width: "100%",
+          height: "auto",
+          display: "block",
+          overflow: "visible",
+        }}
       >
         <defs>
           <filter id="india-outline" x="-5%" y="-5%" width="110%" height="110%">
@@ -97,25 +103,25 @@ function IndiaMap({
           transform={zoomTransform}
           style={{ transition: "transform 0.45s ease" }}
         >
-        {/* Fill layer (light surface fill inside the country) */}
-        <g>
-          {SP.map((s, i) => (
-            <path
-              key={`f-${i}`}
-              d={s.d}
-              fill={fill}
-              stroke={muted}
-              strokeWidth="0.3"
-            />
-          ))}
-        </g>
+          {/* Fill layer (light surface fill inside the country) */}
+          <g>
+            {SP.map((s, i) => (
+              <path
+                key={`f-${i}`}
+                d={s.d}
+                fill={fill}
+                stroke={muted}
+                strokeWidth="0.3"
+              />
+            ))}
+          </g>
 
-        {/* Outline layer (black, visible country border) */}
-        <g filter="url(#india-outline)">
-          {SP.map((s, i) => (
-            <path key={`o-${i}`} d={s.d} fill={outline} stroke="none" />
-          ))}
-        </g>
+          {/* Outline layer (black, visible country border) */}
+          <g filter="url(#india-outline)">
+            {SP.map((s, i) => (
+              <path key={`o-${i}`} d={s.d} fill={outline} stroke="none" />
+            ))}
+          </g>
         </g>
 
         {/* Plant markers — OUTSIDE the zoom group, positioned at projected
@@ -153,83 +159,83 @@ function IndiaMap({
                   fluctuate. All visuals below ignore pointer events. */}
               <circle cx={0} cy={0} r={16} fill="transparent" />
               <g style={{ pointerEvents: "none" }}>
-              {/* Animated pulse rings — only for active plants */}
-              {active && (
-                <>
-                  <circle
-                    cx={0}
-                    cy={0}
-                    r="14"
-                    fill="none"
-                    stroke={accent}
-                    strokeWidth="1.2"
-                    opacity="0.35"
-                  >
-                    <animate
-                      attributeName="r"
-                      values="8;18;8"
-                      dur="2.5s"
-                      repeatCount="indefinite"
-                    />
-                    <animate
-                      attributeName="opacity"
-                      values="0.5;0;0.5"
-                      dur="2.5s"
-                      repeatCount="indefinite"
-                    />
-                  </circle>
-                  <circle
-                    cx={0}
-                    cy={0}
-                    r="10"
-                    fill="none"
-                    stroke={accent}
-                    strokeWidth="0.8"
-                    opacity="0.25"
-                  >
-                    <animate
-                      attributeName="r"
-                      values="6;14;6"
-                      dur="2.5s"
-                      repeatCount="indefinite"
-                      begin="0.5s"
-                    />
-                    <animate
-                      attributeName="opacity"
-                      values="0.4;0;0.4"
-                      dur="2.5s"
-                      repeatCount="indefinite"
-                      begin="0.5s"
-                    />
-                  </circle>
-                </>
-              )}
+                {/* Animated pulse rings — only for active plants */}
+                {active && (
+                  <>
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r="14"
+                      fill="none"
+                      stroke={accent}
+                      strokeWidth="1.2"
+                      opacity="0.35"
+                    >
+                      <animate
+                        attributeName="r"
+                        values="8;18;8"
+                        dur="2.5s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.5;0;0.5"
+                        dur="2.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r="10"
+                      fill="none"
+                      stroke={accent}
+                      strokeWidth="0.8"
+                      opacity="0.25"
+                    >
+                      <animate
+                        attributeName="r"
+                        values="6;14;6"
+                        dur="2.5s"
+                        repeatCount="indefinite"
+                        begin="0.5s"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.4;0;0.4"
+                        dur="2.5s"
+                        repeatCount="indefinite"
+                        begin="0.5s"
+                      />
+                    </circle>
+                  </>
+                )}
 
-              {/* Core dot */}
-              <circle
-                cx={0}
-                cy={0}
-                r={highlight ? 7 : 5}
-                fill={markerColor}
-                stroke="white"
-                strokeWidth="2"
-                style={{ transition: "r 0.15s" }}
-              />
+                {/* Core dot */}
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={highlight ? 7 : 5}
+                  fill={markerColor}
+                  stroke="white"
+                  strokeWidth="2"
+                  style={{ transition: "r 0.15s" }}
+                />
 
-              {/* Label */}
-              <text
-                x={10}
-                y={4}
-                fill={active ? theme.palette.text.primary : muted}
-                fontSize="11"
-                fontWeight={highlight ? 700 : 500}
-                style={{
-                  pointerEvents: "none",
-                  userSelect: "none",
-                }}
-              >
-                {p.name.replace(" Plant", "")}
-              </text>
+                {/* Label */}
+                <text
+                  x={10}
+                  y={4}
+                  fill={active ? theme.palette.text.primary : muted}
+                  fontSize="11"
+                  fontWeight={highlight ? 700 : 500}
+                  style={{
+                    pointerEvents: "none",
+                    userSelect: "none",
+                  }}
+                >
+                  {p.name.replace(" Plant", "")}
+                </text>
               </g>
             </g>
           );

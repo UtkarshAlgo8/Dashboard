@@ -21,7 +21,12 @@
  * @returns {string} formatted string with Indian comma grouping
  */
 export function formatIndianNumber(value, options = {}) {
-  const { fallback = "—", decimals, maxDecimals = 2, minDecimals = 0 } = options;
+  const {
+    fallback = "—",
+    decimals,
+    maxDecimals = 2,
+    minDecimals = 0,
+  } = options;
 
   if (value === null || value === undefined || value === "") {
     return fallback;
@@ -60,7 +65,8 @@ export function formatIndianNumber(value, options = {}) {
  */
 export function formatIndianInteger(value, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
-  const num = typeof value === "number" ? value : Number(String(value).replace(/,/g, ""));
+  const num =
+    typeof value === "number" ? value : Number(String(value).replace(/,/g, ""));
   if (!Number.isFinite(num)) return fallback;
   return Math.round(num).toLocaleString("en-IN", {
     minimumFractionDigits: 0,

@@ -132,7 +132,9 @@ function DailyInventoryTable({ history }) {
                 </TableCell>
                 {COLS.map((c) => (
                   <TableCell key={c.key} align="center" sx={{ fontSize: 12 }}>
-                    {typeof row[c.key] === "number" ? formatIndianNumber(row[c.key]) : (row[c.key] ?? "—")}
+                    {typeof row[c.key] === "number"
+                      ? formatIndianNumber(row[c.key])
+                      : (row[c.key] ?? "—")}
                   </TableCell>
                 ))}
               </TableRow>
