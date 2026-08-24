@@ -11,12 +11,6 @@ import {
   GRAN_MONTH,
 } from "../utils/normalize.js";
 
-// CR-10 / Q-LP-02 placeholder. Plant-aggregate Cured Tire Production's
-// MT display is computed as `curedTyreProduction * AVG_MASS_PER_TIRE_KG
-// / 1000`. Gold carries only NOS for Curing Production_product; revisit
-// when the gold layer carries a true mass field or per-tire-mass lookup.
-const AVG_MASS_PER_TIRE_KG = 10;
-
 /**
  * Lookup data + handlers. Labels/coordinates are app configuration; KPI
  * values shown on live plant cards are read from the gold DB.
@@ -211,8 +205,8 @@ function resolveLandingWindow(timeRange) {
  * (Production_product × product_type="Cured Tyre" × section="Curing",
  * all machines/SKUs) and plant-wide Scrap in the active window.
  * Returns the NOS sum and the Scrap Percentage (null when Cured Tire
- * Production is 0 — the "—" tile state). The MT figure is derived
- * client-side via AVG_MASS_PER_TIRE_KG (Q-LP-02).
+ * Production is 0 — the "—" tile state). NOS is the only unit gold
+ * carries for this KPI, so there is no mass conversion.
  */
 async function landingTimeAwareKpisForPlant(plantId, timeRange) {
   const { from, to } = resolveLandingWindow(timeRange);

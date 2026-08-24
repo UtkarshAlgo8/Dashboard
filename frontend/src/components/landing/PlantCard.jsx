@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 
@@ -8,10 +7,9 @@ import { formatIndianNumber } from "@/lib/numberFormat.js";
  * (Q-NAV-01). A left stripe + KPI pills are colour-coded by OEE health.
  *
  * CR-10: 5 KPI tiles (was 3). Top row keeps OEE / OTIF / Yield
- * (current-snapshot). Bottom row adds Cured Tire Production (with a
- * NOS / MT toggle mirroring the production dashboard's BATCH / MT
- * pattern) and Scrap Percentage (computed from total Scrap /
- * Cured Tire Production × 100 — see Q-LP-02 for the MT derivation).
+ * (current-snapshot). Bottom row adds Cured Tire Production (NOS —
+ * the only unit gold carries for it) and Scrap Percentage (total
+ * Scrap / Cured Tire Production × 100, both NOS tire counts).
  */
 function statusColor(theme, v) {
   const value = numericPercent(v);
@@ -25,10 +23,6 @@ function numericPercent(value) {
   const n = typeof value === "number" ? value : Number.parseFloat(value);
   return Number.isFinite(n) ? n : null;
 }
-
-// CR-10 / Q-LP-02: average mass per cured tire (kg). Mirrors the
-// backend placeholder; revisit when gold carries a true mass field.
-const AVG_MASS_PER_TIRE_KG = 10;
 
 function PlantCard({
   plant,
@@ -217,17 +211,13 @@ function KpiCell({ label, value, color }) {
   );
 }
 
-// CR-10: Cured Tire Production tile. NOS is the raw sum from the
-// backend; MT is derived client-side (NOS * AVG_MASS_PER_TIRE_KG /
-// 1000). Small NOS / MT pill toggle mirrors the production dashboard's
-// BATCH / MT pattern. State lives inside the cell so the toggle
-// doesn't disturb sibling tiles.
+// Cured Tire Production tile. Gold stores this KPI in NOS only —
+// every Curing / "Cured Tyre" row (Production, Production_product,
+// Production_m, Scrap, Rework, Curing_Plan) carries
+// unit_of_measurement = 'NOS' and there is no mass field to convert
+// from, so the tile shows the raw count with no unit toggle.
 function KpiCellCuredTyre({ nos }) {
-  const [unit, setUnit] = useState("nos");
   const hasValue = typeof nos === "number" && Number.isFinite(nos) && nos >= 0;
-  const mt = hasValue ? (nos * AVG_MASS_PER_TIRE_KG) / 1000 : null;
-  const displayValue = unit === "nos" ? nos : mt;
-  const unitLabel = unit === "nos" ? "NOS" : "MT";
   return (
     <Box
       sx={{
@@ -236,51 +226,8 @@ function KpiCellCuredTyre({ nos }) {
         py: 0.75,
         borderRadius: 1.25,
         backgroundColor: "action.hover",
-        position: "relative",
       }}
     >
-      <Box
-        sx={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          display: "flex",
-          border: 1,
-          borderColor: "divider",
-          borderRadius: 1,
-          overflow: "hidden",
-          backgroundColor: "background.paper",
-        }}
-      >
-        {[
-          { id: "nos", label: "NOS" },
-          { id: "mt", label: "MT" },
-        ].map((opt) => {
-          const active = unit === opt.id;
-          return (
-            <Box
-              key={opt.id}
-              component="button"
-              type="button"
-              onClick={() => setUnit(opt.id)}
-              sx={{
-                fontSize: 9,
-                fontWeight: 700,
-                px: 0.5,
-                py: 0.1,
-                color: active ? "primary.main" : "text.disabled",
-                backgroundColor: active ? "primary.light" : "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                letterSpacing: 0.4,
-              }}
-            >
-              {opt.label}
-            </Box>
-          );
-        })}
-      </Box>
       <Typography
         sx={{
           fontSize: 18,
@@ -289,15 +236,13 @@ function KpiCellCuredTyre({ nos }) {
           color: hasValue ? "text.primary" : "text.disabled",
         }}
       >
-        {hasValue && displayValue != null
-          ? formatIndianNumber(Math.round(displayValue))
-          : "NA"}
+        {hasValue ? formatIndianNumber(Math.round(nos)) : "NA"}
         {hasValue && (
           <Typography
             component="span"
             sx={{ fontSize: 11, color: "text.disabled", ml: 0.25 }}
           >
-            {unitLabel}
+            NOS
           </Typography>
         )}
       </Typography>
