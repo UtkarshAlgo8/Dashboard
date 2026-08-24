@@ -417,12 +417,25 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     state.section === "stk" ||
     state.section === "tbm" ||
     state.section === "cur";
+  // CR-11: follow a Shift A/B/C selection instead of always reading DAY.
+  // The reason leaves are stored under SHIFT A/B/C as well as DAY, and the
+  // three shifts partition the day exactly (verified in gold: Mixing Aug-2026
+  // 10,921 + 9,120 + 10,477 = 30,518 = the DAY total). Pinning DAY under a
+  // shift selection therefore showed the WHOLE day's downtime on a card
+  // labelled "Shift A" — roughly 3x the figure asked for. MONTH stays on DAY
+  // so the tile keeps per-date rows to draw a sparkline from.
+  const downtimeGranularity = String(state.granularity ?? "")
+    .toUpperCase()
+    .startsWith("SHIFT")
+    ? state.granularity
+    : "DAY";
+
   const downtimePayload = includesTotalDowntime
     ? {
         plantId,
         context: {
           ...buildContext(state),
-          granularity: "DAY",
+          granularity: downtimeGranularity,
         },
         ...buildDatePayload(state),
         drillKpis: [...DOWNTIME_REASONS],
@@ -731,9 +744,12 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     kpis,
     drillRows,
     rawRows: data ?? null,
-    // CR-11: the 6 OEE-availability-loss reason leaves at DAY granularity,
-    // kept out of `rawRows` on purpose (see the merge note above).
+    // CR-11: the 6 OEE-availability-loss reason leaves, kept out of
+    // `rawRows` on purpose (see the merge note above). `downtimeGranularity`
+    // is the granularity they were actually fetched at, so the drill panel
+    // filters on the same one rather than assuming DAY.
     downtimeRows,
+    downtimeGranularity,
     // new_change.md C10 — true means the row cap was hit and any total on
     // screen is INCOMPLETE.
     truncated,

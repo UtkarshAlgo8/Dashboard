@@ -85,15 +85,23 @@ function DowntimeDrillPanel({
       byReason.set(r.kpi_name, prev + v);
     }
     const total = [...byReason.values()].reduce((s, v) => s + v, 0);
+    // CR-11: divide by the contributing fleet for the same reason the tile
+    // does — machines go down concurrently, so their minutes are
+    // machine-minutes, not elapsed time. `pct` is unaffected: a common
+    // divisor cancels out of every share.
+    const div = machineCount > 0 ? machineCount : 1;
     return DOWNTIME_REASONS.map((reason) => {
-      const sum = byReason.get(reason) ?? 0;
+      const sum = (byReason.get(reason) ?? 0) / div;
       return {
         reason,
         sum,
-        pct: total > 0 ? Math.round((sum / total) * 1000) / 10 : 0,
+        pct:
+          total > 0
+            ? Math.round(((byReason.get(reason) ?? 0) / total) * 1000) / 10
+            : 0,
       };
     }).sort((a, b) => b.sum - a.sum);
-  }, [rawRows, sectionName, granularity]);
+  }, [rawRows, sectionName, granularity, machineCount]);
 
   const totalDowntime = reasonRows.reduce((s, r) => s + r.sum, 0);
 
@@ -148,7 +156,7 @@ function DowntimeDrillPanel({
     },
     {
       key: "sum",
-      label: "Total (machine-min)",
+      label: "Avg / machine (min)",
       align: "right",
       render: (r) => formatIndianNumber(Math.round(r.sum)),
     },
@@ -276,13 +284,12 @@ function DowntimeDrillPanel({
                 }}
               >
                 Total Downtime (selected window)
-                {machineCount > 0 ? ` · ${machineCount} machines` : ""}
               </Typography>
               <Tooltip
                 title={
                   machineCount > 0
-                    ? `Summed across all ${machineCount} machines in ${sectionName}. Available machine-time is ${machineCount} x the window length, so this total is expected to exceed a single month's 720 hours.`
-                    : "Summed across every machine in this section."
+                    ? `Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${machineCount} machines in ${sectionName} that recorded downtime in this window.`
+                    : "Average downtime per machine for this window."
                 }
                 arrow
               >
@@ -296,12 +303,13 @@ function DowntimeDrillPanel({
                   >
                     {formatIndianNumber(Math.round(totalDowntime))} min
                   </Typography>
-                  <Typography
-                    sx={{ fontSize: 11, color: "text.disabled", mt: 0.25 }}
-                  >
-                    {formatIndianNumber(Math.round(totalDowntime / 60))}{" "}
-                    machine-hrs
-                  </Typography>
+                  {machineCount > 0 && (
+                    <Typography
+                      sx={{ fontSize: 11, color: "text.disabled", mt: 0.25 }}
+                    >
+                      averaged over {machineCount} machines
+                    </Typography>
+                  )}
                 </Stack>
               </Tooltip>
             </Stack>

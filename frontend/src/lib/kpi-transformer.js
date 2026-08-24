@@ -1245,7 +1245,14 @@ function selectSeries(
             actual_value: v,
             granularity: r.granularity,
             unit_of_measurement: r.unit_of_measurement,
+            // Which machines contributed to THIS date. Machines break down
+            // concurrently, so the per-date sum is machine-minutes; the card
+            // divides by this set to get elapsed downtime for a typical
+            // machine. Tracked per date because the active fleet varies.
+            machines: new Set(),
           });
+        const bucket = prev ?? perDate.get(d);
+        if (r.machine && r.machine !== "nan") bucket.machines.add(r.machine);
         if (r.granularity) {
           granularityCount.set(
             r.granularity,
@@ -1527,12 +1534,10 @@ export function toKpiGrid(
   // CR-11: scope the dedicated reason rows to this section the same way
   // buildKpiGroups scopes `rows`, then index them by reason kpi_name.
   const downtimeByReason = new Map();
-  // CR-11: how many machines the Total Downtime sum spans. The tile is a
-  // FLEET total (every machine in the section added together), so 169 Curing
-  // presses legitimately produce ~12,000 hours in a 720-hour month — the
-  // capacity denominator is machines x 720, not 720. Surface the count on the
-  // card so the figure cannot be misread as one machine's downtime.
-  const downtimeMachines = new Set();
+  // CR-11: the machines that contributed are tracked PER DATE on the
+  // synthesised rows (see selectSeries), not once for the whole feed — the
+  // active fleet varies day to day, and the card must divide by the fleet
+  // behind the exact rows its headline covers.
   if (Array.isArray(downtimeRows)) {
     const reasonNames = new Set(DOWNTIME_REASONS);
     for (const r of downtimeRows) {
@@ -1547,10 +1552,8 @@ export function toKpiGrid(
       const bucket = downtimeByReason.get(r.kpi_name);
       if (bucket) bucket.push(r);
       else downtimeByReason.set(r.kpi_name, [r]);
-      if (r.machine && r.machine !== "nan") downtimeMachines.add(r.machine);
     }
   }
-  const downtimeMachineCount = downtimeMachines.size;
   // A section with landing rows OR reason rows still has a grid to draw.
   // Gating on `groups` alone would drop the whole grid — Total Downtime
   // tile included — on a view whose only data is the dedicated reason fetch.
@@ -1647,15 +1650,60 @@ export function toKpiGrid(
         continue;
       }
 
-      // CR-11 / Q-DT-01: for TotalDowntime the synthesised rows are
-      // per-date sums, so the headline reads the SUM across the active
-      // window (today's value for Today, this-month's for Month, etc.)
-      // rather than just the latest day's value. Other KPIs keep the
-      // existing "newest" semantics.
-      const value = isTotalDowntime
-        ? Math.round(numericVals.reduce((s, v) => s + v, 0) * 100) / 100
-        : Math.round(numericVals[0] * 100) / 100;
-      const sparkVals = numericVals.slice(0, sparkLength).reverse();
+      // CR-11 / Q-DT-01: TotalDowntime's synthesised rows are per-date sums,
+      // so the headline sums them ONLY when the fetched window IS the period
+      // the card denotes — i.e. the Month preset, whose window is that month.
+      //
+      // The Today and Shift presets deliberately fetch a TRAILING 7-DAY
+      // window so the sparkline has points (timeRange.js presetToDateRange:
+      // `from: shift(anchor, -7)`), while the headline still means ONE day.
+      // Summing unconditionally therefore reported 8 days as though they were
+      // one: measured 2026-08-22, Curing read 243,154 min against an actual
+      // 30,453 for the day (8.0x), TBM 13.4x, Stock 12.9x, Mixing 9.1x. Every
+      // other KPI reads numericVals[0] here for exactly this reason; outside
+      // MONTH, TotalDowntime now does too.
+      const windowIsCardPeriod =
+        normGran(granularity) === "MONTH" || normGran(granularity) === "YEAR";
+
+      // CR-11: the reason rows are PER MACHINE, and machines break down
+      // CONCURRENTLY — two presses down for the same hour contribute 120
+      // machine-minutes but only 60 minutes of elapsed time. Summing them
+      // therefore measures machine-minutes, not downtime, and scales with
+      // fleet size: 169 Curing presses read ~12,000 hours in a 720-hour
+      // month. Divide by the machines that actually contributed, so the
+      // headline is what a typical machine lost and stays comparable to the
+      // 1,440 min in a day / 43,200 in a month.
+      let downtimeMachines = 0;
+      let value;
+      if (isTotalDowntime) {
+        const usedRows = windowIsCardPeriod ? preRows : preRows.slice(0, 1);
+        const fleet = new Set();
+        let total = 0;
+        for (const r of usedRows) {
+          const v = numberOrNull(r.actual_value);
+          if (v == null) continue;
+          total += v;
+          if (r.machines) for (const m of r.machines) fleet.add(m);
+        }
+        // Never divide by zero: with no machine attribution the sum is the
+        // best available figure, and `scope` stays null so the card makes no
+        // claim about averaging.
+        downtimeMachines = fleet.size;
+        value =
+          Math.round(
+            (downtimeMachines > 0 ? total / downtimeMachines : total) * 100,
+          ) / 100;
+      } else {
+        value = Math.round(numericVals[0] * 100) / 100;
+      }
+      // Keep the sparkline on the SAME scale as the headline, or the chart
+      // contradicts the number printed above it.
+      const sparkDivisor =
+        isTotalDowntime && downtimeMachines > 0 ? downtimeMachines : 1;
+      const sparkVals = numericVals
+        .slice(0, sparkLength)
+        .reverse()
+        .map((v) => v / sparkDivisor);
 
       // new_change.md C14 / spike defect S-3: the section's latest day is
       // still IN PROGRESS (its shifts are incomplete). Comparing a part-day
@@ -1698,9 +1746,13 @@ export function toKpiGrid(
         const prevRow =
           preRows.find((r) => isoDate(r.date) === wantPrev) ??
           preRows.find((r) => isoDate(r.date) < currentIso);
+        // CR-11: `value` is per-machine for TotalDowntime, so the previous
+        // day must be divided by the same fleet before the two are compared
+        // — otherwise the spike reads as a ~N-fold jump every single day.
+        const prevVal = prevRow ? numberOrNull(prevRow.actual_value) : null;
         trend = spikePct(
           value,
-          prevRow ? numberOrNull(prevRow.actual_value) : null,
+          prevVal == null ? null : prevVal / sparkDivisor,
         );
         if (trend != null) {
           trendBaseline = `vs ${fmtDayLabel(isoDate(prevRow.date))}`;
@@ -1743,12 +1795,12 @@ export function toKpiGrid(
         partialDay,
         // C10: a hit row cap means this total is INCOMPLETE.
         truncated,
-        // CR-11: the Total Downtime tile is a FLEET sum across every machine
-        // in the section, so the card states the span. Null for every other
-        // KPI, which is already single-series.
+        // CR-11: the Total Downtime headline is a PER-MACHINE average, so the
+        // card names the fleet it was divided by. Null for every other KPI,
+        // which is already single-series.
         scope:
-          kpiDef.name === TOTAL_DOWNTIME_NAME && downtimeMachineCount > 0
-            ? { kind: "fleetSum", machines: downtimeMachineCount }
+          isTotalDowntime && downtimeMachines > 0
+            ? { kind: "perMachineAvg", machines: downtimeMachines }
             : null,
       });
       continue;
@@ -1787,11 +1839,29 @@ export function toKpiGrid(
     // still sums over a custom range (changes.md §8.2), which is exactly
     // what the additive default gives it.
     let value = aggregateForRange(numericVals, name);
+
+    // CR-11: a custom range sums every day in the window, so the same
+    // concurrency argument as the snapshot path applies — divide the
+    // machine-minutes by the machines that contributed, giving what a
+    // typical machine lost across the range.
+    let downtimeMachines = 0;
+    if (isTotalDowntimeAgg) {
+      const fleet = new Set();
+      for (const r of dailyRows) {
+        if (r.machines) for (const m of r.machines) fleet.add(m);
+      }
+      downtimeMachines = fleet.size;
+      if (downtimeMachines > 0) value /= downtimeMachines;
+    }
     value = Math.round(value * 100) / 100;
 
     // Sparkline: up to N most-recent Daily values, oldest→newest so the
-    // chart reads left-to-right.
-    const sparkVals = numericVals.slice(0, sparkLength).reverse();
+    // chart reads left-to-right. Kept on the headline's scale.
+    const aggDivisor = downtimeMachines > 0 ? downtimeMachines : 1;
+    const sparkVals = numericVals
+      .slice(0, sparkLength)
+      .reverse()
+      .map((v) => v / aggDivisor);
 
     // new_change.md C15 (Q4) + C17: a custom range compares with the
     // immediately preceding window of EQUAL length (1-16 Jul -> 15-30 Jun),
@@ -1833,12 +1903,12 @@ export function toKpiGrid(
       partialDay: false,
       // C10: never present a capped range total as if it were complete.
       truncated,
-      // CR-11: the Total Downtime tile is a FLEET sum across every machine
-      // in the section, so the card states the span. Null for every other
-      // KPI, which is already single-series.
+      // CR-11: the Total Downtime headline is a PER-MACHINE average, so the
+      // card names the fleet it was divided by. Null for every other KPI,
+      // which is already single-series.
       scope:
-        kpiDef.name === TOTAL_DOWNTIME_NAME && downtimeMachineCount > 0
-          ? { kind: "fleetSum", machines: downtimeMachineCount }
+        isTotalDowntimeAgg && downtimeMachines > 0
+          ? { kind: "perMachineAvg", machines: downtimeMachines }
           : null,
     });
   }
