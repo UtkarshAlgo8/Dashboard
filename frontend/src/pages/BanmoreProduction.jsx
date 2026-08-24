@@ -459,6 +459,20 @@ function BanmoreProduction() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
 
+  // The Stock sub-section tab RENDERS the resolved value (activeSubSection,
+  // which falls back to the first sub-section), but the fetch context reads
+  // dashboard.subSection verbatim — a null state therefore shows "4 Roll" as
+  // selected while sending no sub_section filter at all, and every Stock
+  // sub-section's rows come back. That widened the OEE drill to all of
+  // Stock's sub-sections. Seed the state so the tab, the fetch and the drill
+  // always describe the same slice.
+  useEffect(() => {
+    if (!isStock || dashboard.subSection != null) return;
+    if (!STOCK_SUBSECTIONS[0]) return;
+    setFilter({ subSection: STOCK_SUBSECTIONS[0] }, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStock, dashboard.subSection, STOCK_SUBSECTIONS[0]]);
+
   // Stock has no product list until its options fetch lands; seed the first
   // REAL product of the sub-section once it does. Also RE-seed when the pinned
   // product isn't among the current sub-section's options (e.g. it lingered
@@ -1216,6 +1230,9 @@ function DrillPanelRouter({
       return (
         <OeeDrillPanel
           section={section}
+          // Stock records OEE per sub_section; without the active tab the
+          // panel lists every sub-section's machines.
+          subSection={subSection}
           rawRows={rawRows}
           mode={mode}
           granularity={productivityDrillGranularity}

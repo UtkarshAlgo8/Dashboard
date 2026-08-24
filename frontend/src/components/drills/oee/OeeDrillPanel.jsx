@@ -21,6 +21,7 @@ import client from "@/api/client.js";
 import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
+import { denanDimension } from "@/lib/dashboardRowScopes.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 /**
@@ -69,6 +70,11 @@ const OEE_CORE_KPIS = new Set([
 
 function OeeDrillPanel({
   section,
+  // The sub-section the dashboard is scoped to. Stock is the only section
+  // that records OEE per sub_section (OEE_s / OEE_m carry one; Mixing, TBM
+  // and Curing leave it blank), so without this the Stock drill lists every
+  // sub-section's machines regardless of which tab is active.
+  subSection = null,
   rawRows,
   mode = "snapshot",
   granularity = "DAY",
@@ -107,8 +113,20 @@ function OeeDrillPanel({
   // filtering. Collapse to the latest available date in snapshot mode so
   // the drill reconciles with the card and we never average a week.
   const scopedRows = useMemo(() => {
+    const pinnedSub = subSection
+      ? String(subSection).trim().toLowerCase()
+      : null;
     const rows = (rawRows ?? []).filter((r) => {
       if (r?.section !== sectionName) return false;
+      // A row that carries NO sub_section belongs to the section as a whole
+      // (that is how every non-Stock section stores OEE) and is kept; only a
+      // row explicitly tagged with a DIFFERENT sub-section is dropped.
+      if (pinnedSub) {
+        const rowSub = denanDimension(r.sub_section);
+        if (rowSub && String(rowSub).trim().toLowerCase() !== pinnedSub) {
+          return false;
+        }
+      }
       if (OEE_CORE_KPIS.has(r.kpi_name)) return true;
       return Boolean(r.machine && r.machine !== "nan");
     });
@@ -118,7 +136,7 @@ function OeeDrillPanel({
       return rows.filter((r) => dateKey(r?.date) === want);
     }
     return snapshotLatest(rows, mode);
-  }, [rawRows, sectionName, mode, cardDate]);
+  }, [rawRows, sectionName, mode, cardDate, subSection]);
 
   // Read the stored value for one kpi_name VERBATIM (optionally
   // machine-scoped). scopedRows is already collapsed to the snapshot day,
@@ -141,16 +159,21 @@ function OeeDrillPanel({
     return matching[0].actual_value;
   };
 
-  // Like latestVal but pinned to a sub_section (Tredge) — used by the
-  // Curing trench tier to read OEE_s / Availability_s / etc. per Tredge.
-  const latestValSub = (kpiName, subSection) => {
-    if (!Array.isArray(scopedRows)) return null;
+  // Like latestVal but pinned to a sub_section — used by the Curing trench
+  // tier (per Tredge) and by the Stock tiles (per sub-section). The compare
+  // is trimmed + case-insensitive so a tab label spelled differently from
+  // the stored value still matches.
+  const latestValSub = (kpiName, wantSub) => {
+    if (!Array.isArray(scopedRows) || !wantSub) return null;
+    const want = String(wantSub).trim().toLowerCase();
     const m = scopedRows.filter(
       (r) =>
         r.section === sectionName &&
         r.kpi_name === kpiName &&
         r.granularity === granularity &&
-        r.sub_section === subSection &&
+        String(r.sub_section ?? "")
+          .trim()
+          .toLowerCase() === want &&
         typeof r.actual_value === "number" &&
         Number.isFinite(r.actual_value),
     );
@@ -198,13 +221,26 @@ function OeeDrillPanel({
       if (a == null && p == null && q == null) return null;
       return { availability: a ?? 0, performance: p ?? 0, quality: q ?? 0 };
     }
+    // Stock has no section-wide OEE_o worth showing here: its OEE lives on
+    // the per-sub_section *_s rows, and the CARD reads OEE_s for the active
+    // tab. Read the same rows so the tiles reconcile with the card instead
+    // of showing the whole section's average. Falls back to the *_o family
+    // for the sections that only store that.
+    if (subSection) {
+      const a = latestValSub("Availability_s", subSection);
+      const p = latestValSub("Performance_s", subSection);
+      const q = latestValSub("Quality_s", subSection);
+      if (a != null || p != null || q != null) {
+        return { availability: a ?? 0, performance: p ?? 0, quality: q ?? 0 };
+      }
+    }
     const a = latestVal("Availability_o");
     const p = latestVal("Performance_o");
     const q = latestVal("Quality_o");
     if (a == null && p == null && q == null) return null;
     return { availability: a ?? 0, performance: p ?? 0, quality: q ?? 0 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopedRows, sectionName, trench, selectedTredge]);
+  }, [scopedRows, sectionName, trench, selectedTredge, subSection]);
 
   const machines = useMemo(() => {
     if (!Array.isArray(scopedRows)) return [];
