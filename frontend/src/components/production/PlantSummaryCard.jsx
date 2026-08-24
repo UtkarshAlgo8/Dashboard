@@ -73,7 +73,7 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
           lineHeight: 1,
         }}
       >
-        {oee.toFixed(1)}%
+        {oee == null ? "–" : `${oee.toFixed(1)}%`}
       </Typography>
     </Box>
   );

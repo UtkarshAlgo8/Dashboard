@@ -341,7 +341,7 @@ function BanmoreProduction() {
   const activeProductType =
     dashboard.productType ??
     (isStock
-      ? (stockProductOptions[0] ?? null)
+      ? null
       : (navProductOptions[0] ?? sectionDefaultProduct[dashboard.section]));
 
   const unitOptionsForProduct = [
@@ -386,7 +386,7 @@ function BanmoreProduction() {
     const first = stockProductOptions[0];
     if (!first) return;
     if (
-      dashboard.productType == null ||
+      dashboard.productType != null &&
       !stockProductOptions.includes(dashboard.productType)
     ) {
       setFilter({ productType: first, unitOfMeasurement: null }, false);
@@ -719,7 +719,7 @@ function BanmoreProduction() {
                                   label: opt,
                                 })),
                               ]}
-                              value={activeProductType || "all"}
+                              value={dashboard.productType ?? "all"}
                               onChange={(v) =>
                                 setFilter(
                                   { productType: v === "all" ? null : v },

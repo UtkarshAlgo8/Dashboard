@@ -103,11 +103,23 @@ function KpiCard({
   // Trend formatting
   const trendUp = kpi.trend == null || kpi.trend >= 0;
   let trendVal = "–";
-  if (kpi.trendValue != null && !isNaN(kpi.trendValue)) {
-    trendVal =
-      `${kpi.trendValue > 0 ? "+" : ""}${formatIndianNumber(kpi.trendValue)} ${kpiId.includes("prod") ? "Tyres" : ""}`.trim();
-  } else if (kpi.trend != null && !isNaN(kpi.trend)) {
-    trendVal = `${kpi.trend > 0 ? "+" : ""}${kpi.trend.toFixed(1)}%`;
+  const isProduction = kpiId.includes("prod") || kpiName.includes("prod");
+  const trendValue =
+    kpi.trendValue == null || kpi.trendValue === ""
+      ? null
+      : Number(kpi.trendValue);
+  const trendPct =
+    kpi.trend == null || kpi.trend === "" ? null : Number(kpi.trend);
+
+  if (isProduction) {
+    if (Number.isFinite(trendValue)) {
+      trendVal = `${trendValue > 0 ? "+" : ""}${formatIndianNumber(trendValue)} Tyres`;
+    } else if (Number.isFinite(trendPct) && Number.isFinite(numVal)) {
+      const absoluteDifference = Math.round(numVal * (trendPct / 100));
+      trendVal = `${absoluteDifference > 0 ? "+" : ""}${formatIndianNumber(absoluteDifference)} Tyres`;
+    }
+  } else if (Number.isFinite(trendPct)) {
+    trendVal = `${trendPct > 0 ? "+" : ""}${trendPct.toFixed(1)}%`;
   }
   const trendLabel = kpi.trendBaseline ?? "vs prev";
 
