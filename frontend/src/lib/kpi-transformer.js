@@ -1148,6 +1148,8 @@ function placeholderCard(kpiDef) {
     asOfDate: null,
     partialDay: false,
     truncated: false,
+    // CR-11: no rows ⇒ no fleet to describe.
+    scope: null,
   };
 }
 
@@ -1525,16 +1527,30 @@ export function toKpiGrid(
   // CR-11: scope the dedicated reason rows to this section the same way
   // buildKpiGroups scopes `rows`, then index them by reason kpi_name.
   const downtimeByReason = new Map();
+  // CR-11: how many machines the Total Downtime sum spans. The tile is a
+  // FLEET total (every machine in the section added together), so 169 Curing
+  // presses legitimately produce ~12,000 hours in a 720-hour month — the
+  // capacity denominator is machines x 720, not 720. Surface the count on the
+  // card so the figure cannot be misread as one machine's downtime.
+  const downtimeMachines = new Set();
   if (Array.isArray(downtimeRows)) {
     const reasonNames = new Set(DOWNTIME_REASONS);
     for (const r of downtimeRows) {
       if (!r || !reasonNames.has(r.kpi_name)) continue;
+      // Rows whose `section` is blank are NOT this section's: for the 31
+      // dual-listed Curing presses they are exact value duplicates of the
+      // attributed rows (same machine/date/kpi/value, different record_id),
+      // and the remaining machines only ever carry section 'UNKNOWN' — they
+      // are not Mixing/Stock/TBM/Curing equipment. Counting either would
+      // double the section total.
       if (r.section !== section) continue;
       const bucket = downtimeByReason.get(r.kpi_name);
       if (bucket) bucket.push(r);
       else downtimeByReason.set(r.kpi_name, [r]);
+      if (r.machine && r.machine !== "nan") downtimeMachines.add(r.machine);
     }
   }
+  const downtimeMachineCount = downtimeMachines.size;
   // A section with landing rows OR reason rows still has a grid to draw.
   // Gating on `groups` alone would drop the whole grid — Total Downtime
   // tile included — on a view whose only data is the dedicated reason fetch.
@@ -1727,6 +1743,13 @@ export function toKpiGrid(
         partialDay,
         // C10: a hit row cap means this total is INCOMPLETE.
         truncated,
+        // CR-11: the Total Downtime tile is a FLEET sum across every machine
+        // in the section, so the card states the span. Null for every other
+        // KPI, which is already single-series.
+        scope:
+          kpiDef.name === TOTAL_DOWNTIME_NAME && downtimeMachineCount > 0
+            ? { kind: "fleetSum", machines: downtimeMachineCount }
+            : null,
       });
       continue;
     }
@@ -1810,6 +1833,13 @@ export function toKpiGrid(
       partialDay: false,
       // C10: never present a capped range total as if it were complete.
       truncated,
+      // CR-11: the Total Downtime tile is a FLEET sum across every machine
+      // in the section, so the card states the span. Null for every other
+      // KPI, which is already single-series.
+      scope:
+        kpiDef.name === TOTAL_DOWNTIME_NAME && downtimeMachineCount > 0
+          ? { kind: "fleetSum", machines: downtimeMachineCount }
+          : null,
     });
   }
   return result;

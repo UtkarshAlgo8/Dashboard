@@ -55,6 +55,22 @@ function DowntimeDrillPanel({
   const cardRef = useRef(null);
   const [selectedReason, setSelectedReason] = useState(null);
 
+  // How many machines these sums span. Every figure in this panel is a FLEET
+  // total — 169 Curing presses add up to ~12,000 hours in a 720-hour month —
+  // so the header states the span rather than leaving the reader to compare
+  // it against one machine's month.
+  const machineCount = useMemo(() => {
+    if (!Array.isArray(rawRows)) return 0;
+    const seen = new Set();
+    for (const r of rawRows) {
+      if (r.section !== sectionName) continue;
+      if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
+      if (r.granularity !== granularity) continue;
+      if (r.machine && r.machine !== "nan") seen.add(r.machine);
+    }
+    return seen.size;
+  }, [rawRows, sectionName, granularity]);
+
   // Group the 6 reasons: sum per reason for the active window.
   const reasonRows = useMemo(() => {
     if (!Array.isArray(rawRows)) return [];
@@ -132,7 +148,7 @@ function DowntimeDrillPanel({
     },
     {
       key: "sum",
-      label: "Total (min)",
+      label: "Total (machine-min)",
       align: "right",
       render: (r) => formatIndianNumber(Math.round(r.sum)),
     },
@@ -260,16 +276,34 @@ function DowntimeDrillPanel({
                 }}
               >
                 Total Downtime (selected window)
+                {machineCount > 0 ? ` · ${machineCount} machines` : ""}
               </Typography>
-              <Typography
-                sx={{
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: "primary.main",
-                }}
+              <Tooltip
+                title={
+                  machineCount > 0
+                    ? `Summed across all ${machineCount} machines in ${sectionName}. Available machine-time is ${machineCount} x the window length, so this total is expected to exceed a single month's 720 hours.`
+                    : "Summed across every machine in this section."
+                }
+                arrow
               >
-                {formatIndianNumber(Math.round(totalDowntime))} min
-              </Typography>
+                <Stack alignItems="flex-end">
+                  <Typography
+                    sx={{
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: "primary.main",
+                    }}
+                  >
+                    {formatIndianNumber(Math.round(totalDowntime))} min
+                  </Typography>
+                  <Typography
+                    sx={{ fontSize: 11, color: "text.disabled", mt: 0.25 }}
+                  >
+                    {formatIndianNumber(Math.round(totalDowntime / 60))}{" "}
+                    machine-hrs
+                  </Typography>
+                </Stack>
+              </Tooltip>
             </Stack>
             <DataTable
               columns={reasonColumns}

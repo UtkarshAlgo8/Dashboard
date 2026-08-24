@@ -161,7 +161,12 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
           <Typography
             sx={{ fontSize: 12, color: "text.disabled", fontWeight: 500 }}
           >
-            {kpi.unit}
+            {/* CR-11: a fleet sum is machine-minutes, not minutes — one
+                machine down 60 min and 60 machines down 1 min each both
+                read 60. Say so in the unit. */}
+            {kpi.scope?.kind === "fleetSum" && kpi.unit === "min"
+              ? "machine-min"
+              : kpi.unit}
           </Typography>
         </Stack>
         {Array.isArray(kpi.spark) && kpi.spark.length >= 2 ? (
@@ -240,6 +245,23 @@ function KpiCard({ kpi, isDrilling, onClick, onTrendOpen, onCloseDrill }) {
             }}
           >
             in progress · partial day
+          </Typography>
+        </Tooltip>
+      )}
+
+      {/* CR-11: the Total Downtime tile adds up EVERY machine in the section,
+          so its magnitude scales with fleet size — 169 Curing presses produce
+          ~12,000 machine-hours in a 720-hour month. Without this line the
+          number invites a comparison against a single month's 43,200 minutes,
+          which is the wrong denominator (it is machines x 43,200). */}
+      {kpi.scope?.kind === "fleetSum" && kpi.scope.machines > 0 && (
+        <Tooltip
+          title={`Summed across all ${kpi.scope.machines} machines in this section. Available machine-time for the window is ${kpi.scope.machines} x the window length, so this total is expected to exceed a single month's 720 hours.`}
+          arrow
+        >
+          <Typography sx={{ mt: 0.75, fontSize: 11, color: "text.disabled" }}>
+            {formatIndianNumber(Math.round(kpi.value / 60))} machine-hrs ·
+            across {kpi.scope.machines} machines
           </Typography>
         </Tooltip>
       )}
