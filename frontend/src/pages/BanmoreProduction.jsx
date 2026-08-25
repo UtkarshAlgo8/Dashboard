@@ -811,6 +811,8 @@ function BanmoreProduction() {
                       },
                       gap: 2,
                       alignItems: "flex-start",
+                      flex: 1,
+                      minHeight: 0,
                       transition: "all 0.3s ease",
                     }}
                   >
