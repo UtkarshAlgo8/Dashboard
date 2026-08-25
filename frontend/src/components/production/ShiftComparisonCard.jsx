@@ -1,29 +1,25 @@
-import { useRef, useState } from "react";
-import {
-  Box,
-  Stack,
-  Tooltip,
-  Typography,
-  useTheme,
-} from "@mui/material";
+import { useState } from "react";
+import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
 import GridViewIcon from "@mui/icons-material/GridView";
 import DeleteSweepOutlinedIcon from "@mui/icons-material/DeleteSweepOutlined";
 import SyncOutlinedIcon from "@mui/icons-material/SyncOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import {
   canonicalizeProductType,
   canonicalizeSubSection,
 } from "@/lib/dashboardRowScopes.js";
-import { canonicalUnit, resolveProductionKpi } from "@/lib/kpi-transformer.js";
+import {
+  AGGREGATE_PRODUCT,
+  canonicalUnit,
+  resolveProductionKpi,
+} from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
-import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
+import { isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import DataTable from "@/components/tables/DataTable.jsx";
-import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { evaluateShiftTier, getStemColor } from "@/lib/thresholds.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === "true";
@@ -207,19 +203,40 @@ export default function ShiftComparisonCard({
     });
 
   const prodRowsFor = (i) =>
-    pickProdRows(prodBands[i] ?? [], prodKpi, productPin);
+    (() => {
+      const band = prodBands[i] ?? [];
+      const primary = pickProdRows(band, prodKpi, productPin);
+      const isAggregatePin =
+        productPin != null && productPin === AGGREGATE_PRODUCT[section];
+      if (primary.length === 0 && isAggregatePin) {
+        return pickProdRows(band, "Production", null);
+      }
+      return primary;
+    })();
 
   const qRowsFor = (kpiName, i) =>
-    (qualBands[i] ?? []).filter((r) => r.kpi_name === kpiName);
+    (qualBands[i] ?? []).filter(
+      (r) => r.kpi_name === kpiName && matchesScope(r),
+    );
 
   const readShift = (rows, kpiName) => {
-    if (!rows.length) return null;
-    const direct = rows.find((r) => r.kpi_name === kpiName);
-    if (direct?.actual_value != null) {
-      return numOrNull(direct.actual_value);
+    const dated = rows
+      .filter((r) => r.kpi_name === kpiName)
+      .map((r) => ({ key: dateKey(r.date), value: numOrNull(r.actual_value) }))
+      .filter((r) => r.value !== null)
+      .sort((a, b) => (a.key < b.key ? 1 : -1));
+    if (dated.length === 0) return null;
+
+    if (!isRange) {
+      const selectedDate = dateKey(date);
+      const dayRows = selectedDate
+        ? dated.filter((r) => r.key === selectedDate)
+        : dated.filter((r) => r.key === dated[0].key);
+      if (dayRows.length === 0) return null;
+      return dayRows.reduce((sum, row) => sum + row.value, 0);
     }
-    const nums = rows.map((r) => numOrNull(r.actual_value)).filter(Boolean);
-    return nums.length ? nums.reduce((a, b) => a + b, 0) : null;
+
+    return dated.reduce((sum, row) => sum + row.value, 0);
   };
 
   const prodUnit = canonicalUnit(unit);
@@ -235,10 +252,10 @@ export default function ShiftComparisonCard({
     readShift(qRowsFor("Rework", i), "Rework"),
   );
 
-  // Map shift metrics to thousands (k) or 0 if null
-  const displayProd = prodByShift.map((v) => (v == null ? 0 : v / 1000));
-  const displayScrap = scrapByShift.map((v) => (v == null ? 0 : v / 1000));
-  const displayRework = reworkByShift.map((v) => (v == null ? 0 : v / 1000));
+  // Keep the intentional thousands scale while preserving missing shifts as null.
+  const displayProd = prodByShift.map((v) => (v == null ? null : v / 1000));
+  const displayScrap = scrapByShift.map((v) => (v == null ? null : v / 1000));
+  const displayRework = reworkByShift.map((v) => (v == null ? null : v / 1000));
 
   const prodScale = computeYAxisScale(displayProd, 100);
   const scrapScale = computeYAxisScale(displayScrap, 4);
@@ -347,12 +364,7 @@ export default function ShiftComparisonCard({
  * Compact Table View for Shift-Wise Comparison (shown below stacked KPIs in drilldown view)
  * Uses the reusable DataTable component.
  */
-function ShiftComparisonTableCard({
-  shifts,
-  prodData,
-  scrapData,
-  reworkData,
-}) {
+function ShiftComparisonTableCard({ shifts, prodData, scrapData, reworkData }) {
   const theme = useTheme();
 
   const columns = [
@@ -398,9 +410,7 @@ function ShiftComparisonTableCard({
       value: (row) => row.scrap,
       render: (row) => (
         <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
-          {row.scrap != null
-            ? formatIndianNumber(Math.round(row.scrap))
-            : "—"}
+          {row.scrap != null ? formatIndianNumber(Math.round(row.scrap)) : "—"}
         </Typography>
       ),
     },
@@ -767,12 +777,7 @@ function LollipopSvgChart({
           const tooltipWidth = exactText.length * 7.5 + 20;
 
           return (
-            <g
-              key={idx}
-              onMouseEnter={() => setHoveredIdx(idx)}
-              onMouseLeave={() => setHoveredIdx(null)}
-              style={{ cursor: "pointer" }}
-            >
+            <g key={idx}>
               {/* Data Value Label Above Marker (when not hovered) */}
               {!isHovered && (
                 <text
@@ -788,53 +793,62 @@ function LollipopSvgChart({
                 </text>
               )}
 
-              {/* Stem vertical line with vertical fading gradient matching threshold color */}
-              <line
-                x1={x}
-                y1={yBottom}
-                x2={x}
-                y2={yTop}
-                stroke={`url(#${gradId})`}
-                strokeWidth={isHovered ? "2.8" : "2"}
-                strokeLinecap="round"
-              />
+              {val != null && (
+                <>
+                  {/* Stem vertical line with vertical fading gradient matching threshold color */}
+                  <line
+                    x1={x}
+                    y1={yBottom}
+                    x2={x}
+                    y2={yTop}
+                    stroke={`url(#${gradId})`}
+                    strokeWidth={isHovered ? "2.8" : "2"}
+                    strokeLinecap="round"
+                  />
 
-              {/* Circular top marker - Outer Ring */}
-              <circle
-                cx={x}
-                cy={yTop}
-                r={isHovered ? 5.5 : 4.2}
-                fill={theme.palette.background.paper}
-                stroke={color}
-                strokeWidth={isHovered ? "2.6" : "1.8"}
-              />
-
-              {/* Exact Value Tooltip Badge on Hover */}
-              {isHovered && (
-                <g transform={`translate(${x}, ${Math.max(20, yTop - 10)})`}>
-                  <rect
-                    x={-tooltipWidth / 2}
-                    y={-22}
-                    width={tooltipWidth}
-                    height={22}
-                    rx={6}
+                  {/* Circular top marker - Outer Ring */}
+                  <circle
+                    cx={x}
+                    cy={yTop}
+                    r={isHovered ? 5.5 : 4.2}
                     fill={theme.palette.background.paper}
                     stroke={color}
-                    strokeWidth={1.6}
-                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.18))"
+                    strokeWidth={isHovered ? "2.6" : "1.8"}
+                    onMouseEnter={() => setHoveredIdx(idx)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                    style={{ cursor: "pointer" }}
                   />
-                  <text
-                    x={0}
-                    y={-7}
-                    textAnchor="middle"
-                    fill={color}
-                    fontSize="11.5"
-                    fontWeight="800"
-                    fontFamily={theme.typography.fontFamily}
-                  >
-                    {exactText}
-                  </text>
-                </g>
+
+                  {/* Exact Value Tooltip Badge on Hover */}
+                  {isHovered && (
+                    <g
+                      transform={`translate(${x}, ${Math.max(20, yTop - 10)})`}
+                    >
+                      <rect
+                        x={-tooltipWidth / 2}
+                        y={-22}
+                        width={tooltipWidth}
+                        height={22}
+                        rx={6}
+                        fill={theme.palette.background.paper}
+                        stroke={color}
+                        strokeWidth={1.6}
+                        filter="drop-shadow(0 2px 5px rgba(0,0,0,0.18))"
+                      />
+                      <text
+                        x={0}
+                        y={-7}
+                        textAnchor="middle"
+                        fill={color}
+                        fontSize="11.5"
+                        fontWeight="800"
+                        fontFamily={theme.typography.fontFamily}
+                      >
+                        {exactText}
+                      </text>
+                    </g>
+                  )}
+                </>
               )}
 
               {/* Shift Label at Bottom */}
@@ -861,4 +875,12 @@ function numOrNull(v) {
   if (v == null || v === "" || v === "nan" || v === "null") return null;
   const n = typeof v === "number" ? v : Number.parseFloat(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function dateKey(value) {
+  if (typeof value !== "string") return "";
+  const date = value.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(date);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
 }
