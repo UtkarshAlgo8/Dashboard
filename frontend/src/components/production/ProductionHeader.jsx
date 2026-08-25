@@ -49,6 +49,8 @@ const DEFAULT_TYRE_TYPES = [
 function ProductionHeader({
   timeRange,
   onTimeRangeChange,
+  shift = "all",
+  onShiftChange,
   onExport,
   asOf = null,
   lastUpdatedAt = null,
@@ -228,6 +230,8 @@ function ProductionHeader({
               preset={timeRange?.preset}
               from={timeRange?.from}
               to={timeRange?.to}
+              shift={shift}
+              onShiftChange={onShiftChange}
               onPresetChange={(p) =>
                 onTimeRangeChange?.((prev) => ({
                   ...prev,

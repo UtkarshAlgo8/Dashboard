@@ -431,7 +431,7 @@ function BanmoreProduction() {
     to: "",
   });
 
-  const shiftKey = "all";
+  const [shiftKey, setShiftKey] = useState("all");
 
   const effectiveGranularity = (preset, shift) => {
     const map = { all: null, a: "SHIFT A", b: "SHIFT B", c: "SHIFT C" };
@@ -445,6 +445,10 @@ function BanmoreProduction() {
     setTimeRange((prev) =>
       typeof updater === "function" ? updater(prev) : updater,
     );
+  };
+
+  const onShiftChange = (next) => {
+    setShiftKey(next);
   };
 
   useEffect(() => {
@@ -564,6 +568,8 @@ function BanmoreProduction() {
           plant={plant}
           timeRange={timeRange}
           onTimeRangeChange={onTimeRangeChange}
+          shift={shiftKey}
+          onShiftChange={onShiftChange}
           onExport={onExportPdf}
           asOf={effectiveAsOf}
           lastUpdatedAt={lastUpdatedAt}

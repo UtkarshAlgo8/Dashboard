@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Box, Menu, MenuItem, Stack, useTheme } from "@mui/material";
+import { Box, Menu, MenuItem, Select, Stack, useTheme } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { format, parseISO, isValid } from "date-fns";
 import { DateRangeFilterDialog } from "@/components/common";
@@ -17,6 +17,8 @@ function TimeRangeSelect({
   to,
   onFromChange,
   onToChange,
+  shift = "all",
+  onShiftChange,
   asOf = null,
   month = null,
   onMonthChange,
@@ -36,6 +38,14 @@ function TimeRangeSelect({
 
   const monthOptions = useMemo(() => buildMonthOptions(asOf), [asOf]);
   const selectedMonthKey = month ?? asOfMonthKey(asOf);
+  const showShift = preset === "today" && typeof onShiftChange === "function";
+
+  const shiftOptions = [
+    { id: "all", label: "All Shifts" },
+    { id: "a", label: "Shift A" },
+    { id: "b", label: "Shift B" },
+    { id: "c", label: "Shift C" },
+  ];
 
   const pad =
     size === "sm"
@@ -51,6 +61,35 @@ function TimeRangeSelect({
       spacing={1}
       sx={{ display: "inline-flex" }}
     >
+      <Box sx={{ width: 96, flexShrink: 0, display: "flex" }}>
+        {showShift && (
+          <Select
+            size="small"
+            value={shift}
+            onChange={(event) => onShiftChange(event.target.value)}
+            aria-label="Filter by shift"
+            sx={{
+              width: "100%",
+              fontSize: 11,
+              height: 30,
+              "& .MuiSelect-select": {
+                py: 0.25,
+                pl: 1,
+                pr: "26px !important",
+                fontSize: 11,
+                fontWeight: 600,
+              },
+              "& fieldset": { borderColor: "divider" },
+            }}
+          >
+            {shiftOptions.map((option) => (
+              <MenuItem key={option.id} value={option.id} sx={{ fontSize: 12, py: 0.5 }}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </Select>
+        )}
+      </Box>
       <Box
         sx={{
           display: "inline-flex",
@@ -218,10 +257,12 @@ function TimeRangeSelect({
       <DateRangeFilterDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        fromDate={fromDate}
-        toDate={toDateVal}
-        onFromChange={(d) => onFromChange(formatSafe(d))}
-        onToChange={(d) => onToChange(formatSafe(d))}
+        from={from}
+        to={to}
+        onApply={({ from: nextFrom, to: nextTo }) => {
+          onFromChange(nextFrom);
+          onToChange(nextTo);
+        }}
       />
     </Stack>
   );
@@ -231,10 +272,6 @@ function parseSafe(val) {
   if (!val) return null;
   const d = parseISO(val);
   return isValid(d) ? d : null;
-}
-
-function formatSafe(d) {
-  return d && isValid(d) ? format(d, "yyyy-MM-dd") : "";
 }
 
 function formatRangeLabel(from, to) {
