@@ -135,30 +135,56 @@ export function getKpiCardTheme(theme, tier) {
 }
 
 /**
- * Evaluates Shift Lollipop stem & marker tier.
- * For Scrap/Rework: lower is better.
- * For Production: higher is better.
+ * Evaluates Shift Lollipop stem & marker tier based on threshold rules:
+ * - Production: higher is better (val >= target/max -> Green, moderate -> Amber, low -> Red)
+ * - Scrap & Rework: lower is better (val == 0 or low -> Green, moderate -> Amber, high -> Red)
  */
-export function evaluateShiftTier(metricType, value, shiftIndex = 0) {
+export function evaluateShiftTier(
+  metricType,
+  value,
+  shiftData = [],
+  thresholdVal = null,
+) {
   if (value == null || isNaN(value)) return "neutral";
 
-  if (metricType === "production") {
-    // Production stems default to positive green
-    return "green";
+  // 1. If explicit target/threshold is provided
+  if (thresholdVal != null && !isNaN(thresholdVal) && thresholdVal > 0) {
+    const ratio = value / thresholdVal;
+    if (metricType === "production") {
+      if (ratio >= 0.95) return "green";
+      if (ratio >= 0.8) return "amber";
+      return "red";
+    } else {
+      // For scrap/rework: lower is better
+      if (ratio <= 0.8) return "green";
+      if (ratio <= 1.1) return "amber";
+      return "red";
+    }
   }
 
-  if (metricType === "scrap") {
-    // Scrap stems (low is green)
-    return "green";
-  }
+  // 2. Relative evaluation across active shifts (Shift A, B, C)
+  const validVals = (Array.isArray(shiftData) ? shiftData : [])
+    .map((v) => (v == null || isNaN(v) ? 0 : Number(v)))
+    .filter((v) => !isNaN(v));
 
-  if (metricType === "rework") {
-    // Rework stem distribution across shifts as shown in design:
-    // Shift A (moderate) -> amber, Shift B (good/low) -> green, Shift C (high) -> red
-    if (shiftIndex === 0) return "amber";
-    if (shiftIndex === 1) return "green";
-    if (shiftIndex === 2) return "red";
-    return "amber";
+  if (validVals.length > 0) {
+    const maxVal = Math.max(...validVals);
+
+    if (metricType === "production") {
+      if (maxVal === 0) return "green";
+      const ratioToMax = value / maxVal;
+      if (ratioToMax >= 0.9) return "green";
+      if (ratioToMax >= 0.7) return "amber";
+      return "red";
+    } else {
+      // Scrap or Rework: lower is better
+      if (value === 0) return "green";
+      if (maxVal === 0) return "green";
+      const ratioToMax = value / maxVal;
+      if (ratioToMax <= 0.35) return "green";
+      if (ratioToMax <= 0.75) return "amber";
+      return "red";
+    }
   }
 
   return "green";

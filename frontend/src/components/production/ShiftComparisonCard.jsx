@@ -15,6 +15,7 @@ import { buildDatePayload } from "@/lib/timeRange.js";
 import { isKg, kgToTonnes } from "@/lib/units.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { evaluateShiftTier, getStemColor } from "@/lib/thresholds.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
@@ -277,6 +278,8 @@ export default function ShiftComparisonCard({
             title="Shift Wise Total Production"
             icon={<GridViewIcon sx={{ fontSize: 18, color: "text.primary" }} />}
             data={displayProd}
+            rawValues={prodByShift}
+            unitLabel={isKg(prodUnit) ? "MT" : (prodUnit ?? "Tyres")}
             shifts={shifts}
             metricType="production"
             yTicks={prodScale.yTicks}
@@ -292,6 +295,8 @@ export default function ShiftComparisonCard({
               />
             }
             data={displayScrap}
+            rawValues={scrapByShift}
+            unitLabel="Tyres"
             shifts={shifts}
             metricType="scrap"
             yTicks={scrapScale.yTicks}
@@ -305,6 +310,8 @@ export default function ShiftComparisonCard({
               <SyncOutlinedIcon sx={{ fontSize: 18, color: "text.primary" }} />
             }
             data={displayRework}
+            rawValues={reworkByShift}
+            unitLabel="Tyres"
             shifts={shifts}
             metricType="rework"
             yTicks={reworkScale.yTicks}
@@ -363,6 +370,8 @@ function LollipopChartCard({
   title,
   icon,
   data,
+  rawValues,
+  unitLabel,
   shifts,
   metricType,
   yTicks,
@@ -425,6 +434,8 @@ function LollipopChartCard({
       >
         <LollipopSvgChart
           data={data}
+          rawValues={rawValues}
+          unitLabel={unitLabel}
           shifts={shifts}
           metricType={metricType}
           yTicks={yTicks}
@@ -435,7 +446,15 @@ function LollipopChartCard({
   );
 }
 
-function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
+function LollipopSvgChart({
+  data,
+  rawValues,
+  unitLabel,
+  shifts,
+  metricType,
+  yTicks,
+  maxVal,
+}) {
   const theme = useTheme();
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
@@ -473,7 +492,7 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
             const x = xPositions[idx];
             const yTop = yCoord(val);
             const yBottom = padTop + plotHeight;
-            const tier = evaluateShiftTier(metricType, val, idx);
+            const tier = evaluateShiftTier(metricType, val, data);
             const color = getStemColor(theme, tier);
             const gradId = `stem-fade-${metricType}-${idx}`;
             return (
@@ -487,8 +506,8 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
                 y2={yBottom}
               >
                 <stop offset="0%" stopColor={color} stopOpacity="1" />
-                <stop offset="60%" stopColor={color} stopOpacity="0.7" />
-                <stop offset="100%" stopColor={color} stopOpacity="0.2" />
+                <stop offset="60%" stopColor={color} stopOpacity="0.75" />
+                <stop offset="100%" stopColor={color} stopOpacity="0.25" />
               </linearGradient>
             );
           })}
@@ -553,7 +572,7 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
           const x = xPositions[idx];
           const yTop = yCoord(val);
           const yBottom = padTop + plotHeight;
-          const tier = evaluateShiftTier(metricType, val, idx);
+          const tier = evaluateShiftTier(metricType, val, data);
           const color = getStemColor(theme, tier);
           const isHovered = hoveredIdx === idx;
           const gradId = `stem-fade-${metricType}-${idx}`;
@@ -564,6 +583,15 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
                 ? `${Math.round(val)}k`
                 : `${val.toFixed(1)}k`;
 
+          const rawVal =
+            rawValues && rawValues[idx] != null
+              ? rawValues[idx]
+              : val != null
+                ? val * 1000
+                : 0;
+          const exactText = `${formatIndianNumber(Math.round(rawVal * 100) / 100)}${unitLabel ? ` ${unitLabel}` : ""}`;
+          const tooltipWidth = exactText.length * 7.5 + 20;
+
           return (
             <g
               key={idx}
@@ -571,28 +599,29 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
               onMouseLeave={() => setHoveredIdx(null)}
               style={{ cursor: "pointer" }}
             >
-              {/* Data Value Label Always Visible Above Marker */}
-              <text
-                x={x}
-                y={yTop - 7}
-                textAnchor="middle"
-                fill={isHovered ? color : theme.palette.text.primary}
-                fontSize={isHovered ? "11.5" : "10.5"}
-                fontWeight="700"
-                fontFamily={theme.typography.fontFamily}
-                style={{ transition: "all 0.15s ease" }}
-              >
-                {labelText}
-              </text>
+              {/* Data Value Label Above Marker (when not hovered) */}
+              {!isHovered && (
+                <text
+                  x={x}
+                  y={yTop - 7}
+                  textAnchor="middle"
+                  fill={theme.palette.text.primary}
+                  fontSize="10.5"
+                  fontWeight="700"
+                  fontFamily={theme.typography.fontFamily}
+                >
+                  {labelText}
+                </text>
+              )}
 
-              {/* Stem vertical line with vertical fading gradient */}
+              {/* Stem vertical line with vertical fading gradient matching threshold color */}
               <line
                 x1={x}
                 y1={yBottom}
                 x2={x}
                 y2={yTop}
                 stroke={`url(#${gradId})`}
-                strokeWidth={isHovered ? "2.6" : "2"}
+                strokeWidth={isHovered ? "2.8" : "2"}
                 strokeLinecap="round"
               />
 
@@ -600,20 +629,48 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
               <circle
                 cx={x}
                 cy={yTop}
-                r={isHovered ? 5.2 : 4.2}
+                r={isHovered ? 5.5 : 4.2}
                 fill={theme.palette.background.paper}
                 stroke={color}
-                strokeWidth={isHovered ? "2.4" : "1.8"}
+                strokeWidth={isHovered ? "2.6" : "1.8"}
               />
+
+              {/* Exact Value Tooltip Badge on Hover */}
+              {isHovered && (
+                <g transform={`translate(${x}, ${Math.max(20, yTop - 10)})`}>
+                  <rect
+                    x={-tooltipWidth / 2}
+                    y={-22}
+                    width={tooltipWidth}
+                    height={22}
+                    rx={6}
+                    fill={theme.palette.background.paper}
+                    stroke={color}
+                    strokeWidth={1.6}
+                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.18))"
+                  />
+                  <text
+                    x={0}
+                    y={-7}
+                    textAnchor="middle"
+                    fill={color}
+                    fontSize="11.5"
+                    fontWeight="800"
+                    fontFamily={theme.typography.fontFamily}
+                  >
+                    {exactText}
+                  </text>
+                </g>
+              )}
 
               {/* Shift Label at Bottom */}
               <text
                 x={x}
                 y={chartHeight - 10}
                 textAnchor="middle"
-                fill={theme.palette.text.secondary}
+                fill={isHovered ? color : theme.palette.text.secondary}
                 fontSize="11"
-                fontWeight="600"
+                fontWeight={isHovered ? "700" : "600"}
                 fontFamily={theme.typography.fontFamily}
               >
                 {shifts[idx]?.label || `Shift ${idx + 1}`}

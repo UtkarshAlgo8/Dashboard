@@ -14,6 +14,7 @@ import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import SouthEastIcon from "@mui/icons-material/SouthEast";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
+import AccessTimeOutlinedIcon from "@mui/icons-material/AccessTimeOutlined";
 import Sparkline from "./Sparkline.jsx";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import { evaluateKpiTier, getKpiCardTheme } from "@/lib/thresholds.js";
@@ -56,10 +57,21 @@ function KpiCard({
     HeaderIcon = CheckCircleOutlinedIcon;
     displayName = "Plan Compliance";
     subtitle = "of total planned";
-  } else {
+  } else if (kpiId.includes("downtime") || kpiName.includes("downtime")) {
+    HeaderIcon = AccessTimeOutlinedIcon;
+    displayName = kpi.name || "Total Downtime";
+    subtitle = kpi.unit ? kpi.unit : "mins";
+  } else if (kpiId.includes("prod") || kpiName.includes("prod")) {
     HeaderIcon = GridViewIcon;
     displayName = kpi.name || "Production";
-    subtitle = "tyres";
+    const rawU = String(kpi.unit || "")
+      .trim()
+      .toLowerCase();
+    subtitle = rawU === "nos" || rawU === "num" || !rawU ? "tyres" : kpi.unit;
+  } else {
+    HeaderIcon = GridViewIcon;
+    displayName = kpi.name || "KPI";
+    subtitle = kpi.unit ?? "";
   }
 
   // Calculate Progress % & formatted value
@@ -100,8 +112,17 @@ function KpiCard({
     }
   }
 
-  // Trend formatting
-  const trendUp = kpi.trend == null || kpi.trend >= 0;
+  // Trend formatting & colour resolution
+  const trendUp = kpi.trend == null ? true : kpi.trend >= 0;
+  const isFavourable =
+    kpi.trendFavourable ?? (kpi.trend == null ? true : kpi.trend >= 0);
+  const trendColor =
+    kpi.trend == null || kpi.trend === ""
+      ? theme.palette.text.secondary
+      : isFavourable
+        ? theme.custom.status.green
+        : theme.custom.status.red;
+
   let trendVal = "–";
   const isProduction = kpiId.includes("prod") || kpiName.includes("prod");
   const trendValue =
@@ -112,11 +133,15 @@ function KpiCard({
     kpi.trend == null || kpi.trend === "" ? null : Number(kpi.trend);
 
   if (isProduction) {
+    const unitLabel =
+      kpi.unit && !["nos", "num"].includes(kpi.unit.toLowerCase())
+        ? kpi.unit
+        : "Tyres";
     if (Number.isFinite(trendValue)) {
-      trendVal = `${trendValue > 0 ? "+" : ""}${formatIndianNumber(trendValue)} Tyres`;
+      trendVal = `${trendValue > 0 ? "+" : ""}${formatIndianNumber(trendValue)} ${unitLabel}`;
     } else if (Number.isFinite(trendPct) && Number.isFinite(numVal)) {
       const absoluteDifference = Math.round(numVal * (trendPct / 100));
-      trendVal = `${absoluteDifference > 0 ? "+" : ""}${formatIndianNumber(absoluteDifference)} Tyres`;
+      trendVal = `${absoluteDifference > 0 ? "+" : ""}${formatIndianNumber(absoluteDifference)} ${unitLabel}`;
     }
   } else if (Number.isFinite(trendPct)) {
     trendVal = `${trendPct > 0 ? "+" : ""}${trendPct.toFixed(1)}%`;
@@ -236,6 +261,23 @@ function KpiCard({
               {subtitle}
             </Typography>
           )}
+          {kpi.scope?.kind === "perMachineAvg" && kpi.scope.machines > 0 && (
+            <Tooltip
+              title={`Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${kpi.scope.machines} machines that recorded downtime in this window.`}
+              arrow
+            >
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ({kpi.scope.machines} m/c avg)
+              </Typography>
+            </Tooltip>
+          )}
         </Stack>
 
         {/* Sparkline Graph */}
@@ -285,17 +327,15 @@ function KpiCard({
         {/* Trend Indicator */}
         <Stack direction="row" alignItems="center" spacing={0.5}>
           {trendUp ? (
-            <ArrowOutwardIcon
-              sx={{ fontSize: 15, color: cardTheme.trendColor }}
-            />
+            <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
           ) : (
-            <SouthEastIcon sx={{ fontSize: 15, color: "error.main" }} />
+            <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
           )}
           <Typography
             sx={{
               fontSize: 13,
               fontWeight: 700,
-              color: cardTheme.trendColor,
+              color: trendColor,
             }}
           >
             {trendVal}
