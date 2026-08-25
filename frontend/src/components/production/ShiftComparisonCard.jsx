@@ -227,6 +227,10 @@ export default function ShiftComparisonCard({
   const displayScrap = scrapByShift.map((v) => (v == null ? 0 : v / 1000));
   const displayRework = reworkByShift.map((v) => (v == null ? 0 : v / 1000));
 
+  const prodScale = computeYAxisScale(displayProd, 100);
+  const scrapScale = computeYAxisScale(displayScrap, 4);
+  const reworkScale = computeYAxisScale(displayRework, 12);
+
   return (
     <Box
       sx={{
@@ -275,8 +279,8 @@ export default function ShiftComparisonCard({
             data={displayProd}
             shifts={shifts}
             metricType="production"
-            yTicks={[0, 65, 130, 195, 261]}
-            maxVal={261}
+            yTicks={prodScale.yTicks}
+            maxVal={prodScale.maxVal}
           />
 
           {/* Card 2: Shift Wise Total Scrap */}
@@ -290,8 +294,8 @@ export default function ShiftComparisonCard({
             data={displayScrap}
             shifts={shifts}
             metricType="scrap"
-            yTicks={[0, 1, 2, 3, 4]}
-            maxVal={4}
+            yTicks={scrapScale.yTicks}
+            maxVal={scrapScale.maxVal}
           />
 
           {/* Card 3: Shift Wise Total Rework */}
@@ -303,13 +307,53 @@ export default function ShiftComparisonCard({
             data={displayRework}
             shifts={shifts}
             metricType="rework"
-            yTicks={[0, 3, 6, 9, 12]}
-            maxVal={12}
+            yTicks={reworkScale.yTicks}
+            maxVal={reworkScale.maxVal}
           />
         </Box>
       )}
     </Box>
   );
+}
+
+/**
+ * Computes dynamic, legible Y-axis ticks and ceiling based on actual data
+ */
+function computeYAxisScale(data, fallbackMax = 10) {
+  const nums = (data || []).filter(
+    (v) => typeof v === "number" && Number.isFinite(v) && v > 0,
+  );
+  const maxValRaw = nums.length > 0 ? Math.max(...nums) : 0;
+  if (maxValRaw <= 0) {
+    const step = fallbackMax / 4;
+    return {
+      maxVal: fallbackMax,
+      yTicks: [0, step, step * 2, step * 3, fallbackMax],
+    };
+  }
+
+  // Target max with ~25% headroom so data labels and markers don't hit the ceiling
+  const targetMax = maxValRaw * 1.28;
+  const roughStep = targetMax / 4;
+  const power = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const fraction = roughStep / power;
+  let niceFraction;
+  if (fraction <= 1.25) niceFraction = 1;
+  else if (fraction <= 2.5) niceFraction = 2;
+  else if (fraction <= 5) niceFraction = 5;
+  else niceFraction = 10;
+
+  const step = niceFraction * power;
+  const niceMax = Math.ceil(targetMax / step) * step;
+  const count = Math.max(2, Math.min(6, Math.round(niceMax / step)));
+
+  const yTicks = [];
+  for (let i = 0; i <= count; i++) {
+    const tick = Number((i * step).toFixed(2));
+    yTicks.push(tick);
+  }
+
+  return { maxVal: yTicks[yTicks.length - 1], yTicks };
 }
 
 /**
@@ -548,7 +592,7 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
                 x2={x}
                 y2={yTop}
                 stroke={`url(#${gradId})`}
-                strokeWidth={isHovered ? "2.2" : "1.5"}
+                strokeWidth={isHovered ? "2.6" : "2"}
                 strokeLinecap="round"
               />
 
@@ -556,10 +600,10 @@ function LollipopSvgChart({ data, shifts, metricType, yTicks, maxVal }) {
               <circle
                 cx={x}
                 cy={yTop}
-                r={isHovered ? 4.5 : 3.2}
+                r={isHovered ? 5.2 : 4.2}
                 fill={theme.palette.background.paper}
                 stroke={color}
-                strokeWidth={isHovered ? "2" : "1.5"}
+                strokeWidth={isHovered ? "2.4" : "1.8"}
               />
 
               {/* Shift Label at Bottom */}

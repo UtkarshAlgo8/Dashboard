@@ -16,13 +16,13 @@ const SECTION_DISPLAY_NAMES = {
   mix: "Mixing",
 };
 
-const SECTION_ORDER = ["cur", "tbm", "stk", "mix"];
+const SECTION_ORDER = ["mix", "stk", "tbm", "cur"];
 
 /**
  * Adobe XD Section Sidebar
  *
  * Each row displays:
- * - Section Name (Curing, Tyre Building, Stock, Mixing)
+ * - Section Name (Mixing, Stock, Tyre Building, Curing)
  * - Donut/Pie status icon + colored OEE label (e.g. OEE: 82.5%)
  * - Active row gets a soft light blue fill
  */
@@ -87,7 +87,7 @@ function SectionSidebar({
         <Stack spacing={0}>
           {sectionList.map((s, idx) => {
             const stats = statsBySectionId?.[s.id] ?? null;
-            const oee = typeof stats?.oee === "number" ? stats.oee : 82.5;
+            const oee = typeof stats?.oee === "number" ? stats.oee : null;
             const active = s.id === activeSectionId;
             const displayName = SECTION_DISPLAY_NAMES[s.id] || s.name;
             return (
@@ -115,7 +115,7 @@ function SectionSidebar({
 
 function SidebarRow({ section, oee, stats, active, onClick }) {
   const theme = useTheme();
-  const color = getOeeColor(theme, oee, section.id);
+  const color = getOeeColor(theme, oee);
 
   return (
     <Tooltip
@@ -195,14 +195,7 @@ function SidebarRow({ section, oee, stats, active, onClick }) {
   );
 }
 
-function getOeeColor(theme, value, sectionId) {
-  // Respect section overrides or standard thresholds:
-  // In screenshot: Curing=Amber, Tyre Building=Green, Stock=Green, Mixing=Red
-  if (sectionId === "mix") return theme.custom.status.red;
-  if (sectionId === "cur") return theme.custom.status.amber;
-  if (sectionId === "tbm" || sectionId === "stk")
-    return theme.custom.status.green;
-
+function getOeeColor(theme, value) {
   if (value == null) return theme.palette.text.disabled;
   if (value >= 90) return theme.custom.status.green;
   if (value >= 80) return theme.custom.status.amber;

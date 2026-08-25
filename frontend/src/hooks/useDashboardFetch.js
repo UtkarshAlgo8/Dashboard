@@ -37,7 +37,7 @@ const dashboardPending = new Map();
 // ---------- state shape & actions ----------
 
 const initialState = {
-  section: "cur",
+  section: "mix",
   subSection: null,
   productType: null,
   // new_change.md C8/C9: the pinned unit_of_measurement. Multi-unit
@@ -277,98 +277,10 @@ async function fetchCachedDashboard(payload) {
  * `rawEnvelope` keeps the client interceptor from unwrapping to `.data` and
  * discarding those siblings.
  */
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
-
 async function fetchDashboard(payload) {
-  if (USE_MOCK) {
-    const mockRows = [
-      {
-        kpi_name: "Production",
-        actual_value: 714548,
-        threshold_value: 750000,
-        unit_of_measurement: "NUM",
-        status: "Green",
-        section: payload?.context?.section || "Curing",
-        granularity: payload?.granularity || "MONTH",
-        date: "2026-07-20",
-      },
-      {
-        kpi_name: "OEE_o",
-        actual_value: 88,
-        threshold_value: 90,
-        unit_of_measurement: "%",
-        status: "Yellow",
-        section: payload?.context?.section || "Curing",
-        granularity: payload?.granularity || "MONTH",
-        date: "2026-07-16",
-      },
-      {
-        kpi_name: "Plan Compliance",
-        actual_value: 94,
-        threshold_value: 98,
-        unit_of_measurement: "%",
-        status: "Red",
-        section: payload?.context?.section || "Curing",
-        granularity: payload?.granularity || "MONTH",
-        date: "2026-07-20",
-      },
-    ];
-    return {
-      rows: coerceMeasures(mockRows),
-      truncated: false,
-      baseline: null,
-      baselineWindow: null,
-      fetchedAt: new Date(),
-    };
-  }
-
-  let body;
-  try {
-    body = await client.post("/dashboard/kpi-data", payload, {
-      rawEnvelope: true,
-    });
-  } catch (err) {
-    console.warn("fetchDashboard failed, using mock data:", err);
-    const mockRows = [
-      {
-        kpi_name: "Production",
-        actual_value: 714548,
-        threshold_value: 750000,
-        unit_of_measurement: "NUM",
-        status: "Green",
-        section: payload?.context?.section || "Curing",
-        granularity: payload?.granularity || "MONTH",
-        date: "2026-07-20",
-      },
-      {
-        kpi_name: "OEE_o",
-        actual_value: 88,
-        threshold_value: 90,
-        unit_of_measurement: "%",
-        status: "Yellow",
-        section: payload?.context?.section || "Curing",
-        granularity: payload?.granularity || "MONTH",
-        date: "2026-07-16",
-      },
-      {
-        kpi_name: "Plan Compliance",
-        actual_value: 94,
-        threshold_value: 98,
-        unit_of_measurement: "%",
-        status: "Red",
-        section: payload?.context?.section || "Curing",
-        granularity: payload?.granularity || "MONTH",
-        date: "2026-07-20",
-      },
-    ];
-    return {
-      rows: coerceMeasures(mockRows),
-      truncated: false,
-      baseline: null,
-      baselineWindow: null,
-      fetchedAt: new Date(),
-    };
-  }
+  const body = await client.post("/dashboard/kpi-data", payload, {
+    rawEnvelope: true,
+  });
   // Tolerate a bare array (older/unwrapped shape) so nothing hard-fails.
   const envelope = Array.isArray(body) ? { data: body } : (body ?? {});
   return {

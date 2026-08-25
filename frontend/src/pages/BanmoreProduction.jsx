@@ -33,6 +33,7 @@ import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { canonicalizeProductType } from "@/lib/dashboardRowScopes.js";
 import client from "@/api/client.js";
 import { exportElementToPdf } from "@/lib/exportPdf.js";
+import { displayUnit } from "@/lib/units.js";
 
 // Production drill types render ProductionDrillPanel, which owns its own
 // paginated per-lens fetch — so drilling them must NOT kick off the generic
@@ -341,7 +342,7 @@ function BanmoreProduction() {
   const activeProductType =
     dashboard.productType ??
     (isStock
-      ? null
+      ? (stockProductOptions[0] ?? null)
       : (navProductOptions[0] ?? sectionDefaultProduct[dashboard.section]));
 
   const unitOptionsForProduct = [
@@ -386,7 +387,7 @@ function BanmoreProduction() {
     const first = stockProductOptions[0];
     if (!first) return;
     if (
-      dashboard.productType != null &&
+      dashboard.productType == null ||
       !stockProductOptions.includes(dashboard.productType)
     ) {
       setFilter({ productType: first, unitOfMeasurement: null }, false);
@@ -562,11 +563,9 @@ function BanmoreProduction() {
           categoryTabs={tabs}
           activeCategory={dashboard.category}
           onCategoryChange={onCategorySelect}
-          tyreTypes={["All", "PCR", "TBR"]}
-          tyreType={dashboard.tyreType || "All"}
-          onTyreTypeChange={(v) =>
-            setFilter({ tyreType: v === "All" ? null : v }, false)
-          }
+          tyreTypes={tyreTypes}
+          tyreType={activeTyreType}
+          onTyreTypeChange={(v) => setFilter({ tyreType: v }, false)}
         />
       </Box>
 
@@ -583,7 +582,7 @@ function BanmoreProduction() {
             gridTemplateColumns:
               dashboard.category === "i"
                 ? "1fr"
-                : { xs: "1fr", md: "320px 1fr" },
+                : { xs: "1fr", md: "240px 1fr" },
             gap: dashboard.category === "i" ? 0 : 2.5,
             px: dashboard.category === "i" ? 0 : { xs: 2, md: 3 },
             py: dashboard.category === "i" ? 0 : 2,
@@ -680,130 +679,115 @@ function BanmoreProduction() {
                     </Typography>
 
                     {/* Right: Context-Aware Sub-filter controls based on section */}
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      spacing={2}
-                      flexWrap="wrap"
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                        flexWrap: "wrap",
+                        justifyContent: "flex-end",
+                      }}
                     >
-                      {/* 1. Section-specific Sub-selectors / Product types */}
                       {isStock ? (
-                        <>
-                          <NavTabs
-                            prefixLabel="Sub-Section"
-                            items={STOCK_SUBSECTIONS.map((s) => ({
-                              id: s,
-                              label: s,
-                            }))}
-                            value={activeSubSection}
-                            onChange={(s) =>
-                              setFilter(
-                                {
-                                  subSection: s,
-                                  productType: null,
-                                  unitOfMeasurement: null,
-                                },
-                                false,
-                              )
-                            }
-                            layoutId="stockSubSectionFill"
-                            size="lg"
-                          />
-                          {stockProductOptions.length > 0 && (
-                            <NavTabs
-                              prefixLabel="Product"
-                              items={[
-                                { id: "all", label: "All" },
-                                ...stockProductOptions.map((opt) => ({
-                                  id: opt,
-                                  label: opt,
-                                })),
-                              ]}
-                              value={dashboard.productType ?? "all"}
-                              onChange={(v) =>
-                                setFilter(
-                                  { productType: v === "all" ? null : v },
-                                  false,
-                                )
-                              }
-                              layoutId="stockProductTypeFill"
-                              size="lg"
-                            />
-                          )}
-                        </>
-                      ) : dashboard.section === "mix" ? (
                         <NavTabs
-                          prefixLabel="Compound"
-                          items={[
-                            { id: "all", label: "All" },
-                            { id: "Master Compound", label: "Master Compound" },
-                            { id: "Final Compound", label: "Final Compound" },
-                          ]}
-                          value={
-                            ["Master Compound", "Final Compound"].includes(
-                              activeProductType,
-                            )
-                              ? activeProductType
-                              : "all"
-                          }
-                          onChange={(v) =>
+                          prefixLabel="Sub-Section"
+                          items={STOCK_SUBSECTIONS.map((s) => ({
+                            id: s,
+                            label: s,
+                          }))}
+                          value={activeSubSection}
+                          onChange={(s) =>
                             setFilter(
-                              { productType: v === "all" ? null : v },
+                              {
+                                subSection: s,
+                                productType: null,
+                                unitOfMeasurement: null,
+                              },
                               false,
                             )
                           }
-                          layoutId="sectionProdTypeFill"
+                          layoutId="stockSubSectionFill"
                           size="lg"
                         />
                       ) : (
-                        <NavTabs
-                          prefixLabel="Type"
-                          items={[
-                            { id: "all", label: "All" },
-                            {
-                              id: "Passenger Radial",
-                              label: "Passenger Radial",
-                            },
-                            { id: "LCV", label: "LCV" },
-                          ]}
-                          value={
-                            ["Passenger Radial", "LCV"].includes(
-                              activeProductType,
-                            )
-                              ? activeProductType
-                              : "all"
-                          }
-                          onChange={(v) =>
-                            setFilter(
-                              { productType: v === "all" ? null : v },
-                              false,
-                            )
-                          }
-                          layoutId="sectionProdTypeFill"
-                          size="lg"
-                        />
+                        (dashboard.category === "p" ||
+                          dashboard.category === "q") &&
+                        navProductOptions.length > 0 && (
+                          <NavTabs
+                            prefixLabel={
+                              dashboard.section === "mix" ? "Compound" : "Type"
+                            }
+                            items={navProductOptions.map((o) => ({
+                              id: o,
+                              label: o,
+                            }))}
+                            value={activeProductType}
+                            onChange={(v) =>
+                              setFilter({ productType: v }, false)
+                            }
+                            layoutId="sectionProdTypeFill"
+                            size="lg"
+                          />
+                        )
                       )}
-
-                      {/* 2. UoM filter pills */}
-                      <NavTabs
-                        prefixLabel="UoM"
-                        items={[
-                          { id: "Count", label: "Count" },
-                          { id: "Metric Tonnes", label: "Metric Tonnes" },
-                        ]}
-                        value={
-                          ["Metric Tonnes"].includes(activeUnit)
-                            ? activeUnit
-                            : "Count"
-                        }
-                        onChange={(u) =>
-                          setFilter({ unitOfMeasurement: u }, false)
-                        }
-                        layoutId="sectionUomFill"
-                        size="lg"
-                      />
-                    </Stack>
+                    </Box>
                   </Box>
+
+                  {/* Stock product-type pills & UoM pills — second row (BRD §13.3 two-step:
+                    sub-section first, then product type). */}
+                  {((isStock && stockProductOptions.length > 0) ||
+                    unitOptionsForProduct.length > 1) &&
+                    dashboard.category === "p" && (
+                      <Box
+                        sx={{
+                          px: 2,
+                          py: 1,
+                          mt: 1,
+                          backgroundColor: "background.paper",
+                          borderRadius: 2.5,
+                          border: 1,
+                          borderColor: "rgba(0,0,0,0.06)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 2,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {isStock && stockProductOptions.length > 0 && (
+                          <NavTabs
+                            prefixLabel="Product"
+                            items={stockProductOptions.map((o) => ({
+                              id: o,
+                              label: o,
+                            }))}
+                            value={activeProductType}
+                            onChange={(v) =>
+                              setFilter(
+                                { productType: v, unitOfMeasurement: null },
+                                false,
+                              )
+                            }
+                            layoutId="stockProductTypeFill"
+                            size="md"
+                          />
+                        )}
+                        {unitOptionsForProduct.length > 1 && (
+                          <NavTabs
+                            prefixLabel="UoM"
+                            items={unitOptionsForProduct.map((u) => ({
+                              id: u,
+                              label: displayUnit(u),
+                            }))}
+                            value={activeUnit}
+                            onChange={(u) =>
+                              setFilter({ unitOfMeasurement: u }, false)
+                            }
+                            layoutId="sectionUomFill"
+                            size="md"
+                          />
+                        )}
+                      </Box>
+                    )}
 
                   <KpiGrid
                     kpis={kpis}

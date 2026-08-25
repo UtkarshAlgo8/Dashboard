@@ -14,7 +14,7 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
-import client from "@/api/client.js";
+import { getProductionDrillAggregate } from "@/api/drills.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 
 // Athena serializes measures as strings; coerce to number|null for display.
@@ -24,8 +24,7 @@ function num(v) {
 }
 
 /**
- * Production drill — derives from the raw gold rows already in hand via
- * `rawRows`. No second API call.
+ * Production drill — reads a server-grouped page for each selected lens.
  *
  * Per the journey doc (§5, §6, §15.4) and dashboard_kpi_map_reference
  * §3/§11:
@@ -241,13 +240,15 @@ function ProductionDrillPanel({
   // Gate: no unit yet ⇒ the landing rows (which seed the unit toggle) haven't
   // arrived; and never fetch without a date window.
   const canFetch = Boolean(activeUnit) && Boolean(from || to);
-  const { data: pageData, isLoading: pageLoading } = usePolledQuery(
-    () =>
-      client
-        .post("/dashboard/drill-aggregate", pagePayload)
-        .then((r) => r.data ?? r),
-    { enabled: canFetch, interval: 0, deps: [JSON.stringify(pagePayload)] },
-  );
+  const {
+    data: pageData,
+    error: pageError,
+    isLoading: pageLoading,
+  } = usePolledQuery(() => getProductionDrillAggregate(pagePayload), {
+    enabled: canFetch,
+    interval: 0,
+    deps: [JSON.stringify(pagePayload)],
+  });
 
   // Rows arrive already grouped and summed over the window (new_change.md
   // C5/C3 — the additive Production levels SUM day-wise, exactly as the card
@@ -286,12 +287,10 @@ function ProductionDrillPanel({
         offset: 0,
       }
     : null;
-  const { data: trenchData } = usePolledQuery(
+  const { data: trenchData, error: trenchError } = usePolledQuery(
     () =>
       trenchPayload
-        ? client
-            .post("/dashboard/drill-aggregate", trenchPayload)
-            .then((r) => r.data ?? r)
+        ? getProductionDrillAggregate(trenchPayload)
         : Promise.resolve([]),
     {
       enabled: Boolean(trenchPayload) && canFetch,
@@ -413,6 +412,16 @@ function ProductionDrillPanel({
   if (!hasAnyRows) {
     if (loading) {
       return <DrillSkeleton title rows={5} cols={5} />;
+    }
+    const requestError = pageError || trenchError;
+    if (requestError) {
+      return (
+        <Box sx={{ p: 3, textAlign: "center", color: "error.main" }}>
+          <Typography sx={{ fontSize: 13 }}>
+            Failed to load Production drill data: {requestError.message}
+          </Typography>
+        </Box>
+      );
     }
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
