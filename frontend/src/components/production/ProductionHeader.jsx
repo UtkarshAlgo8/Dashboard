@@ -18,7 +18,7 @@ import jkLogo from "@/assets/jk-logo.png";
 
 /** "Last Updated at HH:MM AM/PM" for the header stamp. */
 function formatUpdated(date) {
-  if (!date) return "Last Updated at 03:27 AM";
+  if (!date) return null;
   const hours = date.getHours();
   const minutes = String(date.getMinutes()).padStart(2, "0");
   const ampm = hours >= 12 ? "PM" : "AM";
@@ -151,16 +151,18 @@ function ProductionHeader({
 
         {/* Right: Last Updated Timestamp + Profile Dropdown */}
         <Stack direction="row" alignItems="center" spacing={2}>
-          <Typography
-            sx={{
-              fontSize: 12.5,
-              color: "text.secondary",
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {formatUpdated(lastUpdatedAt)}
-          </Typography>
+          {formatUpdated(lastUpdatedAt) && (
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: "text.secondary",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {formatUpdated(lastUpdatedAt)}
+            </Typography>
+          )}
 
           <UserMenu user={MOCK_USER} size={34} />
         </Stack>

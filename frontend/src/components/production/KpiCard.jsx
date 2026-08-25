@@ -148,15 +148,7 @@ function KpiCard({
   }
   const trendLabel = kpi.trendBaseline ?? "vs prev";
 
-  // Sparkline data
-  const sparkData =
-    Array.isArray(kpi.spark) && kpi.spark.length >= 2
-      ? kpi.spark
-      : kpiId.includes("comp") || kpiName.includes("plan")
-        ? [96, 95, 93, 95, 92, 94]
-        : kpiId.includes("oee") || kpiName.includes("oee")
-          ? [82, 85, 84, 87, 86, 88]
-          : [680000, 695000, 710000, 705000, 720000, 714548];
+  const hasSpark = Array.isArray(kpi.spark) && kpi.spark.length >= 2;
 
   return (
     <Box
@@ -278,21 +270,57 @@ function KpiCard({
               </Typography>
             </Tooltip>
           )}
+          {kpi.partialDay && (
+            <Tooltip
+              title="This day is still in progress — one or more shifts have no row yet, so a comparison against the previous full day would be an artefact."
+              arrow
+            >
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "warning.main",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                in progress · partial day
+              </Typography>
+            </Tooltip>
+          )}
+          {kpi.truncated && (
+            <Tooltip
+              title="The row cap was reached for this window, so the oldest days are missing from this total. Narrow the date range for a complete figure."
+              arrow
+            >
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "error.main",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                partial data · range too wide
+              </Typography>
+            </Tooltip>
+          )}
         </Stack>
 
         {/* Sparkline Graph */}
-        <Box sx={{ flexShrink: 0 }}>
-          <Sparkline
-            data={sparkData}
-            color={cardTheme.sparkColor}
-            width={75}
-            height={24}
-            onClick={(e) => {
-              e.stopPropagation();
-              onTrendOpen?.(kpi);
-            }}
-          />
-        </Box>
+        {hasSpark && (
+          <Box sx={{ flexShrink: 0 }}>
+            <Sparkline
+              data={kpi.spark}
+              color={cardTheme.sparkColor}
+              width={75}
+              height={24}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTrendOpen?.(kpi);
+              }}
+            />
+          </Box>
+        )}
       </Stack>
 
       {/* 3. Horizontal Target / Progress Bar with Gradient */}
