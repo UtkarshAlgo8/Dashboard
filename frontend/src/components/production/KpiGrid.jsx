@@ -66,11 +66,13 @@ function KpiGrid({
           sx={{
             display: "grid",
             gap: 2,
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0, 1fr))",
-              md: `repeat(${validKpis.length}, minmax(0, 1fr))`,
-            },
+            gridTemplateColumns: openDrillKpiId 
+              ? "1fr" 
+              : {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  md: `repeat(${validKpis.length}, minmax(0, 1fr))`,
+                },
           }}
         >
           {validKpis.map((kpi) => (

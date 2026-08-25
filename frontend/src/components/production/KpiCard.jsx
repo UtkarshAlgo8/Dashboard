@@ -164,7 +164,7 @@ function KpiCard({
       sx={{
         position: "relative",
         backgroundColor: cardTheme.cardBg,
-        border: 1,
+        border: isDrilling ? 2 : 1,
         borderColor: isDrilling ? "primary.main" : `${cardTheme.sparkColor}30`,
         borderRadius: 2.5,
         p: 2,
@@ -296,26 +296,28 @@ function KpiCard({
       </Stack>
 
       {/* 3. Horizontal Target / Progress Bar with Gradient */}
-      <Box
-        sx={{
-          width: "100%",
-          height: 7,
-          borderRadius: 4,
-          backgroundColor: cardTheme.trackColor,
-          overflow: "hidden",
-          my: 1,
-        }}
-      >
+      {!isDrilling && (
         <Box
           sx={{
-            width: `${progressPct}%`,
-            height: "100%",
+            width: "100%",
+            height: 7,
             borderRadius: 4,
-            background: cardTheme.barGradient || cardTheme.barColor,
-            transition: "width 0.4s ease",
+            backgroundColor: cardTheme.trackColor,
+            overflow: "hidden",
+            my: 1,
           }}
-        />
-      </Box>
+        >
+          <Box
+            sx={{
+              width: `${progressPct}%`,
+              height: "100%",
+              borderRadius: 4,
+              background: cardTheme.barGradient || cardTheme.barColor,
+              transition: "width 0.4s ease",
+            }}
+          />
+        </Box>
+      )}
 
       {/* 4. Footer: Trend Badge & Action Icons */}
       <Stack
