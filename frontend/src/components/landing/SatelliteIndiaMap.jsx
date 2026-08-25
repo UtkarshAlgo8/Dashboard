@@ -64,16 +64,16 @@ function SatelliteIndiaMap({
             minzoom: 0,
             maxzoom: 19,
           },
-          // Ambient Outer Cyan/White Glow
+          // Ambient Outer Cyan/White Glow (Subtle and slim)
           {
             id: "india-border-glow-outer",
             type: "line",
             source: "india-boundary",
             paint: {
               "line-color": "#38BDF8",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 9, 6, 16],
-              "line-opacity": 0.5,
-              "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 5, 6, 9],
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 4, 6, 8],
+              "line-opacity": 0.4,
+              "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 2.5, 6, 5],
             },
           },
           // Mid Glow Halo
@@ -83,20 +83,20 @@ function SatelliteIndiaMap({
             source: "india-boundary",
             paint: {
               "line-color": "#F0F9FF",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 4.5, 6, 8],
-              "line-opacity": 0.85,
-              "line-blur": 1.5,
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.2, 6, 4],
+              "line-opacity": 0.75,
+              "line-blur": 1.0,
             },
           },
-          // Crisp Core White National Boundary
+          // Crisp Core White National Boundary (Slim & sharp)
           {
             id: "india-border-core",
             type: "line",
             source: "india-boundary",
             paint: {
               "line-color": "#FFFFFF",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.2, 6, 3.8],
-              "line-opacity": 1.0,
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 6, 2.0],
+              "line-opacity": 0.95,
             },
           },
         ],
