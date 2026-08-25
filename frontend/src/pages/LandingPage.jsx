@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, useTheme } from "@mui/material";
+import { Box } from "@mui/material";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
 import LandingSkeleton from "@/components/landing/LandingSkeleton.jsx";
 import PlantCardList from "@/components/landing/PlantCardList.jsx";
-import IndiaMap from "@/components/landing/IndiaMap.jsx";
+import SatelliteIndiaMap from "@/components/landing/SatelliteIndiaMap.jsx";
 import PlantFunctionModal from "@/components/landing/PlantFunctionModal.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getPlants, getFunctions } from "@/api/plants.js";
@@ -22,9 +22,35 @@ const PHASE_1_ACTIVE_PLANTS = new Set(["banmore", "chennai"]);
 const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
 const PRODUCTION_ONLY_FUNCTIONS = new Set(["prod"]);
 
+const PLANT_GEO = {
+  banmore: {
+    code: "BTP",
+    lat: 26.392750216401705,
+    lng: 78.072224113494,
+    badgeSide: "right",
+  },
+  chennai: {
+    code: "CTP",
+    lat: 12.938622726364054,
+    lng: 80.00271264232934,
+    badgeSide: "right",
+  },
+  laksar: {
+    code: "LTP",
+    lat: 29.7428,
+    lng: 78.0264,
+    badgeSide: "left",
+  },
+  mysore: {
+    code: "RTP",
+    lat: 12.3556,
+    lng: 76.6026,
+    badgeSide: "left",
+  },
+};
+
 function LandingPage() {
   const navigate = useNavigate();
-  const theme = useTheme();
 
   // CR-10: time-range state for the landing-page KPIs. The picker's
   // Today/Month pills + Filter Date dialog drive these three. OEE /
@@ -35,7 +61,7 @@ function LandingPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const { data: plants, isLoading: plantsLoading } = usePolledQuery(
+  const { data: rawPlants, isLoading: plantsLoading } = usePolledQuery(
     () => getPlants({ range, from, to }),
     {
       // Re-fetch when the time range changes; otherwise no polling.
@@ -47,14 +73,40 @@ function LandingPage() {
 
   const [hov, setHov] = useState(null);
   const [modalPlantId, setModalPlantId] = useState(null);
+  const leaveTimeoutRef = useRef(null);
+
+  const handleHover = (plantId) => {
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
+    }
+    setHov(plantId);
+  };
+
+  const handleLeave = () => {
+    if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
+    leaveTimeoutRef.current = setTimeout(() => {
+      setHov(null);
+    }, 120);
+  };
+
+  // Enrich raw plants with coordinates and display metadata
+  const plants = Array.isArray(rawPlants)
+    ? rawPlants.map((p) => ({
+        ...p,
+        lat: p.lat ?? PLANT_GEO[p.id]?.lat,
+        lng: p.lng ?? PLANT_GEO[p.id]?.lng,
+        badgeSide: p.badgeSide ?? PLANT_GEO[p.id]?.badgeSide ?? "right",
+        code: p.code ?? PLANT_GEO[p.id]?.code ?? p.id.toUpperCase(),
+      }))
+    : null;
 
   const modalPlant =
     modalPlantId && Array.isArray(plants)
       ? (plants.find((p) => p.id === modalPlantId) ?? null)
       : null;
 
-  // Functions that render in the "active" style in the modal. Phase 1
-  // only ships Production; Quality / Engineering join in Phase 2.
+  // Functions that render in the "active" style in the modal.
   const modalActiveIds =
     modalPlant?.id === "banmore"
       ? PHASE_1_NAVIGABLE_FUNCTIONS
@@ -72,17 +124,16 @@ function LandingPage() {
     } else if (fn.id === "qual" && modalPlant.id === "banmore") {
       navigate("/banmore/quality");
     }
-    // Inactive rows can't be clicked (PlantFunctionModal guards
-    // onClick), so this handler only fires for the navigable case.
   };
 
   return (
     <Box
       sx={{
-        minHeight: "100vh",
-        backgroundColor: "background.default",
+        height: "100vh",
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
+        backgroundColor: "#0B132B",
       }}
     >
       <LandingHeader
@@ -94,59 +145,81 @@ function LandingPage() {
         onToChange={setTo}
       />
 
-      <Box sx={{ flex: 1, px: 3, py: 3 }}>
+      <Box
+        sx={{
+          flex: 1,
+          position: "relative",
+          display: "flex",
+          overflow: "hidden",
+        }}
+      >
         {plantsLoading ||
         !Array.isArray(plants) ||
         !Array.isArray(functions) ? (
           <LandingSkeleton />
         ) : (
-          <Box
-            sx={{
-              display: "grid",
-              gap: 3,
-              alignItems: "flex-start",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "minmax(360px, 480px) 1fr",
-              },
-            }}
-          >
-            <PlantCardList
-              plants={plants}
-              activePlantIds={PHASE_1_ACTIVE_PLANTS}
-              hov={hov}
-              sel={modalPlantId}
-              onHover={setHov}
-              onLeave={() => setHov(null)}
-              onSelect={openModalFor}
-            />
-
+          <>
+            {/* Map Container (fills viewport / left section) */}
             <Box
               sx={{
-                backgroundColor: "background.paper",
-                border: 1,
-                borderColor: "divider",
-                borderRadius: 2,
-                p: 2,
-                boxShadow: theme.custom.shadow,
-                // Clip the enlarged (zoomed) map to THIS panel so it fills
-                // the panel but never spills out onto the page. The
-                // zoomed-out 540 map fits inside, so this is invisible until
-                // you zoom.
-                overflow: "hidden",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 0,
               }}
             >
-              <IndiaMap
+              <SatelliteIndiaMap
                 plants={plants}
                 activePlantIds={PHASE_1_ACTIVE_PLANTS}
                 hov={hov}
                 sel={modalPlantId}
-                onHover={setHov}
-                onLeave={() => setHov(null)}
+                onHover={handleHover}
+                onLeave={handleLeave}
                 onSelect={openModalFor}
               />
             </Box>
-          </Box>
+
+            {/* Right Side Floating Glass Panel for Plant Cards */}
+            <Box
+              sx={{
+                position: "relative",
+                zIndex: 1,
+                marginLeft: "auto",
+                width: { xs: "100%", md: "520px", lg: "580px" },
+                height: "100%",
+                overflowY: "auto",
+                p: { xs: 2, md: 3 },
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                /* Smooth gradient mask to blend with satellite map on large screens */
+                background: {
+                  xs: "rgba(11, 19, 43, 0.85)",
+                  md: "linear-gradient(to right, rgba(11, 19, 43, 0) 0%, rgba(11, 19, 43, 0.35) 15%, rgba(11, 19, 43, 0.72) 100%)",
+                },
+                backdropFilter: "blur(4px)",
+                "&::-webkit-scrollbar": {
+                  width: "6px",
+                },
+                "&::-webkit-scrollbar-thumb": {
+                  backgroundColor: "rgba(255,255,255,0.2)",
+                  borderRadius: "4px",
+                },
+              }}
+            >
+              <PlantCardList
+                plants={plants}
+                activePlantIds={PHASE_1_ACTIVE_PLANTS}
+                hov={hov}
+                sel={modalPlantId}
+                onHover={handleHover}
+                onLeave={handleLeave}
+                onSelect={openModalFor}
+              />
+            </Box>
+          </>
         )}
       </Box>
 

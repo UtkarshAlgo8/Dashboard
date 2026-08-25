@@ -20,7 +20,10 @@ export const PLANTS = [
   {
     id: "chennai",
     name: "Chennai Tyre Plant",
+    code: "CTP",
     sub: "Tamil Nadu",
+    lat: 12.938622726364054,
+    lng: 80.00271264232934,
     sx: 202.0,
     sy: 446.6,
     oee: 94.2,
@@ -34,7 +37,10 @@ export const PLANTS = [
   {
     id: "banmore",
     name: "Banmore Tyre Plant",
+    code: "BTP",
     sub: "Gwalior, Madhya Pradesh",
+    lat: 26.392750216401705,
+    lng: 78.072224113494,
     sx: 169.7,
     sy: 228.6,
     oee: 91.5,
@@ -47,7 +53,10 @@ export const PLANTS = [
   {
     id: "laksar",
     name: "Laksar Tyre Plant",
+    code: "LTP",
     sub: "Haridwar, Uttarakhand",
+    lat: 29.7428,
+    lng: 78.0264,
     sx: 167.6,
     sy: 170.2,
     oee: 93.1,
@@ -60,7 +69,10 @@ export const PLANTS = [
   {
     id: "mysore",
     name: "Mysore Tyre Plant",
+    code: "RTP",
     sub: "Karnataka",
+    lat: 12.3556,
+    lng: 76.6026,
     sx: 163.0,
     sy: 441.0,
     oee: 92.6,

@@ -6,6 +6,7 @@ import {
   Stack,
   Typography,
   useTheme,
+  alpha,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -36,7 +37,17 @@ function PlantFunctionModal({
       onClose={onClose}
       maxWidth="xs"
       fullWidth
-      PaperProps={{ sx: { borderRadius: 2.5, p: 1 } }}
+      PaperProps={{
+        sx: {
+          borderRadius: 2.5,
+          p: 1,
+          backgroundColor: alpha(theme.palette.background.paper, 0.75),
+          backdropFilter: "blur(24px) saturate(190%)",
+          WebkitBackdropFilter: "blur(24px) saturate(190%)",
+          border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.08)",
+        },
+      }}
     >
       <DialogContent sx={{ pb: 2 }}>
         {/* Header row: bullet + name + close */}
@@ -73,13 +84,14 @@ function PlantFunctionModal({
         {/* KPI strip */}
         <Box
           sx={{
-            backgroundColor: theme.custom.surface.soft,
+            backgroundColor: alpha(theme.custom.surface.soft, 0.6),
             border: 1,
-            borderColor: "divider",
+            borderColor: alpha(theme.palette.divider, 0.4),
             borderRadius: 1.25,
             px: 2.5,
             py: 1.5,
             mb: 2.5,
+            backdropFilter: "blur(12px)",
           }}
         >
           <Stack
@@ -87,7 +99,7 @@ function PlantFunctionModal({
             justifyContent="space-around"
             alignItems="flex-end"
           >
-            <KpiPill label="OEE" value={plant.oee} />
+            <KpiPill label="OEE" value={plant.oee ?? plant.oe} />
             <KpiPill label="OTIF" value={plant.otif} />
             <KpiPill label="YIELD" value={plant.yield} />
           </Stack>
@@ -124,6 +136,11 @@ function PlantFunctionModal({
   );
 }
 
+function numericPercent(value) {
+  const n = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function KpiPill({ label, value }) {
   const displayValue = numericPercent(value);
   const hasValue = displayValue != null;
@@ -154,7 +171,7 @@ function KpiPill({ label, value }) {
             lineHeight: 1,
           }}
         >
-          {hasValue ? displayValue : "NA"}
+          {hasValue ? displayValue : "—"}
         </Typography>
         {hasValue && (
           <Typography sx={{ fontSize: 12, color: "success.main" }}>
@@ -164,11 +181,6 @@ function KpiPill({ label, value }) {
       </Stack>
     </Box>
   );
-}
-
-function numericPercent(value) {
-  const n = typeof value === "number" ? value : Number.parseFloat(value);
-  return Number.isFinite(n) ? n : null;
 }
 
 function FunctionRow({ fn, active, onClick }) {
@@ -188,10 +200,11 @@ function FunctionRow({ fn, active, onClick }) {
         border: 1,
         borderColor: active ? "transparent" : "divider",
         opacity: active ? 1 : 0.65,
-        transition: "background-color 0.15s",
+        transition: "all 0.2s ease",
         "&:hover": active
           ? {
               backgroundColor: theme.custom.brand.orangeRing,
+              transform: "translateX(3px)",
             }
           : undefined,
       }}
