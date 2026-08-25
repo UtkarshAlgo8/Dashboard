@@ -8,46 +8,12 @@ import SatelliteIndiaMap from "@/components/landing/SatelliteIndiaMap.jsx";
 import PlantFunctionModal from "@/components/landing/PlantFunctionModal.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getPlants, getFunctions } from "@/api/plants.js";
-
-/**
- * Phase 1 active sets — per Q-NAV-01 only Banmore + Production are
- * interactive. Quality / Engineering / Plant Head / Technical all
- * render with the "SOON" pill in the modal (FR-L15 explicit
- * deferrals plus the Phase-1 Q-NAV-01 deferral for Quality and
- * Engineering).
- */
-const PHASE_1_ACTIVE_PLANTS = new Set(["banmore", "chennai"]);
-// Production and Quality are both navigable (Banmore only). Quality opens the
-// Quality Head dashboard; the remaining functions stay "SOON".
-const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
-const PRODUCTION_ONLY_FUNCTIONS = new Set(["prod"]);
-
-const PLANT_GEO = {
-  banmore: {
-    code: "BTP",
-    lat: 26.392750216401705,
-    lng: 78.072224113494,
-    badgeSide: "right",
-  },
-  chennai: {
-    code: "CTP",
-    lat: 12.938622726364054,
-    lng: 80.00271264232934,
-    badgeSide: "right",
-  },
-  laksar: {
-    code: "LTP",
-    lat: 29.7428,
-    lng: 78.0264,
-    badgeSide: "left",
-  },
-  mysore: {
-    code: "RTP",
-    lat: 12.3556,
-    lng: 76.6026,
-    badgeSide: "left",
-  },
-};
+import {
+  PHASE_1_ACTIVE_PLANTS,
+  PHASE_1_NAVIGABLE_FUNCTIONS,
+  PLANT_GEO,
+  PRODUCTION_ONLY_FUNCTIONS,
+} from "@/lib/landingConfig.js";
 
 function LandingPage() {
   const navigate = useNavigate();
