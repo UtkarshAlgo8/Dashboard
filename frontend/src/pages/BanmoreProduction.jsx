@@ -789,88 +789,116 @@ function BanmoreProduction() {
                       </Box>
                     )}
 
-                  <KpiGrid
-                    kpis={kpis}
-                    category={dashboard.category}
-                    isLoading={false}
-                    error={kpiError}
-                    openDrillKpiId={openDrillKpiId}
-                    onDrillKpi={handleDrillKpi}
-                    onCloseDrill={handleCloseDrill}
-                    onTrendOpen={(kpi) => setTrendKpi(kpi)}
-                  />
-
-                  {/* Single drill panel for the currently selected card. */}
-                  {openDrillKpiId &&
-                    (() => {
-                      const kpi = kpis.find(
-                        (k) => k.id === openDrillKpiId && k.drillable,
-                      );
-                      if (!kpi) return null;
-                      const cardDate = kpi.resolvedDate ?? null;
-                      const useMonthRange =
-                        dashboard.category === "p" &&
-                        dashboard.granularity === "MONTH" &&
-                        [
-                          "mixOEE",
-                          "curOEE",
-                          "mixProd",
-                          "tbmProd",
-                          "stkProd",
-                          "curProd",
-                        ].includes(kpi.drillType);
-                      return (
-                        <Box sx={{ px: 0, pb: 2 }}>
-                          <DrillPanelRouter
-                            kpi={kpi}
-                            plantId={plantId}
-                            section={dashboard.section}
-                            sectionName={sectionName}
-                            subSection={pinnedSubSection}
-                            cardDate={cardDate}
-                            from={useMonthRange ? from : (cardDate ?? from)}
-                            to={useMonthRange ? to : (cardDate ?? to)}
-                            windowFrom={from}
-                            windowTo={to}
-                            shift={dashboard.granularity}
-                            allDrillRows={drillRows}
-                            rawRows={rawRows}
-                            downtimeRows={downtimeRows}
-                            prodSub={activeProductType}
-                            unitPin={activeUnit}
-                            mode={dashboard.mode}
-                            isLoading={isDrillLoading}
-                          />
-                        </Box>
-                      );
-                    })()}
-
-                  {/* Shift Comparison — Productivity tab only, always pinned
-                    at the bottom regardless of which card is drilled. */}
-                  {dashboard.category === "p" && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: { xs: "column", lg: openDrillKpiId ? "row" : "column" },
+                      gap: 2,
+                      alignItems: "flex-start",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    {/* Left Column (or full width if not drilling) */}
                     <Box
                       sx={{
-                        px: 0,
-                        pb: 2,
-                        flex: 1,
+                        flex: openDrillKpiId ? "0 0 340px" : "1 1 auto",
+                        width: openDrillKpiId ? { xs: "100%", lg: "340px" } : "100%",
                         display: "flex",
                         flexDirection: "column",
-                        minHeight: 0,
+                        gap: 2,
+                        transition: "all 0.3s ease",
                       }}
                     >
-                      <ShiftComparisonCard
-                        plantId={plantId}
-                        section={sectionName}
-                        subSection={pinnedSubSection}
-                        productType={activeProductType}
-                        unit={activeUnit}
-                        mode={timeRange.preset === "today" ? "day" : "range"}
-                        date={timeRange.preset === "today" ? to : null}
-                        from={timeRange.preset === "today" ? null : from}
-                        to={timeRange.preset === "today" ? null : to}
+                      <KpiGrid
+                        kpis={kpis}
+                        category={dashboard.category}
+                        isLoading={false}
+                        error={kpiError}
+                        openDrillKpiId={openDrillKpiId}
+                        onDrillKpi={handleDrillKpi}
+                        onCloseDrill={handleCloseDrill}
+                        onTrendOpen={(kpi) => setTrendKpi(kpi)}
                       />
+
+                      {/* Shift Comparison — Productivity tab only, always below KPIs */}
+                      {dashboard.category === "p" && (
+                        <Box
+                          sx={{
+                            px: 0,
+                            pb: openDrillKpiId ? 2 : 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            minHeight: 0,
+                          }}
+                        >
+                          <ShiftComparisonCard
+                            plantId={plantId}
+                            section={sectionName}
+                            subSection={pinnedSubSection}
+                            productType={activeProductType}
+                            unit={activeUnit}
+                            mode={timeRange.preset === "today" ? "day" : "range"}
+                            date={timeRange.preset === "today" ? to : null}
+                            from={timeRange.preset === "today" ? null : from}
+                            to={timeRange.preset === "today" ? null : to}
+                            isDrilldown={Boolean(openDrillKpiId)}
+                          />
+                        </Box>
+                      )}
                     </Box>
-                  )}
+
+                    {/* Right Column: Drill Panel */}
+                    {openDrillKpiId &&
+                      (() => {
+                        const kpi = kpis.find(
+                          (k) => k.id === openDrillKpiId && k.drillable,
+                        );
+                        if (!kpi) return null;
+                        const cardDate = kpi.resolvedDate ?? null;
+                        const useMonthRange =
+                          dashboard.category === "p" &&
+                          dashboard.granularity === "MONTH" &&
+                          [
+                            "mixOEE",
+                            "curOEE",
+                            "mixProd",
+                            "tbmProd",
+                            "stkProd",
+                            "curProd",
+                          ].includes(kpi.drillType);
+                        return (
+                          <Box
+                            sx={{
+                              flex: 1,
+                              minWidth: 0,
+                              width: "100%",
+                              animation: "fadeIn 0.3s ease",
+                            }}
+                          >
+                            <DrillPanelRouter
+                              kpi={kpi}
+                              plantId={plantId}
+                              section={dashboard.section}
+                              sectionName={sectionName}
+                              subSection={pinnedSubSection}
+                              cardDate={cardDate}
+                              from={useMonthRange ? from : (cardDate ?? from)}
+                              to={useMonthRange ? to : (cardDate ?? to)}
+                              windowFrom={from}
+                              windowTo={to}
+                              shift={dashboard.granularity}
+                              allDrillRows={drillRows}
+                              rawRows={rawRows}
+                              downtimeRows={downtimeRows}
+                              prodSub={activeProductType}
+                              unitPin={activeUnit}
+                              mode={dashboard.mode}
+                              isLoading={isDrillLoading}
+                            />
+                          </Box>
+                        );
+                      })()}
+                  </Box>
                 </>
               )}
             </Box>

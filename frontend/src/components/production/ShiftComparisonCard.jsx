@@ -1,9 +1,22 @@
 import { useState } from "react";
-import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
+import {
+  Box,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
+  Typography,
+  useTheme,
+} from "@mui/material";
 import GridViewIcon from "@mui/icons-material/GridView";
 import DeleteSweepOutlinedIcon from "@mui/icons-material/DeleteSweepOutlined";
 import SyncOutlinedIcon from "@mui/icons-material/SyncOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import {
@@ -13,6 +26,7 @@ import {
 import { canonicalUnit, resolveProductionKpi } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
 import { isKg, kgToTonnes } from "@/lib/units.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { evaluateShiftTier, getStemColor } from "@/lib/thresholds.js";
 
@@ -133,6 +147,7 @@ export default function ShiftComparisonCard({
   date = null,
   from = null,
   to = null,
+  isDrilldown = false,
 }) {
   const isRange = mode === "range";
 
@@ -249,7 +264,7 @@ export default function ShiftComparisonCard({
             alignItems: "center",
             justifyContent: "center",
             height: "100%",
-            minHeight: 280,
+            minHeight: isDrilldown ? 180 : 280,
             backgroundColor: "background.paper",
             borderRadius: 2.5,
             border: 1,
@@ -258,6 +273,14 @@ export default function ShiftComparisonCard({
         >
           <JKLoader />
         </Box>
+      ) : isDrilldown ? (
+        <ShiftComparisonTableCard
+          shifts={shifts}
+          prodData={prodByShift}
+          scrapData={scrapByShift}
+          reworkData={reworkByShift}
+          unit={unit}
+        />
       ) : (
         <Box
           sx={{
@@ -312,6 +335,132 @@ export default function ShiftComparisonCard({
           />
         </Box>
       )}
+    </Box>
+  );
+}
+
+/**
+ * Compact Table View for Shift-Wise Comparison (shown below stacked KPIs in drilldown view)
+ */
+function ShiftComparisonTableCard({
+  shifts,
+  prodData,
+  scrapData,
+  reworkData,
+  unit,
+}) {
+  const theme = useTheme();
+
+  return (
+    <Box
+      sx={{
+        backgroundColor: "background.paper",
+        borderRadius: 2.5,
+        border: 1,
+        borderColor: "rgba(0,0,0,0.06)",
+        p: 2,
+        boxShadow: theme.custom.shadow,
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.25,
+      }}
+    >
+      {/* Header */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+      >
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <TableChartOutlinedIcon sx={{ fontSize: 18, color: "text.primary" }} />
+          <Typography
+            sx={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: "text.primary",
+            }}
+          >
+            Shift-wise Comparison
+          </Typography>
+        </Stack>
+        <Tooltip title="Shift-wise Breakdown for Production, Scrap & Rework" arrow>
+          <InfoOutlinedIcon
+            sx={{ fontSize: 17, color: "text.secondary", cursor: "pointer" }}
+          />
+        </Tooltip>
+      </Stack>
+
+      {/* Table */}
+      <TableContainer
+        sx={{
+          borderRadius: 1.5,
+          border: 1,
+          borderColor: "divider",
+          overflow: "hidden",
+        }}
+      >
+        <Table size="small" sx={{ "& th, & td": { py: 0.85, px: 1 } }}>
+          <TableHead sx={{ backgroundColor: "rgba(0,0,0,0.03)" }}>
+            <TableRow>
+              <TableCell sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+                Shift
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+                Prod {unit ? `(${unit})` : ""}
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+                Scrap
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+                Rework
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {shifts.map((shift, idx) => {
+              const prod = prodData[idx];
+              const scrap = scrapData[idx];
+              const rework = reworkData[idx];
+              return (
+                <TableRow
+                  key={shift.gran}
+                  sx={{
+                    "&:nth-of-type(even)": { backgroundColor: "rgba(0,0,0,0.02)" },
+                    "&:last-child td": { borderBottom: 0 },
+                  }}
+                >
+                  <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "text.primary", whiteSpace: "nowrap" }}>
+                    {shift.label}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: "text.primary" }}>
+                    {prod != null ? formatIndianNumber(prod) : "—"}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: scrap > 0 ? "error.main" : "text.secondary",
+                    }}
+                  >
+                    {scrap != null ? formatIndianNumber(scrap) : "—"}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: rework > 0 ? "warning.main" : "text.secondary",
+                    }}
+                  >
+                    {rework != null ? formatIndianNumber(rework) : "—"}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Box>
   );
 }
