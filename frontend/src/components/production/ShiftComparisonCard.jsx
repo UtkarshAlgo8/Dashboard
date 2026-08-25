@@ -29,7 +29,6 @@ import { isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { evaluateShiftTier, getStemColor } from "@/lib/thresholds.js";
-import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
