@@ -298,6 +298,40 @@ async function landingKpisForPlant(plantId) {
   return out;
 }
 
+/**
+ * Per-plant KPI fan-out that degrades instead of failing the page.
+ *
+ * Each enabled plant reads its OWN gold table (Banmore `gold.gold`,
+ * Chennai `ctp_gold.ctp_gold`), so a table that has not landed upstream
+ * yet makes that plant's query throw. Under a plain Promise.all one such
+ * plant rejected the whole batch and the landing page 502'd — every
+ * plant went dark because one was missing. Failures are per-plant now:
+ * the plant is dropped from the map, the caller's `??` fallback fills in
+ * nulls, and the card renders its placeholder state while the rest of
+ * the page loads normally.
+ */
+export async function perPlantSummaries(plants, load) {
+  const settled = await Promise.allSettled(
+    plants.map(async (p) => {
+      const plantId = normalizePlantId(p.id);
+      if (!plantId) return null;
+      return [p.id, await load(plantId)];
+    }),
+  );
+  const entries = [];
+  settled.forEach((result, i) => {
+    if (result.status === "fulfilled") {
+      if (result.value) entries.push(result.value);
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[plants] landing KPIs unavailable for '${plants[i].id}': ${result.reason?.message ?? result.reason}`,
+    );
+  });
+  return Object.fromEntries(entries);
+}
+
 export async function getPlants(req, res, next) {
   try {
     const timeRange = {
@@ -305,34 +339,17 @@ export async function getPlants(req, res, next) {
       from: typeof req.query.from === "string" ? req.query.from : "",
       to: typeof req.query.to === "string" ? req.query.to : "",
     };
+    const enabled = PLANTS.filter((p) => p.enabled);
     const staticSummaries = await cached(
       buildCacheKey("/plants:landing-live-kpis", {}),
-      async () => {
-        const enabled = PLANTS.filter((p) => p.enabled);
-        const entries = await Promise.all(
-          enabled.map(async (p) => {
-            const plantId = normalizePlantId(p.id);
-            if (!plantId) return [p.id, { oee: null, otif: null, yield: null }];
-            return [p.id, await landingKpisForPlant(plantId)];
-          }),
-        );
-        return Object.fromEntries(entries);
-      },
+      () => perPlantSummaries(enabled, landingKpisForPlant),
       CACHE_TTL.STATIC_LOOKUPS,
     );
     // Time-aware KPIs are NOT cached at this layer (window changes per
     // user pick). Cheap query; per-plant fan-out.
-    const enabled = PLANTS.filter((p) => p.enabled);
-    const timeAwareEntries = await Promise.all(
-      enabled.map(async (p) => {
-        const plantId = normalizePlantId(p.id);
-        if (!plantId) {
-          return [p.id, { curedTyreProduction: 0, scrap: 0, scrapPct: null }];
-        }
-        return [p.id, await landingTimeAwareKpisForPlant(plantId, timeRange)];
-      }),
+    const timeAwareSummaries = await perPlantSummaries(enabled, (plantId) =>
+      landingTimeAwareKpisForPlant(plantId, timeRange),
     );
-    const timeAwareSummaries = Object.fromEntries(timeAwareEntries);
     const data = PLANTS.map((p) => ({
       ...p,
       ...(staticSummaries[p.id] ?? { oee: null, otif: null, yield: null }),
