@@ -80,6 +80,7 @@ function KpiGrid({
               key={kpi.id || kpi.name}
               kpi={kpi}
               isDrilling={openDrillKpiId === kpi.id}
+              isDrilldown={Boolean(openDrillKpiId)}
               onClick={() => handleCardClick(kpi)}
               onTrendOpen={() => onTrendOpen?.(kpi)}
               onCloseDrill={() => onCloseDrill?.()}

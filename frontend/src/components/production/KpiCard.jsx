@@ -26,6 +26,7 @@ import { evaluateKpiTier, getKpiCardTheme } from "@/lib/thresholds.js";
 function KpiCard({
   kpi,
   isDrilling = false,
+  isDrilldown = false,
   onClick,
   onTrendOpen,
   onCloseDrill,
@@ -324,7 +325,7 @@ function KpiCard({
       </Stack>
 
       {/* 3. Horizontal Target / Progress Bar with Gradient */}
-      {!isDrilling && (
+      {!isDrilling && !isDrilldown && (
         <Box
           sx={{
             width: "100%",
