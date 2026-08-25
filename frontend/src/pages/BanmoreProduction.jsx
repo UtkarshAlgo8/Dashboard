@@ -823,6 +823,7 @@ function BanmoreProduction() {
                           : "100%",
                         display: "flex",
                         flexDirection: "column",
+                        minHeight: 0,
                         gap: 2,
                         transition: "all 0.3s ease",
                       }}
@@ -846,6 +847,7 @@ function BanmoreProduction() {
                             pb: openDrillKpiId ? 2 : 0,
                             display: "flex",
                             flexDirection: "column",
+                            flex: 1,
                             minHeight: 0,
                           }}
                         >

@@ -523,28 +523,15 @@ function computeYAxisScale(data, fallbackMax = 10) {
     };
   }
 
-  // Target max with ~25% headroom so data labels and markers don't hit the ceiling
-  const targetMax = maxValRaw * 1.28;
-  const roughStep = targetMax / 4;
-  const power = Math.pow(10, Math.floor(Math.log10(roughStep)));
-  const fraction = roughStep / power;
-  let niceFraction;
-  if (fraction <= 1.25) niceFraction = 1;
-  else if (fraction <= 2.5) niceFraction = 2;
-  else if (fraction <= 5) niceFraction = 5;
-  else niceFraction = 10;
+  // Keep only a small amount of headroom so the tallest stem uses the chart.
+  const targetMax = maxValRaw * 1.05;
+  const tickUnit = maxValRaw >= 100 ? 10 : maxValRaw >= 10 ? 1 : 0.5;
+  const maxVal = Math.ceil(targetMax / tickUnit) * tickUnit;
+  const yTicks = Array.from({ length: 5 }, (_, index) =>
+    Number(((maxVal * index) / 4).toFixed(2)),
+  );
 
-  const step = niceFraction * power;
-  const niceMax = Math.ceil(targetMax / step) * step;
-  const count = Math.max(2, Math.min(6, Math.round(niceMax / step)));
-
-  const yTicks = [];
-  for (let i = 0; i <= count; i++) {
-    const tick = Number((i * step).toFixed(2));
-    yTicks.push(tick);
-  }
-
-  return { maxVal: yTicks[yTicks.length - 1], yTicks };
+  return { maxVal, yTicks };
 }
 
 /**
