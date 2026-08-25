@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box } from "@mui/material";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
@@ -75,20 +75,20 @@ function LandingPage() {
   const [modalPlantId, setModalPlantId] = useState(null);
   const leaveTimeoutRef = useRef(null);
 
-  const handleHover = (plantId) => {
+  const handleHover = useCallback((plantId) => {
     if (leaveTimeoutRef.current) {
       clearTimeout(leaveTimeoutRef.current);
       leaveTimeoutRef.current = null;
     }
     setHov(plantId);
-  };
+  }, []);
 
-  const handleLeave = () => {
+  const handleLeave = useCallback(() => {
     if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
     leaveTimeoutRef.current = setTimeout(() => {
       setHov(null);
     }, 120);
-  };
+  }, []);
 
   // Enrich raw plants with coordinates and display metadata
   const plants = Array.isArray(rawPlants)
@@ -112,10 +112,10 @@ function LandingPage() {
       ? PHASE_1_NAVIGABLE_FUNCTIONS
       : PRODUCTION_ONLY_FUNCTIONS;
 
-  const openModalFor = (plantId) => {
+  const openModalFor = useCallback((plantId) => {
     if (!PHASE_1_ACTIVE_PLANTS.has(plantId)) return;
     setModalPlantId(plantId);
-  };
+  }, []);
 
   const handleFunctionSelect = (fn) => {
     if (!modalPlant) return;

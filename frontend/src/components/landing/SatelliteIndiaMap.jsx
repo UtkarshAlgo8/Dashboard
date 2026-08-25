@@ -95,7 +95,15 @@ function SatelliteIndiaMap({
             source: "india-boundary",
             paint: {
               "line-color": "#FFFFFF",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 6, 2.0],
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                3,
+                1.2,
+                6,
+                2.0,
+              ],
               "line-opacity": 0.95,
             },
           },
@@ -143,9 +151,10 @@ function SatelliteIndiaMap({
       mapRef.current = null;
       setMapLoaded(false);
     };
-  }, []);
+  }, [onLeave]);
 
-  // 2. Initialize Markers Once when map loads or plants list changes
+  // 2. Initialize markers when map loads or plant data changes. Hover state
+  // is applied by the next effect so marker roots are not rebuilt on hover.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !Array.isArray(plants) || plants.length === 0)
@@ -165,13 +174,11 @@ function SatelliteIndiaMap({
 
       const el = document.createElement("div");
       const root = createRoot(el);
-      const isFocused = hov === plant.id || sel === plant.id;
-
       // Render content immediately on initial creation
       root.render(
         <MapPlantMarker
           plant={plant}
-          isFocused={isFocused}
+          isFocused={false}
           onClick={() => onSelect && onSelect(plant.id)}
           onMouseEnter={() => onHover && onHover(plant.id)}
         />,
@@ -209,7 +216,9 @@ function SatelliteIndiaMap({
     });
   }, [hov, sel, onHover, onSelect]);
 
-  // 4. Cinematic 3D Camera Zoom / FlyTo on Hover or Selection
+  // 4. Zoom around the hovered plant instead of centering it. Keeping the
+  // geographic point under its current screen position prevents the marker
+  // from leaving the pointer during the camera animation.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
@@ -223,15 +232,13 @@ function SatelliteIndiaMap({
     if (targetId) {
       const plant = plants.find((p) => p.id === targetId);
       if (plant && plant.lng && plant.lat) {
-        // Fast, responsive 3D Fly-In with 50-degree pitch and subtle isometric bearing
-        map.flyTo({
-          center: [plant.lng, plant.lat],
+        map.stop();
+        map.easeTo({
+          around: [plant.lng, plant.lat],
           zoom: 8.2,
-          pitch: 50,
-          bearing: -12,
-          speed: 1.2,
-          curve: 1.3,
-          padding: padding,
+          pitch: 28,
+          bearing: -8,
+          duration: 900,
           essential: true,
         });
         return;
