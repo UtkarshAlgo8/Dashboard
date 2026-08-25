@@ -51,6 +51,10 @@ function SatelliteIndiaMap({
             attribution: "Esri Satellite",
             maxzoom: 19,
           },
+          "india-boundary": {
+            type: "geojson",
+            data: "/india-boundary.geojson",
+          },
         },
         layers: [
           {
@@ -59,6 +63,41 @@ function SatelliteIndiaMap({
             source: "esri-satellite",
             minzoom: 0,
             maxzoom: 19,
+          },
+          // Ambient Outer Cyan/White Glow
+          {
+            id: "india-border-glow-outer",
+            type: "line",
+            source: "india-boundary",
+            paint: {
+              "line-color": "#38BDF8",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 9, 6, 16],
+              "line-opacity": 0.5,
+              "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 5, 6, 9],
+            },
+          },
+          // Mid Glow Halo
+          {
+            id: "india-border-glow-mid",
+            type: "line",
+            source: "india-boundary",
+            paint: {
+              "line-color": "#F0F9FF",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 4.5, 6, 8],
+              "line-opacity": 0.85,
+              "line-blur": 1.5,
+            },
+          },
+          // Crisp Core White National Boundary
+          {
+            id: "india-border-core",
+            type: "line",
+            source: "india-boundary",
+            paint: {
+              "line-color": "#FFFFFF",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.2, 6, 3.8],
+              "line-opacity": 1.0,
+            },
           },
         ],
       },
