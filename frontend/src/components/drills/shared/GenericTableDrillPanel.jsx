@@ -35,6 +35,7 @@ export default function GenericTableDrillPanel({
   productType = null,
   from = null,
   to = null,
+  onClose,
 }) {
   // While the drill fetch is still in flight and we don't yet have any
   // child rows, render a skeleton. Otherwise the user sees an empty
@@ -56,13 +57,18 @@ export default function GenericTableDrillPanel({
     // Quality
     case "ftq":
       return (
-        <FtdDrillPanel drillRows={sectionFiltered} granularity={granularity} />
+        <FtdDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
       );
     case "ds":
       return (
         <ScrapDrillPanel
           drillRows={sectionFiltered}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     case "sr":
@@ -70,6 +76,7 @@ export default function GenericTableDrillPanel({
         <ScrapRateDrillPanel
           drillRows={sectionFiltered}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     case "rw":
@@ -77,6 +84,7 @@ export default function GenericTableDrillPanel({
         <ReworkDrillPanel
           drillRows={sectionFiltered}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     case "ncm":
@@ -90,6 +98,7 @@ export default function GenericTableDrillPanel({
           productType={productType}
           from={from}
           to={to}
+          onClose={onClose}
         />
       );
     // Cost
@@ -98,6 +107,7 @@ export default function GenericTableDrillPanel({
         <SpecificPowerDrillPanel
           drillRows={sectionFiltered}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     // Morale
@@ -105,17 +115,26 @@ export default function GenericTableDrillPanel({
       // Plant-level — pass the windowed rows (NOT section-filtered;
       // Absenteeism_section children span every section).
       return (
-        <AbsenteeismDrillPanel drillRows={windowed} granularity={granularity} />
+        <AbsenteeismDrillPanel
+          drillRows={windowed}
+          granularity={granularity}
+          onClose={onClose}
+        />
       );
     case "tq":
       return (
-        <TqmDrillPanel drillRows={sectionFiltered} granularity={granularity} />
+        <TqmDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
       );
     case "sg":
       return (
         <SuggestionsDrillPanel
           drillRows={sectionFiltered}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     case "tr":
@@ -123,6 +142,7 @@ export default function GenericTableDrillPanel({
         <TrainingDrillPanel
           drillRows={sectionFiltered}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     // Safety
@@ -132,6 +152,7 @@ export default function GenericTableDrillPanel({
           drillRows={sectionFiltered}
           section={section}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     case "fa":
@@ -140,6 +161,7 @@ export default function GenericTableDrillPanel({
           drillRows={sectionFiltered}
           section={section}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     case "nm":
@@ -147,6 +169,7 @@ export default function GenericTableDrillPanel({
         <NearMissDrillPanel
           drillRows={sectionFiltered}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     case "sa":
@@ -155,6 +178,7 @@ export default function GenericTableDrillPanel({
           drillRows={sectionFiltered}
           section={section}
           granularity={granularity}
+          onClose={onClose}
         />
       );
     default:

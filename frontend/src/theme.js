@@ -51,6 +51,8 @@ const C = {
   tl: "#238B3D",
   ocean: "#147EFB",
   purple: "#5856D6",
+  drillCloseBg: "#8E959E",
+  drillCloseHover: "#737B85",
   sh: "0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.03)",
   navbarShadow: "0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04)",
   floatingShadow: "0 3px 12px rgba(0,0,0,0.09), 0 1px 4px rgba(0,0,0,0.05)",
@@ -170,6 +172,10 @@ theme.custom = {
   navbarShadow: C.navbarShadow,
   floatingShadow: C.floatingShadow,
   radius: C.r,
+  drillClose: {
+    bg: C.drillCloseBg,
+    hover: C.drillCloseHover,
+  },
 };
 
 export default theme;

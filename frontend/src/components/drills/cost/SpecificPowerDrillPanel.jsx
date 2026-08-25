@@ -28,6 +28,7 @@ function fmt(v, d = 1) {
 export default function SpecificPowerDrillPanel({
   drillRows,
   granularity = "DAY",
+  onClose,
 }) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
@@ -58,6 +59,7 @@ export default function SpecificPowerDrillPanel({
         rows={rows}
         downloadFilename="drill-specific-power"
         downloadSheetName="SpecificPower"
+        onClose={onClose}
       />
     </Stack>
   );

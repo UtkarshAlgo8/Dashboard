@@ -469,6 +469,8 @@ function BanmoreProduction() {
   const { from, to } = presetToDateRange(timeRange, effectiveAsOf);
 
   const onSectionSelect = (id) => {
+    setOpenDrillKpiId(null);
+    resetDrill();
     if (id === "stk") {
       setFilter(
         {
@@ -491,7 +493,11 @@ function BanmoreProduction() {
       );
     }
   };
-  const onCategorySelect = (id) => setFilter({ category: id }, true);
+  const onCategorySelect = (id) => {
+    setOpenDrillKpiId(null);
+    resetDrill();
+    setFilter({ category: id }, true);
+  };
 
   useEffect(() => {
     if (dashboard.productType == null && !isStock) {
@@ -904,6 +910,7 @@ function BanmoreProduction() {
                               unitPin={activeUnit}
                               mode={dashboard.mode}
                               isLoading={isDrillLoading}
+                              onClose={handleCloseDrill}
                             />
                           </Box>
                         );
@@ -987,6 +994,7 @@ function DrillPanelRouter({
   unitPin,
   mode,
   isLoading,
+  onClose,
 }) {
   if (!kpi) return null;
 
@@ -1017,6 +1025,7 @@ function DrillPanelRouter({
           cardDate={granularity === "MONTH" ? null : cardDate}
           isLoading={isLoading}
           trench={kpi.drillType === "curOEE"}
+          onClose={onClose}
         />
       );
     case "mixProd":
@@ -1035,6 +1044,7 @@ function DrillPanelRouter({
           from={from}
           to={to}
           isLoading={isLoading}
+          onClose={onClose}
         />
       );
     case "downtime":
@@ -1045,6 +1055,7 @@ function DrillPanelRouter({
           mode={mode}
           granularity={downtimeGranularity ?? "DAY"}
           isLoading={isLoading}
+          onClose={onClose}
         />
       );
     case "compliance":
@@ -1063,6 +1074,7 @@ function DrillPanelRouter({
           productType={prodSub}
           from={windowFrom ?? from}
           to={windowTo ?? to}
+          onClose={onClose}
         />
       );
     case "budget":
@@ -1074,6 +1086,7 @@ function DrillPanelRouter({
           to={to}
           shift={shift}
           isLoading={isLoading}
+          onClose={onClose}
         />
       );
     case "qScrapRework":
@@ -1085,6 +1098,7 @@ function DrillPanelRouter({
           mode={mode}
           granularity={granularity}
           isLoading={isLoading}
+          onClose={onClose}
         />
       );
     default:

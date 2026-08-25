@@ -19,6 +19,7 @@ function avg(arr) {
 export default function ScrapRateDrillPanel({
   drillRows,
   granularity = "DAY",
+  onClose,
 }) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
@@ -55,6 +56,7 @@ export default function ScrapRateDrillPanel({
         rows={rows}
         downloadFilename="drill-scrap-rate"
         downloadSheetName="ScrapRate"
+        onClose={onClose}
       />
     </Stack>
   );

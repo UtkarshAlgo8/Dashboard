@@ -13,6 +13,7 @@ import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import DataTable from "@/components/tables/DataTable.jsx";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 
 const SECTION_NAME = {
@@ -50,6 +51,7 @@ function DowntimeDrillPanel({
   rows: propsRows,
   granularity = "DAY",
   isLoading = false,
+  onClose,
 }) {
   const rows = useMemo(
     () =>
@@ -239,17 +241,20 @@ function DowntimeDrillPanel({
               : "Downtime · Reason Breakdown"}
           </Typography>
         </Stack>
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={selectedReason ? eventRows : reasonRows}
-          headers={
-            selectedReason
-              ? ["Date", "Machine", "Downtime (min)", "Shift"]
-              : ["Reason", "Total (min)", "% of Total"]
-          }
-          filename={`drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName="Downtime"
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={selectedReason ? eventRows : reasonRows}
+            headers={
+              selectedReason
+                ? ["Date", "Machine", "Downtime (min)", "Shift"]
+                : ["Reason", "Total (min)", "% of Total"]
+            }
+            filename={`drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
+            sheetName="Downtime"
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
 
       <Box

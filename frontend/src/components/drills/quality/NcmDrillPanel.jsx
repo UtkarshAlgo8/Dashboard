@@ -7,6 +7,7 @@ import { toDrillRows } from "@/lib/kpi-transformer.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
 /**
  * NCM Hold drill — item-code-wise hold details (kpi_name = NCM_Hold_sku).
@@ -89,6 +90,7 @@ export default function NcmDrillPanel({
   productType = null,
   from = null,
   to = null,
+  onClose,
 }) {
   const onMonth = String(granularity).toUpperCase() === "MONTH";
   const needsDayRows = onMonth && Boolean(sectionName && from && to);
@@ -172,24 +174,32 @@ export default function NcmDrillPanel({
         spacing={1}
       >
         <Typography
-          sx={{ fontSize: 13, fontWeight: 600, color: "text.primary" }}
+          sx={{
+            fontSize: 15,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
+          }}
         >
           NCM Hold Details
         </Typography>
-        {/* Top-right download — menu offers PDF (visual) + Excel (NCM rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={[
-            "Item Code",
-            "Date",
-            "Hold Quantity",
-            "Final Status",
-            "Remark / Reason",
-          ]}
-          filename="drill-ncm-hold"
-          sheetName="NCMHold"
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={excelRows}
+            headers={[
+              "Item Code",
+              "Date",
+              "Hold Quantity",
+              "Final Status",
+              "Remark / Reason",
+            ]}
+            filename="drill-ncm-hold"
+            sheetName="NCMHold"
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
       <Box ref={cardRef}>
         <DataTable

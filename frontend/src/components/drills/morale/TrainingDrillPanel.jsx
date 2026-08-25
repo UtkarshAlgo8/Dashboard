@@ -16,7 +16,11 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function TrainingDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function TrainingDrillPanel({
+  drillRows,
+  granularity = "DAY",
+  onClose,
+}) {
   const byArea = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "Training_area") continue;
@@ -54,6 +58,7 @@ export default function TrainingDrillPanel({ drillRows, granularity = "DAY" }) {
         rows={rows}
         downloadFilename="drill-training"
         downloadSheetName="Training"
+        onClose={onClose}
       />
     </Stack>
   );

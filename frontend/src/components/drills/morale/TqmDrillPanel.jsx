@@ -16,7 +16,11 @@ function avg(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export default function TqmDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function TqmDrillPanel({
+  drillRows,
+  granularity = "DAY",
+  onClose,
+}) {
   const byPillar = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "TQM_pillar") continue;
@@ -48,11 +52,12 @@ export default function TqmDrillPanel({ drillRows, granularity = "DAY" }) {
   return (
     <Stack spacing={2}>
       <DrillTable
-        title="TQM by Pillar"
+        title="TQM Pillar Scores"
         cols={["Pillar", "Score", "Target", "Gap"]}
         rows={rows}
-        downloadFilename="drill-tqm"
-        downloadSheetName="TQM"
+        downloadFilename="drill-tqm-pillars"
+        downloadSheetName="TQMPillars"
+        onClose={onClose}
       />
     </Stack>
   );

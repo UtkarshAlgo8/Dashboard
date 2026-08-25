@@ -22,6 +22,7 @@ import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
 /**
  * OEE drill panel — derives its data straight from the gold rows the
@@ -84,6 +85,7 @@ function OeeDrillPanel({
   plantId = "banmore",
   from = null,
   to = null,
+  onClose,
 }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [subCategory, setSubCategory] = useState(null);
@@ -533,14 +535,22 @@ function OeeDrillPanel({
         >
           {sectionName} OEE
         </Typography>
-        {/* Top-right download — menu offers PDF (visual) + Excel (machine rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={machineExcelRows}
-          headers={["Machine", "Availability", "Performance", "Quality", "OEE"]}
-          filename={`drill-oee-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName="OEE"
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={machineExcelRows}
+            headers={[
+              "Machine",
+              "Availability",
+              "Performance",
+              "Quality",
+              "OEE",
+            ]}
+            filename={`drill-oee-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
+            sheetName="OEE"
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
       <Box ref={cardRef}>
         {/* A/P/Q card row — sits as a secondary KPI band under the main grid.

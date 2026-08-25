@@ -16,7 +16,7 @@ const SECTION_DISPLAY_NAMES = {
   mix: "Mixing",
 };
 
-const SECTION_ORDER = ["mix", "stk", "tbm", "cur"];
+const SECTION_ORDER = ["cur", "tbm", "stk", "mix"];
 
 /**
  * Adobe XD Section Sidebar

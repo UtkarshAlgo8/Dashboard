@@ -16,6 +16,7 @@ import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import { getProductionDrillAggregate } from "@/api/drills.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
 // Athena serializes measures as strings; coerce to number|null for display.
 function num(v) {
@@ -129,6 +130,7 @@ function ProductionDrillPanel({
   // never quietly read a different unit than the card above it.
   unitPin = null,
   isLoading = false,
+  onClose,
 }) {
   const isCuring = section === "cur";
   // Curing drill offers a "Trench" lens alongside Machine / SKU /
@@ -452,16 +454,18 @@ function ProductionDrillPanel({
         >
           {title}
         </Typography>
-        {/* Top-right download — menu offers PDF (visual) + Excel (page rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={excelHeaders}
-          filename={`drill-production-${sectionName.toLowerCase().replace(/\s+/g, "-")}${
-            prodSub ? `-${prodSub.toLowerCase().replace(/\s+/g, "-")}` : ""
-          }`}
-          sheetName="Production"
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={excelRows}
+            headers={excelHeaders}
+            filename={`drill-production-${sectionName.toLowerCase().replace(/\s+/g, "-")}${
+              prodSub ? `-${prodSub.toLowerCase().replace(/\s+/g, "-")}` : ""
+            }`}
+            sheetName="Production"
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
 
       <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">

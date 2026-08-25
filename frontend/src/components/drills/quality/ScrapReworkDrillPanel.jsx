@@ -18,6 +18,7 @@ import { snapshotLatest } from "@/lib/drillDate.js";
 import { canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
 // changes.md §1/§8: match granularity spelling-tolerantly ("Daily" vs the
 // real "DAY") so the subsection drill pins the SAME granularity as the card
@@ -75,6 +76,7 @@ function ScrapReworkDrillPanel({
   granularity = "DAY",
   mode = "snapshot",
   isLoading = false,
+  onClose,
 }) {
   const [selectedSub, setSelectedSub] = useState(null);
   const [viewBy, setViewBy] = useState("reason");
@@ -203,14 +205,16 @@ function ScrapReworkDrillPanel({
         >
           {kind} — subsection-wise
         </Typography>
-        {/* Top-right download — menu offers PDF (visual) + Excel (detail rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={excelHeaders}
-          filename={`drill-${kind.toLowerCase()}-${(selectedSub ?? "subsection").toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName={kind}
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={excelRows}
+            headers={excelHeaders}
+            filename={`drill-${kind.toLowerCase()}-${(selectedSub ?? "subsection").toLowerCase().replace(/\s+/g, "-")}`}
+            sheetName={kind}
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
 
       <Box ref={cardRef}>

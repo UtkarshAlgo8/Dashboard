@@ -16,7 +16,7 @@ const REWORK_DATA = [
   ["MS66", "Banbury 5", "Viscosity NC", "3", "In progress"],
 ];
 
-export default function ReworkDrillPanel({ drillRows }) {
+export default function ReworkDrillPanel({ drillRows, onClose }) {
   const rows =
     drillRows && drillRows.length > 0
       ? drillRows.map((r) => [
@@ -38,6 +38,7 @@ export default function ReworkDrillPanel({ drillRows }) {
         rows={rows}
         downloadFilename="drill-rework"
         downloadSheetName="Rework"
+        onClose={onClose}
       />
     </Stack>
   );

@@ -23,7 +23,11 @@ function splitRemarks(remarks) {
   };
 }
 
-export default function FirstAidDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function FirstAidDrillPanel({
+  drillRows,
+  granularity = "DAY",
+  onClose,
+}) {
   const rows = (drillRows ?? [])
     .filter(
       (r) =>
@@ -46,6 +50,7 @@ export default function FirstAidDrillPanel({ drillRows, granularity = "DAY" }) {
         rows={rows}
         downloadFilename="drill-first-aid"
         downloadSheetName="FirstAid"
+        onClose={onClose}
       />
     </Stack>
   );
