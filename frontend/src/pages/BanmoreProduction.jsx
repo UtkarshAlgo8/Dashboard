@@ -880,6 +880,7 @@ function BanmoreProduction() {
                               flex: 1,
                               minWidth: 0,
                               width: "100%",
+                              pt: 2,
                               animation: "fadeIn 0.3s ease",
                             }}
                           >
