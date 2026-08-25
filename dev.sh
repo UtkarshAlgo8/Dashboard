@@ -11,8 +11,8 @@ BACKEND_DIR="$ROOT/backend"
 FRONTEND_DIR="$ROOT/frontend"
 
 # Local dev ports (backend: config.js PORT default; frontend: Vite default).
-BACKEND_PORT="${PORT:-3005}"
-FRONTEND_PORT="${FRONTEND_PORT:-5175}"
+BACKEND_PORT="${PORT:-3001}"
+FRONTEND_PORT="5173"
 FRONTEND_URL="http://localhost:${FRONTEND_PORT}"
 
 # Point the frontend at the LOCAL backend, not the remote server baked into
@@ -46,11 +46,11 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 log "Starting backend (live reload) on http://localhost:${BACKEND_PORT}"
-(cd "$BACKEND_DIR" && PORT="$BACKEND_PORT" npm run dev) &
+(cd "$BACKEND_DIR" && npm run dev) &
 PIDS+=("$!")
 
 log "Starting frontend (Vite HMR) on ${FRONTEND_URL} → API ${LOCAL_API_BASE}"
-(cd "$FRONTEND_DIR" && VITE_API_BASE_URL="$LOCAL_API_BASE" npm run dev -- --port "$FRONTEND_PORT") &
+(cd "$FRONTEND_DIR" && VITE_API_BASE_URL="$LOCAL_API_BASE" npm run dev) &
 PIDS+=("$!")
 
 printf '\n\033[1;32m➜  Frontend:\033[0m %s\n' "$FRONTEND_URL"
