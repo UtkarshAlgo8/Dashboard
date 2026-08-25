@@ -824,6 +824,7 @@ function BanmoreProduction() {
                         display: "flex",
                         flexDirection: "column",
                         minHeight: 0,
+                        height: "100%",
                         gap: 2,
                         transition: "all 0.3s ease",
                       }}
@@ -848,6 +849,7 @@ function BanmoreProduction() {
                             display: "flex",
                             flexDirection: "column",
                             flex: 1,
+                            height: "100%",
                             minHeight: 0,
                           }}
                         >
