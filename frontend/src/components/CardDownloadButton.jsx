@@ -85,14 +85,16 @@ function CardDownloadButton({
     }
   };
 
-  const iconSx = { fontSize: 14 };
+  const iconSx = { fontSize: 18 };
   const buttonSx = {
-    width: 22,
-    height: 22,
+    width: 32,
+    height: 32,
     border: 1,
     borderColor: "divider",
-    borderRadius: 1,
-    color: "text.secondary",
+    borderRadius: 1.5,
+    backgroundColor: "background.paper",
+    color: "text.primary",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
     "&:hover": {
       borderColor: "primary.main",
       color: "primary.main",

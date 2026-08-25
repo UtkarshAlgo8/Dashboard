@@ -31,7 +31,15 @@ export default function BudgetDrillPanel({ drillRows }) {
         justifyContent="space-between"
         spacing={1}
       >
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+        <Typography
+          sx={{
+            fontSize: 15,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
+          }}
+        >
           Budget Utilization
         </Typography>
         <CardDownloadButton

@@ -194,11 +194,11 @@ function ScrapReworkDrillPanel({
       >
         <Typography
           sx={{
-            fontSize: 13,
+            fontSize: 15,
             fontWeight: 700,
             color: "primary.main",
             textTransform: "uppercase",
-            letterSpacing: 0.5,
+            letterSpacing: 0.6,
           }}
         >
           {kind} — subsection-wise
