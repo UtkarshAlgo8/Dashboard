@@ -156,6 +156,7 @@ function BanmoreProduction() {
     drillRows,
     rawRows,
     downtimeRows,
+    downtimeGranularity,
     isLoading: kpiLoading,
     isDrillLoading,
     lastUpdatedAt,
@@ -792,7 +793,10 @@ function BanmoreProduction() {
                   <Box
                     sx={{
                       display: "flex",
-                      flexDirection: { xs: "column", lg: openDrillKpiId ? "row" : "column" },
+                      flexDirection: {
+                        xs: "column",
+                        lg: openDrillKpiId ? "row" : "column",
+                      },
                       gap: 2,
                       alignItems: "flex-start",
                       transition: "all 0.3s ease",
@@ -802,7 +806,9 @@ function BanmoreProduction() {
                     <Box
                       sx={{
                         flex: openDrillKpiId ? "0 0 340px" : "1 1 auto",
-                        width: openDrillKpiId ? { xs: "100%", lg: "340px" } : "100%",
+                        width: openDrillKpiId
+                          ? { xs: "100%", lg: "340px" }
+                          : "100%",
                         display: "flex",
                         flexDirection: "column",
                         gap: 2,
@@ -837,7 +843,9 @@ function BanmoreProduction() {
                             subSection={pinnedSubSection}
                             productType={activeProductType}
                             unit={activeUnit}
-                            mode={timeRange.preset === "today" ? "day" : "range"}
+                            mode={
+                              timeRange.preset === "today" ? "day" : "range"
+                            }
                             date={timeRange.preset === "today" ? to : null}
                             from={timeRange.preset === "today" ? null : from}
                             to={timeRange.preset === "today" ? null : to}
@@ -890,6 +898,7 @@ function BanmoreProduction() {
                               allDrillRows={drillRows}
                               rawRows={rawRows}
                               downtimeRows={downtimeRows}
+                              downtimeGranularity={downtimeGranularity}
                               prodSub={activeProductType}
                               unitPin={activeUnit}
                               mode={dashboard.mode}
@@ -972,6 +981,7 @@ function DrillPanelRouter({
   allDrillRows,
   rawRows,
   downtimeRows,
+  downtimeGranularity,
   prodSub,
   unitPin,
   mode,
@@ -1029,57 +1039,50 @@ function DrillPanelRouter({
     case "downtime":
       return (
         <DowntimeDrillPanel
-          plantId={plantId}
           section={section}
-          granularity={productivityDrillGranularity}
-          date={cardDate ?? from}
-          from={from}
-          to={to}
+          rawRows={downtimeRows}
           mode={mode}
-          rows={downtimeRows}
+          granularity={downtimeGranularity ?? "DAY"}
           isLoading={isLoading}
         />
       );
     case "compliance":
+    case "table":
       return (
         <GenericTableDrillPanel
           kpi={kpi}
-          rows={drillRows}
-          category="p"
-          windowFrom={windowFrom}
-          windowTo={windowTo}
+          drillRows={drillRows}
+          section={section}
+          sectionName={sectionName}
+          mode={mode}
+          granularity={granularity}
           isLoading={isLoading}
+          plantId={plantId}
+          subSection={subSection}
+          productType={prodSub}
+          from={windowFrom ?? from}
+          to={windowTo ?? to}
         />
       );
     case "budget":
       return (
         <BudgetDrillPanel
-          kpi={kpi}
           plantId={plantId}
+          section={section}
           from={from}
           to={to}
+          shift={shift}
           isLoading={isLoading}
         />
       );
-    case "table":
-      return (
-        <GenericTableDrillPanel
-          kpi={kpi}
-          rows={drillRows}
-          category="p"
-          windowFrom={windowFrom}
-          windowTo={windowTo}
-          isLoading={isLoading}
-        />
-      );
+    case "qScrapRework":
     case "scrapRework":
       return (
         <ScrapReworkDrillPanel
-          plantId={plantId}
-          section={sectionName}
-          category="Quality"
-          from={from}
-          to={to}
+          kind={kpi.rawName === "Rework" ? "Rework" : "Scrap"}
+          drillRows={drillRows}
+          mode={mode}
+          granularity={granularity}
           isLoading={isLoading}
         />
       );

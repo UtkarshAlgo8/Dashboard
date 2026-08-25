@@ -74,7 +74,9 @@ function SubDrill({
         boxShadow: theme.custom.shadow,
       }}
     >
-      <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 500, color: "text.secondary" }}
+      >
         OE › {machine.name} › {COMPONENT_NAMES[component]}
       </Typography>
       <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 1.5 }}>

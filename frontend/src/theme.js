@@ -6,9 +6,9 @@ import { createTheme } from "@mui/material/styles";
  */
 const C = {
   // Texts and Icons
-  tx: "#404040", // Primary Text / Icons
-  md: "#9F9F9F", // Secondary Text / Subtext / Timestamps
-  mu: "#E4E4E4", // Disabled Text / Inactive elements
+  tx: "#2B2F33", // Primary Text / Icons (Crisp dark charcoal)
+  md: "#636B74", // Secondary Text / Subtext / Captions (High-contrast neutral)
+  mu: "#959EA6", // Disabled / Muted Text (Legible WCAG compliant)
 
   // Brand / Interactive / Actions
   ac: "#147EFB", // Links / Button Text / Primary Action

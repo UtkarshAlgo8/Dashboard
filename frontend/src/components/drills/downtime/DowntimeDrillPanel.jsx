@@ -47,9 +47,19 @@ const SECTION_NAME = {
 function DowntimeDrillPanel({
   section,
   rawRows,
+  rows: propsRows,
   granularity = "DAY",
   isLoading = false,
 }) {
+  const rows = useMemo(
+    () =>
+      Array.isArray(rawRows)
+        ? rawRows
+        : Array.isArray(propsRows)
+          ? propsRows
+          : [],
+    [rawRows, propsRows],
+  );
   const theme = useTheme();
   const sectionName = SECTION_NAME[section] ?? section;
   const cardRef = useRef(null);
@@ -60,23 +70,23 @@ function DowntimeDrillPanel({
   // so the header states the span rather than leaving the reader to compare
   // it against one machine's month.
   const machineCount = useMemo(() => {
-    if (!Array.isArray(rawRows)) return 0;
+    if (!Array.isArray(rows)) return 0;
     const seen = new Set();
-    for (const r of rawRows) {
-      if (r.section !== sectionName) continue;
+    for (const r of rows) {
+      if (r.section && r.section !== sectionName) continue;
       if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
       if (r.granularity !== granularity) continue;
       if (r.machine && r.machine !== "nan") seen.add(r.machine);
     }
     return seen.size;
-  }, [rawRows, sectionName, granularity]);
+  }, [rows, sectionName, granularity]);
 
   // Group the 6 reasons: sum per reason for the active window.
   const reasonRows = useMemo(() => {
-    if (!Array.isArray(rawRows)) return [];
+    if (!Array.isArray(rows)) return [];
     const byReason = new Map();
-    for (const r of rawRows) {
-      if (r.section !== sectionName) continue;
+    for (const r of rows) {
+      if (r.section && r.section !== sectionName) continue;
       if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
       if (r.granularity !== granularity) continue;
       const v = numOrNull(r.actual_value);
@@ -101,17 +111,17 @@ function DowntimeDrillPanel({
             : 0,
       };
     }).sort((a, b) => b.sum - a.sum);
-  }, [rawRows, sectionName, granularity, machineCount]);
+  }, [rows, sectionName, granularity, machineCount]);
 
   const totalDowntime = reasonRows.reduce((s, r) => s + r.sum, 0);
 
   // Level 2: per-event rows for the selected reason.
   const eventRows = useMemo(() => {
-    if (!selectedReason || !Array.isArray(rawRows)) return [];
-    return rawRows
+    if (!selectedReason || !Array.isArray(rows)) return [];
+    return rows
       .filter(
         (r) =>
-          r.section === sectionName &&
+          (!r.section || r.section === sectionName) &&
           r.kpi_name === selectedReason &&
           r.granularity === granularity,
       )
@@ -122,7 +132,7 @@ function DowntimeDrillPanel({
         shift: r.granularity && r.granularity !== "DAY" ? r.granularity : "—",
       }))
       .sort((a, b) => b.value - a.value);
-  }, [rawRows, sectionName, granularity, selectedReason]);
+  }, [rows, sectionName, granularity, selectedReason]);
 
   if (reasonRows.every((r) => r.sum === 0)) {
     if (isLoading) {
@@ -275,9 +285,9 @@ function DowntimeDrillPanel({
             >
               <Typography
                 sx={{
-                  fontSize: 11,
+                  fontSize: 11.5,
                   fontWeight: 700,
-                  color: "text.disabled",
+                  color: "text.primary",
                   textTransform: "uppercase",
                   letterSpacing: 0.6,
                   flex: 1,
@@ -305,7 +315,12 @@ function DowntimeDrillPanel({
                   </Typography>
                   {machineCount > 0 && (
                     <Typography
-                      sx={{ fontSize: 11, color: "text.disabled", mt: 0.25 }}
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "text.secondary",
+                        mt: 0.25,
+                      }}
                     >
                       averaged over {machineCount} machines
                     </Typography>

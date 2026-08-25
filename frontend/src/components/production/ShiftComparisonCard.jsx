@@ -372,13 +372,11 @@ function ShiftComparisonTableCard({
       }}
     >
       {/* Header */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-      >
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Stack direction="row" alignItems="center" spacing={1}>
-          <TableChartOutlinedIcon sx={{ fontSize: 18, color: "text.primary" }} />
+          <TableChartOutlinedIcon
+            sx={{ fontSize: 18, color: "text.primary" }}
+          />
           <Typography
             sx={{
               fontSize: 14,
@@ -389,7 +387,10 @@ function ShiftComparisonTableCard({
             Shift-wise Comparison
           </Typography>
         </Stack>
-        <Tooltip title="Shift-wise Breakdown for Production, Scrap & Rework" arrow>
+        <Tooltip
+          title="Shift-wise Breakdown for Production, Scrap & Rework"
+          arrow
+        >
           <InfoOutlinedIcon
             sx={{ fontSize: 17, color: "text.secondary", cursor: "pointer" }}
           />
@@ -408,16 +409,27 @@ function ShiftComparisonTableCard({
         <Table size="small" sx={{ "& th, & td": { py: 0.85, px: 1 } }}>
           <TableHead sx={{ backgroundColor: "rgba(0,0,0,0.03)" }}>
             <TableRow>
-              <TableCell sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+              <TableCell
+                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
+              >
                 Shift
               </TableCell>
-              <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+              <TableCell
+                align="right"
+                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
+              >
                 Prod {unit ? `(${unit})` : ""}
               </TableCell>
-              <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+              <TableCell
+                align="right"
+                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
+              >
                 Scrap
               </TableCell>
-              <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+              <TableCell
+                align="right"
+                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
+              >
                 Rework
               </TableCell>
             </TableRow>
@@ -431,14 +443,30 @@ function ShiftComparisonTableCard({
                 <TableRow
                   key={shift.gran}
                   sx={{
-                    "&:nth-of-type(even)": { backgroundColor: "rgba(0,0,0,0.02)" },
+                    "&:nth-of-type(even)": {
+                      backgroundColor: "rgba(0,0,0,0.02)",
+                    },
                     "&:last-child td": { borderBottom: 0 },
                   }}
                 >
-                  <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "text.primary", whiteSpace: "nowrap" }}>
+                  <TableCell
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "text.primary",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {shift.label}
                   </TableCell>
-                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: "text.primary" }}>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "text.primary",
+                    }}
+                  >
                     {prod != null ? formatIndianNumber(prod) : "—"}
                   </TableCell>
                   <TableCell

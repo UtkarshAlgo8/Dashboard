@@ -66,8 +66,8 @@ function KpiGrid({
           sx={{
             display: "grid",
             gap: 2,
-            gridTemplateColumns: openDrillKpiId 
-              ? "1fr" 
+            gridTemplateColumns: openDrillKpiId
+              ? "1fr"
               : {
                   xs: "1fr",
                   sm: "repeat(2, minmax(0, 1fr))",

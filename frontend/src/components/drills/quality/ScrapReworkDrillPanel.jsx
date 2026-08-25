@@ -231,11 +231,11 @@ function ScrapReworkDrillPanel({
             <Stack direction="row" alignItems="center" spacing={1}>
               <Typography
                 sx={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "text.disabled",
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: "text.secondary",
                   textTransform: "uppercase",
-                  letterSpacing: 0.4,
+                  letterSpacing: 0.5,
                 }}
               >
                 View by
@@ -260,7 +260,9 @@ function ScrapReworkDrillPanel({
                 <ToggleButton value="both">Machine + SKU</ToggleButton>
               </ToggleButtonGroup>
               <Box sx={{ flex: 1 }} />
-              <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+              <Typography
+                sx={{ fontSize: 12, fontWeight: 500, color: "text.secondary" }}
+              >
                 {detailRows.length} rows · {selectedSub}
               </Typography>
             </Stack>
@@ -268,7 +270,7 @@ function ScrapReworkDrillPanel({
             {detailRows.length > 0 ? (
               <DetailTable rows={detailRows} viewBy={viewBy} kind={kind} />
             ) : (
-              <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
+              <Box sx={{ p: 2, textAlign: "center", color: "text.secondary" }}>
                 <Typography sx={{ fontSize: 13 }}>
                   No {viewBy} rows for {selectedSub} in this fetch.
                 </Typography>
