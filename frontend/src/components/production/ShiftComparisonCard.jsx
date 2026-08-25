@@ -1,13 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Box,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tooltip,
   Typography,
   useTheme,
@@ -25,9 +19,11 @@ import {
 } from "@/lib/dashboardRowScopes.js";
 import { canonicalUnit, resolveProductionKpi } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
-import { isKg, kgToTonnes } from "@/lib/units.js";
+import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
+import DataTable from "@/components/tables/DataTable.jsx";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { evaluateShiftTier, getStemColor } from "@/lib/thresholds.js";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
@@ -148,7 +144,9 @@ export default function ShiftComparisonCard({
   from = null,
   to = null,
   isDrilldown = false,
+  isDrilling = false,
 }) {
+  const showTable = isDrilldown || isDrilling;
   const isRange = mode === "range";
 
   const shifts = [
@@ -264,7 +262,7 @@ export default function ShiftComparisonCard({
             alignItems: "center",
             justifyContent: "center",
             height: "100%",
-            minHeight: isDrilldown ? 180 : 280,
+            minHeight: showTable ? 180 : 280,
             backgroundColor: "background.paper",
             borderRadius: 2.5,
             border: 1,
@@ -273,7 +271,7 @@ export default function ShiftComparisonCard({
         >
           <JKLoader />
         </Box>
-      ) : isDrilldown ? (
+      ) : showTable ? (
         <ShiftComparisonTableCard
           shifts={shifts}
           prodData={prodByShift}
@@ -347,6 +345,7 @@ export default function ShiftComparisonCard({
 
 /**
  * Compact Table View for Shift-Wise Comparison (shown below stacked KPIs in drilldown view)
+ * Uses the reusable DataTable component.
  */
 function ShiftComparisonTableCard({
   shifts,
@@ -356,6 +355,113 @@ function ShiftComparisonTableCard({
   unit,
 }) {
   const theme = useTheme();
+  const cardRef = useRef(null);
+  const prodUnit = canonicalUnit(unit);
+  const unitLabel = isKg(prodUnit)
+    ? "MT"
+    : prodUnit
+      ? displayUnit(prodUnit)
+      : "";
+
+  const columns = [
+    {
+      key: "shift",
+      label: "Shift",
+      align: "left",
+      render: (row) => (
+        <Box
+          component="span"
+          sx={{
+            px: 1,
+            py: 0.25,
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 700,
+            backgroundColor:
+              row.shiftKey === "SHIFT A"
+                ? "rgba(0, 119, 182, 0.12)"
+                : row.shiftKey === "SHIFT B"
+                  ? "rgba(230, 81, 0, 0.12)"
+                  : "rgba(106, 27, 154, 0.12)",
+            color:
+              row.shiftKey === "SHIFT A"
+                ? "primary.main"
+                : row.shiftKey === "SHIFT B"
+                  ? "warning.main"
+                  : "secondary.main",
+          }}
+        >
+          {row.shift}
+        </Box>
+      ),
+    },
+    {
+      key: "production",
+      label: `Prod ${unitLabel ? `(${unitLabel})` : ""}`,
+      align: "right",
+      value: (row) => row.production,
+      render: (row) =>
+        row.production != null
+          ? formatIndianNumber(Math.round(row.production * 100) / 100)
+          : "—",
+    },
+    {
+      key: "scrap",
+      label: "Scrap",
+      align: "right",
+      value: (row) => row.scrap,
+      render: (row) => (
+        <Box
+          component="span"
+          sx={{
+            fontWeight: row.scrap > 0 ? 600 : 400,
+            color: row.scrap > 0 ? "error.main" : "text.secondary",
+          }}
+        >
+          {row.scrap != null ? formatIndianNumber(row.scrap) : "—"}
+        </Box>
+      ),
+    },
+    {
+      key: "rework",
+      label: "Rework",
+      align: "right",
+      value: (row) => row.rework,
+      render: (row) => (
+        <Box
+          component="span"
+          sx={{
+            fontWeight: row.rework > 0 ? 600 : 400,
+            color: row.rework > 0 ? "warning.main" : "text.secondary",
+          }}
+        >
+          {row.rework != null ? formatIndianNumber(row.rework) : "—"}
+        </Box>
+      ),
+    },
+  ];
+
+  const tableRows = shifts.map((shift, idx) => ({
+    shiftKey: shift.gran,
+    shift: shift.label,
+    production: prodData[idx],
+    scrap: scrapData[idx],
+    rework: reworkData[idx],
+  }));
+
+  const excelHeaders = [
+    "Shift",
+    `Prod ${unitLabel ? `(${unitLabel})` : ""}`,
+    "Scrap",
+    "Rework",
+  ];
+  const excelRows = tableRows.map((r) => ({
+    Shift: r.shift,
+    [`Prod ${unitLabel ? `(${unitLabel})` : ""}`]:
+      r.production != null ? r.production : "",
+    Scrap: r.scrap != null ? r.scrap : "",
+    Rework: r.rework != null ? r.rework : "",
+  }));
 
   return (
     <Box
@@ -387,114 +493,35 @@ function ShiftComparisonTableCard({
             Shift-wise Comparison
           </Typography>
         </Stack>
-        <Tooltip
-          title="Shift-wise Breakdown for Production, Scrap & Rework"
-          arrow
-        >
-          <InfoOutlinedIcon
-            sx={{ fontSize: 17, color: "text.secondary", cursor: "pointer" }}
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={excelRows}
+            headers={excelHeaders}
+            filename="shift-wise-comparison"
+            sheetName="Shift Comparison"
           />
-        </Tooltip>
+          <Tooltip
+            title="Shift-wise Breakdown for Production, Scrap & Rework"
+            arrow
+          >
+            <InfoOutlinedIcon
+              sx={{ fontSize: 17, color: "text.secondary", cursor: "pointer" }}
+            />
+          </Tooltip>
+        </Stack>
       </Stack>
 
-      {/* Table */}
-      <TableContainer
-        sx={{
-          borderRadius: 1.5,
-          border: 1,
-          borderColor: "divider",
-          overflow: "hidden",
-        }}
-      >
-        <Table size="small" sx={{ "& th, & td": { py: 0.85, px: 1 } }}>
-          <TableHead sx={{ backgroundColor: "rgba(0,0,0,0.03)" }}>
-            <TableRow>
-              <TableCell
-                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
-              >
-                Shift
-              </TableCell>
-              <TableCell
-                align="right"
-                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
-              >
-                Prod {unit ? `(${unit})` : ""}
-              </TableCell>
-              <TableCell
-                align="right"
-                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
-              >
-                Scrap
-              </TableCell>
-              <TableCell
-                align="right"
-                sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}
-              >
-                Rework
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {shifts.map((shift, idx) => {
-              const prod = prodData[idx];
-              const scrap = scrapData[idx];
-              const rework = reworkData[idx];
-              return (
-                <TableRow
-                  key={shift.gran}
-                  sx={{
-                    "&:nth-of-type(even)": {
-                      backgroundColor: "rgba(0,0,0,0.02)",
-                    },
-                    "&:last-child td": { borderBottom: 0 },
-                  }}
-                >
-                  <TableCell
-                    sx={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "text.primary",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {shift.label}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "text.primary",
-                    }}
-                  >
-                    {prod != null ? formatIndianNumber(prod) : "—"}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: scrap > 0 ? "error.main" : "text.secondary",
-                    }}
-                  >
-                    {scrap != null ? formatIndianNumber(scrap) : "—"}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: rework > 0 ? "warning.main" : "text.secondary",
-                    }}
-                  >
-                    {rework != null ? formatIndianNumber(rework) : "—"}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Box ref={cardRef}>
+        <DataTable
+          columns={columns}
+          rows={tableRows}
+          getRowKey={(r) => r.shiftKey}
+          search={false}
+          maxHeight={320}
+          emptyMessage="No shift data available."
+        />
+      </Box>
     </Box>
   );
 }
