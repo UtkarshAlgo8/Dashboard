@@ -47,7 +47,7 @@ function KpiCard({
 
   if (kpiId.includes("oee") || kpiName.includes("oee")) {
     HeaderIcon = SettingsOutlinedIcon;
-    displayName = "Overall Equipment Effectiveness (OEE)";
+    displayName = "OEE";
     subtitle = "";
   } else if (
     kpiId.includes("comp") ||
