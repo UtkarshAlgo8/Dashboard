@@ -26,7 +26,7 @@ import DataTable from "@/components/tables/DataTable.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { evaluateShiftTier, getStemColor } from "@/lib/thresholds.js";
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
 function useShiftBands({
   plantId = "banmore",

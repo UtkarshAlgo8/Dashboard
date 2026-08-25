@@ -1,6 +1,6 @@
 import client from "./client.js";
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
 /**
  * new_change.md C6/C14 — GET /dashboard/anchors.
