@@ -352,115 +352,82 @@ function ShiftComparisonTableCard({
   prodData,
   scrapData,
   reworkData,
-  unit,
 }) {
   const theme = useTheme();
-  const cardRef = useRef(null);
-  const prodUnit = canonicalUnit(unit);
-  const unitLabel = isKg(prodUnit)
-    ? "MT"
-    : prodUnit
-      ? displayUnit(prodUnit)
-      : "";
 
   const columns = [
     {
       key: "shift",
       label: "Shift",
-      align: "left",
+      align: "center",
+      sortable: false,
+      filterable: false,
       render: (row) => (
-        <Box
-          component="span"
+        <Typography
           sx={{
-            px: 1,
-            py: 0.25,
-            borderRadius: 999,
-            fontSize: 11,
-            fontWeight: 700,
-            backgroundColor:
-              row.shiftKey === "SHIFT A"
-                ? "rgba(0, 119, 182, 0.12)"
-                : row.shiftKey === "SHIFT B"
-                  ? "rgba(230, 81, 0, 0.12)"
-                  : "rgba(106, 27, 154, 0.12)",
-            color:
-              row.shiftKey === "SHIFT A"
-                ? "primary.main"
-                : row.shiftKey === "SHIFT B"
-                  ? "warning.main"
-                  : "secondary.main",
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: "text.primary",
           }}
         >
-          {row.shift}
-        </Box>
+          {row.shiftCode}
+        </Typography>
       ),
     },
     {
       key: "production",
-      label: `Prod ${unitLabel ? `(${unitLabel})` : ""}`,
-      align: "right",
+      label: "Production",
+      align: "center",
+      sortable: false,
+      filterable: false,
       value: (row) => row.production,
-      render: (row) =>
-        row.production != null
-          ? formatIndianNumber(Math.round(row.production * 100) / 100)
-          : "—",
+      render: (row) => (
+        <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
+          {row.production != null
+            ? formatIndianNumber(Math.round(row.production))
+            : "—"}
+        </Typography>
+      ),
     },
     {
       key: "scrap",
       label: "Scrap",
-      align: "right",
+      align: "center",
+      sortable: false,
+      filterable: false,
       value: (row) => row.scrap,
       render: (row) => (
-        <Box
-          component="span"
-          sx={{
-            fontWeight: row.scrap > 0 ? 600 : 400,
-            color: row.scrap > 0 ? "error.main" : "text.secondary",
-          }}
-        >
-          {row.scrap != null ? formatIndianNumber(row.scrap) : "—"}
-        </Box>
+        <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
+          {row.scrap != null
+            ? formatIndianNumber(Math.round(row.scrap))
+            : "—"}
+        </Typography>
       ),
     },
     {
       key: "rework",
       label: "Rework",
-      align: "right",
+      align: "center",
+      sortable: false,
+      filterable: false,
       value: (row) => row.rework,
       render: (row) => (
-        <Box
-          component="span"
-          sx={{
-            fontWeight: row.rework > 0 ? 600 : 400,
-            color: row.rework > 0 ? "warning.main" : "text.secondary",
-          }}
-        >
-          {row.rework != null ? formatIndianNumber(row.rework) : "—"}
-        </Box>
+        <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
+          {row.rework != null
+            ? formatIndianNumber(Math.round(row.rework))
+            : "—"}
+        </Typography>
       ),
     },
   ];
 
   const tableRows = shifts.map((shift, idx) => ({
     shiftKey: shift.gran,
+    shiftCode: shift.label.replace("Shift ", ""),
     shift: shift.label,
     production: prodData[idx],
     scrap: scrapData[idx],
     rework: reworkData[idx],
-  }));
-
-  const excelHeaders = [
-    "Shift",
-    `Prod ${unitLabel ? `(${unitLabel})` : ""}`,
-    "Scrap",
-    "Rework",
-  ];
-  const excelRows = tableRows.map((r) => ({
-    Shift: r.shift,
-    [`Prod ${unitLabel ? `(${unitLabel})` : ""}`]:
-      r.production != null ? r.production : "",
-    Scrap: r.scrap != null ? r.scrap : "",
-    Rework: r.rework != null ? r.rework : "",
   }));
 
   return (
@@ -470,55 +437,59 @@ function ShiftComparisonTableCard({
         borderRadius: 2.5,
         border: 1,
         borderColor: "rgba(0,0,0,0.06)",
-        p: 2,
+        p: 1.75,
         boxShadow: theme.custom.shadow,
         display: "flex",
         flexDirection: "column",
-        gap: 1.25,
+        gap: 1,
       }}
     >
-      {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <TableChartOutlinedIcon
-            sx={{ fontSize: 18, color: "text.primary" }}
+      {/* Header matching UI sample */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ px: 0.5 }}
+      >
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: "text.primary",
+          }}
+        >
+          Shift Wise Comparison
+        </Typography>
+        <Tooltip
+          title="Shift Wise Breakdown for Production, Scrap & Rework"
+          arrow
+        >
+          <InfoOutlinedIcon
+            sx={{ fontSize: 17, color: "text.secondary", cursor: "pointer" }}
           />
-          <Typography
-            sx={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "text.primary",
-            }}
-          >
-            Shift-wise Comparison
-          </Typography>
-        </Stack>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <CardDownloadButton
-            cardRef={cardRef}
-            rows={excelRows}
-            headers={excelHeaders}
-            filename="shift-wise-comparison"
-            sheetName="Shift Comparison"
-          />
-          <Tooltip
-            title="Shift-wise Breakdown for Production, Scrap & Rework"
-            arrow
-          >
-            <InfoOutlinedIcon
-              sx={{ fontSize: 17, color: "text.secondary", cursor: "pointer" }}
-            />
-          </Tooltip>
-        </Stack>
+        </Tooltip>
       </Stack>
 
-      <Box ref={cardRef}>
+      <Box
+        sx={{
+          "& .MuiTableContainer-root": {
+            borderRadius: 1.5,
+            border: 1,
+            borderColor: "divider",
+          },
+          "& .MuiTableCell-root": {
+            py: 0.75,
+            px: 1,
+          },
+        }}
+      >
         <DataTable
           columns={columns}
           rows={tableRows}
           getRowKey={(r) => r.shiftKey}
           search={false}
-          maxHeight={320}
+          stickyHeader={false}
+          maxHeight="none"
           emptyMessage="No shift data available."
         />
       </Box>
