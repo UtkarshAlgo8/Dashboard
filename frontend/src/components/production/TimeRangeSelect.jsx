@@ -61,35 +61,6 @@ function TimeRangeSelect({
       spacing={1}
       sx={{ display: "inline-flex" }}
     >
-      <Box sx={{ width: 96, flexShrink: 0, display: "flex" }}>
-        {showShift && (
-          <Select
-            size="small"
-            value={shift}
-            onChange={(event) => onShiftChange(event.target.value)}
-            aria-label="Filter by shift"
-            sx={{
-              width: "100%",
-              fontSize: 11,
-              height: 30,
-              "& .MuiSelect-select": {
-                py: 0.25,
-                pl: 1,
-                pr: "26px !important",
-                fontSize: 11,
-                fontWeight: 600,
-              },
-              "& fieldset": { borderColor: "divider" },
-            }}
-          >
-            {shiftOptions.map((option) => (
-              <MenuItem key={option.id} value={option.id} sx={{ fontSize: 12, py: 0.5 }}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        )}
-      </Box>
       <Box
         sx={{
           display: "inline-flex",
@@ -99,8 +70,48 @@ function TimeRangeSelect({
           border: 1,
           borderColor: "divider",
           backgroundColor: "background.paper",
+          overflow: "hidden",
         }}
       >
+        {showShift && (
+          <Select
+            size="small"
+            value={shift}
+            onChange={(event) => onShiftChange(event.target.value)}
+            aria-label="Filter by shift"
+            variant="outlined"
+            sx={{
+              minWidth: 112,
+              height: 42,
+              borderRight: 1,
+              borderColor: "divider",
+              borderRadius: 0,
+              fontSize: 13,
+              fontWeight: 600,
+              color: "text.primary",
+              "& .MuiSelect-select": {
+                display: "flex",
+                alignItems: "center",
+                py: 0,
+                pl: 1.75,
+                pr: "30px !important",
+              },
+              "& .MuiOutlinedInput-notchedOutline": { border: 0 },
+              "&:hover .MuiOutlinedInput-notchedOutline": { border: 0 },
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": { border: 0 },
+            }}
+          >
+            {shiftOptions.map((option) => (
+              <MenuItem
+                key={option.id}
+                value={option.id}
+                sx={{ fontSize: 13, py: 0.75 }}
+              >
+                {option.label}
+              </MenuItem>
+            ))}
+          </Select>
+        )}
         {/* 1. Today Pill */}
         <Box
           onClick={() =>
