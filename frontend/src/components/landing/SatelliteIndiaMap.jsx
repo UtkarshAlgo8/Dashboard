@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import * as maplibregl from "maplibre-gl";
+import {
+  Map as MapLibreMap,
+  Marker as MapLibreMarker,
+  setWorkerUrl,
+} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Box, Button } from "@mui/material";
 import MapPlantMarker from "./MapPlantMarker.jsx";
+
+// Explicitly register the worker URL so Vite production bundles emit and load the worker script
+setWorkerUrl(maplibreWorkerUrl);
 
 // Initial India view coordinates
 const INITIAL_CENTER = [78.5, 21.8];
@@ -37,7 +45,7 @@ function SatelliteIndiaMap({
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    const map = new maplibregl.Map({
+    const map = new MapLibreMap({
       container: mapContainerRef.current,
       style: {
         version: 8,
@@ -185,7 +193,7 @@ function SatelliteIndiaMap({
       );
 
       const isLeft = plant.badgeSide === "left";
-      const marker = new maplibregl.Marker({
+      const marker = new MapLibreMarker({
         element: el,
         anchor: isLeft ? "bottom-right" : "bottom-left",
       })
