@@ -18,7 +18,11 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  optimizeDeps: {
+    exclude: ["maplibre-gl"],
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
 });
+

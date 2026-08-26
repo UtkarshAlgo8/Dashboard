@@ -4,13 +4,14 @@ import { Donut } from "@/components/drills/shared/Donut.jsx";
 import { Stat } from "@/components/drills/shared/Stat.jsx";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
 /**
  * Budget Util. drill panel.
  * Matches artifact drillType:"budget" exactly.
  * Shows donut chart + allocated/spent labels.
  */
-export default function BudgetDrillPanel({ drillRows }) {
+export default function BudgetDrillPanel({ drillRows, onClose }) {
   const cardRef = useRef(null);
   // From drill rows: actual = spent, threshold_value = allocated
   const spent =
@@ -31,28 +32,39 @@ export default function BudgetDrillPanel({ drillRows }) {
         justifyContent="space-between"
         spacing={1}
       >
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+        <Typography
+          sx={{
+            fontSize: 15,
+            fontWeight: 700,
+            color: "primary.main",
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
+          }}
+        >
           Budget Utilization
         </Typography>
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={[
-            {
-              Metric: "Allocated Consumables",
-              Value: formatIndianNumber(allocated, { decimals: 1 }),
-              Unit: "₹ L",
-            },
-            {
-              Metric: "Spent Consumables",
-              Value: formatIndianNumber(spent, { decimals: 1 }),
-              Unit: "₹ L",
-            },
-            { Metric: "Consumed", Value: `${consumedPct}`, Unit: "%" },
-          ]}
-          headers={["Metric", "Value", "Unit"]}
-          filename="drill-budget-utilization"
-          sheetName="Budget"
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={[
+              {
+                Metric: "Allocated Consumables",
+                Value: formatIndianNumber(allocated, { decimals: 1 }),
+                Unit: "₹ L",
+              },
+              {
+                Metric: "Spent Consumables",
+                Value: formatIndianNumber(spent, { decimals: 1 }),
+                Unit: "₹ L",
+              },
+              { Metric: "Consumed", Value: `${consumedPct}`, Unit: "%" },
+            ]}
+            headers={["Metric", "Value", "Unit"]}
+            filename="drill-budget-utilization"
+            sheetName="Budget"
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
       <Box
         ref={cardRef}

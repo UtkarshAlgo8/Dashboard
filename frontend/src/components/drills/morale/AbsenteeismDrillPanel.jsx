@@ -19,6 +19,7 @@ function avg(arr) {
 export default function AbsenteeismDrillPanel({
   drillRows,
   granularity = "DAY",
+  onClose,
 }) {
   const bySection = new Map();
   for (const r of drillRows ?? []) {
@@ -44,6 +45,7 @@ export default function AbsenteeismDrillPanel({
         rows={rows}
         downloadFilename="drill-absenteeism"
         downloadSheetName="Absenteeism"
+        onClose={onClose}
       />
     </Stack>
   );

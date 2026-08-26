@@ -1,56 +1,15 @@
 import { useMemo, useState } from "react";
-import {
-  Box,
-  Button,
-  Menu,
-  MenuItem,
-  Select,
-  Stack,
-  ToggleButton,
-  ToggleButtonGroup,
-} from "@mui/material";
-import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
+import { Box, Menu, MenuItem, Select, Stack, useTheme } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { format, parseISO, isValid } from "date-fns";
 import { DateRangeFilterDialog } from "@/components/common";
 import { asOfMonthKey, buildMonthOptions } from "@/lib/timeRange.js";
 
 /**
- * Time-range selector. Three preset pills (Today / Month / Year per
- * BRD FR-X7 and CR-05 — Week was dropped after the artifact refresh)
- * plus a single "Filter Date" pill that opens DateRangeFilterDialog.
- *
- * When the active preset is "today" and `onShiftChange` is provided,
- * a compact Shift select renders inline to the LEFT of the preset
- * pills (same row), so toggling Today never changes the header height
- * — no vertical UI jump. Shift only makes sense within a single day,
- * so it disappears for Month / Year / custom.
- *
- * Parent owns `preset`, `from`, `to` (ISO yyyy-MM-dd strings) and
- * optionally `shift` ("all" | "a" | "b" | "c").
- *
- * `presetLabels` optionally overrides the display text per preset id
- * WITHOUT changing the ids — the dashboard header keeps Today/Month/Year,
- * while the Trend modal passes Daily/Monthly/Yearly (dashboard_doc.md §1).
- * The granularity mapping downstream keys off the id, so it is unaffected.
+ * Adobe XD Time-range selector.
+ * Renders as a single rounded segmented pill group:
+ * [ Today | This Month | Date Range ▾ ]
  */
-// realdata.md §3: no yearly (YTD) data yet — the Year option stays visible
-// but disabled. Flip `disabled` off (and ENABLE_YEAR in timeRange.js) when
-// yearly data arrives; no other change needed.
-const ENABLE_YEAR = false;
-const PRESETS = [
-  { id: "today", label: "Today" },
-  { id: "month", label: "Month" },
-  { id: "year", label: "Year", disabled: !ENABLE_YEAR },
-];
-
-const SHIFT_OPTIONS = [
-  { id: "all", label: "All Shifts" },
-  { id: "a", label: "Shift A" },
-  { id: "b", label: "Shift B" },
-  { id: "c", label: "Shift C" },
-];
-
 function TimeRangeSelect({
   preset,
   onPresetChange,
@@ -58,177 +17,253 @@ function TimeRangeSelect({
   to,
   onFromChange,
   onToChange,
-  shift,
+  shift = "all",
   onShiftChange,
-  presetLabels,
-  // When provided, the Month pill becomes a dropdown of selectable months
-  // (bounded by `asOf`); `month` is the pinned "yyyy-MM" (default: as-of month).
   asOf = null,
   month = null,
   onMonthChange,
-  // CR-10 / Q-LP-01: when true, the Year pill is omitted entirely (the
-  // landing page drops Year from the visible preset row; Year remains
-  // reachable via the custom-range dialog). Defaults to false so the
-  // production dashboard is unchanged.
-  hideYear = false,
+  size = "md",
 }) {
+  const theme = useTheme();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [monthAnchor, setMonthAnchor] = useState(null);
 
   const fromDate = parseSafe(from);
-  const toDate = parseSafe(to);
-  const label = formatRangeLabel(fromDate, toDate);
-  const showShift = preset === "today" && typeof onShiftChange === "function";
+  const toDateVal = parseSafe(to);
+  const isCustomRange =
+    Boolean(from || to) && preset !== "today" && preset !== "month";
+  const customLabel = isCustomRange
+    ? formatRangeLabel(fromDate, toDateVal)
+    : "Date Range";
 
-  const monthMenuEnabled = typeof onMonthChange === "function";
   const monthOptions = useMemo(() => buildMonthOptions(asOf), [asOf]);
   const selectedMonthKey = month ?? asOfMonthKey(asOf);
-  const selectedMonthLabel =
-    monthOptions.find((o) => o.key === selectedMonthKey)?.label ?? "Month";
+  const showShift = preset === "today" && typeof onShiftChange === "function";
+
+  const shiftOptions = [
+    { id: "all", label: "All Shifts" },
+    { id: "a", label: "Shift A" },
+    { id: "b", label: "Shift B" },
+    { id: "c", label: "Shift C" },
+  ];
+
+  const pad =
+    size === "sm"
+      ? { px: 1.5, py: 0.4, fontSize: 12.5 }
+      : size === "lg"
+        ? { px: 2.75, py: 0.85, fontSize: 14.5 }
+        : { px: 2.25, py: 0.65, fontSize: 13.5 };
 
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
-      {/* Fixed-width slot: always reserved so showing/hiding the shift
-          selector (Today only) never changes the cluster width — the
-          centred plant pill stays put, no UI jump. */}
-      <Box sx={{ width: 96, flexShrink: 0, display: "flex" }}>
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1}
+      sx={{ display: "inline-flex" }}
+    >
+      <Box
+        sx={{
+          display: "inline-flex",
+          alignItems: "center",
+          p: 0,
+          borderRadius: 999,
+          border: 1,
+          borderColor: "divider",
+          backgroundColor: "background.paper",
+          overflow: "hidden",
+        }}
+      >
         {showShift && (
           <Select
             size="small"
-            value={shift ?? "all"}
-            onChange={(e) => onShiftChange(e.target.value)}
+            value={shift}
+            onChange={(event) => onShiftChange(event.target.value)}
             aria-label="Filter by shift"
+            variant="outlined"
             sx={{
-              width: "100%",
-              fontSize: 11,
-              height: 30,
+              minWidth: 112,
+              height: 42,
+              borderRight: 1,
+              borderColor: "divider",
+              borderRadius: 0,
+              fontSize: 13,
+              fontWeight: 600,
+              color: "text.primary",
               "& .MuiSelect-select": {
-                py: 0.25,
-                pl: 1,
-                pr: "26px !important",
-                fontSize: 11,
-                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                py: 0,
+                pl: 1.75,
+                pr: "30px !important",
               },
-              "& fieldset": { borderColor: "divider" },
+              "& .MuiOutlinedInput-notchedOutline": { border: 0 },
+              "&:hover .MuiOutlinedInput-notchedOutline": { border: 0 },
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": { border: 0 },
             }}
           >
-            {SHIFT_OPTIONS.map((opt) => (
+            {shiftOptions.map((option) => (
               <MenuItem
-                key={opt.id}
-                value={opt.id}
-                sx={{ fontSize: 12, py: 0.5 }}
+                key={option.id}
+                value={option.id}
+                sx={{ fontSize: 13, py: 0.75 }}
               >
-                {opt.label}
+                {option.label}
               </MenuItem>
             ))}
           </Select>
         )}
+        {/* 1. Today Pill */}
+        <Box
+          onClick={() =>
+            onPresetChange({
+              preset: "today",
+              from: "",
+              to: "",
+            })
+          }
+          sx={{
+            ...pad,
+            m: preset === "today" ? "-1px" : 0,
+            zIndex: preset === "today" ? 1 : 0,
+            fontWeight: preset === "today" ? 600 : 500,
+            whiteSpace: "nowrap",
+            userSelect: "none",
+            borderRadius: 999,
+            cursor: "pointer",
+            border: 1,
+            borderColor: preset === "today" ? "primary.main" : "transparent",
+            backgroundColor:
+              preset === "today" ? theme.custom.pills.activeBg : "transparent",
+            color: preset === "today" ? "primary.main" : "text.primary",
+            transition: "all 0.15s ease",
+            "&:hover": {
+              backgroundColor:
+                preset === "today"
+                  ? theme.custom.pills.activeBg
+                  : theme.custom.surface.soft,
+            },
+          }}
+        >
+          Today
+        </Box>
+
+        {/* 2. This Month Pill */}
+        <Box
+          onClick={() =>
+            onPresetChange({
+              preset: "month",
+              from: "",
+              to: "",
+            })
+          }
+          sx={{
+            ...pad,
+            m: preset === "month" ? "-1px" : 0,
+            zIndex: preset === "month" ? 1 : 0,
+            fontWeight: preset === "month" ? 600 : 500,
+            whiteSpace: "nowrap",
+            userSelect: "none",
+            borderRadius: 999,
+            cursor: "pointer",
+            border: 1,
+            borderColor: preset === "month" ? "primary.main" : "transparent",
+            backgroundColor:
+              preset === "month" ? theme.custom.pills.activeBg : "transparent",
+            color: preset === "month" ? "primary.main" : "text.primary",
+            transition: "all 0.15s ease",
+            "&:hover": {
+              backgroundColor:
+                preset === "month"
+                  ? theme.custom.pills.activeBg
+                  : theme.custom.surface.soft,
+            },
+          }}
+        >
+          This Month
+        </Box>
+
+        {/* 3. Date Range Dropdown Trigger Pill */}
+        <Box
+          onClick={(e) => setMonthAnchor(e.currentTarget)}
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.5,
+            ...pad,
+            m: isCustomRange ? "-1px" : 0,
+            zIndex: isCustomRange ? 1 : 0,
+            fontWeight: isCustomRange ? 600 : 500,
+            whiteSpace: "nowrap",
+            userSelect: "none",
+            borderRadius: 999,
+            cursor: "pointer",
+            border: 1,
+            borderColor: isCustomRange ? "primary.main" : "transparent",
+            backgroundColor: isCustomRange
+              ? theme.custom.pills.activeBg
+              : "transparent",
+            color: isCustomRange ? "primary.main" : "text.primary",
+            transition: "all 0.15s ease",
+            "&:hover": {
+              backgroundColor: isCustomRange
+                ? theme.custom.pills.activeBg
+                : theme.custom.surface.soft,
+            },
+          }}
+        >
+          <span>{customLabel}</span>
+          <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
+        </Box>
       </Box>
 
-      <ToggleButtonGroup
-        size="small"
-        value={preset ?? ""}
-        exclusive
-        onChange={(_, value) => {
-          // The Month pill opens its own dropdown (handled in onClick below)
-          // when the month menu is enabled, so ignore its group toggle — that
-          // also avoids the exclusive-group deselect on re-clicking Month.
-          if (!value) return;
-          if (value === "month" && monthMenuEnabled) return;
-          onPresetChange(value);
-        }}
-        sx={{
-          "& .MuiToggleButton-root": {
-            px: 1.5,
-            py: 0.25,
-            fontSize: 12,
-            textTransform: "none",
-            fontWeight: 500,
-            // Keep multi-word labels (e.g. the "Aug 2026" month pill) on one
-            // line instead of wrapping to two.
-            whiteSpace: "nowrap",
-          },
-          // Highlighted preset gets the primary tint (matches the rest of
-          // the nav controls) instead of MUI's default grey.
-          "& .MuiToggleButton-root.Mui-selected": {
-            backgroundColor: "primary.light",
-            color: "primary.main",
-            fontWeight: 700,
-            "&:hover": { backgroundColor: "primary.light" },
-          },
-        }}
-      >
-        {(hideYear ? PRESETS.filter((p) => p.id !== "year") : PRESETS).map(
-          (p) => {
-            const useMonthMenu = p.id === "month" && monthMenuEnabled;
-            return (
-              <ToggleButton
-                key={p.id}
-                value={p.id}
-                disabled={p.disabled}
-                onClick={
-                  useMonthMenu
-                    ? (e) => {
-                        setMonthAnchor(e.currentTarget);
-                        if (preset !== "month") onPresetChange("month");
-                      }
-                    : undefined
-                }
-              >
-                {useMonthMenu && preset === "month"
-                  ? selectedMonthLabel
-                  : (presetLabels?.[p.id] ?? p.label)}
-                {useMonthMenu && (
-                  <KeyboardArrowDownIcon
-                    sx={{ fontSize: 16, ml: 0.25, mr: -0.75 }}
-                  />
-                )}
-              </ToggleButton>
-            );
-          },
-        )}
-      </ToggleButtonGroup>
-
+      {/* Date Range Popover Menu */}
       <Menu
         anchorEl={monthAnchor}
         open={Boolean(monthAnchor)}
         onClose={() => setMonthAnchor(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
-      >
-        {monthOptions.map((o) => (
-          <MenuItem
-            key={o.key}
-            selected={o.key === selectedMonthKey}
-            onClick={() => {
-              onMonthChange(o.key);
-              setMonthAnchor(null);
-            }}
-            sx={{ fontSize: 13, py: 0.5 }}
-          >
-            {o.label}
-          </MenuItem>
-        ))}
-      </Menu>
-
-      <Button
-        size="small"
-        variant="outlined"
-        endIcon={<CalendarTodayOutlinedIcon sx={{ fontSize: 14 }} />}
-        onClick={() => setDialogOpen(true)}
-        sx={{
-          textTransform: "none",
-          fontSize: 12,
-          fontWeight: 500,
-          color: "text.primary",
-          borderColor: "divider",
-          backgroundColor: "background.paper",
-          minWidth: 200,
-          justifyContent: "space-between",
+        slotProps={{
+          paper: {
+            sx: {
+              mt: 0.75,
+              borderRadius: 2,
+              minWidth: 170,
+              boxShadow: theme.custom.shadow,
+              border: 1,
+              borderColor: "divider",
+            },
+          },
         }}
       >
-        {label}
-      </Button>
+        {monthOptions.map((opt) => (
+          <MenuItem
+            key={opt.key}
+            selected={preset === "month" && selectedMonthKey === opt.key}
+            onClick={() => {
+              setMonthAnchor(null);
+              onMonthChange?.(opt.key);
+            }}
+            sx={{ fontSize: 13 }}
+          >
+            {opt.label}
+          </MenuItem>
+        ))}
+        <MenuItem
+          onClick={() => {
+            setMonthAnchor(null);
+            setDialogOpen(true);
+          }}
+          sx={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "primary.main",
+            borderTop: 1,
+            borderColor: "divider",
+            mt: 0.5,
+          }}
+        >
+          Custom Date Range…
+        </MenuItem>
+      </Menu>
 
       <DateRangeFilterDialog
         open={dialogOpen}
@@ -244,19 +279,19 @@ function TimeRangeSelect({
   );
 }
 
-function parseSafe(iso) {
-  if (!iso) return null;
-  const d = parseISO(iso);
+function parseSafe(val) {
+  if (!val) return null;
+  const d = parseISO(val);
   return isValid(d) ? d : null;
 }
 
-const PLACEHOLDER = "DD-MM-YYYY";
-
-function formatRangeLabel(fromDate, toDate) {
-  if (!fromDate && !toDate) return "Filter Date";
-  const f = fromDate ? format(fromDate, "dd-MM-yyyy") : PLACEHOLDER;
-  const t = toDate ? format(toDate, "dd-MM-yyyy") : PLACEHOLDER;
-  return `${f} – ${t}`;
+function formatRangeLabel(from, to) {
+  if (from && to) {
+    return `${format(from, "dd MMM")} – ${format(to, "dd MMM")}`;
+  }
+  if (from) return `From ${format(from, "dd MMM")}`;
+  if (to) return `Until ${format(to, "dd MMM")}`;
+  return "Date Range";
 }
 
 export default TimeRangeSelect;

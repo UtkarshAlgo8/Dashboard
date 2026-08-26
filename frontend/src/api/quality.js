@@ -56,7 +56,9 @@ export function getProcessKpiValues({ date, shift = "All" }) {
     shift,
     kpi_names: Object.values(PROCESS_KPI_NAME).join(","),
   });
-  return cachedQualityGet(`/quality/process/kpi-value-batch?${params.toString()}`);
+  return cachedQualityGet(
+    `/quality/process/kpi-value-batch?${params.toString()}`,
+  );
 }
 
 export function getProcessSummary({ date, shift = "All" }) {
@@ -73,7 +75,12 @@ export function getProcessSummary({ date, shift = "All" }) {
  * to drill from sections into that section's machines.
  * @returns {Promise<{context:object, group_by:string, rows:object[]}>}
  */
-export function getProcessKpiChildren({ kpiNames, date, shift = "All", section }) {
+export function getProcessKpiChildren({
+  kpiNames,
+  date,
+  shift = "All",
+  section,
+}) {
   const params = new URLSearchParams({
     plant: "BANMORE",
     date,
@@ -84,7 +91,14 @@ export function getProcessKpiChildren({ kpiNames, date, shift = "All", section }
   return cachedQualityGet(`/quality/process/kpi-children?${params.toString()}`);
 }
 
-export function getProcessKpiHistory({ kpiName, dateFrom, dateTo, shift = "All", section, machine }) {
+export function getProcessKpiHistory({
+  kpiName,
+  dateFrom,
+  dateTo,
+  shift = "All",
+  section,
+  machine,
+}) {
   const params = new URLSearchParams({
     plant: "BANMORE",
     kpi_name: kpiName,
@@ -121,7 +135,13 @@ export function getSpcWidgets({ date, machine, recipe, headlineStatus } = {}) {
   return cachedQualityGet(`/quality/spc/widgets?${params.toString()}`);
 }
 
-export function getSpcDetail({ date, shift = "All", machine, recipe, parameter }) {
+export function getSpcDetail({
+  date,
+  shift = "All",
+  machine,
+  recipe,
+  parameter,
+}) {
   const params = new URLSearchParams({
     plant: "BANMORE",
     date,

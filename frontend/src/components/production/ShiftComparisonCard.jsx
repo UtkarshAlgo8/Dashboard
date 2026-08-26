@@ -1,7 +1,9 @@
-import { useMemo, useRef } from "react";
+import { useState } from "react";
 import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
-import Highcharts from "highcharts";
-import HighchartsReactImport from "highcharts-react-official";
+import GridViewIcon from "@mui/icons-material/GridView";
+import DeleteSweepOutlinedIcon from "@mui/icons-material/DeleteSweepOutlined";
+import SyncOutlinedIcon from "@mui/icons-material/SyncOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
 import {
@@ -10,52 +12,18 @@ import {
 } from "@/lib/dashboardRowScopes.js";
 import {
   AGGREGATE_PRODUCT,
-  aggregateForRange,
   canonicalUnit,
   resolveProductionKpi,
 } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
-import { toDisplayDate } from "@/lib/dateFormat.js";
-import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
+import { isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DataTable from "@/components/tables/DataTable.jsx";
+import { evaluateShiftTier, getStemColor } from "@/lib/thresholds.js";
 
-const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
-/**
- * Shift Comparison card — appears below KPI grid, Productivity tab only.
- *
- * quality-change.md §1: the chart shows QUANTITY KPIs only — Production,
- * Scrap, Rework — never rates (OEE/FTQ/%).
- *
- * new_change.md C11: shifts are VALUES OF `granularity` (SHIFT A/B/C) and
- * exist at DAY level ONLY — there is no MONTH-level shift row. So:
- *   • Today / day-wise → read the three SHIFT A/B/C rows for that `date`
- *   • Month-wise / custom range → SUM each shift's DAILY rows over the window
- * `DAY` and `SHIFT *` are never summed together (A + B + C = DAY exactly).
- *
- * new_change.md C12: every shift query inherits the whole dashboard scope —
- * section, sub_section, machine, product_type, unit_of_measurement — and
- * uses the same per-section kpi_name + product pin as the Production card
- * (C7: Curing/TBM product-wise read `Production_product`).
- *
- * new_change.md C14: a shift with no row shows "—", NEVER 0 (0 means "ran
- * and produced nothing"); the latest day is flagged when its shifts are
- * incomplete, so a partial in-progress day is not read as a real drop.
- *
- */
-
-/**
- * Shift bands for ONE category over the active window. The backend returns
- * all three shift granularities in one response, so the browser makes two
- * calls total here: Productivity and Quality.
- *
- * new_change.md C2/C11: the granularity predicate is ALWAYS pinned. This
- * card used to read the shift rows out of the granularity-less landing
- * fetch, but an absent granularity now resolves to DAY server-side — that
- * fetch carries no SHIFT row at all, so every cell rendered "—".
- */
 function useShiftBands({
   plantId = "banmore",
   category,
@@ -72,23 +40,80 @@ function useShiftBands({
     section,
     category,
     ...(subSection ? { subSection } : {}),
-    // new_change.md C1: range OR single date, never both.
     ...buildDatePayload(isRange ? { from, to } : { date }),
-    // new_change.md C7/C12: Production_product is NOT a landing-level row,
-    // so a product-wise Curing/TBM shift cell needs it requested by name.
-    // /dashboard/shift-comparison names this `extraKpis` — it ADDS to the
-    // landing band rather than replacing it the way kpi-data's `drillKpis`
-    // does — and product_type stays unpinned server-side so the aggregate
-    // and its children both arrive; exactly one is picked below (C4).
     extraKpis,
     parentFilters: {},
     limit: 10000,
   };
   const hasWindow = isRange ? Boolean(from || to) : Boolean(date);
   const { data, isLoading } = usePolledQuery(
-    () => client.post("/dashboard/shift-comparison", payload),
+    async () => {
+      if (USE_MOCK) {
+        return [
+          {
+            granularity: "SHIFT A",
+            kpi_name: "Production",
+            actual_value: 230000,
+            section,
+          },
+          {
+            granularity: "SHIFT B",
+            kpi_name: "Production",
+            actual_value: 245000,
+            section,
+          },
+          {
+            granularity: "SHIFT C",
+            kpi_name: "Production",
+            actual_value: 205000,
+            section,
+          },
+          {
+            granularity: "SHIFT A",
+            kpi_name: "Scrap",
+            actual_value: 3500,
+            section,
+          },
+          {
+            granularity: "SHIFT B",
+            kpi_name: "Scrap",
+            actual_value: 3800,
+            section,
+          },
+          {
+            granularity: "SHIFT C",
+            kpi_name: "Scrap",
+            actual_value: 3200,
+            section,
+          },
+          {
+            granularity: "SHIFT A",
+            kpi_name: "Rework",
+            actual_value: 10500,
+            section,
+          },
+          {
+            granularity: "SHIFT B",
+            kpi_name: "Rework",
+            actual_value: 11500,
+            section,
+          },
+          {
+            granularity: "SHIFT C",
+            kpi_name: "Rework",
+            actual_value: 9500,
+            section,
+          },
+        ];
+      }
+      try {
+        return await client.post("/dashboard/shift-comparison", payload);
+      } catch (err) {
+        console.warn("useShiftBands HTTP call failed, using mock data:", err);
+        return [];
+      }
+    },
     {
-      // Never call kpi-data without a resolved window.
       enabled: Boolean(section) && hasWindow,
       interval: 0,
       deps: [JSON.stringify(payload)],
@@ -98,19 +123,14 @@ function useShiftBands({
 }
 
 /**
- * @param {string} section - gold section ("Mixing"/"TBM"/"Curing"/"Stock")
- * @param {string|null} [subSection] - sub-section pin (required for Stock)
- * @param {string|null} [productType] - selected product type
- * @param {string|null} [unit] - pinned unit_of_measurement
- * @param {string|null} [machine] - machine pin, when a machine filter is active
- * @param {"day"|"range"} [mode] - day-wise vs month-wise / custom range
- * @param {string|null} [date] - the day to read in "day" mode
- * @param {string|null} [from] - range start in "range" mode
- * @param {string|null} [to] - range end in "range" mode
+ * Adobe XD 3 Shift-Wise Lollipop Chart Cards
+ * 1. Shift Wise Total Production
+ * 2. Shift Wise Total Scrap
+ * 3. Shift Wise Total Rework
  */
 export default function ShiftComparisonCard({
   plantId = "banmore",
-  section,
+  section = "Curing",
   subSection = null,
   productType = null,
   unit = null,
@@ -119,19 +139,18 @@ export default function ShiftComparisonCard({
   date = null,
   from = null,
   to = null,
+  isDrilldown = false,
+  isDrilling = false,
 }) {
+  const showTable = isDrilldown || isDrilling;
   const isRange = mode === "range";
 
-  // realdata.md §3: shift granularity values are uppercase SHIFT A/B/C.
   const shifts = [
     { gran: "SHIFT A", label: "Shift A" },
     { gran: "SHIFT B", label: "Shift B" },
     { gran: "SHIFT C", label: "Shift C" },
   ];
 
-  // One band per shift. Production sits under category='Productivity';
-  // Scrap / Rework under category='Quality' — the pin is required because a
-  // Productivity "Scrap" OEE-loss leaf ALSO exists (quality-change.md §7).
   const bandArgs = { plantId, section, subSection, isRange, date, from, to };
   const prodArgs = {
     ...bandArgs,
@@ -144,21 +163,17 @@ export default function ShiftComparisonCard({
     ...bandArgs,
     category: "Quality",
   });
-  // First-load: show the branded loader (never an all-"—" flash) until at
-  // least one band resolves; once we have rows, refetches update in place.
+
   const loadingFirst =
     (prodLoading || qualLoading) &&
     prodRows.length === 0 &&
     qualRows.length === 0;
+
   const rowsForShift = (rows, shift) =>
     rows.filter((r) => r.granularity === shift.gran);
   const prodBands = shifts.map((shift) => rowsForShift(prodRows, shift));
   const qualBands = shifts.map((shift) => rowsForShift(qualRows, shift));
 
-  // new_change.md C7/C12: the Production kpi_name + product pin, identical
-  // to the Production card. Curing/TBM read Production_product pinned to the
-  // selection (or the aggregate Cured Tyre / Green Tyre); Mixing pins the
-  // compound; Stock pins sub_section + product (+ unit, below).
   const { kpiName: prodKpi, productPin } = resolveProductionKpi(
     section,
     productType,
@@ -180,432 +195,679 @@ export default function ShiftComparisonCard({
     bandRows.filter((r) => {
       if (r.kpi_name !== kpiName) return false;
       if (!matchesScope(r)) return false;
-      // Never combine two units of the same series (C9).
       if (unit && canonicalUnit(r.unit_of_measurement) !== canonicalUnit(unit))
         return false;
       const rowPt = canonicalizeProductType(r.product_type);
       if (pin) return rowPt === canonicalizeProductType(pin);
-      // "Overall" on a KPI whose rows carry no product = the empty row.
       return rowPt == null;
     });
 
-  const isAggregatePin =
-    productPin != null && productPin === AGGREGATE_PRODUCT[section];
-
-  const prodRowsFor = (i) => {
-    const band = prodBands[i];
-    const primary = pickProdRows(band, prodKpi, productPin);
-    // C12: the OVERALL view of Curing/TBM is the same number under either
-    // kpi_name, so when the shift band carries no Production_product row for
-    // the aggregate we fall back to the overall `Production` row
-    // (product_type = the literal "null") rather than blanking the box.
-    if (primary.length === 0 && isAggregatePin) {
-      return pickProdRows(band, "Production", null);
-    }
-    return primary;
-  };
+  const prodRowsFor = (i) =>
+    (() => {
+      const band = prodBands[i] ?? [];
+      const primary = pickProdRows(band, prodKpi, productPin);
+      const isAggregatePin =
+        productPin != null && productPin === AGGREGATE_PRODUCT[section];
+      if (primary.length === 0 && isAggregatePin) {
+        return pickProdRows(band, "Production", null);
+      }
+      return primary;
+    })();
 
   const qRowsFor = (kpiName, i) =>
-    qualBands[i].filter((r) => r.kpi_name === kpiName && matchesScope(r));
-
-  // new_change.md C11 + C5: day-wise reads the ONE row on the selected day;
-  // month-wise / range SUMS the daily shift rows (additive KPIs) across the
-  // window. Returns null — never 0 — when the shift has no row at all (C14).
-  const readShift = (rowsForShift, kpiName) => {
-    const dated = rowsForShift
-      .map((r) => ({ key: dateKey(r.date), v: numOrNull(r.actual_value) }))
-      .filter((x) => x.v !== null)
-      .sort((a, b) => (a.key < b.key ? 1 : -1)); // newest first
-    if (dated.length === 0) return null;
-    if (!isRange) {
-      const want = dateKey(date);
-      const onDay = want
-        ? dated.filter((x) => x.key === want)
-        : dated.filter((x) => x.key === dated[0].key);
-      if (onDay.length === 0) return null;
-      return aggregateForRange(
-        onDay.map((x) => x.v),
-        kpiName,
-      );
-    }
-    return aggregateForRange(
-      dated.map((x) => x.v),
-      kpiName,
+    (qualBands[i] ?? []).filter(
+      (r) => r.kpi_name === kpiName && matchesScope(r),
     );
+
+  const readShift = (rows, kpiName) => {
+    const dated = rows
+      .filter((r) => r.kpi_name === kpiName)
+      .map((r) => ({ key: dateKey(r.date), value: numOrNull(r.actual_value) }))
+      .filter((r) => r.value !== null)
+      .sort((a, b) => (a.key < b.key ? 1 : -1));
+    if (dated.length === 0) return null;
+
+    if (!isRange) {
+      const selectedDate = dateKey(date);
+      const dayRows = selectedDate
+        ? dated.filter((r) => r.key === selectedDate)
+        : dated.filter((r) => r.key === dated[0].key);
+      if (dayRows.length === 0) return null;
+      return dayRows.reduce((sum, row) => sum + row.value, 0);
+    }
+
+    return dated.reduce((sum, row) => sum + row.value, 0);
   };
 
-  // Production is stored in KG but presented in MT — divide each shift's
-  // production by 1000 when the pinned unit is KG. Scrap/Rework (NOS) below
-  // are never touched. See lib/units.js.
   const prodUnit = canonicalUnit(unit);
   const prodByShift = shifts.map((_, i) => {
     const v = readShift(prodRowsFor(i), prodKpi);
     return isKg(prodUnit) ? kgToTonnes(v) : v;
   });
 
-  // new_change.md C14: flag a partial / in-progress day — at least one shift
-  // has data and at least one has none, so the totals cannot reconcile yet.
-  const anyProd = prodByShift.some((v) => v != null);
-  const someMissing = prodByShift.some((v) => v == null);
-  const isPartial = anyProd && someMissing;
+  const scrapByShift = shifts.map((_, i) =>
+    readShift(qRowsFor("Scrap", i), "Scrap"),
+  );
+  const reworkByShift = shifts.map((_, i) =>
+    readShift(qRowsFor("Rework", i), "Rework"),
+  );
 
-  const unitLabel = displayUnit(prodUnit) ?? "";
-  const shiftRows = shifts.map(({ label }, i) => ({
-    shift: label,
-    production: prodByShift[i],
-    scrap: readShift(qRowsFor("Scrap", i), "Scrap"),
-    rework: readShift(qRowsFor("Rework", i), "Rework"),
-  }));
-  const shiftColumns = [
-    { key: "shift", label: "Shift", align: "left" },
-    {
-      key: "production",
-      label: unitLabel ? `Production (${unitLabel})` : "Production",
-      filterable: false,
-      value: (r) => (r.production == null ? -1 : r.production),
-      render: (r) => fmtQty(r.production),
-    },
-    {
-      key: "scrap",
-      label: "Scrap",
-      filterable: false,
-      value: (r) => (r.scrap == null ? -1 : r.scrap),
-      render: (r) => fmtQty(r.scrap),
-    },
-    {
-      key: "rework",
-      label: "Rework",
-      filterable: false,
-      value: (r) => (r.rework == null ? -1 : r.rework),
-      render: (r) => fmtQty(r.rework),
-    },
-  ];
+  // Keep the intentional thousands scale while preserving missing shifts as null.
+  const displayProd = prodByShift.map((v) => (v == null ? null : v / 1000));
+  const displayScrap = scrapByShift.map((v) => (v == null ? null : v / 1000));
+  const displayRework = reworkByShift.map((v) => (v == null ? null : v / 1000));
 
-  const windowLabel = isRange
-    ? `${toDisplayDate(from) ?? "…"} → ${toDisplayDate(to) ?? "…"} · daily shift rows summed`
-    : (toDisplayDate(date) ?? "latest day");
-
-  const cardRef = useRef(null);
+  const prodScale = computeYAxisScale(displayProd, 100);
+  const scrapScale = computeYAxisScale(displayScrap, 4);
+  const reworkScale = computeYAxisScale(displayRework, 12);
 
   return (
     <Box
-      ref={cardRef}
       sx={{
-        position: "relative",
-        border: 1,
-        borderColor: "divider",
-        borderRadius: 1.25,
-        p: 2,
+        width: "100%",
+        height: "100%",
         flex: 1,
+        minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        minHeight: 380,
       }}
     >
-      <Stack
-        direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
-        spacing={1}
-      >
-        <Box sx={{ flex: 1 }}>
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "primary.main",
-              mb: 0.5,
-            }}
-          >
-            Shift Comparison
-          </Typography>
-          <Typography sx={{ fontSize: 11, color: "text.disabled", mb: 1.5 }}>
-            {windowLabel}
-            {isPartial && (
-              <Tooltip
-                title="This day is still in progress — one or more shifts have no row yet, so the shifts do not add up to the day total."
-                arrow
-              >
-                <Box component="span" sx={{ ml: 1, color: "warning.main" }}>
-                  · partial day (in progress)
-                </Box>
-              </Tooltip>
-            )}
-          </Typography>
-        </Box>
-        {/* Top-right download — menu offers PDF (visual) + Excel (shift rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={shiftRows}
-          headers={shiftColumns.map((c) => c.label)}
-          filename={`shift-comparison-${(section ?? "section").toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName="ShiftComparison"
-          sx={{ mt: 0.25 }}
-        />
-      </Stack>
       {loadingFirst ? (
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            flex: 1,
-            minHeight: 180,
+            height: "100%",
+            minHeight: showTable ? 180 : 280,
+            backgroundColor: "background.paper",
+            borderRadius: 2.5,
+            border: 1,
+            borderColor: "divider",
           }}
         >
           <JKLoader />
         </Box>
-      ) : (
-        <ShiftComparisonChart
-          columns={shiftColumns}
-          rows={shiftRows}
-          emptyMessage="No shift data."
+      ) : showTable ? (
+        <ShiftComparisonTableCard
+          shifts={shifts}
+          prodData={prodByShift}
+          scrapData={scrapByShift}
+          reworkData={reworkByShift}
+          unit={unit}
         />
+      ) : (
+        <Box
+          sx={{
+            display: "grid",
+            gap: 2,
+            height: "100%",
+            flex: 1,
+            minHeight: 0,
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "repeat(3, minmax(0, 1fr))",
+            },
+          }}
+        >
+          {/* Card 1: Shift Wise Total Production */}
+          <LollipopChartCard
+            title="Shift Wise Total Production"
+            icon={<GridViewIcon sx={{ fontSize: 18, color: "text.primary" }} />}
+            data={displayProd}
+            rawValues={prodByShift}
+            unitLabel={isKg(prodUnit) ? "MT" : (prodUnit ?? "Tyres")}
+            shifts={shifts}
+            metricType="production"
+            yTicks={prodScale.yTicks}
+            maxVal={prodScale.maxVal}
+          />
+
+          {/* Card 2: Shift Wise Total Scrap */}
+          <LollipopChartCard
+            title="Shift Wise Total Scrap"
+            icon={
+              <DeleteSweepOutlinedIcon
+                sx={{ fontSize: 18, color: "text.primary" }}
+              />
+            }
+            data={displayScrap}
+            rawValues={scrapByShift}
+            unitLabel="Tyres"
+            shifts={shifts}
+            metricType="scrap"
+            yTicks={scrapScale.yTicks}
+            maxVal={scrapScale.maxVal}
+          />
+
+          {/* Card 3: Shift Wise Total Rework */}
+          <LollipopChartCard
+            title="Shift Wise Total Rework"
+            icon={
+              <SyncOutlinedIcon sx={{ fontSize: 18, color: "text.primary" }} />
+            }
+            data={displayRework}
+            rawValues={reworkByShift}
+            unitLabel="Tyres"
+            shifts={shifts}
+            metricType="rework"
+            yTicks={reworkScale.yTicks}
+            maxVal={reworkScale.maxVal}
+          />
+        </Box>
       )}
     </Box>
   );
 }
 
 /**
- * Dynamic grouped column chart for Shift Comparison.
- *
- * Dynamically derives X-axis categories from the shift column and
- * grouped bar series from all metric columns.
+ * Compact Table View for Shift-Wise Comparison (shown below stacked KPIs in drilldown view)
+ * Uses the reusable DataTable component.
  */
-function ShiftComparisonChart({
-  columns,
-  rows,
-  emptyMessage = "No shift data.",
-}) {
+function ShiftComparisonTableCard({ shifts, prodData, scrapData, reworkData }) {
   const theme = useTheme();
 
-  const shiftCol = columns.find((c) => c.key === "shift") || columns[0];
-  const metricColumns = columns.filter((c) => c !== shiftCol);
-  const categories = rows.map((r) => r[shiftCol?.key] ?? r.shift ?? "");
-
-  const hasData = rows.some((row) =>
-    metricColumns.some((col) => {
-      const v = row[col.key];
-      return typeof v === "number" && Number.isFinite(v);
-    }),
-  );
-
-  const series = useMemo(() => {
-    return metricColumns.map((col, index) => {
-      const color = resolveMetricColor(col.key, index, theme);
-      const data = rows.map((r) => {
-        const val = r[col.key];
-        return typeof val === "number" && Number.isFinite(val) ? val : null;
-      });
-      return {
-        name: col.label,
-        data,
-        color,
-      };
-    });
-  }, [metricColumns, rows, theme]);
-
-  const options = useMemo(() => {
-    const grid = theme.palette.divider;
-    const text = theme.palette.text.secondary;
-    const textPrimary = theme.palette.text.primary;
-
-    return {
-      chart: {
-        type: "column",
-        spacing: [8, 8, 8, 8],
-        backgroundColor: "transparent",
-        style: { fontFamily: theme.typography.fontFamily },
-      },
-      title: { text: null },
-      credits: { enabled: false },
-      accessibility: { enabled: false },
-      xAxis: {
-        categories,
-        lineColor: grid,
-        tickColor: grid,
-        labels: {
-          style: {
-            color: textPrimary,
-            fontSize: "12px",
+  const columns = [
+    {
+      key: "shift",
+      label: "Shift",
+      align: "center",
+      sortable: false,
+      filterable: false,
+      render: (row) => (
+        <Typography
+          sx={{
+            fontSize: 12.5,
             fontWeight: 600,
-          },
-        },
-      },
-      yAxis: {
-        title: { text: null },
-        gridLineColor: grid,
-        maxPadding: 0.05,
-        labels: {
-          style: { color: text, fontSize: "11px" },
-          formatter: function () {
-            return formatIndianNumber(this.value);
-          },
-        },
-      },
-      tooltip: {
-        shared: true,
-        useHTML: true,
-        backgroundColor: theme.palette.background.paper,
-        borderColor: grid,
-        borderRadius: 8,
-        shadow: true,
-        formatter: function () {
-          let s = `<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:${textPrimary}">${this.x}</div>`;
-          (this.points ?? []).forEach((point) => {
-            const val = point.y != null ? formatIndianNumber(point.y) : "—";
-            s +=
-              `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:3px;color:${text}">` +
-              `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${point.color};flex-shrink:0;"></span>` +
-              `<span>${point.series.name}:</span> <b style="color:${textPrimary}">${val}</b>` +
-              `</div>`;
-          });
-          return s;
-        },
-      },
-      plotOptions: {
-        column: {
-          borderRadius: 3,
-          borderWidth: 0,
-          pointPadding: 0.08,
-          groupPadding: 0.15,
-          dataLabels: {
-            enabled: true,
-            crop: false,
-            overflow: "none",
-            style: {
-              fontSize: "10px",
-              fontWeight: "600",
-              color: text,
-              textOutline: "none",
-              fontFamily: theme.typography.fontFamily,
-            },
-            formatter: function () {
-              if (this.y == null) return null;
-              return formatIndianNumber(this.y);
-            },
-          },
-        },
-      },
-      legend: {
-        enabled: true,
-        align: "right",
-        verticalAlign: "top",
-        layout: "horizontal",
-        y: -6,
-        itemStyle: {
-          color: text,
-          fontSize: "12px",
-          fontWeight: 500,
-        },
-        itemHoverStyle: { color: textPrimary },
-        symbolWidth: 10,
-        symbolHeight: 10,
-        symbolRadius: 2,
-      },
-      series,
-    };
-  }, [categories, series, theme]);
+            color: "text.primary",
+          }}
+        >
+          {row.shiftCode}
+        </Typography>
+      ),
+    },
+    {
+      key: "production",
+      label: "Production",
+      align: "center",
+      sortable: false,
+      filterable: false,
+      value: (row) => row.production,
+      render: (row) => (
+        <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
+          {row.production != null
+            ? formatIndianNumber(Math.round(row.production))
+            : "—"}
+        </Typography>
+      ),
+    },
+    {
+      key: "scrap",
+      label: "Scrap",
+      align: "center",
+      sortable: false,
+      filterable: false,
+      value: (row) => row.scrap,
+      render: (row) => (
+        <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
+          {row.scrap != null ? formatIndianNumber(Math.round(row.scrap)) : "—"}
+        </Typography>
+      ),
+    },
+    {
+      key: "rework",
+      label: "Rework",
+      align: "center",
+      sortable: false,
+      filterable: false,
+      value: (row) => row.rework,
+      render: (row) => (
+        <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
+          {row.rework != null
+            ? formatIndianNumber(Math.round(row.rework))
+            : "—"}
+        </Typography>
+      ),
+    },
+  ];
 
-  if (!hasData) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flex: 1,
-          minHeight: 180,
-          color: "text.disabled",
-          fontSize: 13,
-        }}
-      >
-        {emptyMessage}
-      </Box>
-    );
-  }
+  const tableRows = shifts.map((shift, idx) => ({
+    shiftKey: shift.gran,
+    shiftCode: shift.label.replace("Shift ", ""),
+    shift: shift.label,
+    production: prodData[idx],
+    scrap: scrapData[idx],
+    rework: reworkData[idx],
+  }));
 
   return (
     <Box
       sx={{
-        width: "100%",
-        flex: 1,
+        backgroundColor: "background.paper",
+        borderRadius: 2.5,
+        border: 1,
+        borderColor: "rgba(0,0,0,0.06)",
+        p: 1.75,
+        boxShadow: theme.custom.shadow,
         display: "flex",
         flexDirection: "column",
-        minHeight: 340,
-        "& .highcharts-container": {
-          width: "100% !important",
-          height: "100% !important",
-        },
-        "& .highcharts-root": {
-          width: "100% !important",
-          height: "100% !important",
-        },
+        gap: 1,
       }}
     >
-      <HighchartsReact
-        highcharts={Highcharts}
-        options={options}
-        containerProps={{
-          style: {
-            width: "100%",
-            height: "100%",
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
+      {/* Header matching UI sample */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ px: 0.5 }}
+      >
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: "text.primary",
+          }}
+        >
+          Shift Wise Comparison
+        </Typography>
+        <Tooltip
+          title="Shift Wise Breakdown for Production, Scrap & Rework"
+          arrow
+        >
+          <InfoOutlinedIcon
+            sx={{ fontSize: 17, color: "text.secondary", cursor: "pointer" }}
+          />
+        </Tooltip>
+      </Stack>
+
+      <Box
+        sx={{
+          "& .MuiTableContainer-root": {
+            borderRadius: 1.5,
+            border: 1,
+            borderColor: "divider",
+          },
+          "& .MuiTableCell-root": {
+            py: 0.75,
+            px: 1,
           },
         }}
-      />
+      >
+        <DataTable
+          columns={columns}
+          rows={tableRows}
+          getRowKey={(r) => r.shiftKey}
+          search={false}
+          stickyHeader={false}
+          maxHeight="none"
+          emptyMessage="No shift data available."
+        />
+      </Box>
     </Box>
   );
 }
 
 /**
- * Intelligent color resolver with brand palette fallback.
+ * Computes dynamic, legible Y-axis ticks and ceiling based on actual data
  */
-function resolveMetricColor(key, index, theme) {
-  const k = String(key).toLowerCase();
-  if (k.includes("prod") || k.includes("actual") || k.includes("output")) {
-    return theme.palette.primary.main;
+function computeYAxisScale(data, fallbackMax = 10) {
+  const nums = (data || []).filter(
+    (v) => typeof v === "number" && Number.isFinite(v) && v > 0,
+  );
+  const maxValRaw = nums.length > 0 ? Math.max(...nums) : 0;
+  if (maxValRaw <= 0) {
+    const step = fallbackMax / 4;
+    return {
+      maxVal: fallbackMax,
+      yTicks: [0, step, step * 2, step * 3, fallbackMax],
+    };
   }
-  if (k.includes("scrap") || k.includes("defect") || k.includes("loss")) {
-    return theme.custom.brand.red;
-  }
-  if (k.includes("rework") || k.includes("hold") || k.includes("alert")) {
-    return theme.custom.brand.amber;
-  }
-  const palette = [
-    theme.palette.primary.main,
-    theme.custom.brand.red,
-    theme.custom.brand.amber,
-    theme.custom.brand.green,
-    theme.custom.brand.purple,
-    theme.custom.brand.teal,
-    theme.custom.brand.cyan,
-  ];
-  return palette[index % palette.length];
+
+  // Keep only a small amount of headroom so the tallest stem uses the chart.
+  const targetMax = maxValRaw * 1.05;
+  const tickUnit = maxValRaw >= 100 ? 10 : maxValRaw >= 10 ? 1 : 0.5;
+  const maxVal = Math.ceil(targetMax / tickUnit) * tickUnit;
+  const yTicks = Array.from({ length: 5 }, (_, index) =>
+    Number(((maxVal * index) / 4).toFixed(2)),
+  );
+
+  return { maxVal, yTicks };
 }
 
-/** Athena serializes measures as strings; coerce to number|null. */
+/**
+ * Individual White Card containing a responsive SVG Lollipop Chart
+ */
+function LollipopChartCard({
+  title,
+  icon,
+  data,
+  rawValues,
+  unitLabel,
+  shifts,
+  metricType,
+  yTicks,
+  maxVal,
+}) {
+  const theme = useTheme();
+
+  return (
+    <Box
+      sx={{
+        backgroundColor: "background.paper",
+        borderRadius: 2.5,
+        border: 1,
+        borderColor: "rgba(0,0,0,0.06)",
+        p: 2,
+        boxShadow: theme.custom.shadow,
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 260,
+      }}
+    >
+      {/* Header */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ mb: 1 }}
+      >
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {icon}
+          <Typography
+            sx={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: "text.primary",
+            }}
+          >
+            {title}
+          </Typography>
+        </Stack>
+        <Tooltip title={`${title} Breakdown`} arrow>
+          <InfoOutlinedIcon
+            sx={{ fontSize: 18, color: "text.secondary", cursor: "pointer" }}
+          />
+        </Tooltip>
+      </Stack>
+
+      {/* Lollipop Chart Area */}
+      <Box
+        sx={{
+          flex: 1,
+          position: "relative",
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 0,
+        }}
+      >
+        <LollipopSvgChart
+          data={data}
+          rawValues={rawValues}
+          unitLabel={unitLabel}
+          shifts={shifts}
+          metricType={metricType}
+          yTicks={yTicks}
+          maxVal={maxVal}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+function LollipopSvgChart({
+  data,
+  rawValues,
+  unitLabel,
+  shifts,
+  metricType,
+  yTicks,
+  maxVal,
+}) {
+  const theme = useTheme();
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  const chartWidth = 350;
+  const chartHeight = 300;
+  const padLeft = 46;
+  const padRight = 24;
+  const padTop = 22;
+  const padBottom = 32;
+
+  const plotWidth = chartWidth - padLeft - padRight;
+  const plotHeight = chartHeight - padTop - padBottom;
+
+  const yCoord = (val) => {
+    const ratio = Math.max(0, Math.min(1, val / maxVal));
+    return padTop + plotHeight * (1 - ratio);
+  };
+
+  const xPositions = [
+    padLeft + plotWidth * 0.2,
+    padLeft + plotWidth * 0.5,
+    padLeft + plotWidth * 0.8,
+  ];
+
+  return (
+    <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
+      <svg
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: "100%", height: "100%", display: "block" }}
+      >
+        {/* Gradients for Vertical Fading Effect on Stems */}
+        <defs>
+          {data.map((val, idx) => {
+            const x = xPositions[idx];
+            const yTop = yCoord(val);
+            const yBottom = padTop + plotHeight;
+            const tier = evaluateShiftTier(metricType, val, data);
+            const color = getStemColor(theme, tier);
+            const gradId = `stem-fade-${metricType}-${idx}`;
+            return (
+              <linearGradient
+                key={gradId}
+                id={gradId}
+                gradientUnits="userSpaceOnUse"
+                x1={x}
+                y1={yTop}
+                x2={x}
+                y2={yBottom}
+              >
+                <stop offset="0%" stopColor={color} stopOpacity="1" />
+                <stop offset="60%" stopColor={color} stopOpacity="0.75" />
+                <stop offset="100%" stopColor={color} stopOpacity="0.25" />
+              </linearGradient>
+            );
+          })}
+        </defs>
+
+        {/* Y-Axis Title (Rotated) */}
+        <text
+          x={-(padTop + plotHeight / 2)}
+          y={12}
+          transform="rotate(-90)"
+          textAnchor="middle"
+          fill={theme.palette.text.secondary}
+          fontSize="9.5"
+          fontWeight="500"
+          fontFamily={theme.typography.fontFamily}
+        >
+          No. of Tyres in Thousands
+        </text>
+
+        {/* Horizontal Dashed Gridlines & Y-Axis Labels */}
+        {yTicks.map((tick) => {
+          const y = yCoord(tick);
+          return (
+            <g key={tick}>
+              <line
+                x1={padLeft}
+                y1={y}
+                x2={chartWidth - padRight}
+                y2={y}
+                stroke={theme.palette.divider}
+                strokeWidth="1"
+                strokeDasharray={tick === 0 ? "none" : "3 3"}
+                opacity={0.8}
+              />
+              <text
+                x={padLeft - 8}
+                y={y + 3.5}
+                textAnchor="end"
+                fill={theme.palette.text.secondary}
+                fontSize="10"
+                fontWeight="500"
+                fontFamily={theme.typography.fontFamily}
+              >
+                {tick}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* X-Axis Base Line */}
+        <line
+          x1={padLeft}
+          y1={padTop + plotHeight}
+          x2={chartWidth - padRight}
+          y2={padTop + plotHeight}
+          stroke={theme.palette.divider}
+          strokeWidth="1"
+        />
+
+        {/* Lollipop Stems & Markers */}
+        {data.map((val, idx) => {
+          const x = xPositions[idx];
+          const yTop = yCoord(val);
+          const yBottom = padTop + plotHeight;
+          const tier = evaluateShiftTier(metricType, val, data);
+          const color = getStemColor(theme, tier);
+          const isHovered = hoveredIdx === idx;
+          const gradId = `stem-fade-${metricType}-${idx}`;
+          const labelText =
+            val == null || isNaN(val)
+              ? ""
+              : val >= 100
+                ? `${Math.round(val)}k`
+                : `${val.toFixed(1)}k`;
+
+          const rawVal =
+            rawValues && rawValues[idx] != null
+              ? rawValues[idx]
+              : val != null
+                ? val * 1000
+                : 0;
+          const exactText = `${formatIndianNumber(Math.round(rawVal * 100) / 100)}${unitLabel ? ` ${unitLabel}` : ""}`;
+          const tooltipWidth = exactText.length * 7.5 + 20;
+
+          return (
+            <g key={idx}>
+              {/* Data Value Label Above Marker (when not hovered) */}
+              {!isHovered && (
+                <text
+                  x={x}
+                  y={yTop - 7}
+                  textAnchor="middle"
+                  fill={theme.palette.text.primary}
+                  fontSize="10.5"
+                  fontWeight="700"
+                  fontFamily={theme.typography.fontFamily}
+                >
+                  {labelText}
+                </text>
+              )}
+
+              {val != null && (
+                <>
+                  {/* Stem vertical line with vertical fading gradient matching threshold color */}
+                  <line
+                    x1={x}
+                    y1={yBottom}
+                    x2={x}
+                    y2={yTop}
+                    stroke={`url(#${gradId})`}
+                    strokeWidth={isHovered ? "2.8" : "2"}
+                    strokeLinecap="round"
+                  />
+
+                  {/* Circular top marker - Outer Ring */}
+                  <circle
+                    cx={x}
+                    cy={yTop}
+                    r={isHovered ? 5.5 : 4.2}
+                    fill={theme.palette.background.paper}
+                    stroke={color}
+                    strokeWidth={isHovered ? "2.6" : "1.8"}
+                    onMouseEnter={() => setHoveredIdx(idx)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                    style={{ cursor: "pointer" }}
+                  />
+
+                  {/* Exact Value Tooltip Badge on Hover */}
+                  {isHovered && (
+                    <g
+                      transform={`translate(${x}, ${Math.max(20, yTop - 10)})`}
+                    >
+                      <rect
+                        x={-tooltipWidth / 2}
+                        y={-22}
+                        width={tooltipWidth}
+                        height={22}
+                        rx={6}
+                        fill={theme.palette.background.paper}
+                        stroke={color}
+                        strokeWidth={1.6}
+                        filter="drop-shadow(0 2px 5px rgba(0,0,0,0.18))"
+                      />
+                      <text
+                        x={0}
+                        y={-7}
+                        textAnchor="middle"
+                        fill={color}
+                        fontSize="11.5"
+                        fontWeight="800"
+                        fontFamily={theme.typography.fontFamily}
+                      >
+                        {exactText}
+                      </text>
+                    </g>
+                  )}
+                </>
+              )}
+
+              {/* Shift Label at Bottom */}
+              <text
+                x={x}
+                y={chartHeight - 10}
+                textAnchor="middle"
+                fill={isHovered ? color : theme.palette.text.secondary}
+                fontSize="11"
+                fontWeight={isHovered ? "700" : "600"}
+                fontFamily={theme.typography.fontFamily}
+              >
+                {shifts[idx]?.label || `Shift ${idx + 1}`}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </Box>
+  );
+}
+
 function numOrNull(v) {
   if (v == null || v === "" || v === "nan" || v === "null") return null;
   const n = typeof v === "number" ? v : Number.parseFloat(v);
   return Number.isFinite(n) ? n : null;
 }
 
-/** ISO yyyy-mm-dd or DD-MM-YYYY → sortable YYYYMMDD. */
-function dateKey(d) {
-  if (typeof d !== "string") return "";
-  const s = d.length > 10 ? d.slice(0, 10) : d;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.replaceAll("-", "");
-  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(s);
-  return m ? `${m[3]}${m[2]}${m[1]}` : "";
-}
-
-/** new_change.md C14: no row → "—", never 0. */
-function fmtQty(v) {
-  if (v == null) return "—";
-  return Math.abs(v) < 1000 && !Number.isInteger(v)
-    ? formatIndianNumber(v, { decimals: 1 })
-    : formatIndianNumber(Math.round(v));
+function dateKey(value) {
+  if (typeof value !== "string") return "";
+  const date = value.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(date);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
 }

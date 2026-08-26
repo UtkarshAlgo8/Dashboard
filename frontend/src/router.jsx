@@ -1,13 +1,25 @@
 import { createBrowserRouter } from "react-router-dom";
-import LandingPage from "@/pages/LandingPage.jsx";
-import BanmoreProduction from "@/pages/BanmoreProduction.jsx";
-import BanmoreQuality from "@/pages/BanmoreQuality.jsx";
+import {
+  BanmoreProduction,
+  BanmoreQuality,
+  LandingPage,
+  LazyRoute,
+} from "@/routerComponents.jsx";
 
 const router = createBrowserRouter([
-  { path: "/", element: <LandingPage /> },
-  { path: "/:plantId/production", element: <BanmoreProduction /> },
-  { path: "/banmore/production", element: <BanmoreProduction /> },
-  { path: "/banmore/quality", element: <BanmoreQuality /> },
+  { path: "/", element: <LazyRoute Page={LandingPage} /> },
+  {
+    path: "/:plantId/production",
+    element: <LazyRoute Page={BanmoreProduction} />,
+  },
+  {
+    path: "/banmore/production",
+    element: <LazyRoute Page={BanmoreProduction} />,
+  },
+  {
+    path: "/banmore/quality",
+    element: <LazyRoute Page={BanmoreQuality} />,
+  },
 ]);
 
 export default router;

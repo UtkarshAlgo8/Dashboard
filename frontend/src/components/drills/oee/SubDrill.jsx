@@ -74,7 +74,9 @@ function SubDrill({
         boxShadow: theme.custom.shadow,
       }}
     >
-      <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 500, color: "text.secondary" }}
+      >
         OE › {machine.name} › {COMPONENT_NAMES[component]}
       </Typography>
       <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 1.5 }}>
@@ -161,20 +163,20 @@ function SubDrill({
               onTraceRowClick={onTraceRowClick}
             />
           ) : (
-          <Box
-            sx={{
-              border: 1,
-              borderStyle: "dashed",
-              borderColor: "divider",
-              borderRadius: 1.25,
-              p: 3,
-            }}
-          >
-            <EmptyState
-              title={`No ${activeSub.name} recorded`}
-              description={`No ${activeSub.name} recorded for ${machine.name} in this period.`}
-            />
-          </Box>
+            <Box
+              sx={{
+                border: 1,
+                borderStyle: "dashed",
+                borderColor: "divider",
+                borderRadius: 1.25,
+                p: 3,
+              }}
+            >
+              <EmptyState
+                title={`No ${activeSub.name} recorded`}
+                description={`No ${activeSub.name} recorded for ${machine.name} in this period.`}
+              />
+            </Box>
           )}
         </>
       ) : (
@@ -210,7 +212,9 @@ function DetailTable({
       searchPlaceholder="Search…"
       emptyMessage="No records."
       onRowClick={
-        isScrap ? (row) => row.traceable && onTraceRowClick(row.itemCode) : undefined
+        isScrap
+          ? (row) => row.traceable && onTraceRowClick(row.itemCode)
+          : undefined
       }
       rowSx={
         isScrap

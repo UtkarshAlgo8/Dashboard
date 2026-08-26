@@ -14,8 +14,9 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
-import client from "@/api/client.js";
+import { getProductionDrillAggregate } from "@/api/drills.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
 // Athena serializes measures as strings; coerce to number|null for display.
 function num(v) {
@@ -24,8 +25,7 @@ function num(v) {
 }
 
 /**
- * Production drill — derives from the raw gold rows already in hand via
- * `rawRows`. No second API call.
+ * Production drill — reads a server-grouped page for each selected lens.
  *
  * Per the journey doc (§5, §6, §15.4) and dashboard_kpi_map_reference
  * §3/§11:
@@ -130,6 +130,7 @@ function ProductionDrillPanel({
   // never quietly read a different unit than the card above it.
   unitPin = null,
   isLoading = false,
+  onClose,
 }) {
   const isCuring = section === "cur";
   // Curing drill offers a "Trench" lens alongside Machine / SKU /
@@ -241,13 +242,15 @@ function ProductionDrillPanel({
   // Gate: no unit yet ⇒ the landing rows (which seed the unit toggle) haven't
   // arrived; and never fetch without a date window.
   const canFetch = Boolean(activeUnit) && Boolean(from || to);
-  const { data: pageData, isLoading: pageLoading } = usePolledQuery(
-    () =>
-      client
-        .post("/dashboard/drill-aggregate", pagePayload)
-        .then((r) => r.data ?? r),
-    { enabled: canFetch, interval: 0, deps: [JSON.stringify(pagePayload)] },
-  );
+  const {
+    data: pageData,
+    error: pageError,
+    isLoading: pageLoading,
+  } = usePolledQuery(() => getProductionDrillAggregate(pagePayload), {
+    enabled: canFetch,
+    interval: 0,
+    deps: [JSON.stringify(pagePayload)],
+  });
 
   // Rows arrive already grouped and summed over the window (new_change.md
   // C5/C3 — the additive Production levels SUM day-wise, exactly as the card
@@ -286,12 +289,10 @@ function ProductionDrillPanel({
         offset: 0,
       }
     : null;
-  const { data: trenchData } = usePolledQuery(
+  const { data: trenchData, error: trenchError } = usePolledQuery(
     () =>
       trenchPayload
-        ? client
-            .post("/dashboard/drill-aggregate", trenchPayload)
-            .then((r) => r.data ?? r)
+        ? getProductionDrillAggregate(trenchPayload)
         : Promise.resolve([]),
     {
       enabled: Boolean(trenchPayload) && canFetch,
@@ -414,6 +415,16 @@ function ProductionDrillPanel({
     if (loading) {
       return <DrillSkeleton title rows={5} cols={5} />;
     }
+    const requestError = pageError || trenchError;
+    if (requestError) {
+      return (
+        <Box sx={{ p: 3, textAlign: "center", color: "error.main" }}>
+          <Typography sx={{ fontSize: 13 }}>
+            Failed to load Production drill data: {requestError.message}
+          </Typography>
+        </Box>
+      );
+    }
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>
@@ -434,25 +445,27 @@ function ProductionDrillPanel({
       >
         <Typography
           sx={{
-            fontSize: 13,
+            fontSize: 15,
             fontWeight: 700,
             color: "primary.main",
             textTransform: "uppercase",
-            letterSpacing: 0.5,
+            letterSpacing: 0.6,
           }}
         >
           {title}
         </Typography>
-        {/* Top-right download — menu offers PDF (visual) + Excel (page rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={excelHeaders}
-          filename={`drill-production-${sectionName.toLowerCase().replace(/\s+/g, "-")}${
-            prodSub ? `-${prodSub.toLowerCase().replace(/\s+/g, "-")}` : ""
-          }`}
-          sheetName="Production"
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={excelRows}
+            headers={excelHeaders}
+            filename={`drill-production-${sectionName.toLowerCase().replace(/\s+/g, "-")}${
+              prodSub ? `-${prodSub.toLowerCase().replace(/\s+/g, "-")}` : ""
+            }`}
+            sheetName="Production"
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
 
       <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
@@ -476,7 +489,9 @@ function ProductionDrillPanel({
 
       <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
         <Box sx={{ flex: 1 }} />
-        <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+        <Typography
+          sx={{ fontSize: 12, fontWeight: 500, color: "text.secondary" }}
+        >
           {activeRows.length === 0
             ? "0 rows"
             : isTrenchView
@@ -511,7 +526,7 @@ function ProductionDrillPanel({
           )}
         </Box>
       ) : (
-        <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
+        <Box sx={{ p: 2, textAlign: "center", color: "text.secondary" }}>
           <Typography sx={{ fontSize: 13 }}>
             No rows for {sectionName} in this fetch.
           </Typography>
@@ -526,11 +541,11 @@ function ToggleGroup({ label, value, onChange, options }) {
     <Stack direction="row" alignItems="center" spacing={1}>
       <Typography
         sx={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: "text.disabled",
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: "text.secondary",
           textTransform: "uppercase",
-          letterSpacing: 0.4,
+          letterSpacing: 0.5,
         }}
       >
         {label}

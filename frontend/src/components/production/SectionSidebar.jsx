@@ -1,34 +1,69 @@
-import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
-import { motion } from "framer-motion";
+import {
+  Box,
+  Divider,
+  Stack,
+  Tooltip,
+  Typography,
+  useTheme,
+} from "@mui/material";
+import PieChartIcon from "@mui/icons-material/PieChart";
 import JKLoader from "@/components/JKLoader.jsx";
 
+const SECTION_DISPLAY_NAMES = {
+  cur: "Curing",
+  tbm: "Tyre Building",
+  stk: "Stock",
+  mix: "Mixing",
+};
+
+const SECTION_ORDER = ["cur", "tbm", "stk", "mix"];
+
 /**
- * Left vertical section sidebar (BRD FR-P4). Each row shows an OEE
- * donut ring with the section's stable OVERALL OEE centered + section name.
- * Hovering a row reveals the Availability / Performance / Quality breakdown.
- * Down-chevrons between rows denote the process flow (Mixing → Stock
- * → TBM → Curing), per docs/artifact.jsx. While the section OEE refetches
- * (e.g. a month change) the rings are replaced by a loader.
+ * Adobe XD Section Sidebar
+ *
+ * Each row displays:
+ * - Section Name (Mixing, Stock, Tyre Building, Curing)
+ * - Donut/Pie status icon + colored OEE label (e.g. OEE: 82.5%)
+ * - Active row gets a soft light blue fill
  */
 function SectionSidebar({
-  sections,
+  sections = [],
   activeSectionId,
   onSelect,
-  statsBySectionId,
+  statsBySectionId = {},
   loading = false,
 }) {
+  const theme = useTheme();
+
+  // Normalize sections list to adhere to canonical order and names
+  const sectionList = [...sections].sort((a, b) => {
+    const idxA = SECTION_ORDER.indexOf(a.id);
+    const idxB = SECTION_ORDER.indexOf(b.id);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    return 0;
+  });
+
   return (
-    <Stack spacing={0}>
+    <Box
+      sx={{
+        backgroundColor: "background.paper",
+        border: 1,
+        borderColor: "rgba(0,0,0,0.06)",
+        borderRadius: 2.5,
+        p: 2,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: theme.custom.shadow,
+      }}
+    >
       <Typography
         sx={{
-          // Big heading matching the render-box header, with a full-width
-          // border-bottom (negative mx cancels the sidebar card's padding).
           fontSize: 17,
           fontWeight: 700,
           color: "text.primary",
-          mx: -1,
-          px: 2,
-          py: 1.25,
+          px: 0.5,
+          pb: 1.5,
           mb: 1,
           borderBottom: 1,
           borderColor: "divider",
@@ -36,101 +71,57 @@ function SectionSidebar({
       >
         Sections
       </Typography>
+
       {loading ? (
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            minHeight: 260,
+            minHeight: 220,
           }}
         >
           <JKLoader />
         </Box>
       ) : (
-        sections.map((s, i) => (
-          <Box key={s.id}>
-            <SidebarRow
-              section={s}
-              stats={statsBySectionId?.[s.id] ?? null}
-              active={s.id === activeSectionId}
-              onClick={() => onSelect(s.id)}
-            />
-            {i < sections.length - 1 && <FlowArrow />}
-          </Box>
-        ))
+        <Stack spacing={0}>
+          {sectionList.map((s, idx) => {
+            const stats = statsBySectionId?.[s.id] ?? null;
+            const oee = typeof stats?.oee === "number" ? stats.oee : null;
+            const active = s.id === activeSectionId;
+            const displayName = SECTION_DISPLAY_NAMES[s.id] || s.name;
+            return (
+              <Box key={s.id}>
+                {idx > 0 && (
+                  <Divider
+                    sx={{ my: 0.5, borderColor: "divider", opacity: 0.6 }}
+                  />
+                )}
+                <SidebarRow
+                  section={{ ...s, name: displayName }}
+                  oee={oee}
+                  stats={stats}
+                  active={active}
+                  onClick={() => onSelect(s.id)}
+                />
+              </Box>
+            );
+          })}
+        </Stack>
       )}
-    </Stack>
+    </Box>
   );
 }
 
-function SidebarRow({ section, stats, active, onClick }) {
+function SidebarRow({ section, oee, stats, active, onClick }) {
   const theme = useTheme();
-  const oee = typeof stats?.oee === "number" ? stats.oee : null;
-  const ringColor = oeeColor(theme, oee);
-  const row = (
-    <Box
-      onClick={onClick}
-      sx={{
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        gap: 1.25,
-        px: 1.25,
-        py: 1,
-        borderRadius: 1,
-        cursor: "pointer",
-        transition: "background-color 0.15s",
-        "&:hover": {
-          backgroundColor: active ? "transparent" : theme.custom.surface.soft,
-        },
-      }}
-    >
-      {/* Active highlight slides between sections (shared layout), with a
-          left accent bar — same animated treatment as the nav tabs. */}
-      {active && (
-        <motion.div
-          layoutId="sectionActiveFill"
-          transition={{ type: "spring", stiffness: 520, damping: 19, mass: 0.7 }}
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: theme.palette.primary.light,
-            borderRadius: 8,
-            borderLeft: `3px solid ${theme.palette.primary.main}`,
-            zIndex: 0,
-          }}
-        />
-      )}
-      <Box sx={{ position: "relative", zIndex: 1, flexShrink: 0 }}>
-        <Ring value={oee} color={ringColor} />
-      </Box>
-      <Stack spacing={0.1} sx={{ minWidth: 0, position: "relative", zIndex: 1 }}>
-        <Typography
-          sx={{
-            fontSize: 16,
-            fontWeight: active ? 700 : 500,
-            color: "text.primary",
-            lineHeight: 1.1,
-          }}
-        >
-          {section.name}{" "}
-          <Typography
-            component="span"
-            sx={{ fontSize: 11, fontWeight: 500, color: "text.disabled" }}
-          >
-            (OEE)
-          </Typography>
-        </Typography>
-      </Stack>
-    </Box>
-  );
+  const color = getOeeColor(theme, oee);
 
   return (
     <Tooltip
       arrow
       placement="right"
-      enterDelay={120}
+      enterDelay={150}
       title={<SectionTooltip name={section.name} oee={oee} stats={stats} />}
       slotProps={{
         tooltip: {
@@ -141,16 +132,74 @@ function SidebarRow({ section, stats, active, onClick }) {
             maxWidth: "none",
             borderRadius: 2,
             border: 1,
-            borderColor: "divider",
-            boxShadow: 6,
+            borderColor: "rgba(0,0,0,0.06)",
+            boxShadow: theme.custom.shadow,
           },
         },
         arrow: { sx: { color: "background.paper" } },
       }}
     >
-      {row}
+      <Box
+        onClick={onClick}
+        sx={{
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          gap: 0.5,
+          px: 2,
+          py: 1.5,
+          borderRadius: 2,
+          cursor: "pointer",
+          backgroundColor: active ? theme.custom.pills.activeBg : "transparent",
+          transition: "all 0.15s ease",
+          "&:hover": {
+            backgroundColor: active
+              ? theme.custom.pills.activeBg
+              : theme.custom.surface.soft,
+          },
+        }}
+      >
+        {/* Row Title */}
+        <Typography
+          sx={{
+            fontSize: 16,
+            fontWeight: active ? 700 : 600,
+            color: "text.primary",
+            lineHeight: 1.2,
+          }}
+        >
+          {section.name}
+        </Typography>
+
+        {/* Status Line: Small Pie Chart Icon + OEE label */}
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={0.75}
+          sx={{ mt: 0.5 }}
+        >
+          <PieChartIcon sx={{ fontSize: 17, color }} />
+          <Typography
+            sx={{
+              fontSize: 14,
+              fontWeight: 600,
+              color,
+              lineHeight: 1,
+            }}
+          >
+            OEE: {oee == null ? "–" : `${oee.toFixed(1)}%`}
+          </Typography>
+        </Stack>
+      </Box>
     </Tooltip>
   );
+}
+
+function getOeeColor(theme, value) {
+  if (value == null) return theme.palette.text.disabled;
+  if (value >= 90) return theme.custom.status.green;
+  if (value >= 80) return theme.custom.status.amber;
+  return theme.custom.status.red;
 }
 
 const METRICS = [
@@ -159,49 +208,46 @@ const METRICS = [
   { key: "quality", label: "Quality", caption: "Yield" },
 ];
 
-/** Formats an OEE-family metric: 100 → "100", 96.2 → "96.2". */
 function fmtPct(v) {
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
-/** Rich hover card: overall OEE + Availability / Performance / Quality bars. */
 function SectionTooltip({ name, oee, stats }) {
   const theme = useTheme();
   const rows = METRICS.map((m) => ({ ...m, value: stats?.[m.key] })).filter(
     (m) => typeof m.value === "number",
   );
   return (
-    <Box sx={{ p: 1.5, width: 244 }}>
+    <Box sx={{ p: 1.5, width: 230 }}>
       <Typography
         sx={{
           fontSize: 13,
           fontWeight: 700,
-          textTransform: "uppercase",
-          letterSpacing: 0.4,
           color: "text.primary",
+          mb: 0.5,
         }}
       >
         {name}
       </Typography>
-      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.5 }}>
-        <Box
-          sx={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            bgcolor: oeeColor(theme, oee),
-          }}
-        />
-        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-          OEE: {oee == null ? "–" : fmtPct(oee)}
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={0.75}
+        sx={{ mb: 1.25 }}
+      >
+        <PieChartIcon sx={{ fontSize: 14, color: getOeeColor(theme, oee) }} />
+        <Typography
+          sx={{ fontSize: 12, color: "text.secondary", fontWeight: 500 }}
+        >
+          OEE: {oee == null ? "–" : `${fmtPct(oee)}%`}
         </Typography>
       </Stack>
       {rows.length === 0 ? (
-        <Typography sx={{ fontSize: 11.5, color: "text.disabled" }}>
-          No breakdown available for this section.
+        <Typography sx={{ fontSize: 11, color: "text.secondary" }}>
+          Breakdown available on drilldown.
         </Typography>
       ) : (
-        <Stack spacing={1.25}>
+        <Stack spacing={1}>
           {rows.map((m) => (
             <MetricBar
               key={m.key}
@@ -218,132 +264,45 @@ function SectionTooltip({ name, oee, stats }) {
 
 function MetricBar({ label, caption, value }) {
   const theme = useTheme();
-  const color = oeeColor(theme, value);
-  const pct = Math.max(0, Math.min(100, value));
+  const pct = Math.max(0, Math.min(100, value ?? 0));
   return (
     <Box>
       <Stack
         direction="row"
-        alignItems="flex-end"
+        alignItems="baseline"
         justifyContent="space-between"
-        sx={{ mb: 0.5 }}
       >
-        <Box>
-          <Typography
-            sx={{
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: 0.4,
-              color: "text.primary",
-              lineHeight: 1.2,
-            }}
-          >
+        <Stack direction="row" spacing={0.5} alignItems="baseline">
+          <Typography sx={{ fontSize: 11, fontWeight: 600 }}>
             {label}
           </Typography>
-          <Typography sx={{ fontSize: 11, color: "text.disabled", lineHeight: 1.2 }}>
-            {caption}
+          <Typography sx={{ fontSize: 9.5, color: "text.secondary" }}>
+            ({caption})
           </Typography>
-        </Box>
-        <Typography sx={{ fontSize: 15, fontWeight: 700, color: "text.primary" }}>
-          {fmtPct(value)}%
+        </Stack>
+        <Typography sx={{ fontSize: 11, fontWeight: 700 }}>
+          {value == null ? "–" : `${fmtPct(value)}%`}
         </Typography>
       </Stack>
       <Box
         sx={{
-          height: 6,
-          borderRadius: 3,
-          bgcolor: theme.palette.action.disabledBackground,
+          mt: 0.25,
+          height: 4,
+          borderRadius: 2,
+          bgcolor: theme.custom.surface.soft,
           overflow: "hidden",
         }}
       >
-        <Box sx={{ width: `${pct}%`, height: "100%", bgcolor: color }} />
+        <Box
+          sx={{
+            height: "100%",
+            width: `${pct}%`,
+            bgcolor: getOeeColor(theme, pct),
+          }}
+        />
       </Box>
     </Box>
   );
-}
-
-function Ring({ value, color, size = 44, stroke = 4 }) {
-  const theme = useTheme();
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const pct = value == null ? 0 : Math.max(0, Math.min(100, value));
-  const dash = (pct / 100) * c;
-  const trackColor = theme.palette.action.disabledBackground;
-  return (
-    <Box
-      sx={{ position: "relative", width: size, height: size, flexShrink: 0 }}
-    >
-      <svg width={size} height={size}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={trackColor}
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeDasharray={`${dash} ${c}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </svg>
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 10.5,
-          fontWeight: 700,
-          color,
-        }}
-      >
-        {value == null ? "–" : value.toFixed(1)}
-      </Box>
-    </Box>
-  );
-}
-
-function FlowArrow() {
-  const theme = useTheme();
-  const stroke = theme.palette.divider;
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        py: 0.25,
-      }}
-    >
-      <svg width="8" height="12" viewBox="0 0 12 16">
-        <path
-          d="M6 3v10M4 10l2 3 2-3"
-          stroke={stroke}
-          strokeWidth="1.5"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </Box>
-  );
-}
-
-function oeeColor(theme, value) {
-  // Thresholds match the section header chip: ≥90 green, ≥80 amber, else red.
-  if (value == null) return theme.custom.text.muted;
-  if (value >= 90) return theme.custom.brand.green;
-  if (value >= 80) return theme.custom.brand.amber;
-  return theme.custom.brand.red;
 }
 
 export default SectionSidebar;

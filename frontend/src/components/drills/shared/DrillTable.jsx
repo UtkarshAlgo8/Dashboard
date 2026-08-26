@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 import TableLegend from "@/components/tables/TableLegend.jsx";
 
 /**
@@ -44,6 +45,7 @@ export function DrillTable({
   downloadHeaders,
   downloadSheetName,
   legend,
+  onClose,
 }) {
   const tableRef = useRef(null);
   const excelHeaders = downloadHeaders ?? cols ?? [];
@@ -78,7 +80,7 @@ export function DrillTable({
 
   return (
     <Stack spacing={1.25} sx={{ position: "relative" }}>
-      {(title || downloadFilename || legendNode) && (
+      {(title || downloadFilename || legendNode || onClose) && (
         <Stack
           direction="row"
           alignItems="center"
@@ -90,9 +92,11 @@ export function DrillTable({
           {title ? (
             <Typography
               sx={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: accent ? `${accent}.main` : "text.primary",
+                fontSize: 15,
+                fontWeight: 700,
+                color: accent ? `${accent}.main` : "primary.main",
+                textTransform: "uppercase",
+                letterSpacing: 0.6,
               }}
             >
               {title}
@@ -103,7 +107,7 @@ export function DrillTable({
           <Stack
             direction="row"
             alignItems="center"
-            spacing={1.5}
+            spacing={1}
             useFlexGap
             flexWrap="wrap"
           >
@@ -117,6 +121,7 @@ export function DrillTable({
                 sheetName={downloadSheetName}
               />
             )}
+            <DrillCloseButton onClose={onClose} />
           </Stack>
         </Stack>
       )}

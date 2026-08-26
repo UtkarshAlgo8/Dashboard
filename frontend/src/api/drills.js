@@ -86,6 +86,11 @@ export function getProductionDrill({
   );
 }
 
+/** Fetch one grouped, paginated Production drill lens. */
+export function getProductionDrillAggregate(payload) {
+  return client.post("/dashboard/drill-aggregate", payload);
+}
+
 /**
  * Fetch Production ID-level traceability for a scrap entry (spec 08).
  *

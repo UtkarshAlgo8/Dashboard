@@ -191,7 +191,9 @@ function ScrapTraceabilityPanel({ plantId, section, machine, itemCode }) {
         sx={{ mb: 1.5 }}
       >
         <Box>
-          <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+          <Typography
+            sx={{ fontSize: 11.5, fontWeight: 500, color: "text.secondary" }}
+          >
             OE › {machine.name} › Quality › Scrap › {itemCode} › Production IDs
           </Typography>
           <Typography sx={{ fontSize: 14, fontWeight: 600 }}>

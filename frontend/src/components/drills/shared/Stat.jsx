@@ -6,7 +6,9 @@ import { Stack, Typography } from "@mui/material";
 export function Stat({ label, value, accent }) {
   return (
     <Stack spacing={0.25}>
-      <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}
+      >
         {label}
       </Typography>
       <Typography

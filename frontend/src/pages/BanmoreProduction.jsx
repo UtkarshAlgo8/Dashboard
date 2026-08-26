@@ -5,7 +5,6 @@ import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import JKLoader from "@/components/JKLoader.jsx";
 import SectionSidebar from "@/components/production/SectionSidebar.jsx";
 import PlantSummaryCard from "@/components/production/PlantSummaryCard.jsx";
-import CategoryTabs from "@/components/production/CategoryTabs.jsx";
 import KpiGrid from "@/components/production/KpiGrid.jsx";
 import NavTabs from "@/components/production/NavTabs.jsx";
 import ProductionBodySkeleton from "@/components/production/ProductionBodySkeleton.jsx";
@@ -32,9 +31,9 @@ import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { canonicalizeProductType } from "@/lib/dashboardRowScopes.js";
-import { displayUnit } from "@/lib/units.js";
 import client from "@/api/client.js";
 import { exportElementToPdf } from "@/lib/exportPdf.js";
+import { displayUnit } from "@/lib/units.js";
 
 // Production drill types render ProductionDrillPanel, which owns its own
 // paginated per-lens fetch — so drilling them must NOT kick off the generic
@@ -223,12 +222,12 @@ function BanmoreProduction() {
     },
   );
 
-  // Section metadata per artifact (full title shown in section header).
+  // Section metadata (simplified names shown in subheader)
   const SECTION_TITLE = {
-    mix: "Mixing / Banbury",
-    tbm: "Tyre Building Machine",
-    cur: "Curing / Vulcanization",
-    stk: "Stock / Component Prep",
+    mix: "Mixing",
+    tbm: "Tyre Building",
+    cur: "Curing",
+    stk: "Stock",
   };
 
   // Product-type / sub-category pills per artifact buildKpis().
@@ -236,10 +235,6 @@ function BanmoreProduction() {
   // default (the section-level "overall" where one exists). Selecting one
   // sends product_type to the backend — a real, server-side-filtered API
   // call (no client-side fallback).
-  // new_change.md C7: the real per-product children of the TBM/Curing
-  // aggregate are Passenger Radial / LCV / Unknown (there is no LT or SUV
-  // Radial in the data). The first entry is the section AGGREGATE, i.e.
-  // "Overall" — the Production card reads Production_product pinned to it.
   const PROD_SUB_OPTIONS = {
     mix: ["Master Compound", "Final Compound"],
     tbm: ["Green Tyre", "Passenger Radial", "LCV"],
@@ -250,17 +245,8 @@ function BanmoreProduction() {
     mix: "Master Compound",
     tbm: "Green Tyre",
     cur: "Cured Tyre",
-    // changes.md §4: Stock's default product is resolved from the active
-    // sub-section's first REAL product, never a synthetic "Overall".
     stk: null,
   };
-  // PROD_SUB_OPTIONS / SECTION_DEFAULT_PRODUCT above are BANMORE's canonical
-  // vocabulary (Master vs Final Compound, Passenger Radial / LCV). CTP makes
-  // different things under different names — its Mixing productivity is
-  // "Chemical" alone, with no Master Compound at all — so seeding another
-  // plant with this list pins a product that matches no row and the whole
-  // section reads as "no data". Off Banmore, the pills come purely from what
-  // the plant records (nonStockProductOptions, below).
   const prodSubOptions = isBanmore
     ? (PROD_SUB_OPTIONS[dashboard.section] ?? [])
     : [];
@@ -274,18 +260,6 @@ function BanmoreProduction() {
     ? dashboard.tyreType
     : tyreTypes[0];
 
-  // Stock sub-sections (BRD §13.2). The first is the default on entering
-  // Stock. new_change.md C8: the PRODUCT list is NOT hardcoded — every
-  // sub-section makes different products under different names (4 Roll makes
-  // "Belt Mother Roll", Cutter makes "Belt"), so a shared list matches
-  // nothing for some of them and the card blanks. The options are derived
-  // from the data below (and `Belt Mother Roll` is never aliased to `Belt` —
-  // a mother roll is a genuinely different intermediate product).
-  // Banmore's canonical order (the artefact's, first entry = default). Used
-  // as-is for Banmore; every other plant lists the sub-sections IT records —
-  // CTP's Stock has EBR / TDA / Super Assembly / Belt Edge Filler and neither
-  // 4 Roll nor Slitter, so this list would default to a sub-section with no
-  // rows and blank the section.
   const BANMORE_STOCK_SUBSECTIONS = [
     "4 Roll",
     "Extruder",
@@ -300,34 +274,14 @@ function BanmoreProduction() {
     : vocabStockSubs;
   const isStock = dashboard.section === "stk";
   const activeSubSection = dashboard.subSection ?? STOCK_SUBSECTIONS[0];
-  // dashboard_doc.md §3/§8: OEE is disambiguated by sub_section. Stock OEE
-  // has one OEE_o row PER sub_section (5 rows/date), so a plot/shift card
-  // that doesn't pin one stacks all five points on the same date. Stock is
-  // always viewed per sub_section, so pin the resolved sub_section (which
-  // defaults to the first one before the user picks). Other sections have a
-  // single section-level OEE_o row (sub_section empty), so they stay null.
   const pinnedSubSection = isStock ? activeSubSection : dashboard.subSection;
-  // new_change.md C8: read the DISTINCT (product_type, unit_of_measurement)
-  // pairs the data actually holds for this section / sub-section. Its own small
-  // fetch, deliberately WITHOUT a product_type pin (the landing fetch carries
-  // one, so it could only ever return the already-selected product).
-  //
-  // The enumeration is intentionally NOT scoped to the selected date window or
-  // granularity. Scoping it made the product-type toggle unstable — a narrow
-  // window, a partial "Today", or a shift view holds only a SUBSET of the
-  // products (e.g. TBM/Curing showed a different set each time), so pills
-  // appeared and disappeared as the selection changed. Omitting date/from/to
-  // (all dates) and granularity (defaults to DAY on the backend, where every
-  // product has rows) yields the COMPLETE, stable list; the key only changes
-  // on a section / sub-section switch, so there is no window-driven flicker.
+
   const optionsPayload = {
     plantId,
     context: {
       section: sectionName,
       category: "Productivity",
       ...(isStock ? { sub_section: activeSubSection } : {}),
-      // Scope the pills to the selected line too — a product only that line
-      // makes must not stay selectable once the other line is picked.
       ...(activeTyreType && activeTyreType !== "All"
         ? { tyre_type: activeTyreType }
         : {}),
@@ -337,9 +291,6 @@ function BanmoreProduction() {
   const currentOptionsKey = stableOptionsKey(optionsPayload);
   const { data: productionOptionsData } = usePolledQuery(
     () => {
-      // Tag the result with the exact scope it was fetched for, so stale
-      // options (kept by keepPreviousData across a section/sub-section/window
-      // change) can be detected and ignored below.
       const key = stableOptionsKey(optionsPayload);
       return client
         .post("/dashboard/product-options", optionsPayload)
@@ -368,19 +319,13 @@ function BanmoreProduction() {
       deps: [JSON.stringify(optionsPayload)],
     },
   );
-  // Only trust options that were fetched for the CURRENT section / sub-section
-  // / window. keepPreviousData keeps the previous section's options in hand
-  // until the new fetch lands; using them would seed a product / unit that
-  // doesn't exist in the new section, so the landing fetch returns nothing
-  // until a reload. Treating stale options as empty defers seeding until the
-  // correct options arrive (the seeding effects below no-op on an empty list).
+
   const productionOptions =
     productionOptionsData?.key === currentOptionsKey &&
     Array.isArray(productionOptionsData.options)
       ? productionOptionsData.options
       : [];
-  // "Unknown" is a catch-all bucket for rows whose product_type wasn't tagged;
-  // it is never a real product, so drop it from the selectable pills.
+
   const nonStockProductOptions = [
     ...new Set(
       productionOptions
@@ -389,31 +334,18 @@ function BanmoreProduction() {
         .filter((p) => p.trim().toLowerCase() !== "unknown"),
     ),
   ];
-  // changes.md §4: Stock has NO synthetic "Overall" product — only the real
-  // product rows of the sub-section, in the data's own spelling.
+
   const stockProductOptions = [...nonStockProductOptions];
-  // TBM / Curing / Mixing: always offer the FULL canonical product-type set
-  // (PROD_SUB_OPTIONS) unioned with whatever the data actually holds, so every
-  // product type stays selectable even when it has no rows in the current
-  // window. Selecting an empty one shows a "no data" card (placeholder "—")
-  // rather than the pill disappearing — the user asked to see all product
-  // types with an explicit no-data state. Canonical entries come first so the
-  // section default remains index 0; any extra product the data carries (a
-  // name not in the canonical list) is appended.
   const navProductOptions = isStock
     ? stockProductOptions
     : [...new Set([...prodSubOptions, ...nonStockProductOptions])];
-  // The active product type (sent to the backend). Falls back to the
-  // section default; for Stock that is the sub-section's first real product.
+
   const activeProductType =
     dashboard.productType ??
     (isStock
       ? (stockProductOptions[0] ?? null)
       : (navProductOptions[0] ?? sectionDefaultProduct[dashboard.section]));
 
-  // new_change.md C8/C9: multi-unit series (Stock Extruder / 3 Roll / Bead,
-  // Mixing KG vs Batch) must pin a unit as well as the product — the two
-  // units measure the same production and may never be combined.
   const unitOptionsForProduct = [
     ...new Set(
       productionOptions
@@ -424,13 +356,7 @@ function BanmoreProduction() {
         .filter(Boolean),
     ),
   ];
-  // The options list is deliberately window-independent (see above), so it
-  // also carries units that exist somewhere in history but not here and now:
-  // CTP's Mixing Chemical was recorded in KG exactly once, in May, and in NUM
-  // every other day. Pinning the first option regardless left the shift box —
-  // which filters on the pinned unit strictly — with no matching row and every
-  // cell reading "—". Prefer a unit the CURRENT window actually holds, and
-  // fall back to the first option while the rows are still in flight.
+
   const unitsInWindow = new Set(
     (Array.isArray(rawRows) ? rawRows : [])
       .filter(
@@ -450,8 +376,6 @@ function BanmoreProduction() {
         unitOptionsForProduct[0] ??
         null);
 
-  // Keep the pinned unit valid whenever the section / sub-section / product
-  // changes under it (a stale unit would silently match no rows).
   useEffect(() => {
     if (activeUnit !== dashboard.unitOfMeasurement) {
       setFilter({ unitOfMeasurement: activeUnit }, false);
@@ -481,7 +405,7 @@ function BanmoreProduction() {
   useEffect(() => {
     if (!isStock) return;
     const first = stockProductOptions[0];
-    if (!first) return; // options for this sub-section haven't arrived yet
+    if (!first) return;
     if (
       dashboard.productType == null ||
       !stockProductOptions.includes(dashboard.productType)
@@ -505,19 +429,6 @@ function BanmoreProduction() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStock, dashboard.productType, navProductOptions.join("|")]);
 
-  const onStockSubChange = (next) => {
-    // Switching sub-section clears the product + unit: the previous product
-    // very likely does not exist under the new sub-section (C8), and the
-    // options fetch reseeds both from the data.
-    setFilter(
-      { subSection: next, productType: null, unitOfMeasurement: null },
-      false,
-    );
-  };
-  const onStockProductChange = (next) => {
-    setFilter({ productType: next, unitOfMeasurement: null }, false);
-  };
-
   const ready =
     !plantLoading &&
     plant &&
@@ -525,73 +436,30 @@ function BanmoreProduction() {
     Array.isArray(tabs) &&
     summary;
 
-  // A SINGLE page-level loading flag for the whole dashboard body. The KPI
-  // grid, sidebar rings, plant summary and open drill panel all (re)fetch
-  // together on a section / filter / month change; instead of each showing its
-  // own spinner, one branded loader covers the body (see the overlay in the
-  // render) and the per-panel loaders below are suppressed. Inventory owns its
-  // own loading UI, so it is excluded.
-  //
-  // `isDrillLoading` is NOT part of this. Opening or switching a drill leaves
-  // the cards, rings and summary untouched, so covering them was pure flicker
-  // over content that never changed — the drill panel renders its own skeleton
-  // instead. A section / filter / month change still lands here, because that
-  // reloads the landing query and `kpiLoading` goes true.
   const contentLoading =
     dashboard.category !== "i" &&
     (kpiLoading || sectionOeeLoading || summaryLoading);
 
-  // Which REGION is actually reloading?
-  //
-  // Read it off the queries themselves rather than guessing from what the user
-  // clicked. The sidebar rings (getSectionOee) and the plant summary
-  // (getPlantSummary) are both keyed on plant + window — not section, product,
-  // sub-section or category. So they refetch for a date / granularity change
-  // and for nothing else, and their loading flags ARE the signal that the
-  // whole body is changing.
-  //
-  // Everything else — section, product type, sub-section, unit, category tab —
-  // moves only the landing query, i.e. only the content column. Covering the
-  // sidebar and summary for those reads as the whole app blinking over content
-  // that never changed.
   const bodyLoading =
     dashboard.category !== "i" && (sectionOeeLoading || summaryLoading);
   const contentOnlyLoading = contentLoading && !bodyLoading;
 
-  // Time-range UI state. Default preset is "month".
-  // Today → single-date equality (state.date). Month/Year/custom →
-  // BETWEEN range (state.from + state.to).
   const [timeRange, setTimeRange] = useState({
     preset: "month",
     from: "",
     to: "",
   });
 
-  // Shift selector state — independent of the preset granularity.
-  // When the user picks a specific shift (A/B/C) that wins over the
-  // preset; "all" lets the preset decide (Daily/MTD/YTD).
   const [shiftKey, setShiftKey] = useState("all");
 
-  // Resolve the effective granularity from preset + shift selector.
-  // realdata.md §3: real shift granularities are uppercase SHIFT A/B/C.
   const effectiveGranularity = (preset, shift) => {
     const map = { all: null, a: "SHIFT A", b: "SHIFT B", c: "SHIFT C" };
     const shiftGran = map[shift];
     if (shiftGran) return shiftGran;
-    // changes.md §8: a custom calendar range must resolve to DAY (aggregate
-    // DAY rows), NOT null. Pass the FULL timeRange (incl. from/to) so
-    // presetToDateRange returns granularity="DAY" for a custom range; a
-    // bare {preset} would drop the range and yield null → the "Daily"
-    // fallback that never matches the real "DAY" rows.
     return presetToDateRange({ ...timeRange, preset }, effectiveAsOf)
       .granularity;
   };
 
-  // Handlers ONLY update the UI state (pure functional updater so the
-  // custom date dialog's sequential onFromChange→onToChange calls chain
-  // correctly). The single effect below derives the fetch filter from
-  // that state — this avoids dispatching setFilter inside a setState
-  // updater (which StrictMode runs twice and dropped the update).
   const onTimeRangeChange = (updater) => {
     setTimeRange((prev) =>
       typeof updater === "function" ? updater(prev) : updater,
@@ -602,16 +470,7 @@ function BanmoreProduction() {
     setShiftKey(next);
   };
 
-  // Resolve the active range → fetch filter whenever the time range, the
-  // shift, or the as-of date changes (also fires on mount, and again once
-  // as-of loads so the window snaps to the latest available data date).
-  // The shift only applies to Today, so it's ignored for Month/Year even
-  // if a stale value lingers.
   useEffect(() => {
-    // Wait for a real data anchor before resolving the window. Falling back
-    // to the system clock can query the current calendar month even when the
-    // dataset ends earlier, which makes the main panel blank while sidebar
-    // latest-OEE values still render.
     if ((asOfLoading || anchorsLoading) && !effectiveAsOf) return;
     if (!effectiveAsOf) return;
     const effShift = timeRange.preset === "today" ? shiftKey : "all";
@@ -623,9 +482,6 @@ function BanmoreProduction() {
         to: resolved.to,
         granularity: effectiveGranularity(timeRange.preset, effShift),
         mode: resolved.mode,
-        // new_change.md C6: only a preset window is "no explicit date" —
-        // a picked from/to is the user's own intent and must NOT be
-        // re-anchored per KPI.
         userWindow: Boolean(timeRange.from && timeRange.to),
       },
       false,
@@ -636,12 +492,9 @@ function BanmoreProduction() {
   const { from, to } = presetToDateRange(timeRange, effectiveAsOf);
 
   const onSectionSelect = (id) => {
-    // Entering Stock seeds the default sub-section + its first REAL product
-    // (changes.md §4: no synthetic "Overall"); leaving Stock clears both so
-    // other sections aren't accidentally scoped to a stale sub-section.
+    setOpenDrillKpiId(null);
+    resetDrill();
     if (id === "stk") {
-      // new_change.md C8: the product is left unset — the sub-section's
-      // options fetch seeds it with a REAL product from the data.
       setFilter(
         {
           section: id,
@@ -663,12 +516,13 @@ function BanmoreProduction() {
       );
     }
   };
-  const onCategorySelect = (id) => setFilter({ category: id }, true);
+  const onCategorySelect = (id) => {
+    setOpenDrillKpiId(null);
+    resetDrill();
+    setFilter({ category: id }, true);
+  };
 
-  // Ensure the active section always has a product type set (covers the
-  // initial mount, where the default section has no product type yet).
   useEffect(() => {
-    // Stock is seeded from its data-driven options (C8) in the effect above.
     if (dashboard.productType == null && !isStock) {
       const def = sectionDefaultProduct[dashboard.section];
       if (def) setFilter({ productType: def }, false);
@@ -676,32 +530,20 @@ function BanmoreProduction() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboard.section]);
 
-  // Only one drill open at a time. Clicking a different card closes the
-  // previous one; clicking the same card again closes it.
   const [openDrillKpiId, setOpenDrillKpiId] = useState(null);
 
   const handleDrillKpi = (kpi) => {
     if (!kpi.drillable) return;
 
     if (openDrillKpiId === kpi.id) {
-      // Clicked the same card — close it.
       setOpenDrillKpiId(null);
       resetDrill();
       return;
     }
 
-    // Different card (or first open) — switch.
     setOpenDrillKpiId(kpi.id);
-    // new_change.md C3/C6: hand the CARD's resolved date to the drill so it
-    // never re-resolves its own. Curing OEE anchors to 2026-07-16 while
-    // Production runs to 07-20 — a drill that re-resolved would land on an
-    // empty day and render dead.
     const cardDate = kpi.resolvedDate ?? null;
     if (PROD_DRILL_TYPES.has(kpi.drillType)) {
-      // Production drills self-fetch (paginated, 100 rows per lens), so DON'T
-      // trigger the generic 10k drill fetch. Pass an empty target list: the
-      // reducer leaves drillKpis null (no fetch) but records drillSourceKpiId,
-      // which drives the card's Batch→KG unit switch while drilled.
       drillInto([], kpi.id, {}, cardDate);
     } else if (kpi.drillTargets) {
       drillInto(kpi.drillTargets, kpi.id, {}, cardDate);
@@ -715,22 +557,10 @@ function BanmoreProduction() {
     resetDrill();
   };
 
-  // Which drill panel is OPEN is page state (`openDrillKpiId`); which drill is
-  // FETCHED is hook state (`drillSourceKpiId` / `drillKpis`). A section or
-  // category change calls setFilter(..., resetDrill=true), which clears the
-  // hook side but cannot clear the page side — so the panel kept rendering
-  // with no drill fetch behind it and the machine-wise breakdown showed empty
-  // until the user closed and reopened it. Re-arm the same card so the two
-  // stay in step.
   useEffect(() => {
     if (!openDrillKpiId) return;
-    // Already wired to this card. This is also what stops the effect
-    // re-dispatching: drillInto sets drillSourceKpiId to the card id.
     if (dashboard.drillSourceKpiId === openDrillKpiId) return;
     const kpi = kpis.find((k) => k.id === openDrillKpiId && k.drillable);
-    // The card may not exist (or not be drillable) in the new section. Leave
-    // openDrillKpiId set — the panel renders nothing, and switching back to a
-    // section that has it re-arms the drill.
     if (!kpi) return;
     const cardDate = kpi.resolvedDate ?? null;
     if (PROD_DRILL_TYPES.has(kpi.drillType)) {
@@ -751,9 +581,7 @@ function BanmoreProduction() {
         flexDirection: "column",
       }}
     >
-      {/* Top region: header (logo + plant) with the category nav links
-          directly below it. The page itself never scrolls — only the
-          content card scrolls — so this stays fixed at the top. */}
+      {/* Top Header: Row 1 Brand/User Navbar, Row 2 Floating Filter Bar */}
       <Box sx={{ flexShrink: 0, zIndex: theme.zIndex.appBar }}>
         <ProductionHeader
           plant={plant}
@@ -764,17 +592,13 @@ function BanmoreProduction() {
           onExport={onExportPdf}
           asOf={effectiveAsOf}
           lastUpdatedAt={lastUpdatedAt}
+          categoryTabs={tabs}
+          activeCategory={dashboard.category}
+          onCategoryChange={onCategorySelect}
           tyreTypes={tyreTypes}
           tyreType={activeTyreType}
           onTyreTypeChange={(v) => setFilter({ tyreType: v }, false)}
         />
-        {Array.isArray(tabs) && (
-          <CategoryTabs
-            tabs={tabs}
-            activeTabId={dashboard.category}
-            onSelect={onCategorySelect}
-          />
-        )}
       </Box>
 
       {!ready ? (
@@ -790,9 +614,10 @@ function BanmoreProduction() {
             gridTemplateColumns:
               dashboard.category === "i"
                 ? "1fr"
-                : { xs: "1fr", md: "220px 1fr" },
-            gap: dashboard.category === "i" ? 0 : 2,
-            p: dashboard.category === "i" ? 0 : 2,
+                : { xs: "1fr", md: "240px 1fr" },
+            gap: dashboard.category === "i" ? 0 : 2.5,
+            px: dashboard.category === "i" ? 0 : { xs: 2, md: 3 },
+            py: dashboard.category === "i" ? 0 : 2,
           }}
         >
           {dashboard.category !== "i" && (
@@ -803,13 +628,11 @@ function BanmoreProduction() {
               <Box
                 sx={{
                   backgroundColor: "background.paper",
-                  border: 1,
-                  borderColor: "divider",
-                  borderRadius: 1.25,
-                  p: 1,
+                  borderRadius: 2.5,
                   flex: 1,
                   minHeight: 0,
                   overflowY: exporting ? "visible" : "auto",
+                  boxShadow: theme.custom.shadow,
                 }}
               >
                 <SectionSidebar
@@ -828,10 +651,7 @@ function BanmoreProduction() {
             </Stack>
           )}
 
-          {/* Positioning context for the section-switch loader below. It is
-              this wrapper — not the scrolling card inside it — that anchors the
-              overlay, so a scrolled page still gets a centred loader rather
-              than one parked at the top of the scroll height. */}
+          {/* Main Content Column */}
           <Box
             sx={{
               position: "relative",
@@ -844,12 +664,6 @@ function BanmoreProduction() {
           >
             <Box
               sx={{
-                backgroundColor: "background.paper",
-                border: dashboard.category === "i" ? 0 : 1,
-                borderColor: "divider",
-                borderRadius: dashboard.category === "i" ? 0 : 1.25,
-                boxShadow:
-                  dashboard.category === "i" ? "none" : theme.custom.shadow,
                 display: "flex",
                 flexDirection: "column",
                 flex: 1,
@@ -866,11 +680,7 @@ function BanmoreProduction() {
                 <InventoryPage plantId={plantId} />
               ) : (
                 <>
-                  {/* Section header row — title (left) + nav controls (right)
-                    on ONE line, styled like the top nav bar with a
-                    full-width border-bottom. The card has no padding, so
-                    this row's own px insets the content while the border
-                    still spans edge-to-edge. */}
+                  {/* Section subheader row — Title (left) + Type & UoM pills (right) */}
                   <Box
                     sx={{
                       display: "flex",
@@ -880,229 +690,267 @@ function BanmoreProduction() {
                       flexWrap: "wrap",
                       px: 2,
                       py: 1.25,
-                      borderBottom: 1,
-                      borderColor: "divider",
+                      mx: 0,
+                      mt: 0,
+                      mb: 0,
+                      backgroundColor: "background.paper",
+                      borderRadius: 2.5,
+                      border: 1,
+                      borderColor: "rgba(0,0,0,0.06)",
                     }}
                   >
                     <Typography
                       sx={{
-                        fontSize: 17,
+                        fontSize: 19,
                         fontWeight: 700,
+                        color: "text.primary",
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {SECTION_TITLE[dashboard.section] ?? sectionName}
+                      {`${SECTION_TITLE[dashboard.section] ?? sectionName} Production`}
                     </Typography>
 
-                    {/* Right: nav controls. Stock → sub-section selector;
-                      Mixing/TBM/Curing (Productivity & Quality) → product
-                      type pills. */}
+                    {/* Right: Context-Aware Sub-filter controls based on section */}
                     <Box
                       sx={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 1,
+                        gap: 1.5,
                         flexWrap: "wrap",
                         justifyContent: "flex-end",
                       }}
                     >
                       {isStock ? (
                         <NavTabs
+                          prefixLabel="Sub-Section"
                           items={STOCK_SUBSECTIONS.map((s) => ({
                             id: s,
                             label: s,
                           }))}
                           value={activeSubSection}
-                          onChange={onStockSubChange}
-                          layoutId="stockSubFill"
+                          onChange={(s) =>
+                            setFilter(
+                              {
+                                subSection: s,
+                                productType: null,
+                                unitOfMeasurement: null,
+                              },
+                              false,
+                            )
+                          }
+                          layoutId="stockSubSectionFill"
+                          size="lg"
                         />
                       ) : (
                         (dashboard.category === "p" ||
                           dashboard.category === "q") &&
                         navProductOptions.length > 0 && (
                           <NavTabs
+                            prefixLabel={
+                              dashboard.section === "mix" ? "Compound" : "Type"
+                            }
                             items={navProductOptions.map((o) => ({
                               id: o,
                               label: o,
                             }))}
-                            // Selecting a product type sends it to the backend
-                            // (server-side filter / real API call).
                             value={activeProductType}
                             onChange={(v) =>
                               setFilter({ productType: v }, false)
                             }
-                            layoutId="prodTypeFill"
+                            layoutId="sectionProdTypeFill"
+                            size="lg"
                           />
                         )
                       )}
                     </Box>
                   </Box>
 
-                  {/* Stock product-type pills — second row (BRD §13.3 two-step:
-                    sub-section first, then product type). changes.md §4: only
-                    the real products of the sub-section, no synthetic Overall. */}
-                  {(isStock || unitOptionsForProduct.length > 1) &&
+                  {/* Stock product-type pills & UoM pills — second row (BRD §13.3 two-step:
+                    sub-section first, then product type). */}
+                  {((isStock && stockProductOptions.length > 0) ||
+                    unitOptionsForProduct.length > 1) &&
                     dashboard.category === "p" && (
                       <Box
                         sx={{
                           px: 2,
-                          py: 1.25,
-                          borderBottom: 1,
-                          borderColor: "divider",
+                          py: 1,
+                          mt: 1,
+                          backgroundColor: "background.paper",
+                          borderRadius: 2.5,
+                          border: 1,
+                          borderColor: "rgba(0,0,0,0.06)",
                           display: "flex",
                           alignItems: "center",
                           gap: 2,
                           flexWrap: "wrap",
                         }}
                       >
-                        {isStock && (
+                        {isStock && stockProductOptions.length > 0 && (
                           <NavTabs
+                            prefixLabel="Product"
                             items={stockProductOptions.map((o) => ({
                               id: o,
                               label: o,
                             }))}
                             value={activeProductType}
-                            onChange={onStockProductChange}
-                            layoutId="stockProdFill"
+                            onChange={(v) =>
+                              setFilter(
+                                { productType: v, unitOfMeasurement: null },
+                                false,
+                              )
+                            }
+                            layoutId="stockProductTypeFill"
+                            size="md"
                           />
                         )}
-                        {/* new_change.md C8/C9: multi-unit series must pin a
-                          unit — KG and Batch (Mixing), M and NOS (Stock
-                          Extruder / 3 Roll / Bead) are different measures of
-                          the same production and are never combined. */}
                         {unitOptionsForProduct.length > 1 && (
                           <NavTabs
+                            prefixLabel="UoM"
                             items={unitOptionsForProduct.map((u) => ({
                               id: u,
-                              // KG is pinned/filtered as-is, but shown as MT —
-                              // production is presented in tonnes. lib/units.js.
                               label: displayUnit(u),
                             }))}
                             value={activeUnit}
                             onChange={(u) =>
                               setFilter({ unitOfMeasurement: u }, false)
                             }
-                            layoutId="prodUnitFill"
+                            layoutId="sectionUomFill"
+                            size="md"
                           />
                         )}
                       </Box>
                     )}
 
-                  <KpiGrid
-                    kpis={kpis}
-                    // Per-panel loader suppressed: the single page-level overlay
-                    // (contentLoading) covers the whole body while data reloads.
-                    isLoading={false}
-                    error={kpiError}
-                    openDrillKpiId={openDrillKpiId}
-                    onDrillKpi={handleDrillKpi}
-                    onCloseDrill={handleCloseDrill}
-                    onTrendOpen={(kpi) => setTrendKpi(kpi)}
-                  />
-
-                  {/* Single drill panel for the currently selected card. */}
-                  {openDrillKpiId &&
-                    (() => {
-                      const kpi = kpis.find(
-                        (k) => k.id === openDrillKpiId && k.drillable,
-                      );
-                      if (!kpi) return null;
-                      // new_change.md C3/C6: the drill window IS the card's
-                      // resolved day when the card anchored itself (C6);
-                      // otherwise it is the card's from/to window verbatim.
-                      const cardDate = kpi.resolvedDate ?? null;
-                      const useMonthRange =
-                        dashboard.category === "p" &&
-                        dashboard.granularity === "MONTH" &&
-                        [
-                          "mixOEE",
-                          "curOEE",
-                          "mixProd",
-                          "tbmProd",
-                          "stkProd",
-                          "curProd",
-                        ].includes(kpi.drillType);
-                      return (
-                        <Box sx={{ px: 2, pb: 2 }}>
-                          <DrillPanelRouter
-                            kpi={kpi}
-                            plantId={plantId}
-                            section={dashboard.section}
-                            sectionName={sectionName}
-                            subSection={pinnedSubSection}
-                            cardDate={cardDate}
-                            from={useMonthRange ? from : (cardDate ?? from)}
-                            to={useMonthRange ? to : (cardDate ?? to)}
-                            // The SELECTED window, never collapsed to the card's
-                            // anchor day. A panel that fetches dated DAY rows for
-                            // a MONTH card needs the whole month: `from`/`to`
-                            // above resolve to the card's own date, which for a
-                            // MONTH card is the 1st — so a DAY fetch built on
-                            // them returns only the 1st.
-                            windowFrom={from}
-                            windowTo={to}
-                            shift={dashboard.granularity}
-                            allDrillRows={drillRows}
-                            rawRows={rawRows}
-                            // CR-11: the 6 reason leaves at DAY granularity,
-                            // from their own fetch — never merged into
-                            // rawRows (see useDashboardFetch).
-                            downtimeRows={downtimeRows}
-                            downtimeGranularity={downtimeGranularity}
-                            prodSub={activeProductType}
-                            unitPin={activeUnit}
-                            mode={dashboard.mode}
-                            // The panel owns its own in-place skeleton while the
-                            // drill fetch runs. The page-level overlay covers the
-                            // body only when the LANDING data is reloading, which
-                            // a drill never triggers.
-                            isLoading={isDrillLoading}
-                          />
-                        </Box>
-                      );
-                    })()}
-
-                  {/* Shift Comparison — Productivity tab only, always pinned
-                    at the bottom regardless of which card is drilled. */}
-                  {dashboard.category === "p" && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: {
+                        xs: "column",
+                        lg: openDrillKpiId ? "row" : "column",
+                      },
+                      gap: 2,
+                      alignItems: "flex-start",
+                      flex: 1,
+                      minHeight: 0,
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    {/* Left Column (or full width if not drilling) */}
                     <Box
                       sx={{
-                        px: 2,
-                        pb: 2,
-                        flex: 1,
+                        flex: openDrillKpiId ? "0 0 340px" : "1 1 auto",
+                        width: openDrillKpiId
+                          ? { xs: "100%", lg: "340px" }
+                          : "100%",
                         display: "flex",
                         flexDirection: "column",
                         minHeight: 0,
+                        height: "100%",
+                        gap: 2,
+                        transition: "all 0.3s ease",
                       }}
                     >
-                      {/* new_change.md C11/C12: the shift box follows the
-                        active time filter (Today/day-wise → the three
-                        SHIFT rows for that date; Month-wise / custom range
-                        → the daily shift rows SUMMED) and the full
-                        dashboard scope (section, sub-section, product,
-                        unit). */}
-                      <ShiftComparisonCard
-                        plantId={plantId}
-                        section={sectionName}
-                        subSection={pinnedSubSection}
-                        productType={activeProductType}
-                        unit={activeUnit}
-                        mode={timeRange.preset === "today" ? "day" : "range"}
-                        date={timeRange.preset === "today" ? to : null}
-                        from={timeRange.preset === "today" ? null : from}
-                        to={timeRange.preset === "today" ? null : to}
+                      <KpiGrid
+                        kpis={kpis}
+                        category={dashboard.category}
+                        isLoading={false}
+                        error={kpiError}
+                        openDrillKpiId={openDrillKpiId}
+                        onDrillKpi={handleDrillKpi}
+                        onCloseDrill={handleCloseDrill}
+                        onTrendOpen={(kpi) => setTrendKpi(kpi)}
                       />
+
+                      {/* Shift Comparison — Productivity tab only, always below KPIs */}
+                      {dashboard.category === "p" && (
+                        <Box
+                          sx={{
+                            px: 0,
+                            pb: openDrillKpiId ? 2 : 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            flex: 1,
+                            height: "100%",
+                            minHeight: 0,
+                          }}
+                        >
+                          <ShiftComparisonCard
+                            plantId={plantId}
+                            section={sectionName}
+                            subSection={pinnedSubSection}
+                            productType={activeProductType}
+                            unit={activeUnit}
+                            mode={
+                              timeRange.preset === "today" ? "day" : "range"
+                            }
+                            date={timeRange.preset === "today" ? to : null}
+                            from={timeRange.preset === "today" ? null : from}
+                            to={timeRange.preset === "today" ? null : to}
+                            isDrilldown={Boolean(openDrillKpiId)}
+                          />
+                        </Box>
+                      )}
                     </Box>
-                  )}
+
+                    {/* Right Column: Drill Panel */}
+                    {openDrillKpiId &&
+                      (() => {
+                        const kpi = kpis.find(
+                          (k) => k.id === openDrillKpiId && k.drillable,
+                        );
+                        if (!kpi) return null;
+                        const cardDate = kpi.resolvedDate ?? null;
+                        const useMonthRange =
+                          dashboard.category === "p" &&
+                          dashboard.granularity === "MONTH" &&
+                          [
+                            "mixOEE",
+                            "curOEE",
+                            "mixProd",
+                            "tbmProd",
+                            "stkProd",
+                            "curProd",
+                          ].includes(kpi.drillType);
+                        return (
+                          <Box
+                            sx={{
+                              flex: 1,
+                              minWidth: 0,
+                              width: "100%",
+                              pt: 2,
+                              animation: "fadeIn 0.3s ease",
+                            }}
+                          >
+                            <DrillPanelRouter
+                              kpi={kpi}
+                              plantId={plantId}
+                              section={dashboard.section}
+                              sectionName={sectionName}
+                              subSection={pinnedSubSection}
+                              cardDate={cardDate}
+                              from={useMonthRange ? from : (cardDate ?? from)}
+                              to={useMonthRange ? to : (cardDate ?? to)}
+                              windowFrom={from}
+                              windowTo={to}
+                              shift={dashboard.granularity}
+                              allDrillRows={drillRows}
+                              rawRows={rawRows}
+                              downtimeRows={downtimeRows}
+                              downtimeGranularity={downtimeGranularity}
+                              prodSub={activeProductType}
+                              unitPin={activeUnit}
+                              mode={dashboard.mode}
+                              isLoading={isDrillLoading}
+                              onClose={handleCloseDrill}
+                            />
+                          </Box>
+                        );
+                      })()}
+                  </Box>
                 </>
               )}
             </Box>
 
-            {/* Section / product / sub-section / category change — cover the
-                content column only. The sidebar stays live so the user can see
-                what they picked and keep clicking; the plant summary does not
-                move for any of these. Same opaque backdrop as the body loader,
-                for the same reason: it must hide the per-panel loaders. */}
             {contentOnlyLoading && (
               <Box
                 sx={{
@@ -1121,14 +969,6 @@ function BanmoreProduction() {
             )}
           </Box>
 
-          {/* The ONE loader for the whole dashboard body — date / granularity
-              changes, the only ones that move the sidebar rings and plant
-              summary too. Covers the sidebar, summary, KPI grid and any open drill so
-              the user never sees several spinners at once. The backdrop is
-              fully OPAQUE: internally-fetching panels (Shift Comparison, drill
-              panels) render their own JKLoader, and a translucent overlay let
-              those peek through as a second "Please wait". An opaque cover
-              hides them regardless of which panel is mid-fetch. */}
           {bodyLoading && (
             <Box
               sx={{
@@ -1165,25 +1005,15 @@ function BanmoreProduction() {
   );
 }
 
-/**
- * Routes to the appropriate drill panel based on `kpi.drillType`.
- * Matches artifact DrillPanel routing exactly.
- *
- * Dedicated panels (mixOEE, mixProd, tbmProd, stkProd, downtime, compliance, budget)
- * own their API calls. "table" type uses the specific table panel per kpi.id.
- */
 function DrillPanelRouter({
   kpi,
   plantId,
   section,
   sectionName,
   subSection,
-  // new_change.md C3/C6: the card's own resolved date, or null when the
-  // card is showing an explicit range.
   cardDate = null,
   from,
   to,
-  // The selected window, independent of the card-anchor collapse above.
   windowFrom = null,
   windowTo = null,
   shift,
@@ -1195,36 +1025,23 @@ function DrillPanelRouter({
   unitPin,
   mode,
   isLoading,
+  onClose,
 }) {
   if (!kpi) return null;
 
-  // Drilldown inherits the card's granularity (journey.md §5): the panels
-  // filter their rows to this exact granularity so the children always
-  // match the card. `shift` carries the card's effective granularity
-  // (DAY / SHIFT A-C / MONTH); fall back to DAY when none is set
-  // (All-Shifts Today / custom range) — realdata.md §3.
   const granularity = shift ?? "DAY";
-  // The OEE drills (mixOEE / curOEE) now follow the card onto MONTH — they have
-  // a pre-aggregated row at every tier, so downgrading them to DAY only made
-  // the machine table contradict the card above it. The Production drills stay
-  // on DAY: their SKU levels carry 4 months of MONTH rows against 8 for the OEE
-  // family, and those panels paginate a fetch of their own.
   const productivityDrillGranularity =
     granularity === "MONTH" &&
     ["mixProd", "tbmProd", "stkProd", "curProd"].includes(kpi.drillType)
       ? "DAY"
       : granularity;
 
-  // Filter drill rows to this KPI's drill TARGET kpi_names (children),
-  // not the landing kpi_name itself. drillTargets is the list of child
-  // kpi_names the panel needs to render (e.g. FTQ → ["FTQ_m"]).
   const drillTargets = kpi.drillTargets ?? [];
   const drillRows = (allDrillRows ?? []).filter((r) =>
     drillTargets.includes(r.kpiName),
   );
 
   switch (kpi.drillType) {
-    // Productivity
     case "mixOEE":
     case "curOEE":
       return (
@@ -1236,20 +1053,13 @@ function DrillPanelRouter({
           rawRows={rawRows}
           mode={mode}
           granularity={productivityDrillGranularity}
-          // Window + plant for the panel's own date-wise leaf fetch, which only
-          // runs on MONTH (the shared rows carry no per-date detail there).
           plantId={plantId}
           from={from}
           to={to}
-          // new_change.md C3/C6: OEE reads the rows already in hand, which
-          // also carry the (newer) Production rows. Without the card's date
-          // the panel's "latest date" collapses to Production's 07-20 and
-          // drops every OEE row — the dead drill this change removes.
           cardDate={granularity === "MONTH" ? null : cardDate}
           isLoading={isLoading}
-          // dashboard_doc.md §6: Curing inserts a trench (OEE_s) tier above
-          // the press table. curOEE turns it on; mixOEE keeps the flat flow.
           trench={kpi.drillType === "curOEE"}
+          onClose={onClose}
         />
       );
     case "mixProd":
@@ -1263,52 +1073,26 @@ function DrillPanelRouter({
           subSection={section === "stk" ? subSection : null}
           prodSub={prodSub}
           unitPin={unitPin}
-          // rawRows only seeds the unit toggle; the table rows come from the
-          // panel's own paginated per-lens fetch (from/to drive its window).
           rawRows={rawRows}
           granularity={productivityDrillGranularity}
           from={from}
           to={to}
           isLoading={isLoading}
+          onClose={onClose}
         />
       );
     case "downtime":
       return (
-        // CR-11: this panel reads its OWN feed and filters on the SAME
-        // granularity that feed was fetched at — DAY normally, SHIFT A/B/C
-        // when a shift is selected. Handing it `rawRows` + the card's
-        // granularity blanked the breakdown on every preset but Today, since
-        // gold stores no reason row at MONTH.
         <DowntimeDrillPanel
           section={section}
           rawRows={downtimeRows}
           mode={mode}
           granularity={downtimeGranularity ?? "DAY"}
           isLoading={isLoading}
+          onClose={onClose}
         />
       );
-    case "budget":
-      return (
-        <BudgetDrillPanel
-          plantId={plantId}
-          section={section}
-          from={from}
-          to={to}
-          shift={shift}
-        />
-      );
-    // Scrap / Rework (Quality §4/§5): subsection → reason/machine/sku drill.
-    case "qScrapRework":
-      return (
-        <ScrapReworkDrillPanel
-          kind={kpi.rawName === "Rework" ? "Rework" : "Scrap"}
-          drillRows={drillRows}
-          mode={mode}
-          granularity={granularity}
-          isLoading={isLoading}
-        />
-      );
-    // "table" type — route by kpi.id
+    case "compliance":
     case "table":
       return (
         <GenericTableDrillPanel
@@ -1319,17 +1103,38 @@ function DrillPanelRouter({
           mode={mode}
           granularity={granularity}
           isLoading={isLoading}
-          // Context + window for panels that fetch their own DAY rows when the
-          // card is on MONTH (NCM Hold's dated detail).
           plantId={plantId}
           subSection={subSection}
           productType={prodSub}
           from={windowFrom ?? from}
           to={windowTo ?? to}
+          onClose={onClose}
         />
       );
-    // null drillType — no drill panel
-    case null:
+    case "budget":
+      return (
+        <BudgetDrillPanel
+          plantId={plantId}
+          section={section}
+          from={from}
+          to={to}
+          shift={shift}
+          isLoading={isLoading}
+          onClose={onClose}
+        />
+      );
+    case "qScrapRework":
+    case "scrapRework":
+      return (
+        <ScrapReworkDrillPanel
+          kind={kpi.rawName === "Rework" ? "Rework" : "Scrap"}
+          drillRows={drillRows}
+          mode={mode}
+          granularity={granularity}
+          isLoading={isLoading}
+          onClose={onClose}
+        />
+      );
     default:
       return null;
   }

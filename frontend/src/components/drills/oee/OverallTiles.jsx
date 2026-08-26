@@ -39,9 +39,9 @@ function OverallTiles({ overall, sectionName, machineCount }) {
     <Box>
       <Typography
         sx={{
-          fontSize: 11,
+          fontSize: 11.5,
           fontWeight: 700,
-          color: "text.disabled",
+          color: "text.primary",
           textTransform: "uppercase",
           letterSpacing: 0.6,
           mb: 1,
@@ -103,9 +103,9 @@ function Tile({ component, value, sectionName, machineCount }) {
     >
       <Typography
         sx={{
-          fontSize: 11,
+          fontSize: 11.5,
           fontWeight: 700,
-          color: "text.disabled",
+          color: "text.secondary",
           textTransform: "uppercase",
           letterSpacing: 0.6,
         }}
@@ -123,9 +123,20 @@ function Tile({ component, value, sectionName, machineCount }) {
         >
           {value.toFixed(1)}
         </Typography>
-        <Typography sx={{ fontSize: 13, color: "text.disabled" }}>%</Typography>
+        <Typography
+          sx={{ fontSize: 13, fontWeight: 600, color: "text.secondary" }}
+        >
+          %
+        </Typography>
       </Stack>
-      <Typography sx={{ fontSize: 12, color: "text.disabled", mt: 0.75 }}>
+      <Typography
+        sx={{
+          fontSize: 12,
+          fontWeight: 500,
+          color: "text.secondary",
+          mt: 0.75,
+        }}
+      >
         {captionFor(component.id, sectionName, machineCount)}
       </Typography>
     </Box>

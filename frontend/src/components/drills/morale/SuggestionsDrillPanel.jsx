@@ -15,6 +15,7 @@ import { formatIndianNumber } from "@/lib/numberFormat.js";
 export default function SuggestionsDrillPanel({
   drillRows,
   granularity = "DAY",
+  onClose,
 }) {
   const byCat = new Map();
   for (const r of drillRows ?? []) {
@@ -51,6 +52,7 @@ export default function SuggestionsDrillPanel({
         rows={rows}
         downloadFilename="drill-suggestions"
         downloadSheetName="Suggestions"
+        onClose={onClose}
       />
     </Stack>
   );

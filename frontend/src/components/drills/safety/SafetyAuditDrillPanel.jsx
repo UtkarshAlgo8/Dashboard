@@ -19,6 +19,7 @@ function avg(arr) {
 export default function SafetyAuditDrillPanel({
   drillRows,
   granularity = "DAY",
+  onClose,
 }) {
   const byArea = new Map();
   for (const r of drillRows ?? []) {
@@ -51,6 +52,7 @@ export default function SafetyAuditDrillPanel({
         rows={rows}
         downloadFilename="drill-safety-audit"
         downloadSheetName="SafetyAudit"
+        onClose={onClose}
       />
     </Stack>
   );

@@ -25,6 +25,7 @@ function splitRemarks(remarks) {
 export default function ReportableDrillPanel({
   drillRows,
   granularity = "DAY",
+  onClose,
 }) {
   const rows = (drillRows ?? [])
     .filter(
@@ -54,6 +55,7 @@ export default function ReportableDrillPanel({
         rows={rows}
         downloadFilename="drill-reportable-incidents"
         downloadSheetName="Reportable"
+        onClose={onClose}
       />
     </Stack>
   );

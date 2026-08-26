@@ -16,14 +16,16 @@ const REWORK_DATA = [
   ["MS66", "Banbury 5", "Viscosity NC", "3", "In progress"],
 ];
 
-export default function ReworkDrillPanel({ drillRows }) {
+export default function ReworkDrillPanel({ drillRows, onClose }) {
   const rows =
     drillRows && drillRows.length > 0
       ? drillRows.map((r) => [
           r.itemCode ?? "—",
           r.machine ?? "—",
           r.productType ?? r.drillDown?.[0] ?? "—",
-          typeof r.actual === "number" ? formatIndianNumber(r.actual) : (r.actual ?? "—"),
+          typeof r.actual === "number"
+            ? formatIndianNumber(r.actual)
+            : (r.actual ?? "—"),
           r.status ?? "Pending",
         ])
       : REWORK_DATA;
@@ -36,6 +38,7 @@ export default function ReworkDrillPanel({ drillRows }) {
         rows={rows}
         downloadFilename="drill-rework"
         downloadSheetName="Rework"
+        onClose={onClose}
       />
     </Stack>
   );

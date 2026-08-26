@@ -29,7 +29,11 @@ function topDefect(remarksList) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
-export default function FtdDrillPanel({ drillRows, granularity = "DAY" }) {
+export default function FtdDrillPanel({
+  drillRows,
+  granularity = "DAY",
+  onClose,
+}) {
   const byMachine = new Map();
   for (const r of drillRows ?? []) {
     if (r.kpiName !== "FTQ_m") continue;
@@ -58,11 +62,13 @@ export default function FtdDrillPanel({ drillRows, granularity = "DAY" }) {
   return (
     <Stack spacing={2}>
       <DrillTable
-        title="Machine-wise FTQ"
+        title="FTQ · Machine-wise"
         cols={["Machine", "FTQ %", "Defects", "Top Defect"]}
         rows={rows}
-        downloadFilename="drill-ftq-machine"
+        accent="success"
+        downloadFilename="drill-ftq-machine-wise"
         downloadSheetName="FTQ"
+        onClose={onClose}
       />
     </Stack>
   );

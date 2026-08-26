@@ -8,66 +8,68 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { motion } from "framer-motion";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import CheckIcon from "@mui/icons-material/Check";
-import { useNavigate } from "react-router-dom";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
+import NavTabs from "./NavTabs.jsx";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import jkLogo from "@/assets/jk-logo.png";
-import { toDisplayDate } from "@/lib/dateFormat.js";
 
-/** "dd-mm-yyyy HH:MM" (optionally with seconds) for the "last fetched" stamp. */
-function formatUpdated(date, withSeconds = false) {
-  const pad2 = (n) => String(n).padStart(2, "0");
-  const time = `${pad2(date.getHours())}:${pad2(date.getMinutes())}${
-    withSeconds ? `:${pad2(date.getSeconds())}` : ""
-  }`;
-  return `${toDisplayDate(date)} ${time}`;
+/** "Last Updated at HH:MM AM/PM" for the header stamp. */
+function formatUpdated(date) {
+  if (!date) return null;
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const formattedHours = String(hours % 12 || 12).padStart(2, "0");
+  return `Last Updated at ${formattedHours}:${minutes} ${ampm}`;
 }
 
+const DEFAULT_CATEGORY_TABS = [
+  { id: "p", label: "Production" },
+  { id: "q", label: "Quality" },
+  { id: "s", label: "Safety" },
+  { id: "c", label: "Cost" },
+  { id: "d", label: "Delivery" },
+  { id: "m", label: "Morale" },
+];
+
+const DEFAULT_TYRE_TYPES = [
+  { id: "all", label: "All" },
+  { id: "pcr", label: "PCR" },
+  { id: "tbr", label: "TBR" },
+];
+
 /**
- * Production-dashboard top header.
- *
- * Layout is a 3-column grid (1fr | auto | 1fr) so the active plant pill
- * is always perfectly centred regardless of how wide the left brand or
- * the right control cluster grow — no horizontal drift.
- *
- * The header is sticky (pinned to the viewport top); the page body
- * scrolls beneath it.
+ * Adobe XD Production Dashboard Header
+ * Row 1: Brand Logo + One JK One Dashboard | Last Updated at ... + Avatar
+ * Row 2: Category Pills | Tyre Type Pills | Time Range Pills | Download Button
  */
 function ProductionHeader({
-  plant,
   timeRange,
   onTimeRangeChange,
-  shift,
+  shift = "all",
   onShiftChange,
   onExport,
   asOf = null,
   lastUpdatedAt = null,
-  // The tyre lines this plant runs, and the active selection. One entry =
-  // a static badge; several = a picker (see the control below).
-  tyreTypes = ["PCR"],
-  tyreType = null,
+  categoryTabs = null,
+  activeCategory = "p",
+  onCategoryChange,
+  tyreTypes = ["All", "PCR", "TBR"],
+  tyreType = "All",
   onTyreTypeChange,
 }) {
   const theme = useTheme();
-  const navigate = useNavigate();
-  // Fall back to the first option so the control never renders unselected
-  // while the plant lookup is still in flight.
-  const activeTyreType = tyreTypes.includes(tyreType) ? tyreType : tyreTypes[0];
-
-  // Download button state machine: idle → loading (spinner) → done (green
-  // + tick) → back to idle after 3s.
   const [exportStatus, setExportStatus] = useState("idle");
   const resetTimer = useRef(null);
+
   useEffect(() => () => clearTimeout(resetTimer.current), []);
 
   const handleExport = async () => {
     if (exportStatus !== "idle") return;
     setExportStatus("loading");
-    // Let the loading spinner paint before the (heavy, blocking) capture.
     await new Promise((r) => setTimeout(r, 80));
     try {
       await onExport?.();
@@ -79,330 +81,236 @@ function ProductionHeader({
     }
   };
 
+  const formattedTyreOptions = (tyreTypes || []).map((t) =>
+    typeof t === "string" ? { id: t.toLowerCase(), label: t } : t,
+  );
+  const activeTyreId =
+    typeof tyreType === "string" ? tyreType.toLowerCase() : "all";
+
+  const formattedCategories =
+    Array.isArray(categoryTabs) && categoryTabs.length > 0
+      ? categoryTabs.map((t) => ({
+          id: t.id,
+          label: t.name || t.label,
+          disabled: t.enabled === false,
+          disabledTooltip: t.disabledTooltip ?? "Phase 2 — coming soon",
+        }))
+      : DEFAULT_CATEGORY_TABS;
+
   return (
-    <Box
-      component="header"
-      sx={{
-        backgroundColor: "background.paper",
-        borderBottom: 1,
-        borderColor: "divider",
-        px: 2,
-        py: 1,
-        display: "grid",
-        gridTemplateColumns: "1fr auto 1fr",
-        alignItems: "center",
-        gap: 2,
-      }}
-    >
-      {/* Left: brand mark + single heading */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={1.25}
-        sx={{ justifySelf: "start", minWidth: 0 }}
+    <Box component="header" sx={{ width: "100%" }}>
+      {/* Top Row: Full-width White Navbar Bar with Shadow */}
+      <Box
+        sx={{
+          backgroundColor: "background.paper",
+          borderBottom: 1,
+          borderColor: "divider",
+          boxShadow: theme.custom.navbarShadow,
+          px: { xs: 2, md: 3 },
+          py: 1.25,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          position: "relative",
+          zIndex: 2,
+        }}
       >
-        <Box
-          component="img"
-          src={jkLogo}
-          alt="JK Tyre & Industries Ltd."
-          sx={{ height: 22, width: "auto", objectFit: "contain", display: "block" }}
-        />
-        <Box
-          sx={{
-            width: "2px",
-            height: 24,
-            borderRadius: 1,
-            backgroundColor: "text.disabled",
-          }}
-        />
-        <Typography
-          sx={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.2px", whiteSpace: "nowrap" }}
-        >
-          One JK One Dashboard
-        </Typography>
-      </Stack>
-
-      {/* Center: active plant — highlighted pill, click to change plant */}
-      <Tooltip title="Change plant" arrow>
-        <Box
-          role="button"
-          tabIndex={0}
-          onClick={() => navigate("/")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              navigate("/");
-            }
-          }}
-          sx={{
-            justifySelf: "center",
-            display: "flex",
-            alignItems: "center",
-            gap: 0.75,
-            px: 2,
-            py: 0.6,
-            borderRadius: 999,
-            border: 1,
-            borderColor: "primary.main",
-            backgroundColor: "primary.light",
-            color: "primary.main",
-            cursor: "pointer",
-            userSelect: "none",
-            transition: "background-color 120ms ease, box-shadow 120ms ease",
-            "&:hover": {
-              backgroundColor: theme.custom.brand.orangeRing,
-              boxShadow: theme.custom.shadow,
-            },
-          }}
-        >
+        {/* Left: Brand Logo & App Name */}
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <Box
+            component="img"
+            src={jkLogo}
+            alt="JK Tyre"
+            sx={{
+              height: 28,
+              width: "auto",
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+          <Box
+            sx={{
+              width: "1.5px",
+              height: 22,
+              backgroundColor: "error.main",
+              borderRadius: 1,
+            }}
+          />
           <Typography
-            sx={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", lineHeight: 1.2 }}
+            sx={{
+              fontSize: 16.5,
+              fontWeight: 700,
+              letterSpacing: "-0.2px",
+              color: "text.primary",
+              fontStyle: "italic",
+            }}
           >
-            {plant?.name ?? "Select plant"}
+            One JK One Dashboard
           </Typography>
-          <Typography sx={{ fontSize: 11, opacity: 0.8, lineHeight: 1 }}>▾</Typography>
-        </Box>
-      </Tooltip>
+        </Stack>
 
-      {/* Right: TimeRange + TyreType badge + Export + Avatar */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={1.5}
-        sx={{ justifySelf: "end" }}
-      >
-        {lastUpdatedAt && (
-          <Tooltip
-            title={`Data last fetched ${formatUpdated(lastUpdatedAt, true)}`}
-            arrow
-          >
+        {/* Right: Last Updated Timestamp + Profile Dropdown */}
+        <Stack direction="row" alignItems="center" spacing={2}>
+          {formatUpdated(lastUpdatedAt) && (
             <Typography
               sx={{
-                fontSize: 11,
-                color: "text.disabled",
-                lineHeight: 1.2,
+                fontSize: 12.5,
+                color: "text.secondary",
+                fontWeight: 500,
                 whiteSpace: "nowrap",
               }}
             >
-              Updated {formatUpdated(lastUpdatedAt)}
+              {formatUpdated(lastUpdatedAt)}
             </Typography>
-          </Tooltip>
-        )}
+          )}
 
-        <TimeRangeSelect
-          preset={timeRange.preset}
-          from={timeRange.from}
-          to={timeRange.to}
-          onPresetChange={(p) =>
-            onTimeRangeChange((prev) => ({
-              ...prev,
-              preset: p,
-              from: "",
-              to: "",
-            }))
-          }
-          onFromChange={(v) =>
-            onTimeRangeChange((prev) => ({ ...prev, from: v, preset: null }))
-          }
-          onToChange={(v) =>
-            onTimeRangeChange((prev) => ({ ...prev, to: v, preset: null }))
-          }
-          shift={shift}
-          onShiftChange={onShiftChange}
-          asOf={asOf}
-          month={timeRange.month ?? null}
-          onMonthChange={(monthKey) =>
-            onTimeRangeChange((prev) => ({
-              ...prev,
-              preset: "month",
-              from: "",
-              to: "",
-              month: monthKey,
-            }))
-          }
-        />
+          <UserMenu user={MOCK_USER} size={34} />
+        </Stack>
+      </Box>
 
-        {/* Tyre line. A plant that runs one line (Banmore, PCR-only per
-            FR-X2) shows a static badge — there is nothing to choose. A
-            plant that runs several (CTP: PCR and TBR) gets a picker. */}
-        {tyreTypes.length > 1 ? (
-          <TyreTypeToggle
-            options={tyreTypes}
-            value={activeTyreType}
-            onChange={onTyreTypeChange}
+      {/* Second Row: Prominent Floating Navigation & Filter Capsules on Gray Canvas */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2.5,
+          flexWrap: "wrap",
+          px: { xs: 2, md: 3 },
+          pt: 2.25,
+          pb: 0.75,
+        }}
+      >
+        {/* 1. Category Nav Pills in a Rounded Card */}
+        <Box
+          sx={{
+            boxShadow: theme.custom.floatingShadow,
+            borderRadius: 999,
+          }}
+        >
+          <NavTabs
+            items={formattedCategories}
+            value={activeCategory}
+            onChange={(catId) => onCategoryChange?.(catId)}
+            layoutId="categoryFilterFill"
+            size="lg"
           />
-        ) : (
+        </Box>
+
+        {/* 2. Tyre Type / Category Pills */}
+        <Box
+          sx={{
+            boxShadow: theme.custom.floatingShadow,
+            borderRadius: 999,
+          }}
+        >
+          <NavTabs
+            items={
+              formattedTyreOptions.length > 0
+                ? formattedTyreOptions
+                : DEFAULT_TYRE_TYPES
+            }
+            value={activeTyreId}
+            onChange={(id) => {
+              const match = formattedTyreOptions.find((t) => t.id === id);
+              onTyreTypeChange?.(match ? match.label : id);
+            }}
+            layoutId="tyreTypeFilterFill"
+            size="lg"
+          />
+        </Box>
+
+        {/* 3. Time Range Pills + Export Button Cluster */}
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <Box
+            sx={{
+              boxShadow: theme.custom.floatingShadow,
+              borderRadius: 999,
+            }}
+          >
+            <TimeRangeSelect
+              preset={timeRange?.preset}
+              from={timeRange?.from}
+              to={timeRange?.to}
+              shift={shift}
+              onShiftChange={onShiftChange}
+              onPresetChange={(p) =>
+                onTimeRangeChange?.((prev) => ({
+                  ...prev,
+                  preset: p.preset,
+                  from: p.from,
+                  to: p.to,
+                }))
+              }
+              onFromChange={(v) =>
+                onTimeRangeChange?.((prev) => ({
+                  ...prev,
+                  from: v,
+                  preset: null,
+                }))
+              }
+              onToChange={(v) =>
+                onTimeRangeChange?.((prev) => ({
+                  ...prev,
+                  to: v,
+                  preset: null,
+                }))
+              }
+              asOf={asOf}
+              month={timeRange?.month ?? null}
+              onMonthChange={(monthKey) =>
+                onTimeRangeChange?.((prev) => ({
+                  ...prev,
+                  preset: "month",
+                  from: "",
+                  to: "",
+                  month: monthKey,
+                }))
+              }
+              size="lg"
+            />
+          </Box>
+
+          {/* Action: Circular Download Button with white download icon */}
           <Tooltip
-            title={`${plant?.name ?? "This plant"} produces ${tyreTypes[0] ?? "PCR"} only`}
+            title={
+              exportStatus === "done"
+                ? "Downloaded"
+                : exportStatus === "loading"
+                  ? "Generating PDF…"
+                  : "Download Dashboard PDF"
+            }
             arrow
           >
-            <Box
-              sx={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: 0.6,
-                color: theme.custom.brand.teal,
-                border: 1,
-                borderColor: theme.custom.brand.teal,
-                backgroundColor: theme.custom.surface.soft,
-                px: 1,
-                py: 0.5,
-                borderRadius: 1,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {tyreTypes[0] ?? "PCR"} ONLY
-            </Box>
-          </Tooltip>
-        )}
-
-        <Tooltip
-          title={
-            exportStatus === "done"
-              ? "Downloaded"
-              : exportStatus === "loading"
-                ? "Generating PDF…"
-                : "Download as PDF"
-          }
-          arrow
-        >
-          {/* span wrapper so the Tooltip works while the button is disabled */}
-          <span style={{ display: "inline-flex" }}>
             <IconButton
               size="small"
               onClick={handleExport}
-              aria-label="Download as PDF"
               sx={{
-                width: 34,
-                height: 34,
-                borderRadius: "16px",
-                border: 1,
-                // Keep the icon white and the bg coloured in EVERY state —
-                // don't use MUI's `disabled`, which strips the background and
-                // left the white spinner/tick invisible on a white button.
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                backgroundColor: "primary.main",
                 color: "primary.contrastText",
-                boxShadow: theme.custom.shadow,
-                pointerEvents: exportStatus === "idle" ? "auto" : "none",
-                borderColor:
-                  exportStatus === "done"
-                    ? theme.custom.brand.green
-                    : theme.custom.brand.ocean,
-                backgroundColor:
-                  exportStatus === "done"
-                    ? theme.custom.brand.green
-                    : theme.custom.brand.ocean,
-                transition: "background-color 0.2s, border-color 0.2s",
+                boxShadow: theme.custom.floatingShadow,
+                transition: "opacity 0.2s, background-color 0.2s",
                 "&:hover": {
-                  backgroundColor:
-                    exportStatus === "done"
-                      ? theme.custom.brand.green
-                      : theme.custom.brand.ocean,
-                  borderColor:
-                    exportStatus === "done"
-                      ? theme.custom.brand.green
-                      : theme.custom.brand.ocean,
+                  backgroundColor: "primary.main",
+                  opacity: 0.9,
                 },
               }}
             >
               {exportStatus === "loading" ? (
-                <CircularProgress size={18} thickness={5} color="inherit" />
+                <CircularProgress size={22} thickness={5} color="inherit" />
               ) : exportStatus === "done" ? (
-                <CheckIcon sx={{ fontSize: 20 }} />
+                <CheckIcon sx={{ fontSize: 22 }} />
               ) : (
-                <FileDownloadOutlinedIcon sx={{ fontSize: 20 }} />
+                <FileDownloadOutlinedIcon sx={{ fontSize: 22 }} />
               )}
             </IconButton>
-          </span>
-        </Tooltip>
-
-        <UserMenu user={MOCK_USER} size={32} />
-      </Stack>
+          </Tooltip>
+        </Stack>
+      </Box>
     </Box>
-  );
-}
-
-/**
- * Tyre-line segmented toggle — one soft track holding every line, with a
- * white knob sliding under the active one. Used instead of a dropdown so
- * the alternatives are readable at a glance; the plant only ever runs two
- * or three lines, so they all fit on the row.
- *
- * The knob is a framer-motion shared-layout element (same technique as
- * NavTabs) with its own layoutId, so it springs between segments rather
- * than cutting.
- */
-function TyreTypeToggle({ options, value, onChange }) {
-  const theme = useTheme();
-  return (
-    <Stack
-      direction="row"
-      role="radiogroup"
-      aria-label="Tyre type"
-      sx={{
-        alignItems: "center",
-        p: 0.4,
-        borderRadius: 999,
-        backgroundColor: theme.custom.surface.soft,
-      }}
-    >
-      {options.map((option) => {
-        const active = option === value;
-        return (
-          <Box
-            key={option}
-            role="radio"
-            aria-checked={active}
-            tabIndex={0}
-            onClick={() => onChange?.(option)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onChange?.(option);
-              }
-            }}
-            sx={{
-              position: "relative",
-              px: 1.75,
-              py: 0.4,
-              borderRadius: 999,
-              fontSize: 12,
-              // Constant weight so a segment never resizes as it activates.
-              fontWeight: 700,
-              lineHeight: 1.5,
-              whiteSpace: "nowrap",
-              userSelect: "none",
-              cursor: "pointer",
-            }}
-          >
-            {active && (
-              <motion.div
-                layoutId="tyreTypeKnob"
-                transition={{ type: "spring", stiffness: 520, damping: 19, mass: 0.7 }}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  borderRadius: 999,
-                  backgroundColor: theme.palette.background.paper,
-                  boxShadow: theme.custom.shadow,
-                  zIndex: 0,
-                }}
-              />
-            )}
-            <Box
-              component="span"
-              sx={{
-                position: "relative",
-                zIndex: 1,
-                color: active ? "text.primary" : "text.secondary",
-                transition: "color 0.2s ease",
-              }}
-            >
-              {option}
-            </Box>
-          </Box>
-        );
-      })}
-    </Stack>
   );
 }
 

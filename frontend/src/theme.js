@@ -1,45 +1,72 @@
 import { createTheme } from "@mui/material/styles";
 
 /**
- * Artifact palette tokens (from docs/artifact.jsx `const C`).
- * The single source of truth for hex codes in this project — the
- * forbidden-pattern grep in scripts/check.sh disallows hex codes
- * anywhere else.
+ * Adobe XD Design System Palette Tokens
+ * The single source of truth for hex codes in this project.
  */
 const C = {
-  bg: "#F3F4F8",
-  cd: "#FFFFFF",
-  c2: "#F7F8FA",
-  bd: "#E0E3EA",
-  tx: "#1A1D26",
-  md: "#4A5168",
-  mu: "#8891A5",
-  // Accent / primary = company blue (#0077B6). aL / aB are its soft tint
-  // and ring variants used for active highlights, pills, and hovers.
-  ac: "#0077B6",
-  aL: "rgba(0,119,182,0.07)",
-  aB: "rgba(0,119,182,0.28)",
-  rowAlt: "rgba(0, 119, 182, 0.04)",
-  thBg: "#EAEDF3",
-  tl: "#1A9A3E",
-  bl: "#2563EB",
-  rd: "#DC2626",
-  am: "#F59E0B",
-  gn: "#1A9A3E",
-  pp: "#7C3AED",
-  cy: "#0D9488",
-  ocean: "#0077B6",
-  sh: "0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04)",
-  r: 8,
+  // Texts and Icons
+  tx: "#2B2F33", // Primary Text / Icons (Crisp dark charcoal)
+  md: "#636B74", // Secondary Text / Subtext / Captions (High-contrast neutral)
+  mu: "#959EA6", // Disabled / Muted Text (Legible WCAG compliant)
+
+  // Brand / Interactive / Actions
+  ac: "#147EFB", // Links / Button Text / Primary Action
+  aL: "rgba(20, 126, 251, 0.08)", // Soft blue active pill background
+  aB: "rgba(20, 126, 251, 0.25)", // Blue focus / ring
+  activePillBg: "#EAF3FE", // Active pill light blue fill
+  activePillBorder: "#147EFB",
+  activePillText: "#147EFB",
+
+  // Positive / Green Tokens
+  gn: "#238B3D", // Green (Positive) Text & Icons
+  gnAccent: "#33C75A", // Success Element / Progress fill / Stem
+  gnCard: "#EAF9EE", // Green Positive Card Background
+  gnTrack: "rgba(35, 139, 61, 0.15)", // Green Progress Bar Track
+  gnGradient: "linear-gradient(90deg, #238B3D 0%, #33C75A 100%)",
+
+  // Secondary / Amber Tokens
+  am: "#FF9601", // Amber (Medium/Secondary) Text, Icons & Elements
+  amCard: "#FFF4E5", // Amber Secondary Card Background
+  amTrack: "rgba(255, 150, 1, 0.18)", // Amber Progress Bar Track
+  amGradient: "linear-gradient(90deg, #FF8800 0%, #FFB347 100%)",
+
+  // Negative / Red Tokens
+  rd: "#D70014", // Red (Negative) Text & Icons
+  rdAccent: "#FF3B30", // Error Element / Progress fill
+  rdCard: "#FFEBEA", // Red Negative Card Background
+  rdTrack: "rgba(215, 0, 20, 0.15)", // Red Progress Bar Track
+  rdGradient: "linear-gradient(90deg, #D70014 0%, #FF3B30 100%)",
+
+  // Surfaces & Canvas
+  bg: "#F8F9FA", // Dashboard Canvas Background
+  cd: "#FFFFFF", // Neutral White Card Background
+  c2: "#F4F6F8", // Soft Container Background
+  bd: "#E4E4E4", // Divider / Border Line
+  thBg: "#F4F6F8", // Table / Header background
+  rowAlt: "rgba(20, 126, 251, 0.03)",
+
+  // Other Accents
+  bl: "#147EFB",
+  tl: "#238B3D",
+  ocean: "#147EFB",
+  purple: "#5856D6",
+  drillCloseBg: "#8E959E",
+  drillCloseHover: "#737B85",
+  sh: "0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.03)",
+  navbarShadow: "0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04)",
+  floatingShadow: "0 3px 12px rgba(0,0,0,0.09), 0 1px 4px rgba(0,0,0,0.05)",
+  r: 10,
 };
 
 const theme = createTheme({
   palette: {
     mode: "light",
     primary: { main: C.ac, light: C.aL, dark: C.aB, contrastText: "#FFFFFF" },
-    success: { main: C.gn },
+    secondary: { main: C.am },
+    success: { main: C.gnAccent, dark: C.gn },
     warning: { main: C.am },
-    error: { main: C.rd },
+    error: { main: C.rdAccent, dark: C.rd },
     info: { main: C.bl },
     text: { primary: C.tx, secondary: C.md, disabled: C.mu },
     background: { default: C.bg, paper: C.cd },
@@ -61,6 +88,7 @@ const theme = createTheme({
         root: {
           borderBottom: `1px solid ${C.bd}`,
           borderRight: `1px solid ${C.bd}`,
+          color: C.tx,
           "&:last-child": {
             borderRight: "none",
           },
@@ -75,31 +103,56 @@ const theme = createTheme({
     },
     MuiButton: {
       styleOverrides: {
-        root: { textTransform: "none" },
+        root: { textTransform: "none", borderRadius: 8 },
       },
     },
     MuiCard: {
       styleOverrides: {
-        root: { borderRadius: 10 },
+        root: { borderRadius: 12 },
       },
     },
     MuiDialog: {
       styleOverrides: {
-        paper: { borderRadius: 10 },
+        paper: { borderRadius: 12 },
       },
     },
   },
 });
 
 /**
- * Project-specific tokens that don't map cleanly onto MUI's semantic
- * palette. Access via `theme.custom.*` in components (typed via JSDoc
- * since this is JavaScript).
+ * Project-specific tokens that map onto Adobe XD design system.
  */
 theme.custom = {
   surface: { default: C.bg, paper: C.cd, soft: C.c2 },
   text: { strong: C.tx, medium: C.md, muted: C.mu },
   table: { alternateRow: C.rowAlt, headerBg: C.thBg },
+  cards: {
+    neutral: C.cd,
+    green: C.gnCard,
+    amber: C.amCard,
+    red: C.rdCard,
+  },
+  status: {
+    green: C.gn,
+    greenAccent: C.gnAccent,
+    greenCard: C.gnCard,
+    greenTrack: C.gnTrack,
+    greenGradient: C.gnGradient,
+    amber: C.am,
+    amberCard: C.amCard,
+    amberTrack: C.amTrack,
+    amberGradient: C.amGradient,
+    red: C.rd,
+    redAccent: C.rdAccent,
+    redCard: C.rdCard,
+    redTrack: C.rdTrack,
+    redGradient: C.rdGradient,
+  },
+  pills: {
+    activeBg: C.activePillBg,
+    activeBorder: C.activePillBorder,
+    activeText: C.activePillText,
+  },
   brand: {
     orange: C.ac,
     orangeSoft: C.aL,
@@ -107,14 +160,22 @@ theme.custom = {
     teal: C.tl,
     blue: C.bl,
     green: C.gn,
+    greenLight: C.gnCard,
     amber: C.am,
+    amberLight: C.amCard,
     red: C.rd,
-    purple: C.pp,
-    cyan: C.cy,
+    redLight: C.rdCard,
+    purple: C.purple,
     ocean: C.ocean,
   },
   shadow: C.sh,
+  navbarShadow: C.navbarShadow,
+  floatingShadow: C.floatingShadow,
   radius: C.r,
+  drillClose: {
+    bg: C.drillCloseBg,
+    hover: C.drillCloseHover,
+  },
 };
 
 export default theme;

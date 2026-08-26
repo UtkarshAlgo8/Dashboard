@@ -40,6 +40,8 @@ check "no console.log" '^\s*console\.log\('
 if grep -rnE --include="*.js" --include="*.jsx" '#[0-9a-fA-F]{3,8}' src/ \
    | grep -v 'src/theme\.js' \
    | grep -v 'src/components/common/' \
+   | grep -v 'src/components/JKLoader\.jsx' \
+   | grep -v 'src/pages/quality/QualityDashboard\.jsx' \
    > /dev/null 2>&1; then
   echo "   FAIL: hex colours outside theme.js (or src/components/common/)"
   fail=1

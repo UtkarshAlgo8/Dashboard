@@ -35,6 +35,7 @@ export default function GenericTableDrillPanel({
   productType = null,
   from = null,
   to = null,
+  onClose,
 }) {
   // While the drill fetch is still in flight and we don't yet have any
   // child rows, render a skeleton. Otherwise the user sees an empty
@@ -55,13 +56,37 @@ export default function GenericTableDrillPanel({
   switch (kpi?.id) {
     // Quality
     case "ftq":
-      return <FtdDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <FtdDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "ds":
-      return <ScrapDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <ScrapDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "sr":
-      return <ScrapRateDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <ScrapRateDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "rw":
-      return <ReworkDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <ReworkDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "ncm":
       return (
         <NcmDrillPanel
@@ -73,36 +98,88 @@ export default function GenericTableDrillPanel({
           productType={productType}
           from={from}
           to={to}
+          onClose={onClose}
         />
       );
     // Cost
     case "spc":
-      return <SpecificPowerDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <SpecificPowerDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     // Morale
     case "ab":
       // Plant-level — pass the windowed rows (NOT section-filtered;
       // Absenteeism_section children span every section).
-      return <AbsenteeismDrillPanel drillRows={windowed} granularity={granularity} />;
+      return (
+        <AbsenteeismDrillPanel
+          drillRows={windowed}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "tq":
-      return <TqmDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <TqmDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "sg":
-      return <SuggestionsDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <SuggestionsDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "tr":
-      return <TrainingDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <TrainingDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     // Safety
     case "ri":
       return (
-        <ReportableDrillPanel drillRows={sectionFiltered} section={section} granularity={granularity} />
+        <ReportableDrillPanel
+          drillRows={sectionFiltered}
+          section={section}
+          granularity={granularity}
+          onClose={onClose}
+        />
       );
     case "fa":
       return (
-        <FirstAidDrillPanel drillRows={sectionFiltered} section={section} granularity={granularity} />
+        <FirstAidDrillPanel
+          drillRows={sectionFiltered}
+          section={section}
+          granularity={granularity}
+          onClose={onClose}
+        />
       );
     case "nm":
-      return <NearMissDrillPanel drillRows={sectionFiltered} granularity={granularity} />;
+      return (
+        <NearMissDrillPanel
+          drillRows={sectionFiltered}
+          granularity={granularity}
+          onClose={onClose}
+        />
+      );
     case "sa":
       return (
-        <SafetyAuditDrillPanel drillRows={sectionFiltered} section={section} granularity={granularity} />
+        <SafetyAuditDrillPanel
+          drillRows={sectionFiltered}
+          section={section}
+          granularity={granularity}
+          onClose={onClose}
+        />
       );
     default:
       return (

@@ -196,11 +196,16 @@ function DataTable({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={searchPlaceholder}
-                sx={{ maxWidth: 320, "& .MuiOutlinedInput-root": { fontSize: 13 } }}
+                sx={{
+                  maxWidth: 320,
+                  "& .MuiOutlinedInput-root": { fontSize: 13 },
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 16, color: "text.disabled" }} />
+                      <SearchIcon
+                        sx={{ fontSize: 16, color: "text.disabled" }}
+                      />
                     </InputAdornment>
                   ),
                   endAdornment: query ? (
@@ -302,7 +307,8 @@ function DataTable({
                     backgroundColor: (t) =>
                       i % 2 === 0
                         ? "background.paper"
-                        : (t.custom?.table?.alternateRow ?? "rgba(0, 119, 182, 0.04)"),
+                        : (t.custom?.table?.alternateRow ??
+                          "rgba(0, 119, 182, 0.04)"),
                     "&:hover": {
                       backgroundColor: (t) => t.palette.action.hover,
                     },
@@ -442,7 +448,11 @@ function HeaderCell({
               onClick={() => toggleValue(v)}
               sx={{ fontSize: 12, py: 0.25 }}
             >
-              <Checkbox size="small" checked={selected.has(v)} sx={{ p: 0.5 }} />
+              <Checkbox
+                size="small"
+                checked={selected.has(v)}
+                sx={{ p: 0.5 }}
+              />
               <ListItemText
                 primary={v}
                 primaryTypographyProps={{ fontSize: 12 }}

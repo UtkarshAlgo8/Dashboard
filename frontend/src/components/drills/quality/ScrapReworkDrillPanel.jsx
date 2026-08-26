@@ -18,6 +18,7 @@ import { snapshotLatest } from "@/lib/drillDate.js";
 import { canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
 // changes.md §1/§8: match granularity spelling-tolerantly ("Daily" vs the
 // real "DAY") so the subsection drill pins the SAME granularity as the card
@@ -75,6 +76,7 @@ function ScrapReworkDrillPanel({
   granularity = "DAY",
   mode = "snapshot",
   isLoading = false,
+  onClose,
 }) {
   const [selectedSub, setSelectedSub] = useState(null);
   const [viewBy, setViewBy] = useState("reason");
@@ -194,23 +196,25 @@ function ScrapReworkDrillPanel({
       >
         <Typography
           sx={{
-            fontSize: 13,
+            fontSize: 15,
             fontWeight: 700,
             color: "primary.main",
             textTransform: "uppercase",
-            letterSpacing: 0.5,
+            letterSpacing: 0.6,
           }}
         >
           {kind} — subsection-wise
         </Typography>
-        {/* Top-right download — menu offers PDF (visual) + Excel (detail rows). */}
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={excelHeaders}
-          filename={`drill-${kind.toLowerCase()}-${(selectedSub ?? "subsection").toLowerCase().replace(/\s+/g, "-")}`}
-          sheetName={kind}
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <CardDownloadButton
+            cardRef={cardRef}
+            rows={excelRows}
+            headers={excelHeaders}
+            filename={`drill-${kind.toLowerCase()}-${(selectedSub ?? "subsection").toLowerCase().replace(/\s+/g, "-")}`}
+            sheetName={kind}
+          />
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
 
       <Box ref={cardRef}>
@@ -231,11 +235,11 @@ function ScrapReworkDrillPanel({
             <Stack direction="row" alignItems="center" spacing={1}>
               <Typography
                 sx={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "text.disabled",
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: "text.secondary",
                   textTransform: "uppercase",
-                  letterSpacing: 0.4,
+                  letterSpacing: 0.5,
                 }}
               >
                 View by
@@ -260,7 +264,9 @@ function ScrapReworkDrillPanel({
                 <ToggleButton value="both">Machine + SKU</ToggleButton>
               </ToggleButtonGroup>
               <Box sx={{ flex: 1 }} />
-              <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+              <Typography
+                sx={{ fontSize: 12, fontWeight: 500, color: "text.secondary" }}
+              >
                 {detailRows.length} rows · {selectedSub}
               </Typography>
             </Stack>
@@ -268,7 +274,7 @@ function ScrapReworkDrillPanel({
             {detailRows.length > 0 ? (
               <DetailTable rows={detailRows} viewBy={viewBy} kind={kind} />
             ) : (
-              <Box sx={{ p: 2, textAlign: "center", color: "text.disabled" }}>
+              <Box sx={{ p: 2, textAlign: "center", color: "text.secondary" }}>
                 <Typography sx={{ fontSize: 13 }}>
                   No {viewBy} rows for {selectedSub} in this fetch.
                 </Typography>
