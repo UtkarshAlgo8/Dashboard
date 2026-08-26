@@ -383,6 +383,15 @@ function BanmoreProduction() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
 
+  // Keep the rendered Stock tab, fetch scope, and OEE drill on the same
+  // sub-section when the dashboard starts with a null sub-section.
+  useEffect(() => {
+    if (!isStock || dashboard.subSection != null) return;
+    if (!STOCK_SUBSECTIONS[0]) return;
+    setFilter({ subSection: STOCK_SUBSECTIONS[0] }, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStock, dashboard.subSection, STOCK_SUBSECTIONS[0]]);
+
   useEffect(() => {
     if (!isStock) return;
     const first = stockProductOptions[0];
@@ -1028,6 +1037,7 @@ function DrillPanelRouter({
       return (
         <OeeDrillPanel
           section={section}
+          subSection={subSection}
           rawRows={rawRows}
           mode={mode}
           granularity={productivityDrillGranularity}
