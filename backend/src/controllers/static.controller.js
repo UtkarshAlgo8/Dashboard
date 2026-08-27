@@ -63,9 +63,6 @@ export const PLANTS = [
     otif: null,
     yield: null,
     enabled: false,
-    curedTyreProduction: 714248,
-    scrap: 11245,
-    scrapPct: 1.6,
   },
   {
     id: "laksar-unit3",
@@ -80,9 +77,6 @@ export const PLANTS = [
     otif: null,
     yield: null,
     enabled: false,
-    curedTyreProduction: 714248,
-    scrap: 11245,
-    scrapPct: 1.6,
   },
   {
     id: "laksar-unit4",
@@ -97,9 +91,6 @@ export const PLANTS = [
     otif: null,
     yield: null,
     enabled: false,
-    curedTyreProduction: 714248,
-    scrap: 11245,
-    scrapPct: 1.6,
   },
   {
     id: "mysuru-radial",
@@ -114,9 +105,6 @@ export const PLANTS = [
     otif: null,
     yield: null,
     enabled: false,
-    curedTyreProduction: 714248,
-    scrap: 11245,
-    scrapPct: 1.6,
   },
   {
     id: "mysuru-vikrant",
@@ -131,9 +119,6 @@ export const PLANTS = [
     otif: null,
     yield: null,
     enabled: false,
-    curedTyreProduction: 714248,
-    scrap: 11245,
-    scrapPct: 1.6,
   },
   {
     id: "mysuru-otr",
@@ -148,9 +133,6 @@ export const PLANTS = [
     otif: null,
     yield: null,
     enabled: false,
-    curedTyreProduction: 714248,
-    scrap: 11245,
-    scrapPct: 1.6,
   },
   {
     id: "kankroli",
@@ -165,9 +147,6 @@ export const PLANTS = [
     otif: null,
     yield: null,
     enabled: false,
-    curedTyreProduction: 714248,
-    scrap: 11245,
-    scrapPct: 1.6,
   },
 ];
 
@@ -445,9 +424,9 @@ export async function getPlants(req, res, next) {
       ...p,
       ...(staticSummaries[p.id] ?? { oee: null, otif: null, yield: null }),
       ...(timeAwareSummaries[p.id] ?? {
-        curedTyreProduction: p.curedTyreProduction ?? 0,
-        scrap: p.scrap ?? 0,
-        scrapPct: p.scrapPct ?? null,
+        curedTyreProduction: 0,
+        scrap: 0,
+        scrapPct: null,
       }),
     }));
     res.json({ data });
