@@ -316,7 +316,7 @@ export default function ShiftComparisonCard({
             icon={<GridViewIcon sx={{ fontSize: 18, color: "text.primary" }} />}
             data={displayProd}
             rawValues={prodByShift}
-            unitLabel={isKg(prodUnit) ? "MT" : (prodUnit ?? "Tyres")}
+            unitLabel={isKg(prodUnit) ? "MT" : (prodUnit ?? "NOS")}
             shifts={shifts}
             metricType="production"
             yTicks={prodScale.yTicks}
@@ -333,7 +333,7 @@ export default function ShiftComparisonCard({
             }
             data={displayScrap}
             rawValues={scrapByShift}
-            unitLabel="Tyres"
+            unitLabel="NOS"
             shifts={shifts}
             metricType="scrap"
             yTicks={scrapScale.yTicks}
@@ -348,7 +348,7 @@ export default function ShiftComparisonCard({
             }
             data={displayRework}
             rawValues={reworkByShift}
-            unitLabel="Tyres"
+            unitLabel="NOS"
             shifts={shifts}
             metricType="rework"
             yTicks={reworkScale.yTicks}
@@ -695,7 +695,7 @@ function LollipopSvgChart({
           fontWeight="500"
           fontFamily={theme.typography.fontFamily}
         >
-          No. of Tyres in Thousands
+          Quantity in Thousands ({unitLabel})
         </text>
 
         {/* Horizontal Dashed Gridlines & Y-Axis Labels */}

@@ -173,7 +173,7 @@ function ModernPlantCard({
                 ml: 0.5,
               }}
             >
-              Tyres
+              NOS
             </Typography>
           )}
         </Typography>
@@ -219,7 +219,7 @@ function ModernPlantCard({
                 ml: 0.5,
               }}
             >
-              Tyres
+              NOS
             </Typography>
           )}
         </Typography>

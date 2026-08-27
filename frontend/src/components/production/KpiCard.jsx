@@ -65,10 +65,7 @@ function KpiCard({
   } else if (kpiId.includes("prod") || kpiName.includes("prod")) {
     HeaderIcon = GridViewIcon;
     displayName = kpi.name || "Production";
-    const rawU = String(kpi.unit || "")
-      .trim()
-      .toLowerCase();
-    subtitle = rawU === "nos" || rawU === "num" || !rawU ? "tyres" : kpi.unit;
+    subtitle = kpi.unit || "NOS";
   } else {
     HeaderIcon = GridViewIcon;
     displayName = kpi.name || "KPI";
@@ -134,10 +131,7 @@ function KpiCard({
     kpi.trend == null || kpi.trend === "" ? null : Number(kpi.trend);
 
   if (isProduction) {
-    const unitLabel =
-      kpi.unit && !["nos", "num"].includes(kpi.unit.toLowerCase())
-        ? kpi.unit
-        : "Tyres";
+    const unitLabel = kpi.unit || "NOS";
     if (Number.isFinite(trendValue)) {
       trendVal = `${trendValue > 0 ? "+" : ""}${formatIndianNumber(trendValue)} ${unitLabel}`;
     } else if (Number.isFinite(trendPct) && Number.isFinite(numVal)) {
