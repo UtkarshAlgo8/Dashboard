@@ -1,66 +1,25 @@
-import { useEffect, useState } from "react";
 import { Box, Stack, Typography } from "@mui/material";
-import { motion } from "framer-motion";
+import GridViewRoundedIcon from "@mui/icons-material/GridViewRounded";
+import LayersClearRoundedIcon from "@mui/icons-material/LayersClearRounded";
 
 /**
- * Animated Number component that smoothly counts up to target value
+ * Format numeric tyre count with Indian numbering format (e.g. 7,14,248)
  */
-function AnimatedNumber({ value, decimals = 1, suffix = "%" }) {
-  const [displayValue, setDisplayValue] = useState(0);
-  const target = typeof value === "number" ? value : parseFloat(value);
-
-  useEffect(() => {
-    if (isNaN(target) || target === null || target === undefined) return;
-
-    let startTimestamp = null;
-    const duration = 2200; // ms (2.2 seconds)
-
-    const step = (timestamp) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      // Ease out cubic
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-      const current = progress === 1 ? target : target * easeOut;
-      setDisplayValue(current);
-
-      if (progress < 1) {
-        window.requestAnimationFrame(step);
-      }
-    };
-
-    const animFrame = window.requestAnimationFrame(step);
-    return () => window.cancelAnimationFrame(animFrame);
-  }, [target]);
-
-  if (value === null || value === undefined || isNaN(target)) {
-    return <span>NA</span>;
+function formatTyreCount(val, isLive) {
+  if (val !== null && val !== undefined && !isNaN(Number(val))) {
+    const n = Number(val);
+    if (n === 0 && !isLive) return "NA";
+    return n.toLocaleString("en-IN");
   }
-
-  return (
-    <>
-      {displayValue.toFixed(decimals)}
-      <Typography
-        component="span"
-        sx={{
-          fontSize: 11,
-          fontWeight: 700,
-          ml: 0.3,
-          color: "inherit",
-        }}
-      >
-        {suffix}
-      </Typography>
-    </>
-  );
+  return isLive ? "0" : "NA";
 }
 
 /**
- * Modern Glassmorphic Plant Card with Micro-Animations & Data Viz
- * Features:
- * - Animated counting-up KPI percentages
- * - Dynamic SVG sparklines that draw themselves from left to right on load
- * - True Glassmorphism with 24px blur & specular glass top-edge reflection
- * - Ambient neon glow & smooth hover micro-interactions
+ * Modern Plant Menu Card matching the reference design:
+ * - Solid pure white container (#FFFFFF) with 16px radius and clean drop shadow
+ * - Full plant name (e.g. "Banmore Tyre Plant") with red "● Live" or "Phase 2" badge
+ * - Production Row: 4-square grid icon + "Production : [Value] Tyres"
+ * - Scrap Row: Slashed layers icon + "Scrap : [Value] Tyres"
  */
 function ModernPlantCard({
   plant,
@@ -70,9 +29,14 @@ function ModernPlantCard({
   onHover,
   onLeave,
   onSelect,
-  index = 0,
 }) {
+  const isLive = Boolean(active);
   const highlighted = active && (hovered || selected);
+
+  const prodValue = formatTyreCount(plant.curedTyreProduction, isLive);
+  const scrapValue = formatTyreCount(plant.scrap, isLive);
+
+  const displayName = plant.name || `${plant.id?.toUpperCase()} Tyre Plant`;
 
   return (
     <Box
@@ -82,279 +46,183 @@ function ModernPlantCard({
       sx={{
         position: "relative",
         borderRadius: "16px",
-        p: 2.2,
-        background: highlighted
-          ? "linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 246, 255, 0.92) 100%)"
-          : "linear-gradient(135deg, rgba(255, 255, 255, 0.86) 0%, rgba(245, 248, 255, 0.78) 100%)",
-        backdropFilter: "blur(24px) saturate(190%)",
-        WebkitBackdropFilter: "blur(24px) saturate(190%)",
+        p: { xs: 1.75, md: 2 },
+        backgroundColor: "#FFFFFF",
         border: "1px solid",
         borderColor: highlighted
-          ? "rgba(0, 150, 255, 0.7)"
-          : "rgba(255, 255, 255, 0.75)",
+          ? "rgba(37, 99, 235, 0.6)"
+          : "rgba(226, 232, 240, 0.85)",
         boxShadow: highlighted
-          ? "0 20px 45px -10px rgba(0, 100, 255, 0.28), 0 0 25px rgba(0, 180, 255, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.9)"
-          : "0 10px 30px -10px rgba(0, 15, 45, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.8)",
+          ? "0 12px 28px rgba(0, 0, 0, 0.16), 0 0 0 1.5px #2563EB"
+          : "0 4px 16px rgba(0, 0, 0, 0.08)",
         cursor: active ? "pointer" : "default",
-        opacity: active ? 1 : 0.65,
+        opacity: active ? 1 : 0.88,
         transform: highlighted
-          ? "translateY(-4px) scale(1.015)"
+          ? "translateY(-3px) scale(1.01)"
           : "translateY(0)",
-        transition: "all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
-        overflow: "hidden",
-        /* Specular Glass Top-Edge Shine */
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: "5%",
-          right: "5%",
-          height: "1px",
-          background: highlighted
-            ? "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(0,180,255,0.8) 50%, rgba(255,255,255,0) 100%)"
-            : "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0) 100%)",
-          pointerEvents: "none",
-        },
-        "&:hover": active
-          ? {
-              boxShadow:
-                "0 20px 45px -10px rgba(0, 100, 255, 0.28), 0 0 25px rgba(0, 180, 255, 0.2)",
-            }
-          : undefined,
+        transition: "all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        userSelect: "none",
       }}
     >
-      {/* Top Header Row */}
+      {/* Top Header Row: Plant Full Name + Status Badge */}
       <Stack
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        sx={{ mb: 1.5 }}
+        spacing={1}
+        sx={{ mb: 1.2 }}
       >
-        {/* Plant Code Badge + Location */}
-        <Stack direction="row" alignItems="center" spacing={1.2}>
-          <Box
-            sx={{
-              px: 1.25,
-              py: 0.35,
-              borderRadius: "7px",
-              background: "linear-gradient(135deg, #FFF2EC 0%, #FFE5D6 100%)",
-              border: "1px solid #FFD0B8",
-              color: "#E65100",
-              fontSize: 12,
-              fontWeight: 800,
-              letterSpacing: 0.5,
-              boxShadow: "0 2px 6px rgba(230, 81, 0, 0.12)",
-            }}
-          >
-            {plant.code || plant.id.toUpperCase()}
-          </Box>
-          <Typography
-            sx={{
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#0F172A",
-              display: "flex",
-              alignItems: "baseline",
-              gap: "6px",
-            }}
-          >
-            {plant.name.replace(" Tyre Plant", "").replace(" Plant", "")}
-            <Typography
-              component="span"
-              sx={{ fontSize: 13, fontWeight: 500, color: "#64748B" }}
-            >
-              {plant.sub}
-            </Typography>
-          </Typography>
-        </Stack>
+        <Typography
+          sx={{
+            fontSize: { xs: 13, sm: 13.5, md: 14 },
+            fontWeight: 600,
+            color: "#1E293B",
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {displayName}
+        </Typography>
 
-        {/* Live Indicator + Arrow */}
-        <Stack direction="row" alignItems="center" spacing={1}>
-          {active ? (
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={0.7}
-              sx={{
-                px: 1,
-                py: 0.3,
-                borderRadius: "20px",
-                background: "rgba(239, 68, 68, 0.08)",
-                border: "1px solid rgba(239, 68, 68, 0.2)",
-              }}
-            >
-              <Box
-                sx={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  backgroundColor: "#EF4444",
-                  boxShadow: "0 0 10px #EF4444",
-                  animation: "livePulse 1.8s infinite",
-                  "@keyframes livePulse": {
-                    "0%": { opacity: 1, transform: "scale(1)" },
-                    "50%": { opacity: 0.3, transform: "scale(0.8)" },
-                    "100%": { opacity: 1, transform: "scale(1)" },
-                  },
-                }}
-              />
-              <Typography
-                sx={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  color: "#EF4444",
-                  letterSpacing: 0.8,
-                }}
-              >
-                LIVE
-              </Typography>
-            </Stack>
-          ) : (
+        {isLive ? (
+          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
             <Box
               sx={{
-                fontSize: 10,
-                fontWeight: 700,
-                px: 0.9,
-                py: 0.3,
-                borderRadius: "5px",
-                backgroundColor: "#F1F5F9",
-                border: "1px solid #E2E8F0",
-                color: "#64748B",
-                textTransform: "uppercase",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                backgroundColor: "#DC2626",
+                boxShadow: "0 0 4px rgba(220, 38, 38, 0.6)",
+              }}
+            />
+            <Typography
+              sx={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#DC2626",
               }}
             >
-              Phase 2
-            </Box>
-          )}
+              Live
+            </Typography>
+          </Stack>
+        ) : (
           <Typography
             sx={{
-              color: highlighted ? "#0284C7" : "#94A3B8",
-              fontSize: 16,
-              lineHeight: 1,
-              fontWeight: 700,
-              transition: "transform 0.2s ease, color 0.2s ease",
-              transform: highlighted ? "translateX(3px)" : "none",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "#64748B",
+              flexShrink: 0,
             }}
           >
-            →
+            Phase 2
           </Typography>
-        </Stack>
+        )}
       </Stack>
 
-      {/* KPI Metrics Grid (3 columns) */}
+      {/* Aligned KPI Data Rows (Production & Scrap) */}
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 1.2,
+          gridTemplateColumns: "auto auto auto 1fr",
+          alignItems: "center",
+          rowGap: 0.9,
+          columnGap: 0.8,
+          mt: 1.2,
         }}
       >
-        <KpiBlock
-          label="OEE"
-          value={plant.oee}
-          isPositive={plant.oee >= 90}
-          highlighted={highlighted}
-          delay={0.1 + index * 0.08}
+        {/* Production Row */}
+        <GridViewRoundedIcon
+          sx={{ fontSize: 17, color: "#2563EB" }}
         />
-        <KpiBlock
-          label="OTIF"
-          value={plant.otif}
-          isPositive={plant.otif >= 95}
-          highlighted={highlighted}
-          delay={0.18 + index * 0.08}
-        />
-        <KpiBlock
-          label="YIELD"
-          value={plant.yield}
-          isPositive={plant.yield >= 97}
-          highlighted={highlighted}
-          delay={0.26 + index * 0.08}
-        />
-      </Box>
-    </Box>
-  );
-}
-
-function KpiBlock({
-  label,
-  value,
-  isPositive = true,
-  highlighted = false,
-  delay = 0.1,
-}) {
-  const strokeColor = isPositive ? "#22C55E" : "#EF4444";
-  const pathData = isPositive
-    ? "M 2,9 Q 16,12 30,5 T 58,3"
-    : "M 2,3 Q 16,2 30,7 T 58,10";
-
-  return (
-    <Box
-      sx={{
-        backgroundColor: highlighted
-          ? "rgba(255, 255, 255, 0.85)"
-          : "rgba(255, 255, 255, 0.65)",
-        backdropFilter: "blur(12px)",
-        border: "1px solid",
-        borderColor: highlighted
-          ? "rgba(0, 160, 255, 0.2)"
-          : "rgba(226, 232, 240, 0.8)",
-        borderRadius: "11px",
-        p: 1.2,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        boxShadow:
-          "0 2px 6px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
-        transition: "all 0.2s ease",
-      }}
-    >
-      <Typography
-        sx={{
-          fontSize: 10,
-          fontWeight: 700,
-          color: "#64748B",
-          letterSpacing: 0.6,
-          textTransform: "uppercase",
-          mb: 0.5,
-        }}
-      >
-        {label}
-      </Typography>
-
-      <Typography
-        sx={{
-          fontSize: 19,
-          fontWeight: 800,
-          color: isPositive ? "#16A34A" : "#DC2626",
-          lineHeight: 1.1,
-          display: "flex",
-          alignItems: "baseline",
-        }}
-      >
-        <AnimatedNumber value={value} decimals={1} suffix="%" />
-      </Typography>
-
-      {/* Animated Drawing Sparkline Curve */}
-      <Box sx={{ mt: 0.8, height: 12, width: "100%", overflow: "visible" }}>
-        <svg
-          viewBox="0 0 60 12"
-          style={{ width: "100%", height: "100%", overflow: "visible" }}
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "#1E293B",
+          }}
         >
-          <motion.path
-            d={pathData}
-            fill="none"
-            stroke={strokeColor}
-            strokeWidth="2"
-            strokeLinecap="round"
-            initial={{ pathLength: 0, opacity: 0.2 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{
-              duration: 2.2,
-              ease: [0.16, 1, 0.3, 1],
-              delay: 0.3 + delay,
-            }}
-          />
-        </svg>
+          Production
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "#1E293B",
+          }}
+        >
+          :
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#1E293B",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {prodValue}
+          {prodValue !== "NA" && (
+            <Typography
+              component="span"
+              sx={{
+                fontSize: 12.5,
+                fontWeight: 400,
+                color: "#64748B",
+                ml: 0.5,
+              }}
+            >
+              Tyres
+            </Typography>
+          )}
+        </Typography>
+
+        {/* Scrap Row */}
+        <LayersClearRoundedIcon
+          sx={{ fontSize: 17, color: "#0284C7" }}
+        />
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "#1E293B",
+          }}
+        >
+          Scrap
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "#1E293B",
+          }}
+        >
+          :
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#1E293B",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {scrapValue}
+          {scrapValue !== "NA" && (
+            <Typography
+              component="span"
+              sx={{
+                fontSize: 12.5,
+                fontWeight: 400,
+                color: "#64748B",
+                ml: 0.5,
+              }}
+            >
+              Tyres
+            </Typography>
+          )}
+        </Typography>
       </Box>
     </Box>
   );

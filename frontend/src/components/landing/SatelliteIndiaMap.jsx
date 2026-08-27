@@ -247,7 +247,7 @@ function SatelliteIndiaMap({
 
     const isDesktop = window.innerWidth >= 900;
     const padding = isDesktop
-      ? { right: 540, left: 40, top: 40, bottom: 40 }
+      ? { right: 580, left: 40, top: 40, bottom: 40 }
       : { right: 20, left: 20, top: 20, bottom: 20 };
 
     const targetId = sel || hov;
