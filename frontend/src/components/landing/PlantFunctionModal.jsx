@@ -2,34 +2,48 @@ import {
   Box,
   Dialog,
   DialogContent,
+  Divider,
   IconButton,
   Stack,
   Typography,
-  useTheme,
-  alpha,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
+import PrecisionManufacturingRoundedIcon from "@mui/icons-material/PrecisionManufacturingRounded";
+import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
+import DomainRoundedIcon from "@mui/icons-material/DomainRounded";
+import BuildRoundedIcon from "@mui/icons-material/BuildRounded";
+import EngineeringRoundedIcon from "@mui/icons-material/EngineeringRounded";
+
+/**
+ * Modern icon map for functions matching the enterprise design system
+ */
+const FUNCTION_ICONS = {
+  ph: <DomainRoundedIcon sx={{ fontSize: 20 }} />,
+  prod: <PrecisionManufacturingRoundedIcon sx={{ fontSize: 20 }} />,
+  qual: <VerifiedRoundedIcon sx={{ fontSize: 20 }} />,
+  tech: <BuildRoundedIcon sx={{ fontSize: 20 }} />,
+  eng: <EngineeringRoundedIcon sx={{ fontSize: 20 }} />,
+};
 
 /**
  * Plant + function selector dialog. Opens when a plant card is
  * clicked, or when the corresponding India-map marker is clicked.
  *
- * Phase 1: only Production navigates (Banmore only). Quality and
- * Engineering render in the active style but click → toast
- * "Phase 2" (the existing handler in LandingPage). Plant Head and
- * Technical render in the "SOON" style per BRD FR-L15.
+ * Designed with a solid, high-contrast, clean aesthetic matching
+ * ModernPlantCard (no glassy blurs or translucent see-through masks).
  */
 function PlantFunctionModal({
   open,
   onClose,
   plant,
-  functions,
-  activeFunctionIds,
+  functions = [],
+  activeFunctionIds = new Set(),
   onSelectFunction,
 }) {
-  const theme = useTheme();
   if (!plant) return null;
+
+  const isLive = plant.enabled !== false;
 
   return (
     <Dialog
@@ -39,80 +53,147 @@ function PlantFunctionModal({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: 2.5,
-          p: 1,
-          backgroundColor: alpha(theme.palette.background.paper, 0.75),
-          backdropFilter: "blur(24px) saturate(190%)",
-          WebkitBackdropFilter: "blur(24px) saturate(190%)",
-          border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.08)",
+          borderRadius: "18px",
+          p: 0.5,
+          backgroundColor: "#FFFFFF",
+          border: "1px solid rgba(226, 232, 240, 0.95)",
+          boxShadow:
+            "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)",
+          overflow: "hidden",
         },
       }}
     >
-      <DialogContent sx={{ pb: 2 }}>
-        {/* Header row: bullet + name + close */}
+      <DialogContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+        {/* Header row: Status badge + Plant Name + Close Button */}
         <Stack
           direction="row"
           alignItems="flex-start"
           justifyContent="space-between"
-          sx={{ mb: 0.5 }}
+          sx={{ mb: 1.5 }}
         >
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Box
-              sx={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                backgroundColor: "primary.main",
-              }}
-            />
-            <Typography sx={{ fontSize: 20, fontWeight: 700 }}>
-              {plant.name}
+          <Stack spacing={0.5} sx={{ minWidth: 0, pr: 1 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography
+                sx={{
+                  fontSize: 19,
+                  fontWeight: 800,
+                  color: "#0F172A",
+                  lineHeight: 1.2,
+                }}
+              >
+                {plant.name || `${plant.id?.toUpperCase()} Tyre Plant`}
+              </Typography>
+
+              {/* Status Badge */}
+              {isLive ? (
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={0.5}
+                  sx={{
+                    px: 1,
+                    py: 0.25,
+                    borderRadius: "999px",
+                    backgroundColor: "rgba(220, 38, 38, 0.08)",
+                    border: "1px solid rgba(220, 38, 38, 0.2)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      backgroundColor: "#DC2626",
+                      boxShadow: "0 0 5px rgba(220, 38, 38, 0.6)",
+                    }}
+                  />
+                  <Typography
+                    sx={{ fontSize: 11, fontWeight: 700, color: "#DC2626" }}
+                  >
+                    Live
+                  </Typography>
+                </Stack>
+              ) : (
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#64748B",
+                    backgroundColor: "#F1F5F9",
+                    px: 1,
+                    py: 0.25,
+                    borderRadius: "6px",
+                    flexShrink: 0,
+                  }}
+                >
+                  Phase 2
+                </Typography>
+              )}
+            </Stack>
+
+            <Typography
+              sx={{ fontSize: 13, color: "#64748B", fontWeight: 500 }}
+            >
+              {plant.sub || `${plant.location}, ${plant.state}`}
             </Typography>
           </Stack>
-          <IconButton size="small" onClick={onClose} aria-label="Close">
-            <CloseIcon fontSize="small" />
+
+          <IconButton
+            size="small"
+            onClick={onClose}
+            aria-label="Close"
+            sx={{
+              color: "#64748B",
+              backgroundColor: "#F1F5F9",
+              "&:hover": { backgroundColor: "#E2E8F0", color: "#0F172A" },
+            }}
+          >
+            <CloseRoundedIcon fontSize="small" />
           </IconButton>
         </Stack>
 
-        <Typography
-          sx={{ fontSize: 13, color: "text.disabled", mb: 2, ml: 2.5 }}
-        >
-          {plant.sub}
-        </Typography>
-
-        {/* KPI strip */}
+        {/* Solid KPI Summary Strip */}
         <Box
           sx={{
-            backgroundColor: alpha(theme.custom.surface.soft, 0.6),
-            border: 1,
-            borderColor: alpha(theme.palette.divider, 0.4),
-            borderRadius: 1.25,
-            px: 2.5,
+            backgroundColor: "#F8FAFC",
+            border: "1px solid #E2E8F0",
+            borderRadius: "14px",
+            px: 2,
             py: 1.5,
             mb: 2.5,
-            backdropFilter: "blur(12px)",
           }}
         >
           <Stack
             direction="row"
             justifyContent="space-around"
-            alignItems="flex-end"
+            alignItems="center"
           >
             <KpiPill label="OEE" value={plant.oee ?? plant.oe} />
+            <Divider
+              orientation="vertical"
+              flexItem
+              sx={{ borderColor: "#E2E8F0", my: 0.5 }}
+            />
             <KpiPill label="OTIF" value={plant.otif} />
+            <Divider
+              orientation="vertical"
+              flexItem
+              sx={{ borderColor: "#E2E8F0", my: 0.5 }}
+            />
             <KpiPill label="YIELD" value={plant.yield} />
           </Stack>
         </Box>
 
+        {/* Function Selection List Header */}
         <Typography
           sx={{
             fontSize: 11,
-            color: "text.disabled",
+            color: "#64748B",
             textTransform: "uppercase",
             letterSpacing: 0.8,
             fontWeight: 700,
-            mb: 1,
+            mb: 1.25,
           }}
         >
           Select Function
@@ -149,10 +230,11 @@ function KpiPill({ label, value }) {
       <Typography
         sx={{
           fontSize: 11,
-          color: "text.disabled",
+          color: "#64748B",
           textTransform: "uppercase",
           letterSpacing: 0.6,
           fontWeight: 700,
+          mb: 0.25,
         }}
       >
         {label}
@@ -165,16 +247,16 @@ function KpiPill({ label, value }) {
       >
         <Typography
           sx={{
-            fontSize: 26,
-            fontWeight: 700,
-            color: hasValue ? "success.main" : "text.disabled",
+            fontSize: 22,
+            fontWeight: 800,
+            color: hasValue ? "#16A34A" : "#94A3B8",
             lineHeight: 1,
           }}
         >
           {hasValue ? displayValue : "—"}
         </Typography>
         {hasValue && (
-          <Typography sx={{ fontSize: 12, color: "success.main" }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#16A34A" }}>
             %
           </Typography>
         )}
@@ -184,7 +266,10 @@ function KpiPill({ label, value }) {
 }
 
 function FunctionRow({ fn, active, onClick }) {
-  const theme = useTheme();
+  const icon = FUNCTION_ICONS[fn.id] || (
+    <span style={{ fontSize: 18 }}>{fn.icon || "⚙"}</span>
+  );
+
   return (
     <Box
       onClick={onClick}
@@ -192,71 +277,72 @@ function FunctionRow({ fn, active, onClick }) {
         display: "flex",
         alignItems: "center",
         gap: 1.5,
-        px: 1.5,
+        px: 1.75,
         py: 1.25,
-        borderRadius: 1.25,
+        borderRadius: "12px",
         cursor: active ? "pointer" : "default",
-        backgroundColor: active ? theme.custom.brand.orangeSoft : "transparent",
-        border: 1,
-        borderColor: active ? "transparent" : "divider",
+        backgroundColor: active ? "#FFFFFF" : "#F8FAFC",
+        border: "1.5px solid",
+        borderColor: active ? "#E2E8F0" : "rgba(226, 232, 240, 0.6)",
         opacity: active ? 1 : 0.65,
-        transition: "all 0.2s ease",
+        transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.04)" : "none",
         "&:hover": active
           ? {
-              backgroundColor: theme.custom.brand.orangeRing,
-              transform: "translateX(3px)",
+              borderColor: "#2563EB",
+              backgroundColor: "#F8FAFC",
+              boxShadow: "0 4px 12px rgba(37, 99, 235, 0.08)",
+              transform: "translateX(4px)",
             }
           : undefined,
       }}
     >
       <Box
         sx={{
-          width: 32,
-          height: 32,
-          borderRadius: 1,
+          width: 36,
+          height: 36,
+          borderRadius: "8px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: active
-            ? theme.custom.brand.orangeRing
-            : theme.custom.surface.soft,
-          color: active ? "primary.main" : "text.disabled",
-          fontSize: 18,
+          backgroundColor: active ? "#EFF6FF" : "#F1F5F9",
+          color: active ? "#2563EB" : "#94A3B8",
+          flexShrink: 0,
         }}
       >
-        {fn.icon}
+        {icon}
       </Box>
-      <Box sx={{ flex: 1 }}>
+
+      <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography
           sx={{
             fontSize: 14,
-            fontWeight: 600,
-            color: active ? "text.primary" : "text.disabled",
+            fontWeight: 700,
+            color: active ? "#0F172A" : "#64748B",
           }}
         >
           {fn.name}
         </Typography>
         {!active && (
-          <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
-            Coming Soon
+          <Typography sx={{ fontSize: 11, color: "#94A3B8", fontWeight: 500 }}>
+            Under Phase 2
           </Typography>
         )}
       </Box>
+
       {active ? (
-        <ChevronRightIcon sx={{ color: "primary.main", fontSize: 22 }} />
+        <ChevronRightRoundedIcon sx={{ color: "#2563EB", fontSize: 22 }} />
       ) : (
         <Box
           sx={{
             fontSize: 10,
             fontWeight: 700,
-            letterSpacing: 0.8,
-            color: "text.disabled",
-            backgroundColor: theme.custom.surface.soft,
-            border: 1,
-            borderColor: "divider",
-            borderRadius: 999,
+            letterSpacing: 0.6,
+            color: "#64748B",
+            backgroundColor: "#E2E8F0",
+            borderRadius: "6px",
             px: 1,
-            py: 0.25,
+            py: 0.35,
           }}
         >
           SOON
