@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
 import GridViewIcon from "@mui/icons-material/GridView";
 import DeleteSweepOutlinedIcon from "@mui/icons-material/DeleteSweepOutlined";
@@ -15,7 +15,7 @@ import {
   canonicalUnit,
   resolveProductionKpi,
 } from "@/lib/kpi-transformer.js";
-import { buildDatePayload } from "@/lib/timeRange.js";
+import { buildDatePayload, normalizeDateInput } from "@/lib/timeRange.js";
 import { isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
@@ -35,12 +35,28 @@ function useShiftBands({
   to,
   extraKpis = null,
 }) {
+  // Today mode: widen the backend window so `readShift` can fall back to the
+  // most recent date that carries Production / Scrap / Rework rows when the
+  // asOf day only has Curing_Plan / Plan_Adherence (partial-day scenario —
+  // SHIFT KPI rows often trail the latest DAY row by 1-4 days). 14 days is
+  // generous enough to cover any lag in the gold layer.
+  const todayWindow = useMemo(() => {
+    if (isRange || !date) return null;
+    const isoDate = normalizeDateInput(date);
+    if (!isoDate) return null;
+    const end = new Date(`${isoDate}T00:00:00Z`);
+    if (Number.isNaN(end.getTime())) return null;
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 14);
+    const isoStart = start.toISOString().slice(0, 10);
+    return { from: isoStart, to: isoDate };
+  }, [isRange, date]);
   const payload = {
     plantId,
     section,
     category,
     ...(subSection ? { subSection } : {}),
-    ...buildDatePayload(isRange ? { from, to } : { date }),
+    ...buildDatePayload(isRange ? { from, to } : (todayWindow ?? { date })),
     extraKpis,
     parentFilters: {},
     limit: 10000,
@@ -229,11 +245,20 @@ export default function ShiftComparisonCard({
 
     if (!isRange) {
       const selectedDate = dateKey(date);
-      const dayRows = selectedDate
-        ? dated.filter((r) => r.key === selectedDate)
-        : dated.filter((r) => r.key === dated[0].key);
-      if (dayRows.length === 0) return null;
-      return dayRows.reduce((sum, row) => sum + row.value, 0);
+      if (selectedDate) {
+        const dayRows = dated.filter((r) => r.key === selectedDate);
+        if (dayRows.length > 0) {
+          return dayRows.reduce((sum, row) => sum + row.value, 0);
+        }
+        // asOf may trail the latest SHIFT rows (e.g. SHIFT data only exists
+        // through 2026-08-27 while asOf is 2026-08-31 — the day only carries
+        // Curing_Plan / Plan_Adherence, no Production/Scrap/Rework). Fall
+        // back to the most recent date that DOES have this KPI so the chart
+        // still renders for the Today preset.
+      }
+      return dated
+        .filter((r) => r.key === dated[0].key)
+        .reduce((sum, row) => sum + row.value, 0);
     }
 
     return dated.reduce((sum, row) => sum + row.value, 0);
