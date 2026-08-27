@@ -73,43 +73,43 @@ function SatelliteIndiaMap({
             minzoom: 0,
             maxzoom: 19,
           },
-          // 1. High-Contrast Dark Shadow Underlay (prevents washout on bright desert terrain / snow)
+          // 1. High-Contrast Dark Shadow Underlay (subtle contrast against light terrain)
           {
             id: "india-border-shadow",
             type: "line",
             source: "india-boundary",
             paint: {
               "line-color": "#000000",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 5.0, 6, 10.0],
-              "line-opacity": 0.85,
-              "line-blur": 2.0,
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 3.0, 6, 5.5],
+              "line-opacity": 0.55,
+              "line-blur": 1.2,
             },
           },
-          // 2. Vibrant Outer Cyan Halo
+          // 2. Subtle Outer Cyan Halo
           {
             id: "india-border-glow-outer",
             type: "line",
             source: "india-boundary",
             paint: {
               "line-color": "#38BDF8",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 9.0, 6, 16.0],
-              "line-opacity": 0.65,
-              "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 4.0, 6, 8.0],
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 5.5, 6, 9.5],
+              "line-opacity": 0.45,
+              "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 2.5, 6, 4.5],
             },
           },
-          // 3. Bright Mid Glow
+          // 3. Crisp Mid Glow
           {
             id: "india-border-glow-mid",
             type: "line",
             source: "india-boundary",
             paint: {
               "line-color": "#F0F9FF",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 5.5, 6, 9.5],
-              "line-opacity": 0.9,
-              "line-blur": 1.2,
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 3.2, 6, 5.5],
+              "line-opacity": 0.8,
+              "line-blur": 0.8,
             },
           },
-          // 4. Bold Solid Core White National Boundary (2.5x thicker with smooth rounded joins)
+          // 4. Clean & Refined Core White National Boundary (Sharp and well-defined)
           {
             id: "india-border-core",
             type: "line",
@@ -125,9 +125,9 @@ function SatelliteIndiaMap({
                 ["linear"],
                 ["zoom"],
                 3,
-                2.8,
+                1.8,
                 6,
-                4.8,
+                2.8,
               ],
               "line-opacity": 1.0,
             },
