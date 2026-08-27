@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Box, Stack, Tooltip, Typography, useTheme } from "@mui/material";
 import GridViewIcon from "@mui/icons-material/GridView";
 import DeleteSweepOutlinedIcon from "@mui/icons-material/DeleteSweepOutlined";
@@ -15,7 +15,7 @@ import {
   canonicalUnit,
   resolveProductionKpi,
 } from "@/lib/kpi-transformer.js";
-import { buildDatePayload } from "@/lib/timeRange.js";
+import { buildDatePayload, normalizeDateInput } from "@/lib/timeRange.js";
 import { isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import JKLoader from "@/components/JKLoader.jsx";
@@ -35,12 +35,28 @@ function useShiftBands({
   to,
   extraKpis = null,
 }) {
+  // Today mode: widen the backend window so `readShift` can fall back to the
+  // most recent date that carries Production / Scrap / Rework rows when the
+  // asOf day only has Curing_Plan / Plan_Adherence (partial-day scenario —
+  // SHIFT KPI rows often trail the latest DAY row by 1-4 days). 14 days is
+  // generous enough to cover any lag in the gold layer.
+  const todayWindow = useMemo(() => {
+    if (isRange || !date) return null;
+    const isoDate = normalizeDateInput(date);
+    if (!isoDate) return null;
+    const end = new Date(`${isoDate}T00:00:00Z`);
+    if (Number.isNaN(end.getTime())) return null;
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 14);
+    const isoStart = start.toISOString().slice(0, 10);
+    return { from: isoStart, to: isoDate };
+  }, [isRange, date]);
   const payload = {
     plantId,
     section,
     category,
     ...(subSection ? { subSection } : {}),
-    ...buildDatePayload(isRange ? { from, to } : { date }),
+    ...buildDatePayload(isRange ? { from, to } : (todayWindow ?? { date })),
     extraKpis,
     parentFilters: {},
     limit: 10000,
@@ -123,6 +139,75 @@ function useShiftBands({
 }
 
 /**
+ * Fetches the DAY-granularity Production row for the same (plant, section,
+ * sub_section, product_type) the chart shows so the Today view can render a
+ * 'Day' lollipop alongside the per-shift stems. The user can then visually
+ * verify Day == Shift A + Shift B + Shift C. Used only when the Today preset
+ * is active — month/range presets already aggregate via the shift sums.
+ */
+function useDayProduction({
+  plantId = "banmore",
+  section,
+  subSection = null,
+  productType = null,
+  unit = null,
+  isRange,
+  date,
+  from,
+  to,
+  kpiName = "Production_product",
+}) {
+  const payload = {
+    plantId,
+    context: {
+      section,
+      ...(subSection ? { sub_section: subSection } : {}),
+      ...(productType ? { product_type: productType } : {}),
+      ...(unit ? { unit_of_measurement: unit } : {}),
+      granularity: "DAY",
+    },
+    ...buildDatePayload(isRange ? { from, to } : { date }),
+    drillKpis: [kpiName],
+    drillOnly: true,
+    parentFilters: {},
+    limit: 10000,
+  };
+  const hasWindow = isRange ? Boolean(from || to) : Boolean(date);
+  const { data, isLoading } = usePolledQuery(
+    async () => {
+      try {
+        const res = await client.post("/dashboard/kpi-data", payload);
+        return Array.isArray(res?.data?.data) ? res.data.data : [];
+      } catch (err) {
+        console.warn("useDayProduction HTTP call failed:", err);
+        return [];
+      }
+    },
+    {
+      enabled: Boolean(section) && hasWindow && !isRange,
+      interval: 0,
+      deps: [JSON.stringify(payload)],
+    },
+  );
+  const rows = Array.isArray(data) ? data : [];
+  // Pick the latest DAY row matching section + product_type + unit. The gold
+  // table can carry duplicate DAY roll-ups at different drill_down_level
+  // values; the dashboard's own snapshot mode picks one — we mirror that by
+  // taking the most recent row in the response (server orders DESC).
+  const match = rows.find(
+    (r) =>
+      r.granularity === "DAY" &&
+      (!r.section || r.section === section) &&
+      (!productType || r.product_type === productType) &&
+      (!unit || canonicalUnit(r.unit_of_measurement) === canonicalUnit(unit)),
+  );
+  return {
+    value: match ? numOrNull(match.actual_value) : null,
+    isLoading,
+  };
+}
+
+/**
  * Adobe XD 3 Shift-Wise Lollipop Chart Cards
  * 1. Shift Wise Total Production
  * 2. Shift Wise Total Scrap
@@ -164,10 +249,36 @@ export default function ShiftComparisonCard({
     category: "Quality",
   });
 
+  // Day-granularity Production row for the Today preset — rendered as the
+  // first lollipop on the Production chart so users can eyeball that
+  // Day == Shift A + Shift B + Shift C. Disabled for Month/Range presets.
+  const { value: dayProdValue, isLoading: dayProdLoading } = useDayProduction({
+    plantId,
+    section,
+    subSection,
+    productType,
+    unit,
+    isRange,
+    date,
+    from,
+    to,
+    kpiName:
+      section === "TBM" || section === "Curing"
+        ? "Production_product"
+        : "Production",
+  });
+
   const loadingFirst =
-    (prodLoading || qualLoading) &&
+    (prodLoading || qualLoading || dayProdLoading) &&
     prodRows.length === 0 &&
     qualRows.length === 0;
+
+  // When the Today preset is active and the DAY fetch resolved, prepend a
+  // 'Day' stem to the Production chart only (Scrap / Rework stay at 3 stems
+  // per scope). The Day value comes from a separate kpi-data fetch rather
+  // than the shift rows, so users can visually verify Day == Σ shifts.
+  const showDayStem =
+    !isRange && dayProdValue !== null && Number.isFinite(dayProdValue);
 
   const rowsForShift = (rows, shift) =>
     rows.filter((r) => r.granularity === shift.gran);
@@ -229,11 +340,20 @@ export default function ShiftComparisonCard({
 
     if (!isRange) {
       const selectedDate = dateKey(date);
-      const dayRows = selectedDate
-        ? dated.filter((r) => r.key === selectedDate)
-        : dated.filter((r) => r.key === dated[0].key);
-      if (dayRows.length === 0) return null;
-      return dayRows.reduce((sum, row) => sum + row.value, 0);
+      if (selectedDate) {
+        const dayRows = dated.filter((r) => r.key === selectedDate);
+        if (dayRows.length > 0) {
+          return dayRows.reduce((sum, row) => sum + row.value, 0);
+        }
+        // asOf may trail the latest SHIFT rows (e.g. SHIFT data only exists
+        // through 2026-08-27 while asOf is 2026-08-31 — the day only carries
+        // Curing_Plan / Plan_Adherence, no Production/Scrap/Rework). Fall
+        // back to the most recent date that DOES have this KPI so the chart
+        // still renders for the Today preset.
+      }
+      return dated
+        .filter((r) => r.key === dated[0].key)
+        .reduce((sum, row) => sum + row.value, 0);
     }
 
     return dated.reduce((sum, row) => sum + row.value, 0);
@@ -253,9 +373,22 @@ export default function ShiftComparisonCard({
   );
 
   // Keep the intentional thousands scale while preserving missing shifts as null.
-  const displayProd = prodByShift.map((v) => (v == null ? null : v / 1000));
+  const displayProdBase = prodByShift.map((v) => (v == null ? null : v / 1000));
   const displayScrap = scrapByShift.map((v) => (v == null ? null : v / 1000));
   const displayRework = reworkByShift.map((v) => (v == null ? null : v / 1000));
+
+  // Day stem goes first when Today preset is active; convert the raw value
+  // through the same unit pipeline as the shift values for consistency.
+  const dayProdRaw = isKg(prodUnit) ? kgToTonnes(dayProdValue) : dayProdValue;
+  const displayProd = showDayStem
+    ? [dayProdRaw == null ? null : dayProdRaw / 1000, ...displayProdBase]
+    : displayProdBase;
+  const prodByShiftForChart = showDayStem
+    ? [dayProdRaw, ...prodByShift]
+    : prodByShift;
+  const prodShiftsForChart = showDayStem
+    ? [{ gran: "DAY", label: "Day", isDay: true }, ...shifts]
+    : shifts;
 
   const prodScale = computeYAxisScale(displayProd, 100);
   const scrapScale = computeYAxisScale(displayScrap, 4);
@@ -295,6 +428,7 @@ export default function ShiftComparisonCard({
           scrapData={scrapByShift}
           reworkData={reworkByShift}
           unit={unit}
+          dayProdData={showDayStem ? dayProdRaw : null}
         />
       ) : (
         <Box
@@ -315,9 +449,9 @@ export default function ShiftComparisonCard({
             title="Shift Wise Total Production"
             icon={<GridViewIcon sx={{ fontSize: 18, color: "text.primary" }} />}
             data={displayProd}
-            rawValues={prodByShift}
+            rawValues={prodByShiftForChart}
             unitLabel={isKg(prodUnit) ? "MT" : (prodUnit ?? "NOS")}
-            shifts={shifts}
+            shifts={prodShiftsForChart}
             metricType="production"
             yTicks={prodScale.yTicks}
             maxVal={prodScale.maxVal}
@@ -364,7 +498,13 @@ export default function ShiftComparisonCard({
  * Compact Table View for Shift-Wise Comparison (shown below stacked KPIs in drilldown view)
  * Uses the reusable DataTable component.
  */
-function ShiftComparisonTableCard({ shifts, prodData, scrapData, reworkData }) {
+function ShiftComparisonTableCard({
+  shifts,
+  prodData,
+  scrapData,
+  reworkData,
+  dayProdData = null,
+}) {
   const theme = useTheme();
 
   const columns = [
@@ -378,7 +518,7 @@ function ShiftComparisonTableCard({ shifts, prodData, scrapData, reworkData }) {
         <Typography
           sx={{
             fontSize: 12.5,
-            fontWeight: 600,
+            fontWeight: row.isDay ? 800 : 600,
             color: "text.primary",
           }}
         >
@@ -394,7 +534,13 @@ function ShiftComparisonTableCard({ shifts, prodData, scrapData, reworkData }) {
       filterable: false,
       value: (row) => row.production,
       render: (row) => (
-        <Typography sx={{ fontSize: 12.5, color: "text.primary" }}>
+        <Typography
+          sx={{
+            fontSize: 12.5,
+            fontWeight: row.isDay ? 700 : 400,
+            color: "text.primary",
+          }}
+        >
           {row.production != null
             ? formatIndianNumber(Math.round(row.production))
             : "—"}
@@ -431,14 +577,34 @@ function ShiftComparisonTableCard({ shifts, prodData, scrapData, reworkData }) {
     },
   ];
 
-  const tableRows = shifts.map((shift, idx) => ({
-    shiftKey: shift.gran,
-    shiftCode: shift.label.replace("Shift ", ""),
-    shift: shift.label,
-    production: prodData[idx],
-    scrap: scrapData[idx],
-    rework: reworkData[idx],
-  }));
+  // Prepend a 'Day' row first when the Today preset is active so the table
+  // mirrors the chart's left-most lollipop and the user can read off
+  // Day vs Σ shifts at a glance.
+  const dayRow =
+    dayProdData != null
+      ? [
+          {
+            shiftKey: "DAY",
+            shiftCode: "Day",
+            shift: "Day",
+            production: dayProdData,
+            scrap: null,
+            rework: null,
+            isDay: true,
+          },
+        ]
+      : [];
+  const tableRows = [
+    ...dayRow,
+    ...shifts.map((shift, idx) => ({
+      shiftKey: shift.gran,
+      shiftCode: shift.label.replace("Shift ", ""),
+      shift: shift.label,
+      production: prodData[idx],
+      scrap: scrapData[idx],
+      rework: reworkData[idx],
+    })),
+  ];
 
   return (
     <Box
@@ -644,11 +810,14 @@ function LollipopSvgChart({
     return padTop + plotHeight * (1 - ratio);
   };
 
-  const xPositions = [
-    padLeft + plotWidth * 0.2,
-    padLeft + plotWidth * 0.5,
-    padLeft + plotWidth * 0.8,
-  ];
+  // Stems spread evenly across the plot area; supports 3 shifts (default) or
+  // 4 stems when the Production chart prepends a 'Day' lollipop on Today.
+  const stemCount = Math.max(shifts?.length ?? 3, 1);
+  const xPositions = Array.from({ length: stemCount }, (_, i) =>
+    stemCount === 1
+      ? padLeft + plotWidth * 0.5
+      : padLeft + (plotWidth * (i + 1)) / (stemCount + 1),
+  );
 
   return (
     <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
@@ -838,14 +1007,17 @@ function LollipopSvgChart({
                 </>
               )}
 
-              {/* Shift Label at Bottom */}
+              {/* Shift Label at Bottom — 'Day' label is always bold so the
+                  Today view's first stem reads as the daily aggregate. */}
               <text
                 x={x}
                 y={chartHeight - 10}
                 textAnchor="middle"
                 fill={isHovered ? color : theme.palette.text.secondary}
                 fontSize="11"
-                fontWeight={isHovered ? "700" : "600"}
+                fontWeight={
+                  shifts[idx]?.isDay ? "800" : isHovered ? "700" : "600"
+                }
                 fontFamily={theme.typography.fontFamily}
               >
                 {shifts[idx]?.label || `Shift ${idx + 1}`}
