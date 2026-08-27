@@ -27,6 +27,16 @@ function LandingPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
+  const handleRangeChange = useCallback((value) => {
+    if (typeof value === "object" && value !== null) {
+      setRange(value.preset ?? "today");
+      if ("from" in value) setFrom(value.from ?? "");
+      if ("to" in value) setTo(value.to ?? "");
+    } else {
+      setRange(value ?? "today");
+    }
+  }, []);
+
   const { data: rawPlants, isLoading: plantsLoading } = usePolledQuery(
     () => getPlants({ range, from, to }),
     {
@@ -106,7 +116,7 @@ function LandingPage() {
         range={range}
         from={from}
         to={to}
-        onRangeChange={setRange}
+        onRangeChange={handleRangeChange}
         onFromChange={setFrom}
         onToChange={setTo}
       />

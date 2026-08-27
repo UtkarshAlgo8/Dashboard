@@ -24,8 +24,12 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
  */
 export function getPlants(timeRange = {}) {
   if (USE_MOCK) return mockDelay(PLANTS);
+  const rangeVal =
+    typeof timeRange.range === "object" && timeRange.range !== null
+      ? (timeRange.range.preset ?? "today")
+      : (timeRange.range ?? "today");
   const q = buildQuery({
-    range: timeRange.range ?? "",
+    range: rangeVal,
     from: timeRange.from ?? "",
     to: timeRange.to ?? "",
   });
