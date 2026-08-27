@@ -71,7 +71,8 @@ function KpiGrid({
               : {
                   xs: "1fr",
                   sm: "repeat(2, minmax(0, 1fr))",
-                  md: `repeat(${validKpis.length}, minmax(0, 1fr))`,
+                  md: "repeat(2, minmax(0, 1fr))",
+                  lg: `repeat(${validKpis.length}, minmax(0, 1fr))`,
                 },
           }}
         >

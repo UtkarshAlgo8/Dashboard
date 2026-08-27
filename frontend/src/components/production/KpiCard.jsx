@@ -150,6 +150,7 @@ function KpiCard({
       onClick={() => onClick?.(kpi)}
       sx={{
         position: "relative",
+        containerType: "inline-size",
         backgroundColor: cardTheme.cardBg,
         border: isDrilling ? 2 : 1,
         borderColor: isDrilling ? "primary.main" : `${cardTheme.sparkColor}30`,
@@ -218,97 +219,122 @@ function KpiCard({
         alignItems="center"
         justifyContent="space-between"
         spacing={1}
-        sx={{ my: 0.5 }}
+        sx={{ my: 0.5, minWidth: 0 }}
       >
-        <Stack
-          direction="row"
-          alignItems="baseline"
-          spacing={0.75}
-          sx={{ minWidth: 0 }}
-        >
-          <Typography
-            sx={{
-              fontSize: 28,
-              fontWeight: 800,
-              lineHeight: 1.1,
-              color: cardTheme.textColor,
-            }}
+        {/* Left: Value, Unit & Sub-Badges */}
+        <Stack sx={{ minWidth: 0, flex: 1 }}>
+          <Stack
+            direction="row"
+            alignItems="baseline"
+            spacing={0.75}
+            sx={{ minWidth: 0 }}
           >
-            {formattedVal}
-          </Typography>
-          {subtitle && (
             <Typography
               sx={{
-                fontSize: 13,
-                fontWeight: 500,
-                color: "text.secondary",
+                fontSize: { xs: 24, md: 26, lg: 28 },
+                fontWeight: 800,
+                lineHeight: 1.1,
+                color: cardTheme.textColor,
                 whiteSpace: "nowrap",
               }}
             >
-              {subtitle}
+              {formattedVal}
             </Typography>
-          )}
-          {kpi.scope?.kind === "perMachineAvg" && kpi.scope.machines > 0 && (
-            <Tooltip
-              title={`Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${kpi.scope.machines} machines that recorded downtime in this window.`}
-              arrow
-            >
+            {subtitle && (
               <Typography
                 sx={{
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: 500,
                   color: "text.secondary",
                   whiteSpace: "nowrap",
                 }}
               >
-                ({kpi.scope.machines} m/c avg)
+                {subtitle}
               </Typography>
-            </Tooltip>
-          )}
-          {kpi.partialDay && (
-            <Tooltip
-              title="This day is still in progress — one or more shifts have no row yet, so a comparison against the previous full day would be an artefact."
-              arrow
+            )}
+          </Stack>
+
+          {/* Badges / Annotations row (placed neatly below the metric value) */}
+          {(Boolean(kpi.scope?.kind === "perMachineAvg" && kpi.scope.machines > 0) ||
+            Boolean(kpi.partialDay) ||
+            Boolean(kpi.truncated)) && (
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.75}
+              sx={{ mt: 0.35, flexWrap: "wrap", rowGap: 0.25 }}
             >
-              <Typography
-                sx={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "warning.main",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                in progress · partial day
-              </Typography>
-            </Tooltip>
-          )}
-          {kpi.truncated && (
-            <Tooltip
-              title="The row cap was reached for this window, so the oldest days are missing from this total. Narrow the date range for a complete figure."
-              arrow
-            >
-              <Typography
-                sx={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "error.main",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                partial data · range too wide
-              </Typography>
-            </Tooltip>
+              {kpi.scope?.kind === "perMachineAvg" && kpi.scope.machines > 0 && (
+                <Tooltip
+                  title={`Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${kpi.scope.machines} machines that recorded downtime in this window.`}
+                  arrow
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: "text.secondary",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ({kpi.scope.machines} m/c avg)
+                  </Typography>
+                </Tooltip>
+              )}
+              {kpi.partialDay && (
+                <Tooltip
+                  title="This day is still in progress — one or more shifts have no row yet, so a comparison against the previous full day would be an artefact."
+                  arrow
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "warning.main",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    in progress · partial day
+                  </Typography>
+                </Tooltip>
+              )}
+              {kpi.truncated && (
+                <Tooltip
+                  title="The row cap was reached for this window, so the oldest days are missing from this total. Narrow the date range for a complete figure."
+                  arrow
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "error.main",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    partial data · range too wide
+                  </Typography>
+                </Tooltip>
+              )}
+            </Stack>
           )}
         </Stack>
 
-        {/* Sparkline Graph */}
+        {/* Sparkline Graph — Auto-hides when card is too narrow (<215px) to prevent text collision */}
         {hasSpark && (
-          <Box sx={{ flexShrink: 0 }}>
+          <Box
+            sx={{
+              flexShrink: 0,
+              ml: 1,
+              "@container (max-width: 215px)": {
+                display: "none",
+              },
+            }}
+          >
             <Sparkline
               data={kpi.spark}
               color={cardTheme.sparkColor}
-              width={75}
-              height={24}
+              width={70}
+              height={22}
               onClick={(e) => {
                 e.stopPropagation();
                 onTrendOpen?.(kpi);
