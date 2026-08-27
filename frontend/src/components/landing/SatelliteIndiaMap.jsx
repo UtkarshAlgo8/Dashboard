@@ -40,6 +40,7 @@ function SatelliteIndiaMap({
   const mapRef = useRef(null);
   const markerEntriesRef = useRef([]); // stores { plant, root, marker }
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapZoom, setMapZoom] = useState(INITIAL_ZOOM);
 
   // 1. Initialize Map Instance
   useEffect(() => {
@@ -134,6 +135,10 @@ function SatelliteIndiaMap({
       map.resize();
     });
 
+    map.on("zoom", () => {
+      setMapZoom(map.getZoom());
+    });
+
     // Reset view if user clicks empty map background
     map.on("click", () => {
       if (onLeave) onLeave();
@@ -180,22 +185,25 @@ function SatelliteIndiaMap({
     plants.forEach((plant) => {
       if (!plant.lng || !plant.lat) return;
 
+      const isFocused = hov === plant.id || sel === plant.id;
+      const isCardVisible = isFocused || mapZoom >= 5.8;
+
       const el = document.createElement("div");
       const root = createRoot(el);
       // Render content immediately on initial creation
       root.render(
         <MapPlantMarker
           plant={plant}
-          isFocused={false}
+          isFocused={isFocused}
+          isCardVisible={isCardVisible}
           onClick={() => onSelect && onSelect(plant.id)}
           onMouseEnter={() => onHover && onHover(plant.id)}
         />,
       );
 
-      const isLeft = plant.badgeSide === "left";
       const marker = new MapLibreMarker({
         element: el,
-        anchor: isLeft ? "bottom-right" : "bottom-left",
+        anchor: "bottom",
       })
         .setLngLat([plant.lng, plant.lat])
         .addTo(map);
@@ -206,23 +214,29 @@ function SatelliteIndiaMap({
     markerEntriesRef.current = newEntries;
   }, [mapLoaded, plants, onHover, onSelect]);
 
-  // 3. Update Marker Props (isFocused) without re-creating roots
+  // 3. Update Marker Props (isFocused, isCardVisible) without re-creating roots
   useEffect(() => {
     markerEntriesRef.current.forEach(({ plant, root, marker }) => {
       const isFocused = hov === plant.id || sel === plant.id;
+      const isCardVisible = isFocused || mapZoom >= 5.8;
       if (marker && marker.getElement()) {
-        marker.getElement().style.zIndex = isFocused ? "50" : "1";
+        marker.getElement().style.zIndex = isFocused
+          ? "50"
+          : isCardVisible
+            ? "10"
+            : "1";
       }
       root.render(
         <MapPlantMarker
           plant={plant}
           isFocused={isFocused}
+          isCardVisible={isCardVisible}
           onClick={() => onSelect && onSelect(plant.id)}
           onMouseEnter={() => onHover && onHover(plant.id)}
         />,
       );
     });
-  }, [hov, sel, onHover, onSelect]);
+  }, [hov, sel, mapZoom, onHover, onSelect]);
 
   // 4. Zoom around the hovered plant instead of centering it. Keeping the
   // geographic point under its current screen position prevents the marker
