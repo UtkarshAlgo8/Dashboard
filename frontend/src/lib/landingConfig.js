@@ -17,6 +17,48 @@ export const PLANT_GEO = {
     lng: 80.00271264232934,
     badgeSide: "right",
   },
+  "laksar-unit2": {
+    code: "LTP-2",
+    lat: 29.7428,
+    lng: 78.0264,
+    badgeSide: "left",
+  },
+  "laksar-unit3": {
+    code: "LTP-3",
+    lat: 29.7550,
+    lng: 78.0380,
+    badgeSide: "left",
+  },
+  "laksar-unit4": {
+    code: "LTP-4",
+    lat: 29.7680,
+    lng: 78.0490,
+    badgeSide: "left",
+  },
+  "mysuru-radial": {
+    code: "RTP",
+    lat: 12.3556,
+    lng: 76.6026,
+    badgeSide: "left",
+  },
+  "mysuru-vikrant": {
+    code: "VTP",
+    lat: 12.3680,
+    lng: 76.5920,
+    badgeSide: "left",
+  },
+  "mysuru-otr": {
+    code: "OTR",
+    lat: 12.3420,
+    lng: 76.6150,
+    badgeSide: "left",
+  },
+  kankroli: {
+    code: "KTP",
+    lat: 25.0458,
+    lng: 73.8828,
+    badgeSide: "right",
+  },
   laksar: {
     code: "LTP",
     lat: 29.7428,
