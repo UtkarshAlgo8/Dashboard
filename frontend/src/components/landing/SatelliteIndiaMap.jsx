@@ -73,35 +73,51 @@ function SatelliteIndiaMap({
             minzoom: 0,
             maxzoom: 19,
           },
-          // Ambient Outer Cyan/White Glow (Subtle and slim)
+          // 1. High-Contrast Dark Shadow Underlay (prevents washout on bright desert terrain / snow)
+          {
+            id: "india-border-shadow",
+            type: "line",
+            source: "india-boundary",
+            paint: {
+              "line-color": "#000000",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 5.0, 6, 10.0],
+              "line-opacity": 0.85,
+              "line-blur": 2.0,
+            },
+          },
+          // 2. Vibrant Outer Cyan Halo
           {
             id: "india-border-glow-outer",
             type: "line",
             source: "india-boundary",
             paint: {
               "line-color": "#38BDF8",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 4, 6, 8],
-              "line-opacity": 0.4,
-              "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 2.5, 6, 5],
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 9.0, 6, 16.0],
+              "line-opacity": 0.65,
+              "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 4.0, 6, 8.0],
             },
           },
-          // Mid Glow Halo
+          // 3. Bright Mid Glow
           {
             id: "india-border-glow-mid",
             type: "line",
             source: "india-boundary",
             paint: {
               "line-color": "#F0F9FF",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.2, 6, 4],
-              "line-opacity": 0.75,
-              "line-blur": 1.0,
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 5.5, 6, 9.5],
+              "line-opacity": 0.9,
+              "line-blur": 1.2,
             },
           },
-          // Crisp Core White National Boundary (Slim & sharp)
+          // 4. Bold Solid Core White National Boundary (2.5x thicker with smooth rounded joins)
           {
             id: "india-border-core",
             type: "line",
             source: "india-boundary",
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+            },
             paint: {
               "line-color": "#FFFFFF",
               "line-width": [
@@ -109,11 +125,11 @@ function SatelliteIndiaMap({
                 ["linear"],
                 ["zoom"],
                 3,
-                1.2,
+                2.8,
                 6,
-                2.0,
+                4.8,
               ],
-              "line-opacity": 0.95,
+              "line-opacity": 1.0,
             },
           },
         ],
