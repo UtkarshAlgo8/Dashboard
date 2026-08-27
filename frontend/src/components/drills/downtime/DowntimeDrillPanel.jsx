@@ -1,7 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import {
   Box,
+  FormControl,
   IconButton,
+  MenuItem,
+  Select,
   Stack,
   Tooltip,
   Typography,
@@ -66,6 +69,9 @@ function DowntimeDrillPanel({
   const sectionName = SECTION_NAME[section] ?? section;
   const cardRef = useRef(null);
   const [selectedReason, setSelectedReason] = useState(null);
+  // null = "All Machines" (fleet-average view). When set, sums become
+  // that machine's actual minutes — see reasonRows memo.
+  const [selectedMachine, setSelectedMachine] = useState(null);
 
   // How many machines these sums span. Every figure in this panel is a FLEET
   // total — 169 Curing presses add up to ~12,000 hours in a 720-hour month —
@@ -83,6 +89,22 @@ function DowntimeDrillPanel({
     return seen.size;
   }, [rows, sectionName, granularity]);
 
+  // The Machine dropdown is derived from the same scope as `machineCount`
+  // so users can pick any machine that recorded downtime in this window.
+  // Deliberately NOT scoped by `selectedMachine` itself — the filter must
+  // always show every available machine so users can switch between them.
+  const machineOptions = useMemo(() => {
+    if (!Array.isArray(rows)) return [];
+    const seen = new Set();
+    for (const r of rows) {
+      if (r.section && r.section !== sectionName) continue;
+      if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
+      if (r.granularity !== granularity) continue;
+      if (r.machine && r.machine !== "nan") seen.add(r.machine);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }, [rows, sectionName, granularity]);
+
   // Group the 6 reasons: sum per reason for the active window.
   const reasonRows = useMemo(() => {
     if (!Array.isArray(rows)) return [];
@@ -91,17 +113,22 @@ function DowntimeDrillPanel({
       if (r.section && r.section !== sectionName) continue;
       if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
       if (r.granularity !== granularity) continue;
+      if (selectedMachine && r.machine !== selectedMachine) continue;
       const v = numOrNull(r.actual_value);
       if (v == null) continue;
       const prev = byReason.get(r.kpi_name) ?? 0;
       byReason.set(r.kpi_name, prev + v);
     }
     const total = [...byReason.values()].reduce((s, v) => s + v, 0);
-    // CR-11: divide by the contributing fleet for the same reason the tile
-    // does — machines go down concurrently, so their minutes are
-    // machine-minutes, not elapsed time. `pct` is unaffected: a common
+    // CR-11: fleet view — machines go down concurrently, so their minutes
+    // are machine-minutes, not elapsed time. Divide by the contributing
+    // fleet to get the per-machine average. `pct` is unaffected: a common
     // divisor cancels out of every share.
-    const div = machineCount > 0 ? machineCount : 1;
+    //
+    // Single-machine view — drop the divisor. `total` already reflects
+    // just that machine's minutes after the row filter above, so `pct` is
+    // naturally over that machine's total.
+    const div = selectedMachine ? 1 : machineCount > 0 ? machineCount : 1;
     return DOWNTIME_REASONS.map((reason) => {
       const sum = (byReason.get(reason) ?? 0) / div;
       return {
@@ -113,7 +140,7 @@ function DowntimeDrillPanel({
             : 0,
       };
     }).sort((a, b) => b.sum - a.sum);
-  }, [rows, sectionName, granularity, machineCount]);
+  }, [rows, sectionName, granularity, machineCount, selectedMachine]);
 
   const totalDowntime = reasonRows.reduce((s, r) => s + r.sum, 0);
 
@@ -125,7 +152,8 @@ function DowntimeDrillPanel({
         (r) =>
           (!r.section || r.section === sectionName) &&
           r.kpi_name === selectedReason &&
-          r.granularity === granularity,
+          r.granularity === granularity &&
+          (!selectedMachine || r.machine === selectedMachine),
       )
       .map((r) => ({
         date: r.date,
@@ -134,7 +162,7 @@ function DowntimeDrillPanel({
         shift: r.granularity && r.granularity !== "DAY" ? r.granularity : "—",
       }))
       .sort((a, b) => b.value - a.value);
-  }, [rows, sectionName, granularity, selectedReason]);
+  }, [rows, sectionName, granularity, selectedReason, selectedMachine]);
 
   if (reasonRows.every((r) => r.sum === 0)) {
     if (isLoading) {
@@ -143,7 +171,8 @@ function DowntimeDrillPanel({
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>
-          No Downtime recorded for {sectionName} in this date range.
+          No Downtime recorded for {sectionName}
+          {selectedMachine ? ` on ${selectedMachine}` : ""} in this date range.
         </Typography>
       </Box>
     );
@@ -168,7 +197,7 @@ function DowntimeDrillPanel({
     },
     {
       key: "sum",
-      label: "Avg / machine (min)",
+      label: selectedMachine ? "Downtime (min)" : "Avg / machine (min)",
       align: "right",
       render: (r) => formatIndianNumber(Math.round(r.sum)),
     },
@@ -248,9 +277,17 @@ function DowntimeDrillPanel({
             headers={
               selectedReason
                 ? ["Date", "Machine", "Downtime (min)", "Shift"]
-                : ["Reason", "Total (min)", "% of Total"]
+                : selectedMachine
+                  ? ["Reason", "Downtime (min)", "% of Total"]
+                  : ["Reason", "Avg / machine (min)", "% of Total"]
             }
-            filename={`drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`}
+            filename={
+              selectedReason
+                ? `drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`
+                : selectedMachine
+                  ? `drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}-${selectedMachine.toLowerCase().replace(/\s+/g, "-")}`
+                  : `drill-downtime-${sectionName.toLowerCase().replace(/\s+/g, "-")}`
+            }
             sheetName="Downtime"
           />
           <DrillCloseButton onClose={onClose} />
@@ -274,7 +311,7 @@ function DowntimeDrillPanel({
             getRowKey={(r, i) => `${r.date}-${r.machine}-${i}`}
             maxHeight={440}
             searchPlaceholder={`Search ${selectedReason} events…`}
-            emptyMessage={`No events recorded for ${selectedReason} in this range.`}
+            emptyMessage={`No events recorded for ${selectedReason}${selectedMachine ? ` on ${selectedMachine}` : ""} in this range.`}
           />
         ) : (
           <>
@@ -302,9 +339,11 @@ function DowntimeDrillPanel({
               </Typography>
               <Tooltip
                 title={
-                  machineCount > 0
-                    ? `Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${machineCount} machines in ${sectionName} that recorded downtime in this window.`
-                    : "Average downtime per machine for this window."
+                  selectedMachine
+                    ? `Total downtime recorded by ${selectedMachine} in this window.`
+                    : machineCount > 0
+                      ? `Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${machineCount} machines in ${sectionName} that recorded downtime in this window.`
+                      : "Average downtime per machine for this window."
                 }
                 arrow
               >
@@ -318,7 +357,7 @@ function DowntimeDrillPanel({
                   >
                     {formatIndianNumber(Math.round(totalDowntime))} min
                   </Typography>
-                  {machineCount > 0 && (
+                  {!selectedMachine && machineCount > 0 && (
                     <Typography
                       sx={{
                         fontSize: 11,
@@ -341,6 +380,26 @@ function DowntimeDrillPanel({
               maxHeight={440}
               searchPlaceholder="Search reasons…"
               emptyMessage="No reasons in this range."
+              toolbarRight={
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <Select
+                    value={selectedMachine ?? ""}
+                    onChange={(e) => setSelectedMachine(e.target.value || null)}
+                    displayEmpty
+                    aria-label="Filter by machine"
+                    sx={{ fontSize: 14 }}
+                  >
+                    <MenuItem value="" sx={{ fontSize: 14 }}>
+                      All Machines
+                    </MenuItem>
+                    {machineOptions.map((m) => (
+                      <MenuItem key={m} value={m} sx={{ fontSize: 14 }}>
+                        {m}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              }
             />
           </>
         )}
