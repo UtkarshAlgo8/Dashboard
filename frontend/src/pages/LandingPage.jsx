@@ -157,7 +157,7 @@ function LandingPage() {
               />
             </Box>
 
-            {/* Right Side Floating Glass Panel for Plant Cards */}
+            {/* Right Side Floating Panel for Plant Cards */}
             <Box
               sx={{
                 position: "relative",
@@ -170,12 +170,7 @@ function LandingPage() {
                 display: "flex",
                 flexDirection: "column",
                 gap: 2,
-                /* Smooth gradient mask to blend with satellite map on large screens */
-                background: {
-                  xs: "rgba(11, 19, 43, 0.85)",
-                  md: "linear-gradient(to right, rgba(11, 19, 43, 0) 0%, rgba(11, 19, 43, 0.35) 15%, rgba(11, 19, 43, 0.72) 100%)",
-                },
-                backdropFilter: "blur(4px)",
+                background: "transparent",
                 "&::-webkit-scrollbar": {
                   width: "6px",
                 },
