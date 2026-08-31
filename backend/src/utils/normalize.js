@@ -449,6 +449,10 @@ const UNIT_ALIASES = new Map([
   ["METERS", "M"],
   ["METER", "M"],
   ["NUM", "NOS"],
+  // "Tyres" is a business label for the count unit (NOS); folding both
+  // spellings into one keeps filter pins and stored rows aligned.
+  ["TYRES", "NOS"],
+  ["TYRE", "NOS"],
 ]);
 // Exported so the materializer can mirror the same spelling-merge logic
 // in JS. Keep the two in lockstep — drift silently halves filtered rows

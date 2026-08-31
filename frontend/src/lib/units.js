@@ -31,6 +31,10 @@ const UNIT_LABEL_ALIASES = new Map([
   ["METERS", "M"],
   ["METER", "M"],
   ["NUM", "NOS"],
+  // "Tyres" is a business label for the count unit (NOS) on the Production
+  // card; folding both spellings into one label keeps the card readable.
+  ["TYRES", "NOS"],
+  ["TYRE", "NOS"],
 ]);
 
 /**
