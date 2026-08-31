@@ -50,7 +50,7 @@ test("the built query filters on the selected line, and not on All", () => {
     context: { section: "Curing", granularity: "MONTH", tyre_type: "TBR" },
   });
   assert.match(tbr, /UPPER\(tyre_type\) IN \('TBR', 'BOTH'\)/);
-  assert.match(tbr, /ctp_gold\.ctp_gold/);
+  assert.match(tbr, /gold\.ctp_gold/);
 
   const all = buildFetchQuery({
     plantId: "chennai",

@@ -60,7 +60,7 @@ export const PLANT_CHENNAI = "CHENNAI";
  * ----------------------------------------------------------------- *
  * Banmore's gold table only ever stores tyre_type = 'PCR' (plus the
  * empty sentinel on non-production rows), so the plant has nothing to
- * pick between. Chennai/CTP (ctp_gold.ctp_gold) runs BOTH lines and
+ * pick between. Chennai/CTP (gold.ctp_gold) runs BOTH lines and
  * stores three values on department = Production:
  *   PCR  — Curing / TBM / Stock
  *   TBR  — Curing / TBM / Stock
@@ -97,7 +97,7 @@ const PLANT_SCOPES = {
     // opens unfiltered and the user narrows from `tyreTypes`.
     tyreType: TYRE_TYPE_ALL,
     tyreTypes: TYRE_TYPES_BOTH_LINES,
-    sqlTable: "ctp_gold.ctp_gold",
+    sqlTable: "gold.ctp_gold",
   },
 };
 

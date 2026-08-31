@@ -338,7 +338,7 @@ describe("materialize-query", () => {
       "../queries/materialize-query.js"
     );
     const sql = buildMaterializePullQuery({ plantId: "chennai", windowDays: 60, levels: [1, 2] });
-    assert.match(sql, /FROM ctp_gold\.ctp_gold/);
+    assert.match(sql, /FROM gold\.ctp_gold/);
     assert.match(sql, /UPPER\(plant\) = 'CHENNAI'/);
   });
 

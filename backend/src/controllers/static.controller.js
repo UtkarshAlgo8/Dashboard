@@ -372,7 +372,7 @@ async function landingKpisForPlant(plantId) {
  * Per-plant KPI fan-out that degrades instead of failing the page.
  *
  * Each enabled plant reads its OWN gold table (Banmore `gold.gold`,
- * Chennai `ctp_gold.ctp_gold`), so a table that has not landed upstream
+ * Chennai `gold.ctp_gold`), so a table that has not landed upstream
  * yet makes that plant's query throw. Under a plain Promise.all one such
  * plant rejected the whole batch and the landing page 502'd — every
  * plant went dark because one was missing. Failures are per-plant now:
