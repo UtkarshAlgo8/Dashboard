@@ -22,6 +22,7 @@ import MultiLineChart from "./MultiLineChart.jsx";
 import BarChart from "./BarChart.jsx";
 import ProgressChart from "./ProgressChart.jsx";
 import MultiSelectPills from "./MultiSelectPills.jsx";
+import PlanComplianceTrendModal from "./PlanComplianceTrendModal.jsx";
 import { pickChartType } from "./pickChartType.js";
 import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
@@ -163,6 +164,31 @@ function TrendModal({
         onFromChange={setFrom}
         onToChange={setTo}
         theme={theme}
+      />
+    );
+  }
+  if (
+    kpi.id === "comp" ||
+    kpi.rawName === "Plan_Compliance" ||
+    kpi.name?.toLowerCase().includes("plan") ||
+    kpi.name?.toLowerCase().includes("fulfillment")
+  ) {
+    return (
+      <PlanComplianceTrendModal
+        open={open}
+        onClose={onClose}
+        plantId={plantId}
+        kpi={kpi}
+        section={section}
+        subSection={subSection}
+        productType={productType}
+        asOf={asOf}
+        range={range}
+        from={from}
+        to={to}
+        onRangeChange={setRange}
+        onFromChange={setFrom}
+        onToChange={setTo}
       />
     );
   }
