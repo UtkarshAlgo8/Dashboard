@@ -64,6 +64,10 @@ function SatelliteIndiaMap({
             type: "geojson",
             data: "/india-boundary.geojson",
           },
+          "india-mask": {
+            type: "geojson",
+            data: "/india-mask.geojson",
+          },
         },
         layers: [
           {
@@ -72,6 +76,16 @@ function SatelliteIndiaMap({
             source: "esri-satellite",
             minzoom: 0,
             maxzoom: 19,
+          },
+          // 0. Subtle Dark Dimming / Fading Mask for territory outside India
+          {
+            id: "india-outer-fade-mask",
+            type: "fill",
+            source: "india-mask",
+            paint: {
+              "fill-color": "#070D18",
+              "fill-opacity": 0.38,
+            },
           },
           // 1. High-Contrast Dark Shadow Underlay (subtle contrast against light terrain)
           {
