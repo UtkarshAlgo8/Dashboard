@@ -2,12 +2,24 @@ import {
   Box,
   Divider,
   Stack,
+  SvgIcon,
   Tooltip,
   Typography,
   useTheme,
 } from "@mui/material";
-import PieChartIcon from "@mui/icons-material/PieChart";
 import JKLoader from "@/components/JKLoader.jsx";
+
+/**
+ * 3/4 Solid Circular Pie Icon (270° solid wedge with top-right quadrant open)
+ * Matching the Adobe XD design system spec.
+ */
+function SectionPieIcon(props) {
+  return (
+    <SvgIcon viewBox="0 0 24 24" {...props}>
+      <path d="M 12 12 L 12 4 A 8 8 0 1 0 20 12 Z" fill="currentColor" />
+    </SvgIcon>
+  );
+}
 
 const SECTION_DISPLAY_NAMES = {
   cur: "Curing",
@@ -171,14 +183,14 @@ function SidebarRow({ section, oee, stats, active, onClick }) {
           {section.name}
         </Typography>
 
-        {/* Status Line: Small Pie Chart Icon + OEE label */}
+        {/* Status Line: Small Solid 3/4 Pie Icon + OEE label */}
         <Stack
           direction="row"
           alignItems="center"
           spacing={0.75}
           sx={{ mt: 0.5 }}
         >
-          <PieChartIcon sx={{ fontSize: 17, color }} />
+          <SectionPieIcon sx={{ fontSize: 17, color }} />
           <Typography
             sx={{
               fontSize: 14,
@@ -235,7 +247,9 @@ function SectionTooltip({ name, oee, stats }) {
         spacing={0.75}
         sx={{ mb: 1.25 }}
       >
-        <PieChartIcon sx={{ fontSize: 14, color: getOeeColor(theme, oee) }} />
+        <SectionPieIcon
+          sx={{ fontSize: 14, color: getOeeColor(theme, oee) }}
+        />
         <Typography
           sx={{ fontSize: 12, color: "text.secondary", fontWeight: 500 }}
         >

@@ -7,14 +7,14 @@ import {
   useTheme,
 } from "@mui/material";
 import GridViewIcon from "@mui/icons-material/GridView";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import SettingsIcon from "@mui/icons-material/Settings";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import SouthEastIcon from "@mui/icons-material/SouthEast";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
-import AccessTimeOutlinedIcon from "@mui/icons-material/AccessTimeOutlined";
+import AccessTimeFilledIcon from "@mui/icons-material/AccessTimeFilled";
 import Sparkline from "./Sparkline.jsx";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import { evaluateKpiTier, getKpiCardTheme } from "@/lib/thresholds.js";
@@ -47,7 +47,7 @@ function KpiCard({
   let subtitle;
 
   if (kpiId.includes("oee") || kpiName.includes("oee")) {
-    HeaderIcon = SettingsOutlinedIcon;
+    HeaderIcon = SettingsIcon;
     displayName = "OEE";
     subtitle = "";
   } else if (
@@ -55,11 +55,11 @@ function KpiCard({
     kpiName.includes("compliance") ||
     kpiName.includes("plan")
   ) {
-    HeaderIcon = CheckCircleOutlinedIcon;
+    HeaderIcon = CheckCircleIcon;
     displayName = "Plan Compliance";
     subtitle = "of total planned";
   } else if (kpiId.includes("downtime") || kpiName.includes("downtime")) {
-    HeaderIcon = AccessTimeOutlinedIcon;
+    HeaderIcon = AccessTimeFilledIcon;
     displayName = kpi.name || "Total Downtime";
     subtitle = kpi.unit ? kpi.unit : "mins";
   } else if (kpiId.includes("prod") || kpiName.includes("prod")) {

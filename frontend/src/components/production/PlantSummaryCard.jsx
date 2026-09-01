@@ -1,5 +1,5 @@
 import { Box, Stack, Typography, useTheme } from "@mui/material";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import SettingsIcon from "@mui/icons-material/Settings";
 import JKLoader from "@/components/JKLoader.jsx";
 
 /**
@@ -57,7 +57,7 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
     >
       {/* Header: Amber Gear Icon + Plant OEE title */}
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-        <SettingsOutlinedIcon
+        <SettingsIcon
           sx={{ fontSize: 22, color: theme.custom.status.amber }}
         />
         <Typography
