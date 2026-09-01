@@ -497,8 +497,11 @@ const ALLOWED_KPIS = {
         id: "comp",
         name: "Plan_Compliance",
         agg: "AVG",
-        drillType: null,
-        drillTargets: null,
+        drillType: "compliance",
+        drillTargets: [
+          "Building_Fulfilled_Qty_sku",
+          "Building_Planned_Qty_sku",
+        ],
       },
     ],
     Q: [
@@ -692,8 +695,11 @@ const ALLOWED_KPIS = {
         id: "comp",
         name: "Plan_Compliance",
         agg: "AVG",
-        drillType: null,
-        drillTargets: null,
+        drillType: "compliance",
+        drillTargets: [
+          "Curing_Fulfilled_Qty_sku",
+          "Curing_Planned_Qty_sku",
+        ],
       },
     ],
     Q: [
@@ -1063,7 +1069,7 @@ const DISPLAY_NAME = {
   Production_m: "By Machine",
   Production_sku: "By SKU",
   Production_m_sku: "By Machine + SKU",
-  Plan_Compliance: "Plan Compliance",
+  Plan_Compliance: "SKU Plan Fulfillment",
   // CR-11: virtual kpi_name. The card shows the sum of the 6
   // OEE-availability-loss reasons.
   [TOTAL_DOWNTIME_NAME]: "Total Downtime",
@@ -1118,6 +1124,16 @@ export function landingKpiNames(section, category) {
   names.delete(TOTAL_DOWNTIME_NAME);
   if (section === "TBM" || section === "Curing") {
     names.add("Production_product");
+  }
+  const cat = String(category || "").toUpperCase();
+  if (cat === "P") {
+    if (section === "TBM") {
+      names.add("Building_Fulfilled_Qty_sku");
+      names.add("Building_Planned_Qty_sku");
+    } else if (section === "Curing") {
+      names.add("Curing_Fulfilled_Qty_sku");
+      names.add("Curing_Planned_Qty_sku");
+    }
   }
   return [...names];
 }
@@ -1284,6 +1300,162 @@ function selectSeries(
       return 0;
     });
     return { name: TOTAL_DOWNTIME_NAME, rows: synthesized };
+  }
+
+  // SKU Plan Fulfillment (Plan_Compliance) synthesis for TBM & Curing
+  if (
+    kpiDef.name === "Plan_Compliance" &&
+    (section === "TBM" || section === "Curing")
+  ) {
+    const feed =
+      section === "TBM"
+        ? {
+            fulfilled: "Building_Fulfilled_Qty_sku",
+            planned: "Building_Planned_Qty_sku",
+          }
+        : {
+            fulfilled: "Curing_Fulfilled_Qty_sku",
+            planned: "Curing_Planned_Qty_sku",
+          };
+
+    let fulfilledRows = groups.get(feed.fulfilled) ?? [];
+    let plannedRows = groups.get(feed.planned) ?? [];
+
+    if (fulfilledRows.length > 0 || plannedRows.length > 0) {
+      const aggProduct = AGGREGATE_PRODUCT[section]; // "Green Tyre" or "Cured Tyre"
+      const isAggProduct =
+        !productType ||
+        productType === "all" ||
+        (aggProduct &&
+          canonicalizeProductType(productType) ===
+            canonicalizeProductType(aggProduct));
+
+      if (!isAggProduct) {
+        const wantPt = canonicalizeProductType(productType);
+        fulfilledRows = fulfilledRows.filter(
+          (r) => canonicalizeProductType(r.product_type) === wantPt,
+        );
+        plannedRows = plannedRows.filter(
+          (r) => canonicalizeProductType(r.product_type) === wantPt,
+        );
+      }
+
+      // Group by date and itemcode to calculate per-SKU fulfillment % and weighted average
+      const perDateItems = new Map();
+      const granularityCount = new Map();
+
+      const addToItemMap = (r, type) => {
+        const v = numberOrNull(r.actual_value);
+        if (v == null || r.date == null) return;
+        const d = isoDate(r.date);
+        if (!d) return;
+        const item = r.itemcode || "UNKNOWN";
+        const dateMap = perDateItems.get(d) || new Map();
+        const entry = dateMap.get(item) || {
+          date: r.date,
+          itemcode: item,
+          fulfilled: 0,
+          planned: 0,
+          granularity: r.granularity,
+        };
+        if (type === "fulfilled") entry.fulfilled += v;
+        if (type === "planned") entry.planned += v;
+        dateMap.set(item, entry);
+        perDateItems.set(d, dateMap);
+
+        if (r.granularity) {
+          granularityCount.set(
+            r.granularity,
+            (granularityCount.get(r.granularity) ?? 0) + 1,
+          );
+        }
+      };
+
+      const dedupeFeed = (rows) => {
+        const seen = new Set();
+        const result = [];
+        for (const r of rows) {
+          const key = [
+            isoDate(r.date),
+            r.granularity || "",
+            r.kpi_name || r.kpiName || "",
+            r.itemcode || r.itemCode || "",
+            r.product_type || r.productType || "",
+            r.machine || "",
+          ].join("||");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          result.push(r);
+        }
+        return result;
+      };
+
+      for (const r of dedupeFeed(fulfilledRows)) addToItemMap(r, "fulfilled");
+      for (const r of dedupeFeed(plannedRows)) addToItemMap(r, "planned");
+
+      let pinnedGranularity = "";
+      let bestCount = 0;
+      for (const [g, c] of granularityCount) {
+        if (c > bestCount) {
+          pinnedGranularity = g;
+          bestCount = c;
+        }
+      }
+
+      const synthesized = [...perDateItems.entries()]
+        .map(([d, itemMap]) => {
+          let numSum = 0;
+          let denSum = 0;
+          let totalFulfilled = 0;
+          let totalPlanned = 0;
+          let sampleDate = null;
+          let rowGranularity = null;
+
+          const skuBreakdown = [];
+          for (const itemData of itemMap.values()) {
+            if (!sampleDate) sampleDate = itemData.date;
+            if (!rowGranularity && itemData.granularity) rowGranularity = itemData.granularity;
+
+            totalFulfilled += itemData.fulfilled;
+            totalPlanned += itemData.planned;
+
+            if (itemData.planned > 0) {
+              const cappedFulfilled = Math.min(itemData.fulfilled, itemData.planned);
+              numSum += cappedFulfilled;
+              denSum += itemData.planned;
+              skuBreakdown.push({
+                itemcode: itemData.itemcode,
+                fulfilled: itemData.fulfilled,
+                planned: itemData.planned,
+                skuPct: (itemData.fulfilled / itemData.planned) * 100,
+              });
+            }
+          }
+
+          // SKU Plan Fulfillment % = Σ MIN(Actual SKU, Plan SKU) / Σ Plan SKU * 100
+          const weightedRatio = denSum > 0 ? (numSum / denSum) * 100 : 0;
+
+          return {
+            date: sampleDate || d,
+            actual_value: weightedRatio,
+            produced: totalFulfilled,
+            planned: totalPlanned,
+            shortfall: totalPlanned - totalFulfilled,
+            granularity: rowGranularity ?? pinnedGranularity,
+            unit_of_measurement: "%",
+            skuBreakdown,
+          };
+        })
+        .sort((a, b) => {
+          const ai = isoDate(a.date);
+          const bi = isoDate(b.date);
+          if (ai < bi) return 1;
+          if (ai > bi) return -1;
+          return 0;
+        });
+
+      return { name: "Plan_Compliance", rows: synthesized };
+    }
   }
 
   // new_change.md C7: the TBM/Curing Production card is product-wise —
@@ -1520,6 +1692,16 @@ export function toKpiGrid(
   if (section === "TBM" || section === "Curing") {
     allowedNames.add("Production_product");
   }
+  const cat = String(category || "").toUpperCase();
+  if (cat === "P") {
+    if (section === "TBM") {
+      allowedNames.add("Building_Fulfilled_Qty_sku");
+      allowedNames.add("Building_Planned_Qty_sku");
+    } else if (section === "Curing") {
+      allowedNames.add("Curing_Fulfilled_Qty_sku");
+      allowedNames.add("Curing_Planned_Qty_sku");
+    }
+  }
   const plantLevelNames = new Set(
     allowedKpis.filter((k) => k.plantLevel).map((k) => k.name),
   );
@@ -1613,9 +1795,13 @@ export function toKpiGrid(
       // them out for Month/Year/custom presets where the dashboard
       // granularity is MONTH.
       const isTotalDowntime = kpiDef.name === TOTAL_DOWNTIME_NAME;
-      let preRows = isTotalDowntime
-        ? groupDesc
-        : atGranularity(groupDesc, granularity);
+      const isPlanFulfillment =
+        kpiDef.name === "Plan_Compliance" &&
+        (section === "TBM" || section === "Curing");
+      let preRows =
+        isTotalDowntime || isPlanFulfillment
+          ? groupDesc
+          : atGranularity(groupDesc, granularity);
       if (preRows.length === 0) {
         result.push(placeholderCard(kpiDef));
         continue;
@@ -1630,16 +1816,32 @@ export function toKpiGrid(
       // fetched window actually reaches it; otherwise we keep the newest
       // row in the window rather than blanking the card.
       let resolvedDate = null;
-      const anchor =
+      let anchor =
         useAnchors && anchors ? anchors[`${section}|${name}`] : null;
+      if (!anchor && isPlanFulfillment && useAnchors && anchors) {
+        anchor =
+          anchors[`${section}|Production`] ??
+          anchors[`${section}|OEE_o`] ??
+          null;
+      }
       if (anchor) {
         const upToAnchor = preRows.filter((r) => isoDate(r.date) <= anchor);
-        if (upToAnchor.length > 0 && isoDate(upToAnchor[0].date) === anchor) {
+        if (upToAnchor.length > 0) {
           preRows = upToAnchor;
-          resolvedDate = anchor;
+          resolvedDate = isoDate(preRows[0].date) === anchor ? anchor : isoDate(preRows[0].date);
         }
       }
-      if (!resolvedDate) resolvedDate = isoDate(preRows[0].date) || null;
+      if (!resolvedDate) {
+        if (isPlanFulfillment) {
+          const withProduction = preRows.filter((r) => (r.produced ?? 0) > 0);
+          if (withProduction.length > 0) {
+            preRows = preRows.filter(
+              (r) => isoDate(r.date) <= isoDate(withProduction[0].date),
+            );
+          }
+        }
+        resolvedDate = isoDate(preRows[0]?.date) || null;
+      }
 
       const kpi = kpiByName.get(name) ?? kpiDef;
       const numericVals = preRows
@@ -1802,6 +2004,9 @@ export function toKpiGrid(
           isTotalDowntime && downtimeMachines > 0
             ? { kind: "perMachineAvg", machines: downtimeMachines }
             : null,
+        produced: isPlanFulfillment && latest.produced != null ? latest.produced : null,
+        planned: isPlanFulfillment && latest.planned != null ? latest.planned : null,
+        shortfall: isPlanFulfillment && latest.shortfall != null ? latest.shortfall : null,
       });
       continue;
     }
@@ -1812,9 +2017,13 @@ export function toKpiGrid(
     // CR-11: TotalDowntime synthesises DAY rows only — bypass
     // atGranularity so Month/Year/custom presets don't filter them out.
     const isTotalDowntimeAgg = kpiDef.name === TOTAL_DOWNTIME_NAME;
-    const dailyRows = isTotalDowntimeAgg
-      ? groupDesc
-      : atGranularity(groupDesc, granularity);
+    const isPlanFulfillmentAgg =
+      kpiDef.name === "Plan_Compliance" &&
+      (section === "TBM" || section === "Curing");
+    const dailyRows =
+      isTotalDowntimeAgg || isPlanFulfillmentAgg
+        ? groupDesc
+        : atGranularity(groupDesc, granularity);
 
     if (dailyRows.length === 0) {
       result.push(placeholderCard(kpiDef));
@@ -1832,28 +2041,62 @@ export function toKpiGrid(
 
     const kpi = kpiByName.get(name) ?? kpiDef;
 
-    // new_change.md C5: the range aggregation class comes from the KPI's
-    // own name — SUM for additive flows, AVERAGE for rates (missing days
-    // are skipped by the numericVals filter above, never counted as 0),
-    // LATEST-in-range for Inventory levels. NCM_Hold's SNAP snapshot agg
-    // still sums over a custom range (changes.md §8.2), which is exactly
-    // what the additive default gives it.
-    let value = aggregateForRange(numericVals, name);
-
-    // CR-11: a custom range sums every day in the window, so the same
-    // concurrency argument as the snapshot path applies — divide the
-    // machine-minutes by the machines that contributed, giving what a
-    // typical machine lost across the range.
+    let value;
     let downtimeMachines = 0;
-    if (isTotalDowntimeAgg) {
-      const fleet = new Set();
+    let totalProduced = null;
+    let totalPlanned = null;
+    let totalShortfall = null;
+
+    if (isPlanFulfillmentAgg) {
+      const itemTotals = new Map();
       for (const r of dailyRows) {
-        if (r.machines) for (const m of r.machines) fleet.add(m);
+        totalProduced = (totalProduced || 0) + (r.produced || 0);
+        totalPlanned = (totalPlanned || 0) + (r.planned || 0);
+        if (r.skuBreakdown) {
+          for (const s of r.skuBreakdown) {
+            const entry = itemTotals.get(s.itemcode) || { fulfilled: 0, planned: 0 };
+            entry.fulfilled += s.fulfilled;
+            entry.planned += s.planned;
+            itemTotals.set(s.itemcode, entry);
+          }
+        }
       }
-      downtimeMachines = fleet.size;
-      if (downtimeMachines > 0) value /= downtimeMachines;
+      totalShortfall = (totalPlanned || 0) - (totalProduced || 0);
+
+      let weightedNumSum = 0;
+      let weightedDenSum = 0;
+      for (const entry of itemTotals.values()) {
+        if (entry.planned > 0) {
+          weightedNumSum += Math.min(entry.fulfilled, entry.planned);
+          weightedDenSum += entry.planned;
+        }
+      }
+      const weightedMonthRatio =
+        weightedDenSum > 0 ? (weightedNumSum / weightedDenSum) * 100 : 0;
+      value = Math.round(weightedMonthRatio * 100) / 100;
+    } else {
+      // new_change.md C5: the range aggregation class comes from the KPI's
+      // own name — SUM for additive flows, AVERAGE for rates (missing days
+      // are skipped by the numericVals filter above, never counted as 0),
+      // LATEST-in-range for Inventory levels. NCM_Hold's SNAP snapshot agg
+      // still sums over a custom range (changes.md §8.2), which is exactly
+      // what the additive default gives it.
+      value = aggregateForRange(numericVals, name);
+
+      // CR-11: a custom range sums every day in the window, so the same
+      // concurrency argument as the snapshot path applies — divide the
+      // machine-minutes by the machines that contributed, giving what a
+      // typical machine lost across the range.
+      if (isTotalDowntimeAgg) {
+        const fleet = new Set();
+        for (const r of dailyRows) {
+          if (r.machines) for (const m of r.machines) fleet.add(m);
+        }
+        downtimeMachines = fleet.size;
+        if (downtimeMachines > 0) value /= downtimeMachines;
+      }
+      value = Math.round(value * 100) / 100;
     }
-    value = Math.round(value * 100) / 100;
 
     // Sparkline: up to N most-recent Daily values, oldest→newest so the
     // chart reads left-to-right. Kept on the headline's scale.
@@ -1910,6 +2153,9 @@ export function toKpiGrid(
         isTotalDowntimeAgg && downtimeMachines > 0
           ? { kind: "perMachineAvg", machines: downtimeMachines }
           : null,
+      produced: isPlanFulfillmentAgg ? totalProduced : null,
+      planned: isPlanFulfillmentAgg ? totalPlanned : null,
+      shortfall: isPlanFulfillmentAgg ? totalShortfall : null,
     });
   }
   return result;

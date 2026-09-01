@@ -22,6 +22,7 @@ import MultiLineChart from "./MultiLineChart.jsx";
 import BarChart from "./BarChart.jsx";
 import ProgressChart from "./ProgressChart.jsx";
 import MultiSelectPills from "./MultiSelectPills.jsx";
+import PlanComplianceTrendModal from "./PlanComplianceTrendModal.jsx";
 import { pickChartType } from "./pickChartType.js";
 import { useToast } from "@/components/common";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
@@ -73,10 +74,6 @@ function TrendModal({
   // avoid blending two series into a zig-zag.
   unit = null,
   asOf = null,
-  // The date window currently selected on the dashboard (resolved from/to).
-  // The trend opens on this SAME range so it matches what the user is viewing.
-  dashFrom = null,
-  dashTo = null,
 }) {
   const theme = useTheme();
   const toast = useToast();
@@ -84,18 +81,15 @@ function TrendModal({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  // Each time the modal opens, seed its range from the dashboard's selection
-  // so the trend shows the SAME window the user has on the dashboard. The user
-  // can still change it afterwards; a later dashboard change is picked up on
-  // the next open. Uses the render-time "adjust state on prop change" pattern
-  // (guarded by the open transition) — no effect, no extra render.
+  // Each time the modal opens, start with the monthly trend view regardless
+  // of the dashboard's current time-range selection.
   const [prevOpen, setPrevOpen] = useState(false);
   if (open !== prevOpen) {
     setPrevOpen(open);
-    if (open && dashFrom && dashTo) {
-      setRange("custom");
-      setFrom(dashFrom);
-      setTo(dashTo);
+    if (open) {
+      setRange("month");
+      setFrom("");
+      setTo("");
     }
   }
 
@@ -163,6 +157,31 @@ function TrendModal({
         onFromChange={setFrom}
         onToChange={setTo}
         theme={theme}
+      />
+    );
+  }
+  if (
+    kpi.id === "comp" ||
+    kpi.rawName === "Plan_Compliance" ||
+    kpi.name?.toLowerCase().includes("plan") ||
+    kpi.name?.toLowerCase().includes("fulfillment")
+  ) {
+    return (
+      <PlanComplianceTrendModal
+        open={open}
+        onClose={onClose}
+        plantId={plantId}
+        kpi={kpi}
+        section={section}
+        subSection={subSection}
+        productType={productType}
+        asOf={asOf}
+        range={range}
+        from={from}
+        to={to}
+        onRangeChange={setRange}
+        onFromChange={setFrom}
+        onToChange={setTo}
       />
     );
   }
@@ -395,11 +414,13 @@ function LegacyTrendModal({
       headerExtras={
         <TimeRangeSelect
           preset={range}
+          variant="trend"
           presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
           from={from}
           to={to}
           onPresetChange={(p) => {
-            onRangeChange(p);
+            const next = typeof p === "string" ? p : p?.preset ?? "month";
+            onRangeChange(next);
             onFromChange("");
             onToChange("");
           }}
@@ -513,6 +534,11 @@ const PRODUCTION_KPI_BY_SECTION = {
   Stock: "Production",
 };
 
+const AGGREGATE_PRODUCT_BY_SECTION = {
+  TBM: "Green Tyre",
+  Curing: "Cured Tyre",
+};
+
 // The Production trend reads a different stored leaf per lens — the
 // base (section) row carries no machine and no itemcode, so grouping it
 // by those fields produced an empty chart. Same mapping as
@@ -528,6 +554,10 @@ function overlayKpiName(overlayValue, viewBy, sectionName) {
     return OVERLAY_AVAILABILITY_BY_VIEW[viewBy] ?? "Availability_o";
   }
   if (overlayValue === "Production") {
+    if (viewBy === "machine") return "Production_m";
+    if (sectionName === "TBM" || sectionName === "Curing") {
+      return "Production_product";
+    }
     return PRODUCTION_KPI_BY_SECTION[sectionName] ?? "Production";
   }
   return OVERLAY_BASE_KPI[overlayValue] ?? overlayValue;
@@ -571,6 +601,7 @@ const OEE_SERIES_CONFIG = {
   // Machines filter plays that role in the Machine view.
   showCompare: () => false,
   showOverlay: true,
+  mainMonthlyAggregation: () => "average",
   mainUnit: "%",
   mainTitleSuffix: "OEE",
   viewByLabel: (viewBy) => VIEW_BY_LABEL[viewBy] ?? "Overall",
@@ -597,6 +628,7 @@ function buildProductionSeriesConfig(sectionName, kpi) {
     skuFilterVisibility: (viewBy) => viewBy === "sku",
     showCompare: (viewBy) => viewBy === "product_type",
     showOverlay: false,
+    mainMonthlyAggregation: () => "sum",
     mainUnit: kpi?.unit ?? "",
     mainTitleSuffix: kpi?.name ?? "Production",
     viewByLabel: (viewBy) => PRODUCTION_VIEW_BY_LABEL[viewBy] ?? "Overall",
@@ -653,16 +685,7 @@ function MultiSeriesTrendModal({
   theme,
   config,
 }) {
-  // A dimension pinned on the dashboard is no longer a lens worth
-  // offering — every row in the chart already carries that one value.
-  // Only the dimensions NOT filtered outside stay as VIEW BY choices.
-  const viewByOptions = useMemo(
-    () =>
-      config.viewByOptions.filter(
-        (o) => !(o.value === "product_type" && productType),
-      ),
-    [config.viewByOptions, productType],
-  );
+  const viewByOptions = config.viewByOptions;
 
   // Default VIEW BY from the config; compare + overlays start empty;
   // machines + sku filters start empty (= all rows pass through).
@@ -753,13 +776,10 @@ function MultiSeriesTrendModal({
       enabled: Boolean(singlePayload),
       interval: 0,
       deps: [JSON.stringify(singlePayload)],
-      // Toggling an overlay mutates the payload (drillKpis adds the
-      // overlay kpi_name). Without keepPreviousData, usePolledQuery
-      // nulls `data` on deps change, which blanks the main OEE chart
-      // for the round-trip duration. Keep the previous data so the
-      // main chart stays rendered; only the new overlay chart shows
-      // its own skeleton until the response lands.
-      keepPreviousData: true,
+      // Clear the previous slice on every date or lens change. Showing the
+      // old chart while the new request is pending is misleading, especially
+      // when the new range has a different number of points.
+      keepPreviousData: false,
     },
   );
 
@@ -892,17 +912,20 @@ function MultiSeriesTrendModal({
         mainRows: filteredMainRows,
         groupField: config.groupField(viewBy),
         activeCompare,
+        isMonthly,
+        monthlyAggregation: config.mainMonthlyAggregation?.(viewBy),
       }),
-    [filteredMainRows, config, viewBy, activeCompare],
+    [filteredMainRows, config, viewBy, activeCompare, isMonthly],
   );
 
   // The chart title reflects the active VIEW BY lens + the KPI's
   // unit/suffix (e.g. "Product Type · OEE — Daily" / "Machine ·
-  // Production — MT — Daily").
+  // Production — MT — Monthly").
   const mainTitle = useMemo(() => {
     const lens = config.viewByLabel(viewBy);
-    return `${lens} · ${config.mainTitleSuffix} — Daily`;
-  }, [config, viewBy]);
+    const suffix = isMonthly ? "Monthly" : "Daily";
+    return `${lens} · ${config.mainTitleSuffix} — ${suffix}`;
+  }, [config, viewBy, isMonthly]);
 
   // Combined overlay chart — one line per picked overlay, sharing the
   // same date axis. Only built when overlays are enabled in config;
@@ -911,33 +934,99 @@ function MultiSeriesTrendModal({
     if (!config.showOverlay || overlays.length === 0) {
       return { labels: [], series: [] };
     }
-    // Collect the union of dates across every picked overlay so the
-    // x-axis is consistent regardless of which kpi has data.
-    const dateSet = new Set();
+
+    const machineView = viewBy === "machine";
+    const allowedMachines = machines.length > 0 ? new Set(machines) : null;
     const perOverlayRows = overlays.map((overlayValue) => {
       const kpiName = overlayKpiName(overlayValue, viewBy, sectionName);
-      const rows = overlayRowsByKpi[kpiName] ?? [];
-      for (const r of rows) if (r.date) dateSet.add(r.date);
+      let rows = overlayRowsByKpi[kpiName] ?? [];
+      if (overlayValue === "Production") {
+        rows = preferProductionOverlayRows(rows, sectionName, productType);
+      }
+      if (isMonthly && machineView) {
+        rows = rows.filter(
+          (r) =>
+            r.machine && (!allowedMachines || allowedMachines.has(r.machine)),
+        );
+      } else if (isMonthly) {
+        // Prefer section rollups so an overall chart does not double-count
+        // a rollup row together with its machine children.
+        const overallRows = rows.filter((r) => !r.machine);
+        if (overallRows.length > 0) rows = overallRows;
+      }
       return { overlayValue, rows };
     });
-    const dates = [...dateSet].sort();
-    const labels = dates.map((d) => toDisplayDate(d) ?? "");
 
-    const series = perOverlayRows.map(({ overlayValue, rows }) => {
+    if (!isMonthly) {
+      const dateSet = new Set();
+      for (const { rows } of perOverlayRows) {
+        for (const r of rows) if (r.date) dateSet.add(r.date);
+      }
+      const dates = [...dateSet].sort();
+      const labels = dates.map((d) => toDisplayDate(d) ?? "");
+      const series = perOverlayRows.map(({ overlayValue, rows }) => {
+        const meta = OVERLAY_OPTIONS.find((o) => o.value === overlayValue);
+        const displayLabel = meta?.label?.replace(/^\+\s*/, "") ?? overlayValue;
+        const byDate = new Map(
+          rows.map((r) => [r.date, numOrNull(r.actual_value)]),
+        );
+        return {
+          name: displayLabel,
+          values: dates.map((d) => byDate.get(d) ?? null),
+          unit: overlayUnit(overlayValue),
+        };
+      });
+      return { labels, series };
+    }
+
+    const monthSet = new Set();
+    for (const { rows } of perOverlayRows) {
+      for (const r of rows) {
+        const mk = monthKey(r.date);
+        if (mk) monthSet.add(mk);
+      }
+    }
+    const months = [...monthSet].sort();
+    const labels = months.map(toDisplayMonth);
+    const series = [];
+    for (const { overlayValue, rows } of perOverlayRows) {
       const meta = OVERLAY_OPTIONS.find((o) => o.value === overlayValue);
       const displayLabel = meta?.label?.replace(/^\+\s*/, "") ?? overlayValue;
-      const byDate = new Map(
-        rows.map((r) => [r.date, numOrNull(r.actual_value)]),
-      );
-      const values = dates.map((d) => byDate.get(d) ?? null);
-      return {
-        name: displayLabel,
-        values,
-        unit: overlayUnit(overlayValue),
-      };
-    });
+      const rowsBySeries = new Map();
+      for (const r of rows) {
+        const mk = monthKey(r.date);
+        const value = numOrNull(r.actual_value);
+        if (!mk || value == null) continue;
+        const seriesKey = machineView ? r.machine : "overall";
+        if (!rowsBySeries.has(seriesKey))
+          rowsBySeries.set(seriesKey, new Map());
+        const monthValues = rowsBySeries.get(seriesKey);
+        if (!monthValues.has(mk)) monthValues.set(mk, []);
+        monthValues.get(mk).push(value);
+      }
+      const aggregation = overlayAggregation(overlayValue, machineView);
+      for (const seriesKey of [...rowsBySeries.keys()].sort()) {
+        const monthValues = rowsBySeries.get(seriesKey);
+        series.push({
+          name: machineView ? `${displayLabel} · ${seriesKey}` : displayLabel,
+          values: months.map((month) =>
+            aggregateValues(monthValues.get(month) ?? [], aggregation),
+          ),
+          unit: overlayUnit(overlayValue),
+        });
+      }
+    }
     return { labels, series };
-  }, [overlays, viewBy, sectionName, overlayRowsByKpi, config.showOverlay]);
+  }, [
+    overlays,
+    viewBy,
+    machines,
+    sectionName,
+    productType,
+    overlayRowsByKpi,
+    config.showOverlay,
+    isMonthly,
+  ]);
 
   const overlayLabels = overlayChart.labels;
   const overlaySeries = overlayChart.series;
@@ -965,11 +1054,13 @@ function MultiSeriesTrendModal({
       headerExtras={
         <TimeRangeSelect
           preset={range}
+          variant="trend"
           presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
           from={from}
           to={to}
           onPresetChange={(p) => {
-            onRangeChange(p);
+            const next = typeof p === "string" ? p : p?.preset ?? "month";
+            onRangeChange(next);
             onFromChange("");
             onToChange("");
           }}
@@ -1063,7 +1154,7 @@ function MultiSeriesTrendModal({
         {config.showOverlay && overlays.length > 0 && (
           <ChartPanel
             theme={theme}
-            title="Overlays · Daily"
+            title={`Overlays · ${isMonthly ? "Monthly" : "Daily"}`}
             loading={loading}
             empty={overlaySeries.every((s) => s.values.every((v) => v == null))}
             emptyMessage={
@@ -1104,19 +1195,84 @@ function DowntimeTrendModal(props) {
  * Small helpers + shared frame.
  * ========================================================================= */
 
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function toDisplayMonth(mKey) {
+  if (!mKey || !mKey.includes("-")) return mKey;
+  const parts = mKey.split("-");
+  const monthIdx = Number.parseInt(parts[1], 10) - 1;
+  return MONTH_NAMES[monthIdx] || mKey;
+}
+
 // Build the (labels, series) bundle for the main chart.
 // - groupField provided → one series per distinct value of that
 //   field (machine / sub_section / tyre_type / product_type, per
 //   the calling config).
 // - groupField null → a single "Overall" series (the section
 //   aggregate).
-function buildMainChart({ mainRows, groupField, activeCompare }) {
+function buildMainChart({
+  mainRows,
+  groupField,
+  activeCompare,
+  isMonthly = false,
+  monthlyAggregation = "average",
+}) {
   if (groupField) {
     return buildGroupedSeries({
       rows: mainRows,
       groupField,
       activeCompare,
+      isMonthly,
+      monthlyAggregation,
     });
+  }
+
+  if (isMonthly) {
+    const monthMap = new Map();
+    for (const r of mainRows) {
+      if (!r.date) continue;
+      const mk = monthKey(r.date);
+      if (!mk) continue;
+      const val = numOrNull(r.actual_value);
+      if (val == null) continue;
+      const prev = monthMap.get(mk) || {
+        sum: 0,
+        count: 0,
+        latestVal: val,
+        latestDate: r.date,
+      };
+      prev.sum += val;
+      prev.count += 1;
+      if (dateKey(r.date) >= dateKey(prev.latestDate)) {
+        prev.latestVal = val;
+        prev.latestDate = r.date;
+      }
+      monthMap.set(mk, prev);
+    }
+    const months = [...monthMap.keys()].sort();
+    const labels = months.map(toDisplayMonth);
+    const values = months.map((m) => {
+      const entry = monthMap.get(m);
+      if (!entry || entry.count === 0) return null;
+      return aggregateValues(entry, monthlyAggregation);
+    });
+    return {
+      labels,
+      series: [{ name: "Overall", values }],
+    };
   }
 
   // Overall: a single series named "Overall". The end of compare[] is
@@ -1135,7 +1291,54 @@ function buildMainChart({ mainRows, groupField, activeCompare }) {
   };
 }
 
-function buildGroupedSeries({ rows, groupField, activeCompare }) {
+function buildGroupedSeries({
+  rows,
+  groupField,
+  activeCompare,
+  isMonthly = false,
+  monthlyAggregation = "average",
+}) {
+  if (isMonthly) {
+    const monthSet = new Set();
+    for (const r of rows) {
+      if (r.date) {
+        const mk = monthKey(r.date);
+        if (mk) monthSet.add(mk);
+      }
+    }
+    const months = [...monthSet].sort();
+    const labels = months.map(toDisplayMonth);
+
+    const byKey = new Map();
+    for (const r of rows) {
+      const k = r[groupField];
+      if (!k || !r.date) continue;
+      const mk = monthKey(r.date);
+      if (!mk) continue;
+      const val = numOrNull(r.actual_value);
+      if (val == null) continue;
+
+      if (!byKey.has(k)) byKey.set(k, new Map());
+      const mEntry = byKey.get(k).get(mk) || { sum: 0, count: 0 };
+      mEntry.sum += val;
+      mEntry.count += 1;
+      byKey.get(k).set(mk, mEntry);
+    }
+
+    const allIds = [...byKey.keys()].sort();
+    const ordered = allIds.filter((id) => activeCompare.includes(id));
+
+    const series = ordered.map((id) => ({
+      name: id,
+      values: months.map((m) => {
+        const entry = byKey.get(id)?.get(m);
+        if (!entry || entry.count === 0) return null;
+        return aggregateValues(entry, monthlyAggregation);
+      }),
+    }));
+    return { labels, series };
+  }
+
   const dateSet = new Set();
   for (const r of rows) if (r.date) dateSet.add(r.date);
   const dates = [...dateSet].sort();
@@ -1173,6 +1376,50 @@ function overlayUnit(overlayValue) {
   if (overlayValue === "Availability") return "%";
   if (overlayValue === "Breakdown") return "min";
   return "";
+}
+
+function overlayAggregation(overlayValue, machineView) {
+  if (overlayValue === "Production" || overlayValue === "Scrap") return "sum";
+  if (overlayValue === "Breakdown") return machineView ? "sum" : "average";
+  return "average";
+}
+
+function preferProductionOverlayRows(rows, sectionName, productType) {
+  const aggregateProduct = AGGREGATE_PRODUCT_BY_SECTION[sectionName];
+  if (aggregateProduct) {
+    const selectedProduct = productType || aggregateProduct;
+    const productRows = rows.filter(
+      (r) => r.product_type === selectedProduct,
+    );
+    if (productRows.length > 0) rows = productRows;
+  }
+
+  // Production is stored in multiple units. OEE's overlay has no unit
+  // selector, so use the standard MT series when available and never add
+  // different units together.
+  const units = [...new Set(rows.map((r) => canonicalUnit(r.unit_of_measurement)).filter(Boolean))];
+  if (units.length > 1) {
+    const preferred = units.find((unit) => unit === "MT") ?? units.sort()[0];
+    const unitRows = rows.filter(
+      (r) => canonicalUnit(r.unit_of_measurement) === preferred,
+    );
+    if (unitRows.length > 0) rows = unitRows;
+  }
+  return rows;
+}
+
+function aggregateValues(valuesOrEntry, aggregation) {
+  if (Array.isArray(valuesOrEntry)) {
+    if (valuesOrEntry.length === 0) return null;
+    const total = valuesOrEntry.reduce((sum, value) => sum + value, 0);
+    const result = aggregation === "sum" ? total : total / valuesOrEntry.length;
+    return Math.round(result * 100) / 100;
+  }
+
+  const entry = valuesOrEntry;
+  if (!entry || entry.count === 0) return null;
+  const result = aggregation === "sum" ? entry.sum : entry.sum / entry.count;
+  return Math.round(result * 100) / 100;
 }
 
 function numOrNull(v) {

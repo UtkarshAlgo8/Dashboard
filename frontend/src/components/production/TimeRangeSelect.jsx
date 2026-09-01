@@ -12,6 +12,8 @@ import { asOfMonthKey, buildMonthOptions } from "@/lib/timeRange.js";
  */
 function TimeRangeSelect({
   preset,
+  variant = "default",
+  presetLabels,
   onPresetChange,
   from,
   to,
@@ -39,6 +41,15 @@ function TimeRangeSelect({
   const monthOptions = useMemo(() => buildMonthOptions(asOf), [asOf]);
   const selectedMonthKey = month ?? asOfMonthKey(asOf);
   const showShift = preset === "today" && typeof onShiftChange === "function";
+  const isTrendVariant = variant === "trend";
+  const presetLabel = (id, fallback) => presetLabels?.[id] ?? fallback;
+  const selectPreset = (nextPreset) => {
+    if (isTrendVariant) {
+      onPresetChange(nextPreset);
+      return;
+    }
+    onPresetChange({ preset: nextPreset, from: "", to: "" });
+  };
 
   const shiftOptions = [
     { id: "all", label: "All Shifts" },
@@ -115,11 +126,7 @@ function TimeRangeSelect({
         {/* 1. Today Pill */}
         <Box
           onClick={() =>
-            onPresetChange({
-              preset: "today",
-              from: "",
-              to: "",
-            })
+            selectPreset("today")
           }
           sx={{
             ...pad,
@@ -144,17 +151,13 @@ function TimeRangeSelect({
             },
           }}
         >
-          Today
+          {presetLabel("today", "Today")}
         </Box>
 
         {/* 2. This Month Pill */}
         <Box
           onClick={() =>
-            onPresetChange({
-              preset: "month",
-              from: "",
-              to: "",
-            })
+            selectPreset("month")
           }
           sx={{
             ...pad,
@@ -179,12 +182,30 @@ function TimeRangeSelect({
             },
           }}
         >
-          This Month
+          {presetLabel("month", "This Month")}
         </Box>
+
+        {isTrendVariant && (
+          <Box
+            aria-disabled
+            sx={{
+              ...pad,
+              color: "text.disabled",
+              cursor: "not-allowed",
+              whiteSpace: "nowrap",
+              userSelect: "none",
+            }}
+          >
+            {presetLabel("year", "Yearly")}
+          </Box>
+        )}
 
         {/* 3. Date Range Dropdown Trigger Pill */}
         <Box
-          onClick={(e) => setMonthAnchor(e.currentTarget)}
+          onClick={(e) => {
+            if (isTrendVariant) setDialogOpen(true);
+            else setMonthAnchor(e.currentTarget);
+          }}
           sx={{
             display: "inline-flex",
             alignItems: "center",
@@ -219,7 +240,7 @@ function TimeRangeSelect({
       {/* Date Range Popover Menu */}
       <Menu
         anchorEl={monthAnchor}
-        open={Boolean(monthAnchor)}
+        open={!isTrendVariant && Boolean(monthAnchor)}
         onClose={() => setMonthAnchor(null)}
         slotProps={{
           paper: {

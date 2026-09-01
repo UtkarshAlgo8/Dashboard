@@ -372,17 +372,9 @@ export default function ShiftComparisonCard({
     readShift(qRowsFor("Rework", i), "Rework"),
   );
 
-  // Keep the intentional thousands scale while preserving missing shifts as null.
-  const displayProdBase = prodByShift.map((v) => (v == null ? null : v / 1000));
-  const displayScrap = scrapByShift.map((v) => (v == null ? null : v / 1000));
-  const displayRework = reworkByShift.map((v) => (v == null ? null : v / 1000));
-
   // Day stem goes first when Today preset is active; convert the raw value
   // through the same unit pipeline as the shift values for consistency.
   const dayProdRaw = isKg(prodUnit) ? kgToTonnes(dayProdValue) : dayProdValue;
-  const displayProd = showDayStem
-    ? [dayProdRaw == null ? null : dayProdRaw / 1000, ...displayProdBase]
-    : displayProdBase;
   const prodByShiftForChart = showDayStem
     ? [dayProdRaw, ...prodByShift]
     : prodByShift;
@@ -390,9 +382,9 @@ export default function ShiftComparisonCard({
     ? [{ gran: "DAY", label: "Day", isDay: true }, ...shifts]
     : shifts;
 
-  const prodScale = computeYAxisScale(displayProd, 100);
-  const scrapScale = computeYAxisScale(displayScrap, 4);
-  const reworkScale = computeYAxisScale(displayRework, 12);
+  const prodScale = computeYAxisScale(prodByShiftForChart, 100);
+  const scrapScale = computeYAxisScale(scrapByShift, 40);
+  const reworkScale = computeYAxisScale(reworkByShift, 100);
 
   return (
     <Box
@@ -448,13 +440,14 @@ export default function ShiftComparisonCard({
           <LollipopChartCard
             title="Shift Wise Total Production"
             icon={<GridViewIcon sx={{ fontSize: 18, color: "text.primary" }} />}
-            data={displayProd}
+            data={prodScale.chartData}
             rawValues={prodByShiftForChart}
             unitLabel={isKg(prodUnit) ? "MT" : (prodUnit ?? "NOS")}
             shifts={prodShiftsForChart}
             metricType="production"
             yTicks={prodScale.yTicks}
             maxVal={prodScale.maxVal}
+            inThousands={prodScale.inThousands}
           />
 
           {/* Card 2: Shift Wise Total Scrap */}
@@ -465,13 +458,14 @@ export default function ShiftComparisonCard({
                 sx={{ fontSize: 18, color: "text.primary" }}
               />
             }
-            data={displayScrap}
+            data={scrapScale.chartData}
             rawValues={scrapByShift}
             unitLabel="NOS"
             shifts={shifts}
             metricType="scrap"
             yTicks={scrapScale.yTicks}
             maxVal={scrapScale.maxVal}
+            inThousands={scrapScale.inThousands}
           />
 
           {/* Card 3: Shift Wise Total Rework */}
@@ -480,13 +474,14 @@ export default function ShiftComparisonCard({
             icon={
               <SyncOutlinedIcon sx={{ fontSize: 18, color: "text.primary" }} />
             }
-            data={displayRework}
+            data={reworkScale.chartData}
             rawValues={reworkByShift}
             unitLabel="NOS"
             shifts={shifts}
             metricType="rework"
             yTicks={reworkScale.yTicks}
             maxVal={reworkScale.maxVal}
+            inThousands={reworkScale.inThousands}
           />
         </Box>
       )}
@@ -674,30 +669,56 @@ function ShiftComparisonTableCard({
 }
 
 /**
- * Computes dynamic, legible Y-axis ticks and ceiling based on actual data
+ * Computes dynamic, legible Y-axis scale, ticks, and formatting mode based on raw values.
+ * If max value >= 1000, scales in thousands ('k'). Otherwise, scales directly in exact units.
  */
-function computeYAxisScale(data, fallbackMax = 10) {
-  const nums = (data || []).filter(
+function computeYAxisScale(rawValues, defaultMax = 100) {
+  const nums = (rawValues || []).filter(
     (v) => typeof v === "number" && Number.isFinite(v) && v > 0,
   );
-  const maxValRaw = nums.length > 0 ? Math.max(...nums) : 0;
-  if (maxValRaw <= 0) {
-    const step = fallbackMax / 4;
-    return {
-      maxVal: fallbackMax,
-      yTicks: [0, step, step * 2, step * 3, fallbackMax],
-    };
+  const maxRaw = nums.length > 0 ? Math.max(...nums) : 0;
+  const inThousands = maxRaw >= 1000;
+
+  let maxVal;
+  let yTicks;
+  let chartData;
+
+  if (inThousands) {
+    // In thousands: chartData is in 'k'
+    chartData = (rawValues || []).map((v) =>
+      v == null || !Number.isFinite(v) ? null : v / 1000,
+    );
+    const maxK = maxRaw / 1000;
+    const targetMax = maxK * 1.15;
+    const step =
+      targetMax >= 100
+        ? Math.ceil(targetMax / 4 / 10) * 10
+        : targetMax >= 20
+          ? Math.ceil(targetMax / 4 / 5) * 5
+          : targetMax >= 4
+            ? Math.ceil(targetMax / 4)
+            : Math.ceil((targetMax / 4) * 2) / 2 || 0.5;
+    maxVal = Number((step * 4).toFixed(2));
+    yTicks = Array.from({ length: 5 }, (_, i) => Number((step * i).toFixed(2)));
+  } else {
+    // Direct exact integer values (avoids 0.0k for small values)
+    chartData = (rawValues || []).map((v) =>
+      v == null || !Number.isFinite(v) ? null : v,
+    );
+    const targetMax = maxRaw <= 0 ? defaultMax : maxRaw * 1.2;
+    const step =
+      targetMax >= 200
+        ? Math.ceil(targetMax / 4 / 25) * 25
+        : targetMax >= 40
+          ? Math.ceil(targetMax / 4 / 10) * 10
+          : targetMax >= 10
+            ? Math.ceil(targetMax / 4 / 2) * 2
+            : Math.ceil(targetMax / 4) || 1;
+    maxVal = step * 4;
+    yTicks = Array.from({ length: 5 }, (_, i) => step * i);
   }
 
-  // Keep only a small amount of headroom so the tallest stem uses the chart.
-  const targetMax = maxValRaw * 1.05;
-  const tickUnit = maxValRaw >= 100 ? 10 : maxValRaw >= 10 ? 1 : 0.5;
-  const maxVal = Math.ceil(targetMax / tickUnit) * tickUnit;
-  const yTicks = Array.from({ length: 5 }, (_, index) =>
-    Number(((maxVal * index) / 4).toFixed(2)),
-  );
-
-  return { maxVal, yTicks };
+  return { inThousands, chartData, maxVal, yTicks };
 }
 
 /**
@@ -713,6 +734,7 @@ function LollipopChartCard({
   metricType,
   yTicks,
   maxVal,
+  inThousands = true,
 }) {
   const theme = useTheme();
 
@@ -777,6 +799,7 @@ function LollipopChartCard({
           metricType={metricType}
           yTicks={yTicks}
           maxVal={maxVal}
+          inThousands={inThousands}
         />
       </Box>
     </Box>
@@ -791,6 +814,7 @@ function LollipopSvgChart({
   metricType,
   yTicks,
   maxVal,
+  inThousands = true,
 }) {
   const theme = useTheme();
   const [hoveredIdx, setHoveredIdx] = useState(null);
@@ -864,7 +888,9 @@ function LollipopSvgChart({
           fontWeight="500"
           fontFamily={theme.typography.fontFamily}
         >
-          Quantity in Thousands ({unitLabel})
+          {inThousands
+            ? `Quantity in Thousands (${unitLabel})`
+            : `Quantity (${unitLabel})`}
         </text>
 
         {/* Horizontal Dashed Gridlines & Y-Axis Labels */}
@@ -916,20 +942,31 @@ function LollipopSvgChart({
           const color = getStemColor(theme, tier);
           const isHovered = hoveredIdx === idx;
           const gradId = `stem-fade-${metricType}-${idx}`;
-          const labelText =
-            val == null || isNaN(val)
-              ? ""
-              : val >= 100
-                ? `${Math.round(val)}k`
-                : `${val.toFixed(1)}k`;
 
           const rawVal =
             rawValues && rawValues[idx] != null
               ? rawValues[idx]
               : val != null
-                ? val * 1000
-                : 0;
-          const exactText = `${formatIndianNumber(Math.round(rawVal * 100) / 100)}${unitLabel ? ` ${unitLabel}` : ""}`;
+                ? inThousands
+                  ? val * 1000
+                  : val
+                : null;
+
+          let labelText = "";
+          if (rawVal != null && !isNaN(rawVal)) {
+            if (rawVal === 0) {
+              labelText = "0";
+            } else if (!inThousands || rawVal < 1000) {
+              labelText = formatIndianNumber(Math.round(rawVal));
+            } else if (rawVal >= 100000) {
+              labelText = `${formatIndianNumber(Math.round(rawVal / 1000))}k`;
+            } else {
+              const kVal = rawVal / 1000;
+              labelText = `${Number.isInteger(kVal) ? kVal : kVal.toFixed(1)}k`;
+            }
+          }
+
+          const exactText = `${formatIndianNumber(Math.round((rawVal ?? 0) * 100) / 100)}${unitLabel ? ` ${unitLabel}` : ""}`;
           const tooltipWidth = exactText.length * 7.5 + 20;
 
           return (

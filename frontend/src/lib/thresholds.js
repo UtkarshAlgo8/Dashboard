@@ -47,6 +47,7 @@ export function evaluateKpiTier(kpi) {
   if (
     id.includes("comp") ||
     name.includes("compliance") ||
+    name.includes("fulfillment") ||
     name.includes("plan")
   ) {
     if (isNaN(val)) return "red";

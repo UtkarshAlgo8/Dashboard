@@ -994,12 +994,16 @@ function BanmoreProduction() {
         kpi={trendKpi}
         section={dashboard.section}
         category={dashboard.category}
-        subSection={pinnedSubSection}
-        productType={dashboard.productType}
+        // Only Stock has a meaningful sub-section scope. Product type is a
+        // Trend lens, so never inherit the dashboard's selected product;
+        // Production Trend must discover all products in the active scope.
+        subSection={isStock ? pinnedSubSection : null}
+        productType={null}
         unit={activeUnit}
         asOf={effectiveAsOf}
-        dashFrom={dashboard.from}
-        dashTo={dashboard.to}
+        dashPreset={timeRange.preset}
+        dashFrom={timeRange.from}
+        dashTo={timeRange.to}
       />
     </Box>
   );
