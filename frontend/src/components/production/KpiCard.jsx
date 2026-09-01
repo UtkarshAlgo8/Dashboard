@@ -53,10 +53,11 @@ function KpiCard({
   } else if (
     kpiId.includes("comp") ||
     kpiName.includes("compliance") ||
+    kpiName.includes("fulfillment") ||
     kpiName.includes("plan")
   ) {
     HeaderIcon = CheckCircleIcon;
-    displayName = "Plan Compliance";
+    displayName = kpi.name || "SKU Plan Fulfillment";
     subtitle = "of total planned";
   } else if (kpiId.includes("downtime") || kpiName.includes("downtime")) {
     HeaderIcon = AccessTimeFilledIcon;
@@ -365,6 +366,77 @@ function KpiCard({
               transition: "width 0.4s ease",
             }}
           />
+        </Box>
+      )}
+
+      {/* Production vs Plan & Shortfall (SKU Plan Fulfillment) */}
+      {kpi.produced != null && kpi.planned != null && !isDrilling && !isDrilldown && (
+        <Box sx={{ my: 0.75 }}>
+          <Typography
+            sx={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: "text.secondary",
+              lineHeight: 1.2,
+            }}
+          >
+            Production vs Plan
+          </Typography>
+          <Stack
+            direction="row"
+            alignItems="baseline"
+            spacing={0.5}
+            sx={{ mt: 0.35 }}
+          >
+            <Typography
+              sx={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: cardTheme.textColor,
+                lineHeight: 1.2,
+              }}
+            >
+              {formatIndianNumber(kpi.produced)}
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: "text.primary",
+                lineHeight: 1.2,
+              }}
+            >
+              / {formatIndianNumber(kpi.planned)} {kpi.quantityUnit || "NOS"}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={3} sx={{ mt: 0.1 }}>
+            <Typography
+              sx={{ fontSize: 10, fontWeight: 500, color: "text.secondary" }}
+            >
+              Produced
+            </Typography>
+            <Typography
+              sx={{ fontSize: 10, fontWeight: 500, color: "text.secondary" }}
+            >
+              Planned
+            </Typography>
+          </Stack>
+          {kpi.shortfall != null && (
+            <Typography
+              sx={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: kpi.shortfall > 0 ? "text.primary" : "success.main",
+                mt: 0.5,
+              }}
+            >
+              {kpi.shortfall > 0
+                ? `Shortfall: ${formatIndianNumber(kpi.shortfall)} ${kpi.quantityUnit || "NOS"}`
+                : kpi.shortfall < 0
+                  ? `Surplus: +${formatIndianNumber(-kpi.shortfall)} ${kpi.quantityUnit || "NOS"}`
+                  : `Shortfall: 0 ${kpi.quantityUnit || "NOS"}`}
+            </Typography>
+          )}
         </Box>
       )}
 

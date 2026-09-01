@@ -12,6 +12,7 @@ import {
   TableBody,
   TableCell,
   TableContainer,
+  TableFooter,
   TableHead,
   TableRow,
   TextField,
@@ -68,6 +69,7 @@ function DataTable({
   maxHeight = 380,
   toolbarRight = null,
   legend = null,
+  footerRow = null,
 }) {
   const theme = useTheme();
   const [query, setQuery] = useState("");
@@ -328,6 +330,41 @@ function DataTable({
               ))
             )}
           </TableBody>
+          {footerRow && (
+            <TableFooter
+              sx={{
+                position: "sticky",
+                bottom: 0,
+                zIndex: 2,
+                backgroundColor: (t) =>
+                  t.custom?.surface?.soft ?? t.palette.action.hover,
+              }}
+            >
+              <TableRow
+                sx={{
+                  borderTop: "2px solid",
+                  borderColor: "divider",
+                }}
+              >
+                {columns.map((col) => (
+                  <TableCell
+                    key={col.key}
+                    align={col.align ?? "center"}
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      backgroundColor: (t) =>
+                        t.custom?.surface?.soft ?? t.palette.action.hover,
+                      borderTop: "2px solid",
+                      borderColor: "divider",
+                    }}
+                  >
+                    {footerRow[col.key] ?? "—"}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableFooter>
+          )}
         </Table>
       </TableContainer>
     </Stack>

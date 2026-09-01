@@ -137,7 +137,22 @@ export const PRODUCT_AGNOSTIC_KPIS = new Set([
   "Preventive Maintenance",
   "Setup & Change",
   "Operations/Material/Manpower",
+  // SKU-level Plan Fulfillment / Compliance feed KPIs
+  "Building_Fulfilled_Qty_sku",
+  "Building_Planned_Qty_sku",
+  "Curing_Fulfilled_Qty_sku",
+  "Curing_Planned_Qty_sku",
 ]);
+
+export const PLAN_FULFILLMENT_SKU_KPIS = new Set([
+  "Building_Fulfilled_Qty_sku",
+  "Building_Planned_Qty_sku",
+  "Curing_Fulfilled_Qty_sku",
+  "Curing_Planned_Qty_sku",
+]);
+const PLAN_FULFILLMENT_SKU_KPIS_SQL = `kpi_name IN (${[...PLAN_FULFILLMENT_SKU_KPIS]
+  .map((k) => `'${k}'`)
+  .join(", ")})`;
 
 /** Pre-built SQL fragment: kpi_name IN ('OEE_o', ...) for the exemption. */
 const PRODUCT_AGNOSTIC_KPIS_SQL = `kpi_name IN (${[...PRODUCT_AGNOSTIC_KPIS]
@@ -997,7 +1012,7 @@ export function buildFetchQuery({
   // card (found 2026-07-23: OEE blank in Mixing/Curing Productivity). Accept
   // both spellings so the landing gate is level-based, not format-based.
   const LANDING_PREDICATE =
-    "(drill_down_level IN ('1', '1.0') OR (drill_down_level IS NULL " +
+    "((kpi_name = 'Building_Fulfilled_Qty_sku' OR kpi_name = 'Building_Planned_Qty_sku' OR kpi_name = 'Curing_Fulfilled_Qty_sku' OR kpi_name = 'Curing_Planned_Qty_sku') OR drill_down_level IN ('1', '1.0') OR (drill_down_level IS NULL " +
     `AND ${emptyColumnPredicate("machine")} ` +
     `AND ${emptyColumnPredicate("itemcode")} ` +
     `AND ${emptyColumnPredicate("sub_section")}))`;

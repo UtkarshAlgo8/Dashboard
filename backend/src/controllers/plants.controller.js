@@ -175,7 +175,7 @@ export async function getAsOf(req, res, next) {
       const sql = `
         SELECT MAX(${DATE_YYYYMMDD}) AS d
         FROM ${plantSqlTable(req.plantId)}
-        WHERE ${coreFilter(req.plantId)}
+        WHERE ${coreFilter(req.plantId)} AND kpi_name = 'Production'
       `.trim();
       const rows = await runQuery(sql);
       const raw = rows?.[0] ? Object.values(rows[0])[0] : null;

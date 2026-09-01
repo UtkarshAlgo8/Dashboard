@@ -15,6 +15,7 @@ import ReportableDrillPanel from "@/components/drills/safety/ReportableDrillPane
 import FirstAidDrillPanel from "@/components/drills/safety/FirstAidDrillPanel.jsx";
 import NearMissDrillPanel from "@/components/drills/safety/NearMissDrillPanel.jsx";
 import SafetyAuditDrillPanel from "@/components/drills/safety/SafetyAuditDrillPanel.jsx";
+import PlanComplianceDrillPanel from "@/components/drills/plan-compliance/PlanComplianceDrillPanel.jsx";
 
 /**
  * Routes "table" drillType to the correct table panel based on kpi.id.
@@ -54,6 +55,15 @@ export default function GenericTableDrillPanel({
   // — it bypasses this filter inside its own panel.
   const sectionFiltered = windowed.filter((r) => r.section === sectionName);
   switch (kpi?.id) {
+    case "comp":
+      return (
+        <PlanComplianceDrillPanel
+          section={sectionName || section}
+          drillRows={sectionFiltered.length ? sectionFiltered : drillRows}
+          productType={productType}
+          onClose={onClose}
+        />
+      );
     // Quality
     case "ftq":
       return (
