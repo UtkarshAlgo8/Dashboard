@@ -74,10 +74,6 @@ function TrendModal({
   // avoid blending two series into a zig-zag.
   unit = null,
   asOf = null,
-  // The global preset or custom date window selected on the dashboard
-  dashPreset = null,
-  dashFrom = null,
-  dashTo = null,
 }) {
   const theme = useTheme();
   const toast = useToast();
@@ -85,25 +81,15 @@ function TrendModal({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  // Each time the modal opens, seed its range from the dashboard's selection
-  // so the trend shows the SAME window the user has on the dashboard.
+  // Each time the modal opens, start with the monthly trend view regardless
+  // of the dashboard's current time-range selection.
   const [prevOpen, setPrevOpen] = useState(false);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      if (dashPreset === "today" || dashPreset === "month") {
-        setRange(dashPreset);
-        setFrom("");
-        setTo("");
-      } else if (dashFrom && dashTo) {
-        setRange("custom");
-        setFrom(dashFrom);
-        setTo(dashTo);
-      } else {
-        setRange("month");
-        setFrom("");
-        setTo("");
-      }
+      setRange("month");
+      setFrom("");
+      setTo("");
     }
   }
 
