@@ -28,8 +28,8 @@ import dnaCoreLogo from "@/assets/portal/dna-core.webp";
  * Visual reference: JK-Infiniti-Portal / JKTyre-ProcessAudit-Desktop-FE
  * design — single white card with a vertical split:
  *   - Left:  Project INFINITI hero artwork + brand strip (JK / DnA CoE)
- *   - Right: Sign In form (Montserrat, blue pill button, underline
- *            "Forgot Password", underline-only inputs)
+ *   - Right: Sign In form (Montserrat, blue pill button, underline-only
+ *            inputs)
  *
  * The landing-page catalog endpoints (GET /plants, /functions) are
  * public so we can warm them while the user is signing in. Failures
@@ -249,35 +249,7 @@ export default function LoginPage() {
                 </Alert>
               )}
 
-              <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ mt: 2.5 }}
-              >
-                <Box
-                  component="button"
-                  type="button"
-                  onClick={() =>
-                    toast.info(
-                      "Contact the Algo8 platform team to reset your password.",
-                    )
-                  }
-                  sx={{
-                    border: "none",
-                    background: "transparent",
-                    p: 0,
-                    textDecoration: "underline",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#9F9F9F",
-                    cursor: "pointer",
-                    fontFamily: "Montserrat, sans-serif",
-                    "&:hover": { color: "#1976d2" },
-                  }}
-                >
-                  Forgot Password
-                </Box>
+              <Box sx={{ mt: 2.5, textAlign: "right" }}>
                 <Button
                   type="submit"
                   disabled={submitting || !identifier || !password}
@@ -308,7 +280,7 @@ export default function LoginPage() {
                 >
                   {submitting ? "Signing in…" : "Sign In"}
                 </Button>
-              </Stack>
+              </Box>
             </Box>
           </Box>
         </Box>
