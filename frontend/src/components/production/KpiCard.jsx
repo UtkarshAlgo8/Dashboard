@@ -156,7 +156,7 @@ function KpiCard({
         border: isDrilling ? 2 : 1,
         borderColor: isDrilling ? "primary.main" : `${cardTheme.sparkColor}30`,
         borderRadius: 2.5,
-        p: 2,
+        p: 1.75,
         minWidth: 0,
         boxShadow: isDrilling
           ? "0 4px 14px rgba(0,0,0,0.08)"
@@ -166,7 +166,7 @@ function KpiCard({
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        minHeight: 148,
+        minHeight: 136,
         "&:hover": {
           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
         },
@@ -177,7 +177,7 @@ function KpiCard({
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        sx={{ mb: 1 }}
+        sx={{ mb: 0.75 }}
       >
         <Stack
           direction="row"
@@ -220,7 +220,7 @@ function KpiCard({
         alignItems="center"
         justifyContent="space-between"
         spacing={1}
-        sx={{ my: 0.5, minWidth: 0 }}
+        sx={{ my: 0.25, minWidth: 0 }}
       >
         {/* Left: Value, Unit & Sub-Badges */}
         <Stack sx={{ minWidth: 0, flex: 1 }}>
@@ -263,7 +263,7 @@ function KpiCard({
               direction="row"
               alignItems="center"
               spacing={0.75}
-              sx={{ mt: 0.35, flexWrap: "wrap", rowGap: 0.25 }}
+              sx={{ mt: 0.25, flexWrap: "wrap", rowGap: 0.25 }}
             >
               {kpi.scope?.kind === "perMachineAvg" && kpi.scope.machines > 0 && (
                 <Tooltip
@@ -350,18 +350,18 @@ function KpiCard({
         <Box
           sx={{
             width: "100%",
-            height: 7,
-            borderRadius: 4,
+            height: 6,
+            borderRadius: 3,
             backgroundColor: cardTheme.trackColor,
             overflow: "hidden",
-            my: 1,
+            my: 0.75,
           }}
         >
           <Box
             sx={{
               width: `${progressPct}%`,
               height: "100%",
-              borderRadius: 4,
+              borderRadius: 3,
               background: cardTheme.barGradient || cardTheme.barColor,
               transition: "width 0.4s ease",
             }}
@@ -369,75 +369,87 @@ function KpiCard({
         </Box>
       )}
 
-      {/* Production vs Plan & Shortfall (SKU Plan Fulfillment) */}
+      {/* Production vs Plan & Shortfall (SKU Plan Fulfillment) — Compact single-line row */}
       {kpi.produced != null && kpi.planned != null && !isDrilling && !isDrilldown && (
-        <Box sx={{ my: 0.75 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mt: 0.5, mb: 0.25, minWidth: 0, flexWrap: "wrap", gap: 0.5 }}
+        >
           <Typography
             sx={{
-              fontSize: 12,
+              fontSize: 11.5,
               fontWeight: 600,
               color: "text.secondary",
-              lineHeight: 1.2,
+              whiteSpace: "nowrap",
             }}
           >
-            Production vs Plan
-          </Typography>
-          <Stack
-            direction="row"
-            alignItems="baseline"
-            spacing={0.5}
-            sx={{ mt: 0.35 }}
-          >
-            <Typography
-              sx={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: cardTheme.textColor,
-                lineHeight: 1.2,
-              }}
+            Prod / Plan:{" "}
+            <Box
+              component="span"
+              sx={{ fontWeight: 700, color: cardTheme.textColor }}
             >
               {formatIndianNumber(kpi.produced)}
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: "text.primary",
-                lineHeight: 1.2,
-              }}
-            >
-              / {formatIndianNumber(kpi.planned)} {kpi.quantityUnit || "NOS"}
-            </Typography>
-          </Stack>
-          <Stack direction="row" spacing={3} sx={{ mt: 0.1 }}>
-            <Typography
-              sx={{ fontSize: 10, fontWeight: 500, color: "text.secondary" }}
-            >
-              Produced
-            </Typography>
-            <Typography
-              sx={{ fontSize: 10, fontWeight: 500, color: "text.secondary" }}
-            >
-              Planned
-            </Typography>
-          </Stack>
+            </Box>{" "}
+            / {formatIndianNumber(kpi.planned)} {kpi.quantityUnit || "NOS"}
+          </Typography>
+
           {kpi.shortfall != null && (
             <Typography
               sx={{
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: 600,
-                color: kpi.shortfall > 0 ? "text.primary" : "success.main",
-                mt: 0.5,
+                color: "text.secondary",
+                whiteSpace: "nowrap",
               }}
             >
-              {kpi.shortfall > 0
-                ? `Shortfall: ${formatIndianNumber(kpi.shortfall)} ${kpi.quantityUnit || "NOS"}`
-                : kpi.shortfall < 0
-                  ? `Surplus: +${formatIndianNumber(-kpi.shortfall)} ${kpi.quantityUnit || "NOS"}`
-                  : `Shortfall: 0 ${kpi.quantityUnit || "NOS"}`}
+              {kpi.shortfall > 0 ? (
+                <>
+                  Shortfall:{" "}
+                  <Box
+                    component="span"
+                    sx={{
+                      fontWeight: 700,
+                      color: theme.custom?.status?.red ?? "error.main",
+                    }}
+                  >
+                    {formatIndianNumber(kpi.shortfall)}
+                  </Box>{" "}
+                  {kpi.quantityUnit || "NOS"}
+                </>
+              ) : kpi.shortfall < 0 ? (
+                <>
+                  Surplus:{" "}
+                  <Box
+                    component="span"
+                    sx={{
+                      fontWeight: 700,
+                      color: theme.custom?.status?.green ?? "success.main",
+                    }}
+                  >
+                    +{formatIndianNumber(-kpi.shortfall)}
+                  </Box>{" "}
+                  {kpi.quantityUnit || "NOS"}
+                </>
+              ) : (
+                <>
+                  Shortfall:{" "}
+                  <Box
+                    component="span"
+                    sx={{
+                      fontWeight: 700,
+                      color: theme.custom?.status?.green ?? "success.main",
+                    }}
+                  >
+                    0
+                  </Box>{" "}
+                  {kpi.quantityUnit || "NOS"}
+                </>
+              )}
             </Typography>
           )}
-        </Box>
+        </Stack>
       )}
 
       {/* 4. Footer: Trend Badge & Action Icons */}
