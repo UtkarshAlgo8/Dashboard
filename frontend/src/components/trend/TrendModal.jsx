@@ -534,6 +534,11 @@ const PRODUCTION_KPI_BY_SECTION = {
   Stock: "Production",
 };
 
+const AGGREGATE_PRODUCT_BY_SECTION = {
+  TBM: "Green Tyre",
+  Curing: "Cured Tyre",
+};
+
 // The Production trend reads a different stored leaf per lens — the
 // base (section) row carries no machine and no itemcode, so grouping it
 // by those fields produced an empty chart. Same mapping as
@@ -549,6 +554,10 @@ function overlayKpiName(overlayValue, viewBy, sectionName) {
     return OVERLAY_AVAILABILITY_BY_VIEW[viewBy] ?? "Availability_o";
   }
   if (overlayValue === "Production") {
+    if (viewBy === "machine") return "Production_m";
+    if (sectionName === "TBM" || sectionName === "Curing") {
+      return "Production_product";
+    }
     return PRODUCTION_KPI_BY_SECTION[sectionName] ?? "Production";
   }
   return OVERLAY_BASE_KPI[overlayValue] ?? overlayValue;
@@ -931,6 +940,9 @@ function MultiSeriesTrendModal({
     const perOverlayRows = overlays.map((overlayValue) => {
       const kpiName = overlayKpiName(overlayValue, viewBy, sectionName);
       let rows = overlayRowsByKpi[kpiName] ?? [];
+      if (overlayValue === "Production") {
+        rows = preferProductionOverlayRows(rows, sectionName, productType);
+      }
       if (isMonthly && machineView) {
         rows = rows.filter(
           (r) =>
@@ -1010,6 +1022,7 @@ function MultiSeriesTrendModal({
     viewBy,
     machines,
     sectionName,
+    productType,
     overlayRowsByKpi,
     config.showOverlay,
     isMonthly,
@@ -1369,6 +1382,30 @@ function overlayAggregation(overlayValue, machineView) {
   if (overlayValue === "Production" || overlayValue === "Scrap") return "sum";
   if (overlayValue === "Breakdown") return machineView ? "sum" : "average";
   return "average";
+}
+
+function preferProductionOverlayRows(rows, sectionName, productType) {
+  const aggregateProduct = AGGREGATE_PRODUCT_BY_SECTION[sectionName];
+  if (aggregateProduct) {
+    const selectedProduct = productType || aggregateProduct;
+    const productRows = rows.filter(
+      (r) => r.product_type === selectedProduct,
+    );
+    if (productRows.length > 0) rows = productRows;
+  }
+
+  // Production is stored in multiple units. OEE's overlay has no unit
+  // selector, so use the standard MT series when available and never add
+  // different units together.
+  const units = [...new Set(rows.map((r) => canonicalUnit(r.unit_of_measurement)).filter(Boolean))];
+  if (units.length > 1) {
+    const preferred = units.find((unit) => unit === "MT") ?? units.sort()[0];
+    const unitRows = rows.filter(
+      (r) => canonicalUnit(r.unit_of_measurement) === preferred,
+    );
+    if (unitRows.length > 0) rows = unitRows;
+  }
+  return rows;
 }
 
 function aggregateValues(valuesOrEntry, aggregation) {
