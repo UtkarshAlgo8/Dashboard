@@ -3,6 +3,7 @@
  * on an ephemeral port in-process. index.js owns binding the real port.
  */
 import express from "express";
+import cookieParser from "cookie-parser";
 
 import { corsMiddleware } from "./middlewares/cors.js";
 import { requestLogger } from "./middlewares/requestLogger.js";
@@ -10,6 +11,7 @@ import { warmContext } from "./middlewares/warmContext.js";
 import { notFound } from "./middlewares/notFound.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { warmRecorder } from "./utils/warm-recorder.js";
+import { config } from "./config.js";
 
 import { router as staticRouter } from "./routes/static.js";
 import { router as plantsRouter } from "./routes/plants.js";
@@ -24,10 +26,18 @@ import { router as adminRouter } from "./routes/admin.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
 
+// Auth slice — see backend/src/middlewares/auth.middleware.js
+import authRouter from "./routes/auth.js";
+import rolesRouter from "./routes/roles.js";
+import { verifyJWT } from "./middlewares/auth.middleware.js";
+
 const app = express();
 
 app.use(corsMiddleware);
 app.use(express.json());
+// verifyJWT reads the optional `accessToken` cookie as a fallback
+// when the Authorization header is absent.
+app.use(cookieParser());
 app.use(requestLogger);
 // Both must sit AFTER express.json (they read req.body) and BEFORE the
 // routers. warmContext puts warm replays into write-through mode; warmRecorder
@@ -40,6 +50,21 @@ app.get("/api/v1/health", (_req, res) => {
   res.json({ data: { status: "ok", time: new Date().toISOString() } });
 });
 
+// --- Auth (unsecured) ---
+// Login / refresh / forgot / reset live under /api/v1/auth and are
+// reachable without a token. Everything else under /api/v1/* is gated
+// by verifyJWT below.
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/roles", rolesRouter);
+
+// Optional kill-switch for local dev / tests: AUTH_ENABLED=false
+// leaves every route public (the verifyJWT mount is skipped
+// entirely). NODE_ENV=test bypasses auth by default so the route
+// smoke tests can hit `/api/v1/*` without a token. Default is true
+// in production / development.
+const protectApi =
+  config.auth.enabled && process.env.NODE_ENV !== "test";
+
 // URL layout (unchanged from CR-07):
 //   /api/v1/{plants,functions,sections,category-tabs}     → static
 //   /api/v1/plants/:id(/summary|/as-of|/section-oee)      → plants
@@ -50,25 +75,31 @@ app.get("/api/v1/health", (_req, res) => {
 //   /api/v1/plants/:id/production/drills/*                → drills
 //   /api/v1/dashboard/{fetch,vocab}                       → dashboard
 //
-// staticRouter mounts FIRST so /plants (list) doesn't shadow /plants/:id.
+// Static catalog endpoints (plant list, functions, sections,
+// category tabs) are PUBLIC so the login page can render the plant
+// grid behind the login card. Per-plant detail + production routes
+// stay gated. staticRouter MUST mount first so `/plants` (list)
+// doesn't shadow `/plants/:id`.
 app.use("/api/v1", staticRouter);
-app.use("/api/v1/plants", plantsRouter);
-app.use("/api/v1/plants/:plantId/production/kpis", kpisRouter);
-app.use("/api/v1/plants/:plantId/production/trends", trendsRouter);
-app.use("/api/v1/plants/:plantId/production/drills", drillsRouter);
-app.use("/api/v1/plants/:plantId/inventory", inventoryRouter);
-app.use("/api/v1/plants/:plantId/anomalies", anomaliesRouter);
-app.use("/api/v1/dashboard", dashboardRouter);
+
+const gate = protectApi ? verifyJWT : (_req, _res, next) => next();
+app.use("/api/v1/plants", gate, plantsRouter);
+app.use("/api/v1/plants/:plantId/production/kpis", gate, kpisRouter);
+app.use("/api/v1/plants/:plantId/production/trends", gate, trendsRouter);
+app.use("/api/v1/plants/:plantId/production/drills", gate, drillsRouter);
+app.use("/api/v1/plants/:plantId/inventory", gate, inventoryRouter);
+app.use("/api/v1/plants/:plantId/anomalies", gate, anomaliesRouter);
+app.use("/api/v1/dashboard", gate, dashboardRouter);
 // /api/v1/dashboard/snapshot — composes the page-load chain into one call.
-app.use("/api/v1/dashboard", snapshotRouter);
+app.use("/api/v1/dashboard", gate, snapshotRouter);
 //   /api/v1/admin/cache/{stats,warm}                      → cache ops
-app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/admin", gate, adminRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
 //   /api/v1/quality/process/{kpi-value,kpi-value-batch,kpi-children,kpi-history}
 //   /api/v1/quality/spc/{summary,filter-options,widgets,detail,*-observations}
-app.use("/api/v1/quality/process", qualityProcessRouter);
-app.use("/api/v1/quality/spc", qualitySpcRouter);
+app.use("/api/v1/quality/process", gate, qualityProcessRouter);
+app.use("/api/v1/quality/spc", gate, qualitySpcRouter);
 
 app.use(notFound);
 app.use(errorHandler);

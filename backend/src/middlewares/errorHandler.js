@@ -1,5 +1,6 @@
 import { UpstreamError } from "../utils/upstream.js";
 import { QueryValidationError } from "../queries/dashboard-query.js";
+import { ApiError } from "../utils/ApiError.js";
 
 /** Central error handler — maps known errors to envelopes. */
 // eslint-disable-next-line no-unused-vars
@@ -14,6 +15,12 @@ export function errorHandler(err, _req, res, _next) {
     res
       .status(400)
       .json({ error: { code: "VALIDATION_ERROR", message: err.message } });
+    return;
+  }
+  // Auth slice uses ApiError → return its envelope unchanged so
+  // {statusCode, success, message, errors} all reach the client.
+  if (err instanceof ApiError) {
+    res.status(err.statusCode).json(err.toJSON());
     return;
   }
   // eslint-disable-next-line no-console

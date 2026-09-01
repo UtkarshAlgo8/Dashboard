@@ -17,6 +17,7 @@ import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useNavigate } from "react-router-dom";
 import HelpModal from "./HelpModal.jsx";
 import AboutModal from "./AboutModal.jsx";
+import { useAuth } from "@/hooks/useAuth.js";
 
 /**
  * Avatar + dropdown menu matching Adobe XD design with options:
@@ -28,6 +29,7 @@ import AboutModal from "./AboutModal.jsx";
 function UserMenu({ size = 32 }) {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(
@@ -66,9 +68,10 @@ function UserMenu({ size = 32 }) {
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     handleClose();
-    navigate("/");
+    await logout();
+    navigate("/login", { replace: true });
   };
 
   return (

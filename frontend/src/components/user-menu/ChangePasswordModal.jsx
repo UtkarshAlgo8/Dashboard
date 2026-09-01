@@ -1,7 +1,9 @@
 import { useState } from "react";
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -13,35 +15,52 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { useToast } from "@/components/common";
+import { changePasswordRequest } from "@/api/auth.js";
 
 /**
- * Change Password modal per BRD FR-X21. UI only — no backend in
- * Phase 1, so submit toasts "Backend pending" and closes.
+ * Change Password modal per BRD FR-X21. Submits to
+ * POST /api/v1/auth/change-password with the current JWT.
  */
 function ChangePasswordModal({ open, onClose }) {
   const toast = useToast();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   const reset = () => {
     setCurrent("");
     setNext("");
     setConfirm("");
+    setError(null);
   };
 
   const handleClose = () => {
+    if (submitting) return;
     reset();
     onClose();
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (next !== confirm) {
-      toast.error("New password and confirmation don't match.");
+      setError("New password and confirmation don't match.");
       return;
     }
-    toast.info("Backend pending — password change isn't wired in Phase 1.");
-    handleClose();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await changePasswordRequest({
+        oldPassword: current,
+        newPassword: next,
+      });
+      toast.success("Password updated.");
+      handleClose();
+    } catch (err) {
+      setError(err?.message || "Could not update password.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const strength = scoreStrength(next);
@@ -66,6 +85,7 @@ function ChangePasswordModal({ open, onClose }) {
             fullWidth
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
+            disabled={submitting}
           />
           <Box>
             <TextField
@@ -75,6 +95,7 @@ function ChangePasswordModal({ open, onClose }) {
               fullWidth
               value={next}
               onChange={(e) => setNext(e.target.value)}
+              disabled={submitting}
             />
             {next && (
               <Typography sx={{ fontSize: 11, mt: 0.5, color: strength.color }}>
@@ -89,17 +110,28 @@ function ChangePasswordModal({ open, onClose }) {
             fullWidth
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
+            disabled={submitting}
           />
+          {error && (
+            <Alert severity="error" sx={{ borderRadius: 2 }}>
+              {error}
+            </Alert>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose}>Cancel</Button>
+        <Button onClick={handleClose} disabled={submitting}>
+          Cancel
+        </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={!current || !next || !confirm}
+          disabled={submitting || !current || !next || !confirm}
+          startIcon={
+            submitting ? <CircularProgress size={14} color="inherit" /> : null
+          }
         >
-          Change
+          {submitting ? "Saving…" : "Change"}
         </Button>
       </DialogActions>
     </Dialog>

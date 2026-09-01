@@ -1,25 +1,54 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import {
   BanmoreProduction,
   BanmoreQuality,
   LandingPage,
   LazyRoute,
 } from "@/routerComponents.jsx";
+import ProtectedRoute from "@/components/ProtectedRoute.jsx";
+import LoginPage from "@/pages/LoginPage.jsx";
 
+/**
+ * Public route: login page. Everything else is gated behind
+ * <ProtectedRoute /> which reads from AuthContext.
+ */
 const router = createBrowserRouter([
-  { path: "/", element: <LazyRoute Page={LandingPage} /> },
+  { path: "/login", element: <LoginPage /> },
+  {
+    path: "/",
+    element: (
+      <ProtectedRoute>
+        <LazyRoute Page={LandingPage} />
+      </ProtectedRoute>
+    ),
+  },
   {
     path: "/:plantId/production",
-    element: <LazyRoute Page={BanmoreProduction} />,
+    element: (
+      <ProtectedRoute>
+        <LazyRoute Page={BanmoreProduction} />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/banmore/production",
-    element: <LazyRoute Page={BanmoreProduction} />,
+    element: (
+      <ProtectedRoute>
+        <LazyRoute Page={BanmoreProduction} />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/banmore/quality",
-    element: <LazyRoute Page={BanmoreQuality} />,
+    element: (
+      <ProtectedRoute>
+        <LazyRoute Page={BanmoreQuality} />
+      </ProtectedRoute>
+    ),
   },
+  // Unknown URLs land on the dashboard root, which then forwards to
+  // /login if the visitor is unauthenticated.
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
 export default router;

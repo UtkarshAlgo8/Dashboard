@@ -42,6 +42,26 @@ function asInt(key, fallback) {
 export const config = {
   port: asInt("PORT", 3001),
   frontendOrigin: optional("FRONTEND_ORIGIN", "http://136.112.107.154:3014"),
+  // MySQL connection details — only the auth DB is on MySQL here.
+  // Dashboard data flows through AWS Lambda (`AWS_DATA_URL`), so
+  // there is no second connection to manage.
+  db: {
+    host: optional("DB_HOST", "127.0.0.1"),
+    port: asInt("DB_PORT", 3306),
+    user: optional("DB_USER", "root"),
+    password: optional("DB_PASSWORD", ""),
+    authName: optional("AUTHDB", "authdb"),
+  },
+  // JWT secrets / expiries used by the auth module. Required at
+  // boot when AUTH_ENABLED=true; if you flip AUTH_ENABLED=false the
+  // app boots without them (useful for local-only dashboard dev).
+  auth: {
+    enabled: optional("AUTH_ENABLED", "true") !== "false",
+    accessTokenSecret: optional("ACCESS_TOKEN_SECRET", "change-me-access"),
+    accessTokenExpiry: optional("ACCESS_TOKEN_EXPIRY", "1d"),
+    refreshTokenSecret: optional("REFRESH_TOKEN_SECRET", "change-me-refresh"),
+    refreshTokenExpiry: optional("REFRESH_TOKEN_EXPIRY", "1y"),
+  },
   upstream: {
     url: required("AWS_DATA_URL"),
     apiKey: required("AWS_DATA_API_KEY"),
