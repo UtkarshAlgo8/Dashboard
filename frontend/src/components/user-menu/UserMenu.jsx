@@ -12,6 +12,7 @@ import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import HelpIcon from "@mui/icons-material/Help";
 import SupportIcon from "@mui/icons-material/Support";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useNavigate } from "react-router-dom";
@@ -19,11 +20,21 @@ import HelpModal from "./HelpModal.jsx";
 import AboutModal from "./AboutModal.jsx";
 import { useAuth } from "@/hooks/useAuth.js";
 
+const checkIsFullscreen = () => {
+  if (typeof document === "undefined") return false;
+  return Boolean(
+    document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement,
+  );
+};
+
 /**
  * Avatar + dropdown menu matching Adobe XD design with options:
  * 1. Guides & Manuals
  * 2. Support
- * 3. Exit Fullscreen / Fullscreen
+ * 3. Full Screen / Exit Full Screen
  * 4. Sign Out
  */
 function UserMenu({ size = 32 }) {
@@ -32,18 +43,26 @@ function UserMenu({ size = 32 }) {
   const { logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(
-    typeof document !== "undefined" && Boolean(document.fullscreenElement),
-  );
+  const [isFullscreen, setIsFullscreen] = useState(checkIsFullscreen);
   const open = Boolean(anchorEl);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      setIsFullscreen(checkIsFullscreen());
     };
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    const events = [
+      "fullscreenchange",
+      "webkitfullscreenchange",
+      "mozfullscreenchange",
+      "MSFullscreenChange",
+    ];
+    events.forEach((ev) =>
+      document.addEventListener(ev, handleFullscreenChange),
+    );
     return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      events.forEach((ev) =>
+        document.removeEventListener(ev, handleFullscreenChange),
+      );
     };
   }, []);
 
@@ -57,13 +76,26 @@ function UserMenu({ size = 32 }) {
 
   const handleToggleFullscreen = () => {
     handleClose();
-    if (!document.fullscreenElement) {
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
+    if (!checkIsFullscreen()) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      } else if (el.mozRequestFullScreen) {
+        el.mozRequestFullScreen();
+      } else if (el.msRequestFullscreen) {
+        el.msRequestFullscreen();
       }
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
       }
     }
   };
@@ -170,7 +202,7 @@ function UserMenu({ size = 32 }) {
           />
         </MenuItem>
 
-        {/* 3. Exit Fullscreen / Fullscreen */}
+        {/* 3. Full Screen / Exit Full Screen */}
         <MenuItem
           onClick={handleToggleFullscreen}
           sx={{
@@ -186,11 +218,11 @@ function UserMenu({ size = 32 }) {
             {isFullscreen ? (
               <FullscreenExitIcon sx={{ fontSize: 20 }} />
             ) : (
-              <FullscreenExitIcon sx={{ fontSize: 20 }} />
+              <FullscreenIcon sx={{ fontSize: 20 }} />
             )}
           </ListItemIcon>
           <ListItemText
-            primary={isFullscreen ? "Exit Fullscreen" : "Exit Fullscreen"}
+            primary={isFullscreen ? "Exit Full Screen" : "Full Screen"}
             primaryTypographyProps={{
               fontSize: 14.5,
               fontWeight: 500,
