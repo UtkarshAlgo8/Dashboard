@@ -998,8 +998,9 @@ function BanmoreProduction() {
         productType={dashboard.productType}
         unit={activeUnit}
         asOf={effectiveAsOf}
-        dashFrom={dashboard.from}
-        dashTo={dashboard.to}
+        dashPreset={timeRange.preset}
+        dashFrom={timeRange.from}
+        dashTo={timeRange.to}
       />
     </Box>
   );

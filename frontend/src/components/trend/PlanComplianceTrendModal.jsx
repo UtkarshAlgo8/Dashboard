@@ -20,6 +20,8 @@ import PlanComplianceTrendChart from "./PlanComplianceTrendChart.jsx";
 import { presetToDateRange } from "@/lib/timeRange.js";
 import { canonicalizeProductType, canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 function sectionIdToName(id) {
   return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
 }
@@ -31,16 +33,27 @@ function dateKey(d) {
   return m ? `${m[3]}${m[2]}${m[1]}` : "";
 }
 
+function monthKey(d) {
+  const k = dateKey(d);
+  return k ? `${k.slice(0, 4)}-${k.slice(4, 6)}` : "";
+}
+
+function toDisplayMonth(mKey) {
+  if (!mKey || !mKey.includes("-")) return mKey;
+  const parts = mKey.split("-");
+  const monthIdx = Number.parseInt(parts[1], 10) - 1;
+  return MONTH_NAMES[monthIdx] || mKey;
+}
+
 function toDisplayDate(d) {
   if (!d) return "";
   const parts = d.split("-");
   if (parts.length === 3) {
     if (parts[0].length === 4) {
       // YYYY-MM-DD
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const day = Number.parseInt(parts[2], 10);
       const monthIdx = Number.parseInt(parts[1], 10) - 1;
-      return `${day} ${months[monthIdx] || parts[1]}`;
+      return `${day} ${MONTH_NAMES[monthIdx] || parts[1]}`;
     }
   }
   return d;
@@ -167,12 +180,18 @@ export default function PlanComplianceTrendModal({
   // Date range resolution (mirrors the other trend modals)
   const resolved = presetToDateRange({ preset: range, from, to }, asOf);
   const anchorIso = asOf ?? resolved.to ?? null;
+
+  // Monthly: YYYY-01-01 to Today (aggregated month-by-month)
+  // Daily: YYYY-MM-01 to Today (aggregated day-by-day in current month)
+  // Custom: from to to (aggregated day-by-day)
+  const isMonthly = range === "month" && !from && !to;
+  const isDailyTrend = range === "today" && !from && !to;
+
   const monthlyFrom = anchorIso ? `${anchorIso.slice(0, 4)}-01-01` : resolved.from;
   const monthlyTo = anchorIso ?? resolved.to;
   const dailyFrom = anchorIso ? `${anchorIso.slice(0, 7)}-01` : resolved.from;
   const dailyTo = anchorIso ?? resolved.to;
-  const isMonthly = range === "month" && !from && !to;
-  const isDailyTrend = range === "today" && !from && !to;
+
   const rangeFrom = isDailyTrend ? dailyFrom : isMonthly ? monthlyFrom : resolved.from;
   const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
 
@@ -231,7 +250,7 @@ export default function PlanComplianceTrendModal({
       uniqueRows.push(r);
     }
 
-    const dateMap = new Map();
+    const groupMap = new Map();
 
     for (const r of uniqueRows) {
       const sku = r.itemcode || r.itemCode;
@@ -250,22 +269,30 @@ export default function PlanComplianceTrendModal({
       const d = r.date;
       if (!d) continue;
 
+      const groupKey = isMonthly ? monthKey(d) : d;
+      if (!groupKey) continue;
+
       const kpiName = r.kpi_name || r.kpiName;
       const val = Number(r.actual_value ?? r.actual) || 0;
 
-      const entry = dateMap.get(d) || { date: d, planned: 0, produced: 0 };
+      const entry = groupMap.get(groupKey) || {
+        key: groupKey,
+        displayLabel: isMonthly ? toDisplayMonth(groupKey) : toDisplayDate(groupKey),
+        planned: 0,
+        produced: 0,
+      };
       if (kpiName === skuFeedNames.fulfilled) {
         entry.produced += val;
       } else if (kpiName === skuFeedNames.planned) {
         entry.planned += val;
       }
-      dateMap.set(d, entry);
+      groupMap.set(groupKey, entry);
     }
 
-    // Sort dates chronologically (oldest -> newest for trend left-to-right)
-    const sortedDates = [...dateMap.keys()].sort((a, b) => dateKey(a).localeCompare(dateKey(b)));
-    const sortedData = sortedDates.map((d) => {
-      const item = dateMap.get(d);
+    // Sort chronologically
+    const sortedKeys = [...groupMap.keys()].sort((a, b) => a.localeCompare(b));
+    const sortedData = sortedKeys.map((k) => {
+      const item = groupMap.get(k);
       const fulfillmentPct = item.planned > 0 ? (item.produced / item.planned) * 100 : 0;
       return {
         ...item,
@@ -278,10 +305,10 @@ export default function PlanComplianceTrendModal({
       backendUnit: detectedUnit,
       perDateData: sortedData,
     };
-  }, [rawRows, skuFeedNames.fulfilled, skuFeedNames.planned, selectedSkus, kpi?.unit]);
+  }, [rawRows, skuFeedNames.fulfilled, skuFeedNames.planned, selectedSkus, kpi?.unit, isMonthly]);
 
   // Chart parallel arrays
-  const chartLabels = useMemo(() => perDateData.map((d) => toDisplayDate(d.date)), [perDateData]);
+  const chartLabels = useMemo(() => perDateData.map((d) => d.displayLabel), [perDateData]);
   const plannedValues = useMemo(() => perDateData.map((d) => d.planned), [perDateData]);
   const producedValues = useMemo(() => perDateData.map((d) => d.produced), [perDateData]);
   const fulfillmentValues = useMemo(() => perDateData.map((d) => d.fulfillmentPct), [perDateData]);
@@ -294,6 +321,9 @@ export default function PlanComplianceTrendModal({
     .join(" · ");
 
   const hasData = perDateData.length > 0;
+  const chartTitle = isMonthly
+    ? "Plan vs Production Trend — Monthly"
+    : "Plan vs Production Trend — Daily";
 
   return (
     <Dialog
@@ -348,7 +378,8 @@ export default function PlanComplianceTrendModal({
           from={from}
           to={to}
           onPresetChange={(p) => {
-            onRangeChange(p);
+            const next = typeof p === "string" ? p : p?.preset ?? "month";
+            onRangeChange(next);
             onFromChange("");
             onToChange("");
           }}
@@ -380,7 +411,7 @@ export default function PlanComplianceTrendModal({
 
         <ChartPanel
           theme={theme}
-          title="Plan vs Production Trend — Daily"
+          title={chartTitle}
           loading={isLoading}
           empty={!hasData}
           emptyMessage={
