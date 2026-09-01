@@ -606,6 +606,7 @@ const OEE_SERIES_CONFIG = {
   // Machines filter plays that role in the Machine view.
   showCompare: () => false,
   showOverlay: true,
+  mainMonthlyAggregation: () => "average",
   mainUnit: "%",
   mainTitleSuffix: "OEE",
   viewByLabel: (viewBy) => VIEW_BY_LABEL[viewBy] ?? "Overall",
@@ -632,6 +633,7 @@ function buildProductionSeriesConfig(sectionName, kpi) {
     skuFilterVisibility: (viewBy) => viewBy === "sku",
     showCompare: (viewBy) => viewBy === "product_type",
     showOverlay: false,
+    mainMonthlyAggregation: () => "sum",
     mainUnit: kpi?.unit ?? "",
     mainTitleSuffix: kpi?.name ?? "Production",
     viewByLabel: (viewBy) => PRODUCTION_VIEW_BY_LABEL[viewBy] ?? "Overall",
@@ -916,6 +918,7 @@ function MultiSeriesTrendModal({
         groupField: config.groupField(viewBy),
         activeCompare,
         isMonthly,
+        monthlyAggregation: config.mainMonthlyAggregation?.(viewBy),
       }),
     [filteredMainRows, config, viewBy, activeCompare, isMonthly],
   );
@@ -936,33 +939,95 @@ function MultiSeriesTrendModal({
     if (!config.showOverlay || overlays.length === 0) {
       return { labels: [], series: [] };
     }
-    // Collect the union of dates across every picked overlay so the
-    // x-axis is consistent regardless of which kpi has data.
-    const dateSet = new Set();
+
+    const machineView = viewBy === "machine";
+    const allowedMachines = machines.length > 0 ? new Set(machines) : null;
     const perOverlayRows = overlays.map((overlayValue) => {
       const kpiName = overlayKpiName(overlayValue, viewBy, sectionName);
-      const rows = overlayRowsByKpi[kpiName] ?? [];
-      for (const r of rows) if (r.date) dateSet.add(r.date);
+      let rows = overlayRowsByKpi[kpiName] ?? [];
+      if (isMonthly && machineView) {
+        rows = rows.filter(
+          (r) =>
+            r.machine && (!allowedMachines || allowedMachines.has(r.machine)),
+        );
+      } else if (isMonthly) {
+        // Prefer section rollups so an overall chart does not double-count
+        // a rollup row together with its machine children.
+        const overallRows = rows.filter((r) => !r.machine);
+        if (overallRows.length > 0) rows = overallRows;
+      }
       return { overlayValue, rows };
     });
-    const dates = [...dateSet].sort();
-    const labels = dates.map((d) => (isMonthly ? toDisplayMonth(monthKey(d)) : toDisplayDate(d) ?? ""));
 
-    const series = perOverlayRows.map(({ overlayValue, rows }) => {
+    if (!isMonthly) {
+      const dateSet = new Set();
+      for (const { rows } of perOverlayRows) {
+        for (const r of rows) if (r.date) dateSet.add(r.date);
+      }
+      const dates = [...dateSet].sort();
+      const labels = dates.map((d) => toDisplayDate(d) ?? "");
+      const series = perOverlayRows.map(({ overlayValue, rows }) => {
+        const meta = OVERLAY_OPTIONS.find((o) => o.value === overlayValue);
+        const displayLabel = meta?.label?.replace(/^\+\s*/, "") ?? overlayValue;
+        const byDate = new Map(
+          rows.map((r) => [r.date, numOrNull(r.actual_value)]),
+        );
+        return {
+          name: displayLabel,
+          values: dates.map((d) => byDate.get(d) ?? null),
+          unit: overlayUnit(overlayValue),
+        };
+      });
+      return { labels, series };
+    }
+
+    const monthSet = new Set();
+    for (const { rows } of perOverlayRows) {
+      for (const r of rows) {
+        const mk = monthKey(r.date);
+        if (mk) monthSet.add(mk);
+      }
+    }
+    const months = [...monthSet].sort();
+    const labels = months.map(toDisplayMonth);
+    const series = [];
+    for (const { overlayValue, rows } of perOverlayRows) {
       const meta = OVERLAY_OPTIONS.find((o) => o.value === overlayValue);
       const displayLabel = meta?.label?.replace(/^\+\s*/, "") ?? overlayValue;
-      const byDate = new Map(
-        rows.map((r) => [r.date, numOrNull(r.actual_value)]),
-      );
-      const values = dates.map((d) => byDate.get(d) ?? null);
-      return {
-        name: displayLabel,
-        values,
-        unit: overlayUnit(overlayValue),
-      };
-    });
+      const rowsBySeries = new Map();
+      for (const r of rows) {
+        const mk = monthKey(r.date);
+        const value = numOrNull(r.actual_value);
+        if (!mk || value == null) continue;
+        const seriesKey = machineView ? r.machine : "overall";
+        if (!rowsBySeries.has(seriesKey))
+          rowsBySeries.set(seriesKey, new Map());
+        const monthValues = rowsBySeries.get(seriesKey);
+        if (!monthValues.has(mk)) monthValues.set(mk, []);
+        monthValues.get(mk).push(value);
+      }
+      const aggregation = overlayAggregation(overlayValue, machineView);
+      for (const seriesKey of [...rowsBySeries.keys()].sort()) {
+        const monthValues = rowsBySeries.get(seriesKey);
+        series.push({
+          name: machineView ? `${displayLabel} · ${seriesKey}` : displayLabel,
+          values: months.map((month) =>
+            aggregateValues(monthValues.get(month) ?? [], aggregation),
+          ),
+          unit: overlayUnit(overlayValue),
+        });
+      }
+    }
     return { labels, series };
-  }, [overlays, viewBy, sectionName, overlayRowsByKpi, config.showOverlay, isMonthly]);
+  }, [
+    overlays,
+    viewBy,
+    machines,
+    sectionName,
+    overlayRowsByKpi,
+    config.showOverlay,
+    isMonthly,
+  ]);
 
   const overlayLabels = overlayChart.labels;
   const overlaySeries = overlayChart.series;
@@ -1159,13 +1224,20 @@ function toDisplayMonth(mKey) {
 //   the calling config).
 // - groupField null → a single "Overall" series (the section
 //   aggregate).
-function buildMainChart({ mainRows, groupField, activeCompare, isMonthly = false }) {
+function buildMainChart({
+  mainRows,
+  groupField,
+  activeCompare,
+  isMonthly = false,
+  monthlyAggregation = "average",
+}) {
   if (groupField) {
     return buildGroupedSeries({
       rows: mainRows,
       groupField,
       activeCompare,
       isMonthly,
+      monthlyAggregation,
     });
   }
 
@@ -1177,7 +1249,12 @@ function buildMainChart({ mainRows, groupField, activeCompare, isMonthly = false
       if (!mk) continue;
       const val = numOrNull(r.actual_value);
       if (val == null) continue;
-      const prev = monthMap.get(mk) || { sum: 0, count: 0, latestVal: val, latestDate: r.date };
+      const prev = monthMap.get(mk) || {
+        sum: 0,
+        count: 0,
+        latestVal: val,
+        latestDate: r.date,
+      };
       prev.sum += val;
       prev.count += 1;
       if (dateKey(r.date) >= dateKey(prev.latestDate)) {
@@ -1191,7 +1268,7 @@ function buildMainChart({ mainRows, groupField, activeCompare, isMonthly = false
     const values = months.map((m) => {
       const entry = monthMap.get(m);
       if (!entry || entry.count === 0) return null;
-      return Math.round((entry.sum / entry.count) * 100) / 100;
+      return aggregateValues(entry, monthlyAggregation);
     });
     return {
       labels,
@@ -1215,7 +1292,13 @@ function buildMainChart({ mainRows, groupField, activeCompare, isMonthly = false
   };
 }
 
-function buildGroupedSeries({ rows, groupField, activeCompare, isMonthly = false }) {
+function buildGroupedSeries({
+  rows,
+  groupField,
+  activeCompare,
+  isMonthly = false,
+  monthlyAggregation = "average",
+}) {
   if (isMonthly) {
     const monthSet = new Set();
     for (const r of rows) {
@@ -1251,7 +1334,7 @@ function buildGroupedSeries({ rows, groupField, activeCompare, isMonthly = false
       values: months.map((m) => {
         const entry = byKey.get(id)?.get(m);
         if (!entry || entry.count === 0) return null;
-        return Math.round((entry.sum / entry.count) * 100) / 100;
+        return aggregateValues(entry, monthlyAggregation);
       }),
     }));
     return { labels, series };
@@ -1294,6 +1377,26 @@ function overlayUnit(overlayValue) {
   if (overlayValue === "Availability") return "%";
   if (overlayValue === "Breakdown") return "min";
   return "";
+}
+
+function overlayAggregation(overlayValue, machineView) {
+  if (overlayValue === "Production" || overlayValue === "Scrap") return "sum";
+  if (overlayValue === "Breakdown") return machineView ? "sum" : "average";
+  return "average";
+}
+
+function aggregateValues(valuesOrEntry, aggregation) {
+  if (Array.isArray(valuesOrEntry)) {
+    if (valuesOrEntry.length === 0) return null;
+    const total = valuesOrEntry.reduce((sum, value) => sum + value, 0);
+    const result = aggregation === "sum" ? total : total / valuesOrEntry.length;
+    return Math.round(result * 100) / 100;
+  }
+
+  const entry = valuesOrEntry;
+  if (!entry || entry.count === 0) return null;
+  const result = aggregation === "sum" ? entry.sum : entry.sum / entry.count;
+  return Math.round(result * 100) / 100;
 }
 
 function numOrNull(v) {
