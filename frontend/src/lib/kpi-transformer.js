@@ -1401,20 +1401,20 @@ function selectSeries(
             totalPlanned += itemData.planned;
 
             if (itemData.planned > 0) {
-              const skuPct = (itemData.fulfilled / itemData.planned) * 100;
-              numSum += skuPct * itemData.planned;
+              const cappedFulfilled = Math.min(itemData.fulfilled, itemData.planned);
+              numSum += cappedFulfilled;
               denSum += itemData.planned;
               skuBreakdown.push({
                 itemcode: itemData.itemcode,
                 fulfilled: itemData.fulfilled,
                 planned: itemData.planned,
-                skuPct,
+                skuPct: (itemData.fulfilled / itemData.planned) * 100,
               });
             }
           }
 
-          // Weighted average formula: \sum (SKU Fulfillment % * SKU Plan) / \sum (SKU Plan)
-          const weightedRatio = denSum > 0 ? numSum / denSum : 0;
+          // SKU Plan Fulfillment % = Σ MIN(Actual SKU, Plan SKU) / Σ Plan SKU * 100
+          const weightedRatio = denSum > 0 ? (numSum / denSum) * 100 : 0;
 
           return {
             date: sampleDate || d,
@@ -2048,13 +2048,12 @@ export function toKpiGrid(
       let weightedDenSum = 0;
       for (const entry of itemTotals.values()) {
         if (entry.planned > 0) {
-          const skuPct = (entry.fulfilled / entry.planned) * 100;
-          weightedNumSum += skuPct * entry.planned;
+          weightedNumSum += Math.min(entry.fulfilled, entry.planned);
           weightedDenSum += entry.planned;
         }
       }
       const weightedMonthRatio =
-        weightedDenSum > 0 ? weightedNumSum / weightedDenSum : 0;
+        weightedDenSum > 0 ? (weightedNumSum / weightedDenSum) * 100 : 0;
       value = Math.round(weightedMonthRatio * 100) / 100;
     } else {
       // new_change.md C5: the range aggregation class comes from the KPI's
