@@ -733,10 +733,9 @@ function MultiSeriesTrendModal({
       : resolved.from;
   const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
 
-  // One trip covers main + (optional) overlays via drillKpis. The
-  // kpi_name(s) come from the config so the same modal handles
-  // both OEE / Production (single kpi_name) and Downtime (array of
-  // 6 reason leaves — CR-11).
+  // Productivity and Quality use separate requests because the backend
+  // applies category as an exact predicate. The kpi_name(s) come from the
+  // config so the same modal handles OEE / Production and Downtime too.
   const sectionName = sectionIdToName(section);
   const mainKpis = useMemo(() => {
     const raw = config.mainKpiName(viewBy, sectionName);
@@ -745,6 +744,14 @@ function MultiSeriesTrendModal({
   const overlayKpis = config.showOverlay
     ? overlays.map((o) => overlayKpiName(o, viewBy, sectionName))
     : [];
+  const qualityOverlayKpis = config.showOverlay
+    ? overlays
+        .filter((o) => o === "Scrap")
+        .map((o) => overlayKpiName(o, viewBy, sectionName))
+    : [];
+  const productivityOverlayKpis = overlayKpis.filter(
+    (kpiName) => !qualityOverlayKpis.includes(kpiName),
+  );
 
   const singlePayload = {
     plantId,
@@ -762,7 +769,9 @@ function MultiSeriesTrendModal({
     from: rangeFrom,
     to: rangeTo,
     drillKpis:
-      overlayKpis.length > 0 ? [...mainKpis, ...overlayKpis] : mainKpis,
+      productivityOverlayKpis.length > 0
+        ? [...mainKpis, ...productivityOverlayKpis]
+        : mainKpis,
     drillOnly: true,
     limit: 10000,
   };
@@ -783,6 +792,34 @@ function MultiSeriesTrendModal({
     },
   );
 
+  const qualityPayload =
+    qualityOverlayKpis.length > 0
+      ? {
+          ...singlePayload,
+          context: { ...singlePayload.context, category: "Quality" },
+          drillKpis: qualityOverlayKpis,
+        }
+      : null;
+
+  const { data: qualityRows, isLoading: qualityLoading } = usePolledQuery(
+    () =>
+      client
+        .post("/dashboard/kpi-data", qualityPayload)
+        .then((r) => r.data ?? r),
+    {
+      enabled: Boolean(qualityPayload),
+      interval: 0,
+      deps: [JSON.stringify(qualityPayload)],
+      keepPreviousData: false,
+    },
+  );
+
+  const allRows = useMemo(() => {
+    const productivityRows = Array.isArray(singleRows) ? singleRows : [];
+    const scrapRows = Array.isArray(qualityRows) ? qualityRows : [];
+    return [...productivityRows, ...scrapRows];
+  }, [singleRows, qualityRows]);
+
   // Apply the dashboard's scope to every row before anything reads them,
   // so the filter options, the chart and the overlays all describe the
   // same slice the user has selected outside. A row that carries NO value
@@ -790,22 +827,22 @@ function MultiSeriesTrendModal({
   // that belong to every slice; only a row explicitly belonging to another
   // sub-section / product is dropped.
   const scopedRows = useMemo(() => {
-    if (!Array.isArray(singleRows)) return [];
+    if (!Array.isArray(allRows)) return [];
     const pinnedSub = canonicalizeSubSection(subSection);
     const pinnedProduct = canonicalizeProductType(productType);
-    if (!pinnedSub && !pinnedProduct) return singleRows;
+    if (!pinnedSub && !pinnedProduct) return allRows;
     const matches = (rowValue, pinned, canon) => {
       if (!pinned) return true;
       const v = canon(rowValue);
       if (v == null) return true;
       return v.toLowerCase() === pinned.toLowerCase();
     };
-    return singleRows.filter(
+    return allRows.filter(
       (r) =>
         matches(r.sub_section, pinnedSub, canonicalizeSubSection) &&
         matches(r.product_type, pinnedProduct, canonicalizeProductType),
     );
-  }, [singleRows, subSection, productType]);
+  }, [allRows, subSection, productType]);
 
   // Distinct machine + SKU values from the scoped rows — the Autocomplete
   // options for each filter. Empty while loading.
@@ -1031,7 +1068,7 @@ function MultiSeriesTrendModal({
   const overlayLabels = overlayChart.labels;
   const overlaySeries = overlayChart.series;
 
-  const loading = singleLoading;
+  const loading = singleLoading || qualityLoading;
   const hasMainData = mainChart.series.length > 0;
   // COMPARE + filter visibility are config-driven per view-by.
   const showCompare = config.showCompare(viewBy);
