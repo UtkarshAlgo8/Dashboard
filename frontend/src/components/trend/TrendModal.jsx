@@ -428,6 +428,7 @@ function LegacyTrendModal({
       headerExtras={
         <TimeRangeSelect
           preset={range}
+          variant="trend"
           presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
           from={from}
           to={to}
@@ -687,16 +688,7 @@ function MultiSeriesTrendModal({
   theme,
   config,
 }) {
-  // A dimension pinned on the dashboard is no longer a lens worth
-  // offering — every row in the chart already carries that one value.
-  // Only the dimensions NOT filtered outside stay as VIEW BY choices.
-  const viewByOptions = useMemo(
-    () =>
-      config.viewByOptions.filter(
-        (o) => !(o.value === "product_type" && productType),
-      ),
-    [config.viewByOptions, productType],
-  );
+  const viewByOptions = config.viewByOptions;
 
   // Default VIEW BY from the config; compare + overlays start empty;
   // machines + sku filters start empty (= all rows pass through).
@@ -787,13 +779,10 @@ function MultiSeriesTrendModal({
       enabled: Boolean(singlePayload),
       interval: 0,
       deps: [JSON.stringify(singlePayload)],
-      // Toggling an overlay mutates the payload (drillKpis adds the
-      // overlay kpi_name). Without keepPreviousData, usePolledQuery
-      // nulls `data` on deps change, which blanks the main OEE chart
-      // for the round-trip duration. Keep the previous data so the
-      // main chart stays rendered; only the new overlay chart shows
-      // its own skeleton until the response lands.
-      keepPreviousData: true,
+      // Clear the previous slice on every date or lens change. Showing the
+      // old chart while the new request is pending is misleading, especially
+      // when the new range has a different number of points.
+      keepPreviousData: false,
     },
   );
 
@@ -1001,6 +990,7 @@ function MultiSeriesTrendModal({
       headerExtras={
         <TimeRangeSelect
           preset={range}
+          variant="trend"
           presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
           from={from}
           to={to}

@@ -223,7 +223,9 @@ export default function PlanComplianceTrendModal({
       enabled: open,
       interval: 0,
       deps: [JSON.stringify(payload), open],
-      keepPreviousData: true,
+      // Do not render the previous range while the new date/filter request
+      // is pending. It can look like a dense or incorrect trend.
+      keepPreviousData: false,
     },
   );
 
@@ -374,6 +376,7 @@ export default function PlanComplianceTrendModal({
       >
         <TimeRangeSelect
           preset={range}
+          variant="trend"
           presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
           from={from}
           to={to}
