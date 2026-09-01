@@ -206,7 +206,9 @@ export default function PlanComplianceTrendModal({
     context: {
       section: sectionName,
       category: "Productivity",
-      granularity: "DAY",
+      // Monthly mode must read the pre-aggregated monthly plan/fulfilled
+      // rows used by the dashboard. Daily and custom ranges use DAY rows.
+      granularity: isMonthly ? "MONTH" : "DAY",
       ...(subSection ? { sub_section: subSection } : {}),
       ...(productType ? { product_type: productType } : {}),
     },
@@ -270,6 +272,9 @@ export default function PlanComplianceTrendModal({
 
       const d = r.date;
       if (!d) continue;
+      if (r.granularity && r.granularity !== (isMonthly ? "MONTH" : "DAY")) {
+        continue;
+      }
 
       const groupKey = isMonthly ? monthKey(d) : d;
       if (!groupKey) continue;
