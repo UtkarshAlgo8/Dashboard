@@ -482,12 +482,12 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
         ? { date: state.drillDate }
         : state;
 
-  // CR-11: the Total Downtime tile's drill targets ARE the 6 reason leaves,
-  // which the dedicated DAY fetch above already holds — and DowntimeDrillPanel
-  // now reads that feed directly. Re-fetching them here bought nothing and, at
-  // MONTH/YEAR granularity, returned nothing at all (no reason row is stored
-  // above DAY). Skip it.
-  const skipDrillFetch = state.drillSourceKpiId === "downtime";
+  // CR-11 / Plan Compliance: the Total Downtime and SKU Plan Fulfillment
+  // tiles' drill targets are already fetched in the landing payload.
+  // Re-fetching them here is redundant and would create duplicate rows. Skip it.
+  const skipDrillFetch =
+    state.drillSourceKpiId === "downtime" ||
+    state.drillSourceKpiId === "comp";
 
   const drillPayload =
     state.drillKpis && !skipDrillFetch

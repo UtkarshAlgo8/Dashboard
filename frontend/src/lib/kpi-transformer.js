@@ -1371,8 +1371,27 @@ function selectSeries(
         }
       };
 
-      for (const r of fulfilledRows) addToItemMap(r, "fulfilled");
-      for (const r of plannedRows) addToItemMap(r, "planned");
+      const dedupeFeed = (rows) => {
+        const seen = new Set();
+        const result = [];
+        for (const r of rows) {
+          const key = [
+            isoDate(r.date),
+            r.granularity || "",
+            r.kpi_name || r.kpiName || "",
+            r.itemcode || r.itemCode || "",
+            r.product_type || r.productType || "",
+            r.machine || "",
+          ].join("||");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          result.push(r);
+        }
+        return result;
+      };
+
+      for (const r of dedupeFeed(fulfilledRows)) addToItemMap(r, "fulfilled");
+      for (const r of dedupeFeed(plannedRows)) addToItemMap(r, "planned");
 
       let pinnedGranularity = "";
       let bestCount = 0;

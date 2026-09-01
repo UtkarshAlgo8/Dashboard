@@ -135,10 +135,27 @@ export default function PlanComplianceDrillPanel({
       : { fulfilled: "Curing_Fulfilled_Qty_sku", planned: "Curing_Planned_Qty_sku" };
 
   const parsedSkuData = useMemo(() => {
-    let fulfilledRows = rowsToUse.filter(
+    // Deduplicate input rows by unique key (date, granularity, kpiName, itemCode, productType, machine)
+    const seen = new Set();
+    const uniqueRows = [];
+    for (const r of rowsToUse) {
+      const key = [
+        r.date,
+        r.granularity,
+        r.kpiName || r.kpi_name,
+        r.itemCode || r.itemcode,
+        r.productType || r.product_type,
+        r.machine,
+      ].join("||");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniqueRows.push(r);
+    }
+
+    let fulfilledRows = uniqueRows.filter(
       (r) => (r.kpiName || r.kpi_name) === skuFeedNames.fulfilled,
     );
-    let plannedRows = rowsToUse.filter(
+    let plannedRows = uniqueRows.filter(
       (r) => (r.kpiName || r.kpi_name) === skuFeedNames.planned,
     );
 
