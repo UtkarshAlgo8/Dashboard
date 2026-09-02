@@ -445,7 +445,7 @@ function BanmoreProduction() {
   const contentOnlyLoading = contentLoading && !bodyLoading;
 
   const [timeRange, setTimeRange] = useState({
-    preset: "month",
+    preset: "today",
     from: "",
     to: "",
   });
