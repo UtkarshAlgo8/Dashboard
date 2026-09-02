@@ -103,7 +103,11 @@ export default function PlanComplianceTrendChart({
       },
       yAxis: [
         {
-          // Left Axis: Quantity
+          // Left Axis: Quantity. SKU view (scrollable) can span a wide value
+          // range (a few hundred vs several thousand) — a log scale keeps
+          // small bars' relative differences visible instead of flattening
+          // them near zero the way a linear scale does.
+          type: scrollable ? "logarithmic" : "linear",
           title: {
             text: useKFormat ? `Quantity in Thousands (${unit})` : `Quantity (${unit})`,
             style: { color: colors.text, fontSize: "11px", fontWeight: "600" },
@@ -115,7 +119,7 @@ export default function PlanComplianceTrendChart({
             style: { color: colors.text, fontSize: "11px" },
           },
           gridLineColor: colors.grid,
-          min: 0,
+          min: scrollable ? undefined : 0,
           opposite: false,
         },
         {
@@ -190,6 +194,8 @@ export default function PlanComplianceTrendChart({
           grouping: true,
           pointPadding: 0.12,
           groupPadding: 0.22,
+          // Floor only for zero-valued bars, which a log axis otherwise can't place.
+          minPointLength: scrollable ? 4 : 0,
           borderWidth: 0,
           borderRadius: 3,
           dataLabels: {
