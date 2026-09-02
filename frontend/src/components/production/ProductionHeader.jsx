@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   CircularProgress,
@@ -47,6 +48,7 @@ const DEFAULT_TYRE_TYPES = [
  * Row 2: Category Pills | Tyre Type Pills | Time Range Pills | Download Button
  */
 function ProductionHeader({
+  plant = null,
   timeRange,
   onTimeRangeChange,
   shift = "all",
@@ -62,6 +64,7 @@ function ProductionHeader({
   onTyreTypeChange,
 }) {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [exportStatus, setExportStatus] = useState("idle");
   const resetTimer = useRef(null);
 
@@ -108,15 +111,20 @@ function ProductionHeader({
           boxShadow: theme.custom.navbarShadow,
           px: { xs: 2, md: 3 },
           py: 1.25,
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
-          justifyContent: "space-between",
           position: "relative",
           zIndex: 2,
         }}
       >
         {/* Left: Brand Logo & App Name */}
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1.5}
+          sx={{ justifySelf: "start" }}
+        >
           <Box
             component="img"
             src={jkLogo}
@@ -149,8 +157,63 @@ function ProductionHeader({
           </Typography>
         </Stack>
 
+        {/* Center: active plant — highlighted pill, click to go back to
+            the plant map. */}
+        <Tooltip title="Change plant" arrow>
+          <Box
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("/")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate("/");
+              }
+            }}
+            sx={{
+              justifySelf: "center",
+              display: "flex",
+              alignItems: "center",
+              gap: 0.75,
+              px: 2,
+              py: 0.6,
+              borderRadius: 999,
+              border: 1,
+              borderColor: "primary.main",
+              backgroundColor: "primary.light",
+              color: "primary.main",
+              cursor: "pointer",
+              userSelect: "none",
+              transition: "background-color 120ms ease, box-shadow 120ms ease",
+              "&:hover": {
+                backgroundColor: theme.custom.brand.orangeRing,
+                boxShadow: theme.custom.shadow,
+              },
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 14,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                lineHeight: 1.2,
+              }}
+            >
+              {plant?.name ?? "Select plant"}
+            </Typography>
+            <Typography sx={{ fontSize: 11, opacity: 0.8, lineHeight: 1 }}>
+              ▾
+            </Typography>
+          </Box>
+        </Tooltip>
+
         {/* Right: Last Updated Timestamp + Profile Dropdown */}
-        <Stack direction="row" alignItems="center" spacing={2}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={2}
+          sx={{ justifySelf: "end" }}
+        >
           {formatUpdated(lastUpdatedAt) && (
             <Typography
               sx={{
