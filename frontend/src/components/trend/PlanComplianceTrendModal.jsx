@@ -10,6 +10,8 @@ import {
   Typography,
   useTheme,
   Autocomplete,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import client from "@/api/client.js";
@@ -24,6 +26,30 @@ const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 
 function sectionIdToName(id) {
   return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
+}
+
+// View lens: "overall" keeps the existing date-bucketed trend; "sku" pivots
+// the x-axis to individual SKUs for the currently selected period.
+const VIEW_OPTIONS = [
+  { value: "overall", label: "Overall" },
+  { value: "sku", label: "SKU" },
+];
+
+// SKU-view status tiers — mirrors PlanComplianceDrillPanel's classification:
+// <90% under, 90-105% acceptable, >105% over for SKUs with a plan; a SKU
+// with zero plan but any production is Overproduced; a SKU with zero plan
+// AND zero production is excluded entirely (see the itemMap filter below).
+const STATUS_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "under", label: "Underproduced (<90%)" },
+  { value: "acceptable", label: "Acceptable (90%-105%)" },
+  { value: "over", label: "Overproduced (>105%)" },
+];
+
+function getStatusTier(pct) {
+  if (Number.isNaN(pct) || pct < 90) return "under";
+  if (pct <= 105) return "acceptable";
+  return "over";
 }
 
 function dateKey(d) {
@@ -116,6 +142,56 @@ function FilterRow({ label, options, value, onChange, placeholder }) {
   );
 }
 
+// Segmented single-select control — same look as the Status toggle in
+// PlanComplianceDrillPanel, reused here for the View and Status rows.
+function ToggleGroup({ label, value, onChange, options }) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1.5}>
+      <Typography
+        sx={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: "text.disabled",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          minWidth: 76,
+        }}
+      >
+        {label}
+      </Typography>
+      <ToggleButtonGroup
+        size="small"
+        value={value}
+        exclusive
+        onChange={(_, next) => {
+          if (next) onChange(next);
+        }}
+        sx={{
+          "& .MuiToggleButton-root": {
+            px: 1.5,
+            py: 0.25,
+            fontSize: 12,
+            textTransform: "none",
+            fontWeight: 600,
+            border: "1.25px solid",
+            borderColor: "divider",
+          },
+          "& .Mui-selected": {
+            borderColor: "primary.main !important",
+            color: "primary.main",
+          },
+        }}
+      >
+        {options.map((opt) => (
+          <ToggleButton key={opt.value} value={opt.value}>
+            {opt.label}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    </Stack>
+  );
+}
+
 function ChartPanel({ theme, title, loading, empty, emptyMessage, children }) {
   return (
     <Box>
@@ -176,6 +252,9 @@ export default function PlanComplianceTrendModal({
 }) {
   const theme = useTheme();
   const [selectedSkus, setSelectedSkus] = useState([]);
+  const [view, setView] = useState("overall");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const isSkuView = view === "sku";
 
   // Date range resolution (mirrors the other trend modals)
   const resolved = presetToDateRange({ preset: range, from, to }, asOf);
@@ -195,6 +274,36 @@ export default function PlanComplianceTrendModal({
   const rangeFrom = isDailyTrend ? dailyFrom : isMonthly ? monthlyFrom : resolved.from;
   const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
 
+  // SKU view collapses the time dimension to one period per preset — the
+  // x-axis is SKUs, not dates — while Overall keeps the trend range as-is.
+  // Daily -> just the latest day; Monthly -> the current month to date
+  // (same window Overall's Daily trend uses); Yearly -> the current year
+  // to date (same window Overall's Monthly trend uses); Date Range -> the
+  // custom range, unchanged.
+  let fetchFrom = rangeFrom;
+  let fetchTo = rangeTo;
+  let activeGranularity = isMonthly ? "MONTH" : "DAY";
+
+  if (isSkuView) {
+    if (isDailyTrend) {
+      fetchFrom = anchorIso;
+      fetchTo = anchorIso;
+      activeGranularity = "DAY";
+    } else if (isMonthly) {
+      fetchFrom = dailyFrom;
+      fetchTo = dailyTo;
+      activeGranularity = "DAY";
+    } else if (range === "year" && !from && !to) {
+      fetchFrom = monthlyFrom;
+      fetchTo = monthlyTo;
+      activeGranularity = "MONTH";
+    } else {
+      fetchFrom = resolved.from;
+      fetchTo = resolved.to;
+      activeGranularity = "DAY";
+    }
+  }
+
   const sectionName = sectionIdToName(section);
   const skuFeedNames =
     sectionName === "TBM"
@@ -206,14 +315,15 @@ export default function PlanComplianceTrendModal({
     context: {
       section: sectionName,
       category: "Productivity",
-      // Monthly mode must read the pre-aggregated monthly plan/fulfilled
-      // rows used by the dashboard. Daily and custom ranges use DAY rows.
-      granularity: isMonthly ? "MONTH" : "DAY",
+      // Monthly mode (and SKU-view Yearly) reads the pre-aggregated monthly
+      // plan/fulfilled rows used by the dashboard; every other case sums
+      // DAY rows over the resolved window.
+      granularity: activeGranularity,
       ...(subSection ? { sub_section: subSection } : {}),
       ...(productType ? { product_type: productType } : {}),
     },
-    from: rangeFrom,
-    to: rangeTo,
+    from: fetchFrom,
+    to: fetchTo,
     drillKpis: [skuFeedNames.fulfilled, skuFeedNames.planned],
     drillOnly: true,
     limit: 10000,
@@ -254,8 +364,8 @@ export default function PlanComplianceTrendModal({
       uniqueRows.push(r);
     }
 
-    const groupMap = new Map();
-
+    // Collect the full SKU universe (drives the SKU filter dropdown) and
+    // the display unit up front — unaffected by view or filters.
     for (const r of uniqueRows) {
       const sku = r.itemcode || r.itemCode;
       if (sku && sku !== "nan" && sku !== "UNKNOWN") {
@@ -264,6 +374,72 @@ export default function PlanComplianceTrendModal({
       if (r.unit_of_measurement && r.unit_of_measurement !== "nan") {
         detectedUnit = r.unit_of_measurement;
       }
+    }
+
+    if (isSkuView) {
+      // X-axis is SKUs: one bar-pair per item, summed over the whole
+      // fetched window (already collapsed to one period per preset above).
+      const itemMap = new Map();
+
+      for (const r of uniqueRows) {
+        const sku = r.itemcode || r.itemCode;
+        if (!sku || sku === "nan" || sku === "UNKNOWN") continue;
+        if (selectedSkus.length > 0 && !selectedSkus.includes(sku)) continue;
+        if (r.granularity && r.granularity !== activeGranularity) continue;
+
+        const kpiName = r.kpi_name || r.kpiName;
+        const val = Number(r.actual_value ?? r.actual) || 0;
+
+        const entry = itemMap.get(sku) || {
+          key: sku,
+          displayLabel: sku,
+          planned: 0,
+          produced: 0,
+        };
+        if (kpiName === skuFeedNames.fulfilled) {
+          entry.produced += val;
+        } else if (kpiName === skuFeedNames.planned) {
+          entry.planned += val;
+        }
+        itemMap.set(sku, entry);
+      }
+
+      // Zero plan + zero production is empty data, not a real comparison —
+      // drop it so it never dilutes a tier bucket. Zero plan with ANY
+      // production is unplanned output, routed straight to Overproduced
+      // instead of through the 90/105 thresholds (which would read the
+      // placeholder 100% as Acceptable). Mirrors the same rule in
+      // PlanComplianceDrillPanel.
+      const withTier = [...itemMap.values()]
+        .filter((item) => item.planned > 0 || item.produced > 0)
+        .map((item) => {
+          const hasPlan = item.planned > 0;
+          const fulfillmentPct = hasPlan ? (item.produced / item.planned) * 100 : 100;
+          const tier = hasPlan ? getStatusTier(fulfillmentPct) : "over";
+          return {
+            ...item,
+            fulfillmentPct: Math.round(fulfillmentPct * 10) / 10,
+            tier,
+          };
+        });
+
+      const filtered =
+        statusFilter === "all"
+          ? withTier
+          : withTier.filter((r) => r.tier === statusFilter);
+      filtered.sort((a, b) => a.key.localeCompare(b.key));
+
+      return {
+        allSkus: [...skuSet].sort(),
+        backendUnit: detectedUnit,
+        perDateData: filtered,
+      };
+    }
+
+    const groupMap = new Map();
+
+    for (const r of uniqueRows) {
+      const sku = r.itemcode || r.itemCode;
 
       // Filter by selected SKUs if specified
       if (selectedSkus.length > 0 && (!sku || !selectedSkus.includes(sku))) {
@@ -272,7 +448,7 @@ export default function PlanComplianceTrendModal({
 
       const d = r.date;
       if (!d) continue;
-      if (r.granularity && r.granularity !== (isMonthly ? "MONTH" : "DAY")) {
+      if (r.granularity && r.granularity !== activeGranularity) {
         continue;
       }
 
@@ -312,7 +488,17 @@ export default function PlanComplianceTrendModal({
       backendUnit: detectedUnit,
       perDateData: sortedData,
     };
-  }, [rawRows, skuFeedNames.fulfilled, skuFeedNames.planned, selectedSkus, kpi?.unit, isMonthly]);
+  }, [
+    rawRows,
+    skuFeedNames.fulfilled,
+    skuFeedNames.planned,
+    selectedSkus,
+    kpi?.unit,
+    isMonthly,
+    isSkuView,
+    statusFilter,
+    activeGranularity,
+  ]);
 
   // Chart parallel arrays
   const chartLabels = useMemo(() => perDateData.map((d) => d.displayLabel), [perDateData]);
@@ -328,9 +514,16 @@ export default function PlanComplianceTrendModal({
     .join(" · ");
 
   const hasData = perDateData.length > 0;
-  const chartTitle = isMonthly
-    ? "Plan vs Production Trend — Monthly"
-    : "Plan vs Production Trend — Daily";
+  const periodLabel = isDailyTrend
+    ? "Daily"
+    : isMonthly
+      ? "Monthly"
+      : range === "year" && !from && !to
+        ? "Yearly"
+        : "Date Range";
+  const chartTitle = isSkuView
+    ? `Plan vs Production — SKU-wise (${periodLabel})`
+    : `Plan vs Production Trend — ${periodLabel}`;
 
   return (
     <Dialog
@@ -379,29 +572,54 @@ export default function PlanComplianceTrendModal({
         dividers
         sx={{ display: "flex", flexDirection: "column", gap: 2 }}
       >
-        <TimeRangeSelect
-          preset={range}
-          variant="trend"
-          presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
-          from={from}
-          to={to}
-          onPresetChange={(p) => {
-            const next = typeof p === "string" ? p : p?.preset ?? "month";
-            onRangeChange(next);
-            onFromChange("");
-            onToChange("");
-          }}
-          onFromChange={(v) => {
-            onFromChange(v);
-            onRangeChange("custom");
-          }}
-          onToChange={(v) => {
-            onToChange(v);
-            onRangeChange("custom");
-          }}
-        />
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          flexWrap="wrap"
+          rowGap={1}
+          columnGap={3}
+        >
+          <TimeRangeSelect
+            preset={range}
+            variant="trend"
+            presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
+            from={from}
+            to={to}
+            onPresetChange={(p) => {
+              const next = typeof p === "string" ? p : p?.preset ?? "month";
+              onRangeChange(next);
+              onFromChange("");
+              onToChange("");
+            }}
+            onFromChange={(v) => {
+              onFromChange(v);
+              onRangeChange("custom");
+            }}
+            onToChange={(v) => {
+              onToChange(v);
+              onRangeChange("custom");
+            }}
+          />
+
+          {isSkuView && (
+            <ToggleGroup
+              label="Status"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={STATUS_OPTIONS}
+            />
+          )}
+        </Stack>
 
         <Stack spacing={1.25}>
+          <ToggleGroup
+            label="View"
+            value={view}
+            onChange={setView}
+            options={VIEW_OPTIONS}
+          />
+
           {scopeLabel && (
             <Typography sx={{ fontSize: 11, color: "text.disabled" }}>
               Scoped to {scopeLabel} — set on the dashboard.
@@ -425,7 +643,9 @@ export default function PlanComplianceTrendModal({
           emptyMessage={
             isLoading
               ? "Loading…"
-              : "No trend data for this period — try another date range or SKU."
+              : isSkuView
+                ? "No SKUs match the selected filters for this period."
+                : "No trend data for this period — try another date range or SKU."
           }
         >
           {hasData && (
@@ -435,6 +655,7 @@ export default function PlanComplianceTrendModal({
               producedValues={producedValues}
               fulfillmentValues={fulfillmentValues}
               unit={backendUnit}
+              scrollable={isSkuView}
             />
           )}
         </ChartPanel>
