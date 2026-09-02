@@ -220,6 +220,12 @@ function SatelliteIndiaMap({
         plant.id === "banmore" || isFocused || mapZoom >= 5.8;
 
       const el = document.createElement("div");
+      // Stack order must be correct from the very first paint — the next
+      // effect (which normally keeps this in sync) only re-runs when
+      // hov/sel/mapZoom change, not when these markers are first created,
+      // so without this a neighboring marker can render on top of the
+      // always-visible Banmore card until the user's first interaction.
+      el.style.zIndex = isFocused ? "50" : isCardVisible ? "10" : "1";
       const root = createRoot(el);
       // Render content immediately on initial creation
       root.render(
