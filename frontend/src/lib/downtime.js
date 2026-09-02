@@ -26,6 +26,15 @@ export const DOWNTIME_REASONS = [
 // reasons before posting).
 export const TOTAL_DOWNTIME_NAME = "TotalDowntime";
 
+// The reason set the KPI CARD sums — 'No Schedule' is a planned non-run,
+// not machine downtime, so the tile's headline value, its per-machine
+// average denominator, and its "top machine" figure all exclude it. The
+// drill-down keeps the full 6-reason DOWNTIME_REASONS list — 'No Schedule'
+// is still a real reason row there.
+export const CARD_DOWNTIME_REASONS = DOWNTIME_REASONS.filter(
+  (r) => r !== "No Schedule",
+);
+
 // Convert the virtual kpi_name into the 6 reason leaves for an
 // actual kpi-data fetch. If `name` is already a real kpi_name
 // (i.e. one of the 6 reasons, or anything else), return as-is.

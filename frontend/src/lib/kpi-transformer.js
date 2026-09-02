@@ -22,7 +22,11 @@ import {
   toDisplayQuantity,
 } from "./units.js";
 import { toDisplayDate } from "./dateFormat.js";
-import { DOWNTIME_REASONS, TOTAL_DOWNTIME_NAME } from "./downtime.js";
+import {
+  DOWNTIME_REASONS,
+  CARD_DOWNTIME_REASONS,
+  TOTAL_DOWNTIME_NAME,
+} from "./downtime.js";
 
 // changes.md §0: missing-value sentinels are the literal strings "nan"
 // AND "null" (not JS null), plus "". Treat all as empty everywhere.
@@ -1164,8 +1168,7 @@ function placeholderCard(kpiDef) {
     asOfDate: null,
     partialDay: false,
     truncated: false,
-    // CR-11: no rows ⇒ no fleet to describe.
-    scope: null,
+    topMachine: null,
   };
 }
 
@@ -1208,6 +1211,33 @@ const UNIT_PINNED_SERIES = new Set([
 const STRICT_FILTER_PLANTS = new Set(["chennai", "ctp"]);
 
 /**
+ * CR-11 follow-up: the single machine with the most downtime across a set
+ * of synthesised TotalDowntime rows (each carrying a per-date `machineTotals`
+ * map — see selectSeries). Mirrors:
+ *   SELECT machine, SUM(actual_value) ... GROUP BY machine ORDER BY 2 DESC LIMIT 1
+ * Already scoped to CARD_DOWNTIME_REASONS (no 'No Schedule') because that's
+ * the reason set `machineTotals` was built from.
+ */
+function topDowntimeMachine(rows) {
+  const totals = new Map();
+  for (const r of rows ?? []) {
+    if (!r.machineTotals) continue;
+    for (const [m, v] of r.machineTotals) {
+      totals.set(m, (totals.get(m) ?? 0) + v);
+    }
+  }
+  let machine = null;
+  let minutes = 0;
+  for (const [m, v] of totals) {
+    if (v > minutes) {
+      machine = m;
+      minutes = v;
+    }
+  }
+  return machine ? { machine, minutes: Math.round(minutes * 100) / 100 } : null;
+}
+
+/**
  * Narrow one KPI's rows down to the single pinned series the card renders:
  * one kpi_name, one product_type, one unit_of_measurement. Returns the
  * (possibly re-pointed) kpi_name alongside the rows — the TBM/Curing
@@ -1246,7 +1276,12 @@ function selectSeries(
     if (!downtimeByReason) return { name: TOTAL_DOWNTIME_NAME, rows: [] };
     const perDate = new Map();
     const granularityCount = new Map();
-    for (const reason of DOWNTIME_REASONS) {
+    // CARD_DOWNTIME_REASONS excludes 'No Schedule' — a planned non-run, not
+    // machine downtime — so it never enters the card's sum, its per-machine
+    // average denominator, or the "top machine" figure below. The
+    // drill-down reads the full 6-reason set directly from `downtimeRows`,
+    // independently of this synthesis (see DowntimeDrillPanel.jsx).
+    for (const reason of CARD_DOWNTIME_REASONS) {
       const g = downtimeByReason.get(reason);
       if (!g) continue;
       for (const r of g) {
@@ -1266,9 +1301,19 @@ function selectSeries(
             // divides by this set to get elapsed downtime for a typical
             // machine. Tracked per date because the active fleet varies.
             machines: new Set(),
+            // Per-machine totals for THIS date, so the card can name the
+            // single highest-downtime machine (SUM(actual_value) GROUP BY
+            // machine, same 5-reason scope as the headline).
+            machineTotals: new Map(),
           });
         const bucket = prev ?? perDate.get(d);
-        if (r.machine && r.machine !== "nan") bucket.machines.add(r.machine);
+        if (r.machine && r.machine !== "nan") {
+          bucket.machines.add(r.machine);
+          bucket.machineTotals.set(
+            r.machine,
+            (bucket.machineTotals.get(r.machine) ?? 0) + v,
+          );
+        }
         if (r.granularity) {
           granularityCount.set(
             r.granularity,
@@ -1876,6 +1921,7 @@ export function toKpiGrid(
       // headline is what a typical machine lost and stays comparable to the
       // 1,440 min in a day / 43,200 in a month.
       let downtimeMachines = 0;
+      let topMachine = null;
       let value;
       if (isTotalDowntime) {
         const usedRows = windowIsCardPeriod ? preRows : preRows.slice(0, 1);
@@ -1891,6 +1937,7 @@ export function toKpiGrid(
         // best available figure, and `scope` stays null so the card makes no
         // claim about averaging.
         downtimeMachines = fleet.size;
+        topMachine = topDowntimeMachine(usedRows);
         value =
           Math.round(
             (downtimeMachines > 0 ? total / downtimeMachines : total) * 100,
@@ -1997,13 +2044,9 @@ export function toKpiGrid(
         partialDay,
         // C10: a hit row cap means this total is INCOMPLETE.
         truncated,
-        // CR-11: the Total Downtime headline is a PER-MACHINE average, so the
-        // card names the fleet it was divided by. Null for every other KPI,
-        // which is already single-series.
-        scope:
-          isTotalDowntime && downtimeMachines > 0
-            ? { kind: "perMachineAvg", machines: downtimeMachines }
-            : null,
+        // CR-11 follow-up: the single machine contributing the most
+        // downtime over this same 5-reason (no 'No Schedule') set.
+        topMachine: isTotalDowntime ? topMachine : null,
         produced: isPlanFulfillment && latest.produced != null ? latest.produced : null,
         planned: isPlanFulfillment && latest.planned != null ? latest.planned : null,
         shortfall: isPlanFulfillment && latest.shortfall != null ? latest.shortfall : null,
@@ -2043,6 +2086,7 @@ export function toKpiGrid(
 
     let value;
     let downtimeMachines = 0;
+    let topMachine = null;
     let totalProduced = null;
     let totalPlanned = null;
     let totalShortfall = null;
@@ -2093,6 +2137,7 @@ export function toKpiGrid(
           if (r.machines) for (const m of r.machines) fleet.add(m);
         }
         downtimeMachines = fleet.size;
+        topMachine = topDowntimeMachine(dailyRows);
         if (downtimeMachines > 0) value /= downtimeMachines;
       }
       value = Math.round(value * 100) / 100;
@@ -2146,13 +2191,9 @@ export function toKpiGrid(
       partialDay: false,
       // C10: never present a capped range total as if it were complete.
       truncated,
-      // CR-11: the Total Downtime headline is a PER-MACHINE average, so the
-      // card names the fleet it was divided by. Null for every other KPI,
-      // which is already single-series.
-      scope:
-        isTotalDowntimeAgg && downtimeMachines > 0
-          ? { kind: "perMachineAvg", machines: downtimeMachines }
-          : null,
+      // CR-11 follow-up: the single machine contributing the most downtime
+      // over this same 5-reason (no 'No Schedule') set.
+      topMachine: isTotalDowntimeAgg ? topMachine : null,
       produced: isPlanFulfillmentAgg ? totalProduced : null,
       planned: isPlanFulfillmentAgg ? totalPlanned : null,
       shortfall: isPlanFulfillmentAgg ? totalShortfall : null,
