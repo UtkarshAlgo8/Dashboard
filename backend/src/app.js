@@ -82,7 +82,9 @@ const protectApi =
 // doesn't shadow `/plants/:id`.
 app.use("/api/v1", staticRouter);
 
-const gate = protectApi ? verifyJWT : (_req, _res, next) => next();
+const gate = protectApi
+  ? (req, _res, next) => (req._isWarmReplay ? next() : verifyJWT(req, _res, next))
+  : (_req, _res, next) => next();
 app.use("/api/v1/plants", gate, plantsRouter);
 app.use("/api/v1/plants/:plantId/production/kpis", gate, kpisRouter);
 app.use("/api/v1/plants/:plantId/production/trends", gate, trendsRouter);

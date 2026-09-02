@@ -33,5 +33,10 @@ export function warmContext(req, res, next) {
     return;
   }
   res.setHeader("x-cache-warmed", "1");
+  // The route gate in app.js reads this to skip verifyJWT — the loopback
+  // check above is what protects against external use, and the warmer has
+  // no JWT. Without this the warmer 401s on every request and never fills
+  // the cache.
+  req._isWarmReplay = true;
   runAsRefresh(() => next());
 }
