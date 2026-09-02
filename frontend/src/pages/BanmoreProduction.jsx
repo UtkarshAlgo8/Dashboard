@@ -1092,6 +1092,7 @@ function DrillPanelRouter({
           rawRows={downtimeRows}
           mode={mode}
           granularity={downtimeGranularity ?? "DAY"}
+          cardDate={granularity === "MONTH" ? null : cardDate}
           isLoading={isLoading}
           onClose={onClose}
         />

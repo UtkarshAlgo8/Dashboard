@@ -18,6 +18,7 @@ import { formatIndianNumber } from "@/lib/numberFormat.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
+import { dateKey } from "@/lib/drillDate.js";
 
 const SECTION_NAME = {
   mix: "Mixing",
@@ -53,18 +54,28 @@ function DowntimeDrillPanel({
   rawRows,
   rows: propsRows,
   granularity = "DAY",
+  // new_change.md C3/C6: the CARD's resolved (as-of) date. For the Today /
+  // Shift presets the reason feed spans a trailing 7-day window so the card
+  // sparkline has points, but the card headline means ONE day. Pinning to
+  // `cardDate` collapses this panel to that day so the drill reconciles with
+  // the tile. MONTH and custom ranges pass null (their window IS the card
+  // period), so they keep the full span.
+  cardDate = null,
   isLoading = false,
   onClose,
 }) {
-  const rows = useMemo(
-    () =>
-      Array.isArray(rawRows)
-        ? rawRows
-        : Array.isArray(propsRows)
-          ? propsRows
-          : [],
-    [rawRows, propsRows],
-  );
+  const rows = useMemo(() => {
+    const base = Array.isArray(rawRows)
+      ? rawRows
+      : Array.isArray(propsRows)
+        ? propsRows
+        : [];
+    if (cardDate) {
+      const want = dateKey(cardDate);
+      return base.filter((r) => dateKey(r?.date) === want);
+    }
+    return base;
+  }, [rawRows, propsRows, cardDate]);
   const theme = useTheme();
   const sectionName = SECTION_NAME[section] ?? section;
   const cardRef = useRef(null);
