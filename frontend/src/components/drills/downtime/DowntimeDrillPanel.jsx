@@ -105,10 +105,14 @@ function DowntimeDrillPanel({
     return [...seen].sort((a, b) => a.localeCompare(b));
   }, [rows, sectionName, granularity]);
 
-  // Group the 6 reasons: sum per reason for the active window.
+  // Group the 6 reasons: sum per reason for the active window, tracking
+  // which machines reported EACH reason separately (GROUP BY kpi_name
+  // semantics) — different reasons can be reported by different subsets
+  // of the fleet, so they can't share one divisor.
   const reasonRows = useMemo(() => {
     if (!Array.isArray(rows)) return [];
     const byReason = new Map();
+    const byReasonMachines = new Map();
     for (const r of rows) {
       if (r.section && r.section !== sectionName) continue;
       if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
@@ -118,29 +122,31 @@ function DowntimeDrillPanel({
       if (v == null) continue;
       const prev = byReason.get(r.kpi_name) ?? 0;
       byReason.set(r.kpi_name, prev + v);
+      if (r.machine && r.machine !== "nan") {
+        const machines = byReasonMachines.get(r.kpi_name) ?? new Set();
+        machines.add(r.machine);
+        byReasonMachines.set(r.kpi_name, machines);
+      }
     }
-    const total = [...byReason.values()].reduce((s, v) => s + v, 0);
     // CR-11: fleet view — machines go down concurrently, so their minutes
-    // are machine-minutes, not elapsed time. Divide by the contributing
-    // fleet to get the per-machine average. `pct` is unaffected: a common
-    // divisor cancels out of every share.
+    // are machine-minutes, not elapsed time. Each reason divides by the
+    // machines that reported THAT specific reason, not one shared
+    // fleet-wide count (a reason reported by 3 machines must average over
+    // 3, not the whole section's fleet).
     //
-    // Single-machine view — drop the divisor. `total` already reflects
-    // just that machine's minutes after the row filter above, so `pct` is
-    // naturally over that machine's total.
-    const div = selectedMachine ? 1 : machineCount > 0 ? machineCount : 1;
+    // Single-machine view — divide by 1. `byReason` already reflects just
+    // that machine's minutes after the row filter above.
     return DOWNTIME_REASONS.map((reason) => {
+      const reasonMachineCount = byReasonMachines.get(reason)?.size ?? 0;
+      const div = selectedMachine
+        ? 1
+        : reasonMachineCount > 0
+          ? reasonMachineCount
+          : 1;
       const sum = (byReason.get(reason) ?? 0) / div;
-      return {
-        reason,
-        sum,
-        pct:
-          total > 0
-            ? Math.round(((byReason.get(reason) ?? 0) / total) * 1000) / 10
-            : 0,
-      };
+      return { reason, sum };
     }).sort((a, b) => b.sum - a.sum);
-  }, [rows, sectionName, granularity, machineCount, selectedMachine]);
+  }, [rows, sectionName, granularity, selectedMachine]);
 
   const totalDowntime = reasonRows.reduce((s, r) => s + r.sum, 0);
 
@@ -200,12 +206,6 @@ function DowntimeDrillPanel({
       label: selectedMachine ? "Downtime (min)" : "Avg / machine (min)",
       align: "right",
       render: (r) => formatIndianNumber(Math.round(r.sum)),
-    },
-    {
-      key: "pct",
-      label: "% of Total",
-      align: "right",
-      render: (r) => `${r.pct.toFixed(1)}%`,
     },
   ];
 
@@ -278,8 +278,8 @@ function DowntimeDrillPanel({
               selectedReason
                 ? ["Date", "Machine", "Downtime (min)", "Shift"]
                 : selectedMachine
-                  ? ["Reason", "Downtime (min)", "% of Total"]
-                  : ["Reason", "Avg / machine (min)", "% of Total"]
+                  ? ["Reason", "Downtime (min)"]
+                  : ["Reason", "Avg / machine (min)"]
             }
             filename={
               selectedReason
@@ -342,7 +342,7 @@ function DowntimeDrillPanel({
                   selectedMachine
                     ? `Total downtime recorded by ${selectedMachine} in this window.`
                     : machineCount > 0
-                      ? `Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${machineCount} machines in ${sectionName} that recorded downtime in this window.`
+                      ? `Machines go down at the same time, so their minutes cannot simply be added. Each reason below is averaged over the machines that reported THAT reason (see the count under each row) — this total is the sum of those per-reason fleet averages, spanning ${machineCount} machines in ${sectionName} overall.`
                       : "Average downtime per machine for this window."
                 }
                 arrow
@@ -366,7 +366,7 @@ function DowntimeDrillPanel({
                         mt: 0.25,
                       }}
                     >
-                      averaged over {machineCount} machines
+                      sum of per-reason fleet averages
                     </Typography>
                   )}
                 </Stack>

@@ -256,7 +256,7 @@ function KpiCard({
           </Stack>
 
           {/* Badges / Annotations row (placed neatly below the metric value) */}
-          {(Boolean(kpi.scope?.kind === "perMachineAvg" && kpi.scope.machines > 0) ||
+          {(Boolean(kpi.topMachine) ||
             Boolean(kpi.partialDay) ||
             Boolean(kpi.truncated)) && (
             <Stack
@@ -265,9 +265,9 @@ function KpiCard({
               spacing={0.75}
               sx={{ mt: 0.25, flexWrap: "wrap", rowGap: 0.25 }}
             >
-              {kpi.scope?.kind === "perMachineAvg" && kpi.scope.machines > 0 && (
+              {kpi.topMachine && (
                 <Tooltip
-                  title={`Machines go down at the same time, so their minutes cannot simply be added. This is the average across the ${kpi.scope.machines} machines that recorded downtime in this window.`}
+                  title={`Machine with the most downtime in this window (Breakdown, Power Failure, Preventive Maintenance, Setup & Change, Operations/Material/Manpower — excludes No Schedule): ${Math.round(kpi.topMachine.minutes).toLocaleString()} min.`}
                   arrow
                 >
                   <Typography
@@ -278,7 +278,8 @@ function KpiCard({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    ({kpi.scope.machines} m/c avg)
+                    Top: {kpi.topMachine.machine} (
+                    {Math.round(kpi.topMachine.minutes).toLocaleString()} min)
                   </Typography>
                 </Tooltip>
               )}
