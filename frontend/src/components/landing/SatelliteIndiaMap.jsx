@@ -216,7 +216,8 @@ function SatelliteIndiaMap({
       if (!plant.lng || !plant.lat) return;
 
       const isFocused = hov === plant.id || sel === plant.id;
-      const isCardVisible = isFocused || mapZoom >= 5.8;
+      const isCardVisible =
+        plant.id === "banmore" || isFocused || mapZoom >= 5.8;
 
       const el = document.createElement("div");
       const root = createRoot(el);
@@ -248,7 +249,8 @@ function SatelliteIndiaMap({
   useEffect(() => {
     markerEntriesRef.current.forEach(({ plant, root, marker }) => {
       const isFocused = hov === plant.id || sel === plant.id;
-      const isCardVisible = isFocused || mapZoom >= 5.8;
+      const isCardVisible =
+        plant.id === "banmore" || isFocused || mapZoom >= 5.8;
       if (marker && marker.getElement()) {
         marker.getElement().style.zIndex = isFocused
           ? "50"
