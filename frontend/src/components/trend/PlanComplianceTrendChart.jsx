@@ -5,15 +5,35 @@ import HighchartsReactImport from "highcharts-react-official";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
+// Compact quantity formatter for axis/data labels. Plain `Math.round(v/1000)`
+// collapses distinct values (e.g. 1250 and 1290 both read "1k") once bars
+// differ by less than half a "k" — keep one decimal below 100k so close
+// values stay visually distinguishable, and drop to whole "k" above that
+// where the extra digit stops mattering.
+function formatCompactQty(value, useKFormat) {
+  if (value == null) return "";
+  if (!useKFormat || Math.abs(value) < 1000) return value.toLocaleString();
+  const k = value / 1000;
+  return `${k.toFixed(Math.abs(k) < 100 ? 1 : 0)}k`;
+}
+
+// Below this many categories the chart stays responsive to its container;
+// at or above it (SKU view can carry ~70 SKUs) it gets a fixed pixel width
+// so bars keep a readable width and the container scrolls horizontally.
+const SCROLL_PX_PER_CATEGORY = 70;
+const SCROLL_MIN_WIDTH = 600;
+
 /**
  * Plan vs Production Trend combo chart powered by Highcharts.
  *
  * Props:
- *   labels             - x-axis date labels (e.g. ['01 Sep', '02 Sep'])
+ *   labels             - x-axis labels (dates, e.g. ['01 Sep', '02 Sep'], or SKU codes)
  *   plannedValues      - parallel array of numeric planned quantities
  *   producedValues     - parallel array of numeric actual produced quantities
  *   fulfillmentValues  - parallel array of fulfillment percentages (e.g. [95.0, 103.8])
  *   unit               - quantity unit (default 'NOS')
+ *   scrollable         - true for SKU view: fixed-width chart in a horizontally
+ *                        scrolling container instead of fitting the panel width
  */
 export default function PlanComplianceTrendChart({
   labels = [],
@@ -21,6 +41,7 @@ export default function PlanComplianceTrendChart({
   producedValues = [],
   fulfillmentValues = [],
   unit = "NOS",
+  scrollable = false,
 }) {
   const theme = useTheme();
 
@@ -72,6 +93,7 @@ export default function PlanComplianceTrendChart({
         lineColor: colors.grid,
         tickColor: colors.grid,
         labels: {
+          rotation: scrollable && labels.length > 10 ? -45 : 0,
           style: {
             color: colors.text,
             fontSize: "11px",
@@ -88,10 +110,7 @@ export default function PlanComplianceTrendChart({
           },
           labels: {
             formatter: function () {
-              if (useKFormat) {
-                return this.value >= 1000 ? Math.round(this.value / 1000) + "k" : this.value;
-              }
-              return this.value.toLocaleString();
+              return formatCompactQty(this.value, useKFormat);
             },
             style: { color: colors.text, fontSize: "11px" },
           },
@@ -177,10 +196,7 @@ export default function PlanComplianceTrendChart({
             enabled: labels.length > 0 && labels.length <= 31,
             formatter: function () {
               if (this.y == null || this.y === 0) return "";
-              if (useKFormat) {
-                return this.y >= 1000 ? Math.round(this.y / 1000) + "k" : this.y;
-              }
-              return this.y.toLocaleString();
+              return formatCompactQty(this.y, useKFormat);
             },
             style: {
               fontSize: "10.5px",
@@ -243,11 +259,20 @@ export default function PlanComplianceTrendChart({
         },
       ],
     };
-  }, [labels, plannedValues, producedValues, fulfillmentValues, unit, theme]);
+  }, [labels, plannedValues, producedValues, fulfillmentValues, unit, theme, scrollable]);
+
+  // SKU view can carry ~70 categories — give the chart enough fixed width
+  // for readable bars and let the outer box scroll horizontally instead of
+  // squeezing everything into the panel width.
+  const chartMinWidth = scrollable
+    ? Math.max(labels.length * SCROLL_PX_PER_CATEGORY, SCROLL_MIN_WIDTH)
+    : "100%";
 
   return (
-    <Box sx={{ width: "100%", height: "100%" }}>
-      <HighchartsReact highcharts={Highcharts} options={options} />
+    <Box sx={{ width: "100%", height: "100%", overflowX: scrollable ? "auto" : "visible" }}>
+      <Box sx={{ minWidth: chartMinWidth, height: "100%" }}>
+        <HighchartsReact highcharts={Highcharts} options={options} />
+      </Box>
     </Box>
   );
 }

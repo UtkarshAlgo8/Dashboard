@@ -194,22 +194,26 @@ export default function PlanComplianceDrillPanel({
       itemMap.set(item, entry);
     }
 
-    return [...itemMap.values()].map((entry) => {
-      const diff = entry.production - entry.plan;
-      const statusPct =
-        entry.plan > 0
-          ? (entry.production / entry.plan) * 100
-          : entry.production > 0
-            ? 100
-            : 0;
-      const tier = getStatusTier(statusPct);
-      return {
-        ...entry,
-        diff,
-        statusPct,
-        tier,
-      };
-    });
+    // Zero plan + zero production is empty data, not a real comparison —
+    // drop it so it never dilutes a tier bucket. Zero plan with ANY
+    // production is unplanned output, routed straight to Overproduced
+    // instead of through the 90/105 thresholds (which would read the
+    // placeholder 100% as Acceptable). Mirrors the same rule in
+    // PlanComplianceTrendModal's SKU view.
+    return [...itemMap.values()]
+      .filter((entry) => entry.plan > 0 || entry.production > 0)
+      .map((entry) => {
+        const diff = entry.production - entry.plan;
+        const hasPlan = entry.plan > 0;
+        const statusPct = hasPlan ? (entry.production / entry.plan) * 100 : 100;
+        const tier = hasPlan ? getStatusTier(statusPct) : "over";
+        return {
+          ...entry,
+          diff,
+          statusPct,
+          tier,
+        };
+      });
   }, [rowsToUse, skuFeedNames.fulfilled, skuFeedNames.planned, sectionKey, productType]);
 
   const filteredRows = useMemo(() => {
