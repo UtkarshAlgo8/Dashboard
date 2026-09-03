@@ -20,9 +20,25 @@ import JKLoader from "@/components/JKLoader.jsx";
 import TimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
 import PlanComplianceTrendChart from "./PlanComplianceTrendChart.jsx";
 import { presetToDateRange } from "@/lib/timeRange.js";
-import { canonicalizeProductType, canonicalizeSubSection } from "@/lib/dashboardRowScopes.js";
+import {
+  canonicalizeProductType,
+  canonicalizeSubSection,
+} from "@/lib/dashboardRowScopes.js";
 
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 function sectionIdToName(id) {
   return { mix: "Mixing", stk: "Stock", tbm: "TBM", cur: "Curing" }[id] ?? id;
@@ -266,12 +282,18 @@ export default function PlanComplianceTrendModal({
   const isMonthly = range === "month" && !from && !to;
   const isDailyTrend = range === "today" && !from && !to;
 
-  const monthlyFrom = anchorIso ? `${anchorIso.slice(0, 4)}-01-01` : resolved.from;
+  const monthlyFrom = anchorIso
+    ? `${anchorIso.slice(0, 4)}-01-01`
+    : resolved.from;
   const monthlyTo = anchorIso ?? resolved.to;
   const dailyFrom = anchorIso ? `${anchorIso.slice(0, 7)}-01` : resolved.from;
   const dailyTo = anchorIso ?? resolved.to;
 
-  const rangeFrom = isDailyTrend ? dailyFrom : isMonthly ? monthlyFrom : resolved.from;
+  const rangeFrom = isDailyTrend
+    ? dailyFrom
+    : isMonthly
+      ? monthlyFrom
+      : resolved.from;
   const rangeTo = isDailyTrend ? dailyTo : isMonthly ? monthlyTo : resolved.to;
 
   // SKU view collapses the time dimension to one period per preset — the
@@ -307,8 +329,14 @@ export default function PlanComplianceTrendModal({
   const sectionName = sectionIdToName(section);
   const skuFeedNames =
     sectionName === "TBM"
-      ? { fulfilled: "Building_Fulfilled_Qty_sku", planned: "Building_Planned_Qty_sku" }
-      : { fulfilled: "Curing_Fulfilled_Qty_sku", planned: "Curing_Planned_Qty_sku" };
+      ? {
+          fulfilled: "Building_Fulfilled_Qty_sku",
+          planned: "Building_Planned_Qty_sku",
+        }
+      : {
+          fulfilled: "Curing_Fulfilled_Qty_sku",
+          planned: "Curing_Planned_Qty_sku",
+        };
 
   const payload = {
     plantId,
@@ -414,7 +442,9 @@ export default function PlanComplianceTrendModal({
         .filter((item) => item.planned > 0 || item.produced > 0)
         .map((item) => {
           const hasPlan = item.planned > 0;
-          const fulfillmentPct = hasPlan ? (item.produced / item.planned) * 100 : 100;
+          const fulfillmentPct = hasPlan
+            ? (item.produced / item.planned) * 100
+            : 100;
           const tier = hasPlan ? getStatusTier(fulfillmentPct) : "over";
           return {
             ...item,
@@ -460,7 +490,9 @@ export default function PlanComplianceTrendModal({
 
       const entry = groupMap.get(groupKey) || {
         key: groupKey,
-        displayLabel: isMonthly ? toDisplayMonth(groupKey) : toDisplayDate(groupKey),
+        displayLabel: isMonthly
+          ? toDisplayMonth(groupKey)
+          : toDisplayDate(groupKey),
         planned: 0,
         produced: 0,
       };
@@ -476,7 +508,8 @@ export default function PlanComplianceTrendModal({
     const sortedKeys = [...groupMap.keys()].sort((a, b) => a.localeCompare(b));
     const sortedData = sortedKeys.map((k) => {
       const item = groupMap.get(k);
-      const fulfillmentPct = item.planned > 0 ? (item.produced / item.planned) * 100 : 0;
+      const fulfillmentPct =
+        item.planned > 0 ? (item.produced / item.planned) * 100 : 0;
       return {
         ...item,
         fulfillmentPct: Math.round(fulfillmentPct * 10) / 10,
@@ -501,10 +534,22 @@ export default function PlanComplianceTrendModal({
   ]);
 
   // Chart parallel arrays
-  const chartLabels = useMemo(() => perDateData.map((d) => d.displayLabel), [perDateData]);
-  const plannedValues = useMemo(() => perDateData.map((d) => d.planned), [perDateData]);
-  const producedValues = useMemo(() => perDateData.map((d) => d.produced), [perDateData]);
-  const fulfillmentValues = useMemo(() => perDateData.map((d) => d.fulfillmentPct), [perDateData]);
+  const chartLabels = useMemo(
+    () => perDateData.map((d) => d.displayLabel),
+    [perDateData],
+  );
+  const plannedValues = useMemo(
+    () => perDateData.map((d) => d.planned),
+    [perDateData],
+  );
+  const producedValues = useMemo(
+    () => perDateData.map((d) => d.produced),
+    [perDateData],
+  );
+  const fulfillmentValues = useMemo(
+    () => perDateData.map((d) => d.fulfillmentPct),
+    [perDateData],
+  );
 
   const scopeLabel = [
     canonicalizeSubSection(subSection),
@@ -587,7 +632,7 @@ export default function PlanComplianceTrendModal({
             from={from}
             to={to}
             onPresetChange={(p) => {
-              const next = typeof p === "string" ? p : p?.preset ?? "month";
+              const next = typeof p === "string" ? p : (p?.preset ?? "month");
               onRangeChange(next);
               onFromChange("");
               onToChange("");

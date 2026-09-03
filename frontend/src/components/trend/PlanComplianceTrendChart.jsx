@@ -109,7 +109,9 @@ export default function PlanComplianceTrendChart({
           // them near zero the way a linear scale does.
           type: scrollable ? "logarithmic" : "linear",
           title: {
-            text: useKFormat ? `Quantity in Thousands (${unit})` : `Quantity (${unit})`,
+            text: useKFormat
+              ? `Quantity in Thousands (${unit})`
+              : `Quantity (${unit})`,
             style: { color: colors.text, fontSize: "11px", fontWeight: "600" },
           },
           labels: {
@@ -156,7 +158,8 @@ export default function PlanComplianceTrendChart({
             else if (pt.series.name === "Fulfillment %") fulfillment = pt.y;
           }
 
-          const diff = produced != null && planned != null ? produced - planned : null;
+          const diff =
+            produced != null && planned != null ? produced - planned : null;
           const diffStr =
             diff != null
               ? diff >= 0
@@ -179,7 +182,7 @@ export default function PlanComplianceTrendChart({
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                 <span style="color: ${colors.text};">Deviation:</span>
-                <span style="font-weight: 600; color: ${diff != null && diff < 0 ? colors.produced : 'inherit'};">${diffStr}</span>
+                <span style="font-weight: 600; color: ${diff != null && diff < 0 ? colors.produced : "inherit"};">${diffStr}</span>
               </div>
               <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px dashed ${colors.grid};">
                 <span style="color: ${colors.fulfillment}; font-weight: 700;">● Fulfillment:</span>
@@ -265,7 +268,15 @@ export default function PlanComplianceTrendChart({
         },
       ],
     };
-  }, [labels, plannedValues, producedValues, fulfillmentValues, unit, theme, scrollable]);
+  }, [
+    labels,
+    plannedValues,
+    producedValues,
+    fulfillmentValues,
+    unit,
+    theme,
+    scrollable,
+  ]);
 
   // SKU view can carry ~70 categories — give the chart enough fixed width
   // for readable bars and let the outer box scroll horizontally instead of
@@ -275,7 +286,13 @@ export default function PlanComplianceTrendChart({
     : "100%";
 
   return (
-    <Box sx={{ width: "100%", height: "100%", overflowX: scrollable ? "auto" : "visible" }}>
+    <Box
+      sx={{
+        width: "100%",
+        height: "100%",
+        overflowX: scrollable ? "auto" : "visible",
+      }}
+    >
       <Box sx={{ minWidth: chartMinWidth, height: "100%" }}>
         <HighchartsReact highcharts={Highcharts} options={options} />
       </Box>

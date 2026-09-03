@@ -28,8 +28,7 @@ function MapPlantMarker({
 }) {
   const isLive =
     plant.enabled || plant.id === "banmore" || plant.id === "chennai";
-  const displayName =
-    plant.name || `${plant.id.toUpperCase()} Tyre Plant`;
+  const displayName = plant.name || `${plant.id.toUpperCase()} Tyre Plant`;
 
   const oeeVal = parseNumeric(plant.oee);
   const otifVal = parseNumeric(plant.otif);
@@ -144,9 +143,7 @@ function MapPlantMarker({
             }}
           >
             <Stack direction="row" alignItems="center" spacing={0.4}>
-              <SettingsRoundedIcon
-                sx={{ fontSize: 13.5, color: "#16A34A" }}
-              />
+              <SettingsRoundedIcon sx={{ fontSize: 13.5, color: "#16A34A" }} />
               <Typography
                 sx={{
                   fontSize: 11,
@@ -224,9 +221,7 @@ function MapPlantMarker({
             }}
           >
             <Stack direction="row" alignItems="center" spacing={0.4}>
-              <StarsRoundedIcon
-                sx={{ fontSize: 13.5, color: "#E11D48" }}
-              />
+              <StarsRoundedIcon sx={{ fontSize: 13.5, color: "#E11D48" }} />
               <Typography
                 sx={{
                   fontSize: 11,

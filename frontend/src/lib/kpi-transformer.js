@@ -700,10 +700,7 @@ const ALLOWED_KPIS = {
         name: "Plan_Compliance",
         agg: "AVG",
         drillType: "compliance",
-        drillTargets: [
-          "Curing_Fulfilled_Qty_sku",
-          "Curing_Planned_Qty_sku",
-        ],
+        drillTargets: ["Curing_Fulfilled_Qty_sku", "Curing_Planned_Qty_sku"],
       },
     ],
     Q: [
@@ -1459,13 +1456,17 @@ function selectSeries(
           const skuBreakdown = [];
           for (const itemData of itemMap.values()) {
             if (!sampleDate) sampleDate = itemData.date;
-            if (!rowGranularity && itemData.granularity) rowGranularity = itemData.granularity;
+            if (!rowGranularity && itemData.granularity)
+              rowGranularity = itemData.granularity;
 
             totalFulfilled += itemData.fulfilled;
             totalPlanned += itemData.planned;
 
             if (itemData.planned > 0) {
-              const cappedFulfilled = Math.min(itemData.fulfilled, itemData.planned);
+              const cappedFulfilled = Math.min(
+                itemData.fulfilled,
+                itemData.planned,
+              );
               numSum += cappedFulfilled;
               denSum += itemData.planned;
               skuBreakdown.push({
@@ -1861,8 +1862,7 @@ export function toKpiGrid(
       // fetched window actually reaches it; otherwise we keep the newest
       // row in the window rather than blanking the card.
       let resolvedDate = null;
-      let anchor =
-        useAnchors && anchors ? anchors[`${section}|${name}`] : null;
+      let anchor = useAnchors && anchors ? anchors[`${section}|${name}`] : null;
       if (!anchor && isPlanFulfillment && useAnchors && anchors) {
         anchor =
           anchors[`${section}|Production`] ??
@@ -1873,7 +1873,10 @@ export function toKpiGrid(
         const upToAnchor = preRows.filter((r) => isoDate(r.date) <= anchor);
         if (upToAnchor.length > 0) {
           preRows = upToAnchor;
-          resolvedDate = isoDate(preRows[0].date) === anchor ? anchor : isoDate(preRows[0].date);
+          resolvedDate =
+            isoDate(preRows[0].date) === anchor
+              ? anchor
+              : isoDate(preRows[0].date);
         }
       }
       if (!resolvedDate) {
@@ -2047,9 +2050,14 @@ export function toKpiGrid(
         // CR-11 follow-up: the single machine contributing the most
         // downtime over this same 5-reason (no 'No Schedule') set.
         topMachine: isTotalDowntime ? topMachine : null,
-        produced: isPlanFulfillment && latest.produced != null ? latest.produced : null,
-        planned: isPlanFulfillment && latest.planned != null ? latest.planned : null,
-        shortfall: isPlanFulfillment && latest.shortfall != null ? latest.shortfall : null,
+        produced:
+          isPlanFulfillment && latest.produced != null ? latest.produced : null,
+        planned:
+          isPlanFulfillment && latest.planned != null ? latest.planned : null,
+        shortfall:
+          isPlanFulfillment && latest.shortfall != null
+            ? latest.shortfall
+            : null,
       });
       continue;
     }
@@ -2098,7 +2106,10 @@ export function toKpiGrid(
         totalPlanned = (totalPlanned || 0) + (r.planned || 0);
         if (r.skuBreakdown) {
           for (const s of r.skuBreakdown) {
-            const entry = itemTotals.get(s.itemcode) || { fulfilled: 0, planned: 0 };
+            const entry = itemTotals.get(s.itemcode) || {
+              fulfilled: 0,
+              planned: 0,
+            };
             entry.fulfilled += s.fulfilled;
             entry.planned += s.planned;
             itemTotals.set(s.itemcode, entry);

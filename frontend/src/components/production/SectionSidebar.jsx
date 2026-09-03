@@ -247,9 +247,7 @@ function SectionTooltip({ name, oee, stats }) {
         spacing={0.75}
         sx={{ mb: 1.25 }}
       >
-        <SectionPieIcon
-          sx={{ fontSize: 14, color: getOeeColor(theme, oee) }}
-        />
+        <SectionPieIcon sx={{ fontSize: 14, color: getOeeColor(theme, oee) }} />
         <Typography
           sx={{ fontSize: 12, color: "text.secondary", fontWeight: 500 }}
         >

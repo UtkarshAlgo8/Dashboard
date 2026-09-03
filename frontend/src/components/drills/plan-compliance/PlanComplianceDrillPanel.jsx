@@ -48,9 +48,11 @@ function getStatusTier(statusPct) {
 }
 
 function formatDeviation(diff, plan) {
-  const diffStr = diff >= 0 ? `+${diff.toLocaleString()}` : `${diff.toLocaleString()}`;
+  const diffStr =
+    diff >= 0 ? `+${diff.toLocaleString()}` : `${diff.toLocaleString()}`;
   const diffPct = plan > 0 ? (diff / plan) * 100 : 0;
-  const pctStr = diffPct >= 0 ? `+${diffPct.toFixed(1)}%` : `${diffPct.toFixed(1)}%`;
+  const pctStr =
+    diffPct >= 0 ? `+${diffPct.toFixed(1)}%` : `${diffPct.toFixed(1)}%`;
   return `${diffStr} (${pctStr})`;
 }
 
@@ -127,12 +129,18 @@ export default function PlanComplianceDrillPanel({
   const sectionKey = SECTION_NAME[section] ?? section;
   const sectionTitle = (SECTION_TITLE[section] ?? section).toUpperCase();
 
-  const rowsToUse = drillRows?.length ? drillRows : rawRows ?? [];
+  const rowsToUse = drillRows?.length ? drillRows : (rawRows ?? []);
 
   const skuFeedNames =
     sectionKey === "TBM"
-      ? { fulfilled: "Building_Fulfilled_Qty_sku", planned: "Building_Planned_Qty_sku" }
-      : { fulfilled: "Curing_Fulfilled_Qty_sku", planned: "Curing_Planned_Qty_sku" };
+      ? {
+          fulfilled: "Building_Fulfilled_Qty_sku",
+          planned: "Building_Planned_Qty_sku",
+        }
+      : {
+          fulfilled: "Curing_Fulfilled_Qty_sku",
+          planned: "Curing_Planned_Qty_sku",
+        };
 
   const parsedSkuData = useMemo(() => {
     // Deduplicate input rows by unique key (date, granularity, kpiName, itemCode, productType, machine)
@@ -164,15 +172,18 @@ export default function PlanComplianceDrillPanel({
       !productType ||
       productType === "all" ||
       (aggProduct &&
-        canonicalizeProductType(productType) === canonicalizeProductType(aggProduct));
+        canonicalizeProductType(productType) ===
+          canonicalizeProductType(aggProduct));
 
     if (!isAggProduct) {
       const wantPt = canonicalizeProductType(productType);
       fulfilledRows = fulfilledRows.filter(
-        (r) => canonicalizeProductType(r.productType || r.product_type) === wantPt,
+        (r) =>
+          canonicalizeProductType(r.productType || r.product_type) === wantPt,
       );
       plannedRows = plannedRows.filter(
-        (r) => canonicalizeProductType(r.productType || r.product_type) === wantPt,
+        (r) =>
+          canonicalizeProductType(r.productType || r.product_type) === wantPt,
       );
     }
 
@@ -214,7 +225,13 @@ export default function PlanComplianceDrillPanel({
           tier,
         };
       });
-  }, [rowsToUse, skuFeedNames.fulfilled, skuFeedNames.planned, sectionKey, productType]);
+  }, [
+    rowsToUse,
+    skuFeedNames.fulfilled,
+    skuFeedNames.planned,
+    sectionKey,
+    productType,
+  ]);
 
   const filteredRows = useMemo(() => {
     if (statusFilter === "all") return parsedSkuData;
@@ -276,7 +293,8 @@ export default function PlanComplianceDrillPanel({
       align: "right",
       sortable: true,
       value: (r) => r.production,
-      render: (r) => (r.production != null ? r.production.toLocaleString() : "—"),
+      render: (r) =>
+        r.production != null ? r.production.toLocaleString() : "—",
     },
     {
       key: "diff",
@@ -300,7 +318,10 @@ export default function PlanComplianceDrillPanel({
     plan: `${totals.plan.toLocaleString()} NOS`,
     production: `${totals.production.toLocaleString()} NOS`,
     diff: (
-      <Box component="span" sx={{ fontWeight: 700, color: totalDeviationColor }}>
+      <Box
+        component="span"
+        sx={{ fontWeight: 700, color: totalDeviationColor }}
+      >
         {formatDeviation(totals.diff, totals.plan)}
       </Box>
     ),

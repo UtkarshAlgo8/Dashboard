@@ -57,9 +57,7 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
     >
       {/* Header: Amber Gear Icon + Plant OEE title */}
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-        <SettingsIcon
-          sx={{ fontSize: 22, color: theme.custom.status.amber }}
-        />
+        <SettingsIcon sx={{ fontSize: 22, color: theme.custom.status.amber }} />
         <Typography
           sx={{
             fontSize: 15,

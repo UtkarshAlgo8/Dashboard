@@ -32,3 +32,16 @@ backend/data/
 !backend/data/
 backend/data/*
 !backend/data/Quality_Dashboard_Gold_Layer_3Months.xlsx
+
+# Added by code-review-graph
+.code-review-graph/
+GEMINI.md
+AGENTS.md
+opencode.jsonc
+
+frontend/.env
+.env.backup
+.claude/
+.mcp.json
+CLAUDE.md
+backend/.env.bak  

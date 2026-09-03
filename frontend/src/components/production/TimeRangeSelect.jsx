@@ -125,9 +125,7 @@ function TimeRangeSelect({
         )}
         {/* 1. Today Pill */}
         <Box
-          onClick={() =>
-            selectPreset("today")
-          }
+          onClick={() => selectPreset("today")}
           sx={{
             ...pad,
             m: preset === "today" ? "-1px" : 0,
@@ -156,9 +154,7 @@ function TimeRangeSelect({
 
         {/* 2. This Month Pill */}
         <Box
-          onClick={() =>
-            selectPreset("month")
-          }
+          onClick={() => selectPreset("month")}
           sx={{
             ...pad,
             m: preset === "month" ? "-1px" : 0,

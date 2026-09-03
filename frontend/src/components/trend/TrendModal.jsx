@@ -419,7 +419,7 @@ function LegacyTrendModal({
           from={from}
           to={to}
           onPresetChange={(p) => {
-            const next = typeof p === "string" ? p : p?.preset ?? "month";
+            const next = typeof p === "string" ? p : (p?.preset ?? "month");
             onRangeChange(next);
             onFromChange("");
             onToChange("");
@@ -1096,7 +1096,7 @@ function MultiSeriesTrendModal({
           from={from}
           to={to}
           onPresetChange={(p) => {
-            const next = typeof p === "string" ? p : p?.preset ?? "month";
+            const next = typeof p === "string" ? p : (p?.preset ?? "month");
             onRangeChange(next);
             onFromChange("");
             onToChange("");
@@ -1425,16 +1425,18 @@ function preferProductionOverlayRows(rows, sectionName, productType) {
   const aggregateProduct = AGGREGATE_PRODUCT_BY_SECTION[sectionName];
   if (aggregateProduct) {
     const selectedProduct = productType || aggregateProduct;
-    const productRows = rows.filter(
-      (r) => r.product_type === selectedProduct,
-    );
+    const productRows = rows.filter((r) => r.product_type === selectedProduct);
     if (productRows.length > 0) rows = productRows;
   }
 
   // Production is stored in multiple units. OEE's overlay has no unit
   // selector, so use the standard MT series when available and never add
   // different units together.
-  const units = [...new Set(rows.map((r) => canonicalUnit(r.unit_of_measurement)).filter(Boolean))];
+  const units = [
+    ...new Set(
+      rows.map((r) => canonicalUnit(r.unit_of_measurement)).filter(Boolean),
+    ),
+  ];
   if (units.length > 1) {
     const preferred = units.find((unit) => unit === "MT") ?? units.sort()[0];
     const unitRows = rows.filter(
