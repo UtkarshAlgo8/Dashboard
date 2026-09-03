@@ -53,8 +53,10 @@ const VIEW_OPTIONS = [
 
 // SKU-view status tiers — mirrors PlanComplianceDrillPanel's classification:
 // <90% under, 90-105% acceptable, >105% over for SKUs with a plan; a SKU
-// with zero plan but any production is Overproduced; a SKU with zero plan
-// AND zero production is excluded entirely (see the itemMap filter below).
+// with zero plan but any production reads 0% fulfillment and gets its own
+// "unplanned" tier (excluded from Under/Acceptable/Over, shown only under
+// "All"); a SKU with zero plan AND zero production is excluded entirely
+// (see the itemMap filter below).
 const STATUS_OPTIONS = [
   { value: "all", label: "All" },
   { value: "under", label: "Underproduced (<90%)" },
@@ -434,18 +436,18 @@ export default function PlanComplianceTrendModal({
 
       // Zero plan + zero production is empty data, not a real comparison —
       // drop it so it never dilutes a tier bucket. Zero plan with ANY
-      // production is unplanned output, routed straight to Overproduced
-      // instead of through the 90/105 thresholds (which would read the
-      // placeholder 100% as Acceptable). Mirrors the same rule in
-      // PlanComplianceDrillPanel.
+      // production is unplanned output: fulfillment reads 0% and it gets
+      // its own "unplanned" tier rather than being forced through the
+      // 90/105 thresholds, so it only shows up under the "All" status
+      // filter. Mirrors the same rule in PlanComplianceDrillPanel.
       const withTier = [...itemMap.values()]
         .filter((item) => item.planned > 0 || item.produced > 0)
         .map((item) => {
           const hasPlan = item.planned > 0;
           const fulfillmentPct = hasPlan
             ? (item.produced / item.planned) * 100
-            : 100;
-          const tier = hasPlan ? getStatusTier(fulfillmentPct) : "over";
+            : 0;
+          const tier = hasPlan ? getStatusTier(fulfillmentPct) : "unplanned";
           return {
             ...item,
             fulfillmentPct: Math.round(fulfillmentPct * 10) / 10,
