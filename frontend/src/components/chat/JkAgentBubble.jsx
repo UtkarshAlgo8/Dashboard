@@ -11,6 +11,8 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import JkAgentMarkdown from "./JkAgentMarkdown.jsx";
+import JkAgentDownloadButton from "./JkAgentDownloadButton.jsx";
+import JkAgentChart from "./JkAgentChart.jsx";
 
 function formatMessageTime(isoString) {
   if (!isoString) return "";
@@ -124,6 +126,17 @@ export default function JkAgentBubble({ message }) {
           }}
         >
           <JkAgentMarkdown content={message.text} />
+
+          {message.wantsPlot && message.plotSpec && (
+            <JkAgentChart plotSpec={message.plotSpec} rows={message.previewRows} />
+          )}
+
+          {message.downloadAvailable && message.resultId && (
+            <JkAgentDownloadButton
+              resultId={message.resultId}
+              columns={message.columns}
+            />
+          )}
 
           <Stack
             direction="row"

@@ -1,4 +1,14 @@
-import { Box, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 
 /**
  * Parses inline formatting like bold, italic, and inline code.
@@ -68,9 +78,57 @@ function renderInlineFormatting(text) {
   return tokens.length > 0 ? tokens : [text];
 }
 
+// GFM pipe-table separator row, e.g. "|---|:---:|---:|" or "---|---".
+const TABLE_SEPARATOR_RE = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/;
+
+function splitTableRow(line) {
+  let trimmed = line.trim();
+  if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1);
+  return trimmed.split("|").map((cell) => cell.trim());
+}
+
 /**
- * Lightweight, zero-dependency Markdown renderer for chat messages.
- * Formats bullet points, numbered lists, headings, and bold text.
+ * Renders a GFM pipe table (header row, separator row, N data rows) as an
+ * MUI table, horizontally scrollable so wide result tables never overflow
+ * the chat bubble.
+ */
+function renderTable(headerCells, dataRows, key) {
+  return (
+    <TableContainer key={key} sx={{ my: 0.75, maxWidth: "100%" }}>
+      <Table size="small" sx={{ "& td, & th": { whiteSpace: "nowrap" } }}>
+        <TableHead>
+          <TableRow>
+            {headerCells.map((cell, i) => (
+              <TableCell
+                key={i}
+                sx={{ fontWeight: 700, fontSize: "0.78rem", py: 0.6, px: 1 }}
+              >
+                {renderInlineFormatting(cell)}
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {dataRows.map((row, r) => (
+            <TableRow key={r}>
+              {row.map((cell, c) => (
+                <TableCell key={c} sx={{ fontSize: "0.78rem", py: 0.5, px: 1 }}>
+                  {renderInlineFormatting(cell)}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
+/**
+ * Lightweight, near-zero-dependency Markdown renderer for chat messages.
+ * Formats bullet points, numbered lists, headings, bold text, and GFM
+ * pipe tables (the KPI Assistant returns result tables this way).
  *
  * @param {{ content: string }} props
  */
@@ -80,9 +138,33 @@ export default function JkAgentMarkdown({ content }) {
   const lines = content.split("\n");
   const elements = [];
   let currentList = null;
+  let lineIndex = 0;
 
-  lines.forEach((line, lineIndex) => {
+  while (lineIndex < lines.length) {
+    const line = lines[lineIndex];
     const trimmed = line.trim();
+
+    // GFM pipe table: a "| ... |" header row immediately followed by a
+    // "|---|---|" separator row.
+    if (
+      trimmed.includes("|") &&
+      TABLE_SEPARATOR_RE.test((lines[lineIndex + 1] ?? "").trim())
+    ) {
+      if (currentList) {
+        elements.push(currentList);
+        currentList = null;
+      }
+      const headerCells = splitTableRow(trimmed);
+      let cursor = lineIndex + 2;
+      const dataRows = [];
+      while (cursor < lines.length && lines[cursor].trim().includes("|")) {
+        dataRows.push(splitTableRow(lines[cursor]));
+        cursor += 1;
+      }
+      elements.push(renderTable(headerCells, dataRows, `table-${lineIndex}`));
+      lineIndex = cursor;
+      continue;
+    }
 
     // Empty line separates paragraphs / lists
     if (!trimmed) {
@@ -90,7 +172,8 @@ export default function JkAgentMarkdown({ content }) {
         elements.push(currentList);
         currentList = null;
       }
-      return;
+      lineIndex += 1;
+      continue;
     }
 
     // Bulleted list item (- or *)
@@ -124,7 +207,8 @@ export default function JkAgentMarkdown({ content }) {
           </Typography>
         </Stack>,
       );
-      return;
+      lineIndex += 1;
+      continue;
     }
 
     // Numbered list item (1. or 2.)
@@ -159,7 +243,8 @@ export default function JkAgentMarkdown({ content }) {
           </Typography>
         </Stack>,
       );
-      return;
+      lineIndex += 1;
+      continue;
     }
 
     // Normal paragraph or heading line
@@ -190,7 +275,8 @@ export default function JkAgentMarkdown({ content }) {
         </Typography>,
       );
     }
-  });
+    lineIndex += 1;
+  }
 
   if (currentList) {
     elements.push(currentList);
