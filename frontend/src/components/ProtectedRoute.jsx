@@ -1,6 +1,8 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { Box, CircularProgress } from "@mui/material";
+
 import { useAuth } from "@/hooks/useAuth.js";
+import JkAgent from "@/components/chat/JkAgent.jsx";
 
 /**
  * Gates any route subtree on a valid session. While AuthContext is
@@ -32,5 +34,10 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
-  return children;
+  return (
+    <>
+      {children}
+      <JkAgent />
+    </>
+  );
 }
