@@ -87,7 +87,12 @@ function ModernPlantCard({
         </Typography>
 
         {isLive ? (
-          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.5}
+            sx={{ flexShrink: 0 }}
+          >
             <Box
               sx={{
                 width: 6,
@@ -133,9 +138,7 @@ function ModernPlantCard({
         }}
       >
         {/* Production Row */}
-        <GridViewRoundedIcon
-          sx={{ fontSize: 17, color: "#2563EB" }}
-        />
+        <GridViewRoundedIcon sx={{ fontSize: 17, color: "#2563EB" }} />
         <Typography
           sx={{
             fontSize: 13,
@@ -179,9 +182,7 @@ function ModernPlantCard({
         </Typography>
 
         {/* Scrap Row */}
-        <LayersClearRoundedIcon
-          sx={{ fontSize: 17, color: "#0284C7" }}
-        />
+        <LayersClearRoundedIcon sx={{ fontSize: 17, color: "#0284C7" }} />
         <Typography
           sx={{
             fontSize: 13,

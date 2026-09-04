@@ -486,8 +486,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // tiles' drill targets are already fetched in the landing payload.
   // Re-fetching them here is redundant and would create duplicate rows. Skip it.
   const skipDrillFetch =
-    state.drillSourceKpiId === "downtime" ||
-    state.drillSourceKpiId === "comp";
+    state.drillSourceKpiId === "downtime" || state.drillSourceKpiId === "comp";
 
   const drillPayload =
     state.drillKpis && !skipDrillFetch

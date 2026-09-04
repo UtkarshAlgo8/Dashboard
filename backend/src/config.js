@@ -78,6 +78,12 @@ export const config = {
     sqlTable: optional("AWS_DATA_SQL_TABLE", "gold.gold"),
     timeoutMs: asInt("AWS_DATA_TIMEOUT_MS", 30_000),
   },
+  // JK KPI Assistant (chatbot) — separate FastAPI service, proxied so the
+  // browser never talks to it directly (see backend/src/utils/chatUpstream.js).
+  chatUpstream: {
+    url: optional("JK_AGENT_API_URL", "http://35.208.174.2:3020"),
+    timeoutMs: asInt("JK_AGENT_TIMEOUT_MS", 60_000),
+  },
   // Quality Dashboard data layer (Backend FRD §A/§B). Additive and fully
   // decoupled from Production above.
   //

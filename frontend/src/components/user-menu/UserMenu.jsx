@@ -24,9 +24,9 @@ const checkIsFullscreen = () => {
   if (typeof document === "undefined") return false;
   return Boolean(
     document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      document.mozFullScreenElement ||
-      document.msFullscreenElement,
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement,
   );
 };
 

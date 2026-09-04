@@ -23,6 +23,7 @@ import { router as anomaliesRouter } from "./routes/anomalies.js";
 import { router as dashboardRouter } from "./routes/dashboard.js";
 import { router as snapshotRouter } from "./routes/snapshot.js";
 import { router as adminRouter } from "./routes/admin.js";
+import { router as chatRouter } from "./routes/chat.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
 
@@ -96,6 +97,10 @@ app.use("/api/v1/dashboard", gate, dashboardRouter);
 app.use("/api/v1/dashboard", gate, snapshotRouter);
 //   /api/v1/admin/cache/{stats,warm}                      → cache ops
 app.use("/api/v1/admin", gate, adminRouter);
+// JK Agent chatbot — proxies the JK KPI Assistant service.
+//   /api/v1/chat                                          → send a query
+//   /api/v1/chat/download/:resultId                       → full result JSON
+app.use("/api/v1/chat", gate, chatRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
 //   /api/v1/quality/process/{kpi-value,kpi-value-batch,kpi-children,kpi-history}

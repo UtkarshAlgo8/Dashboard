@@ -48,24 +48,39 @@ function getStatusTier(statusPct) {
 }
 
 function formatDeviation(diff, plan) {
-  const diffStr = diff >= 0 ? `+${diff.toLocaleString()}` : `${diff.toLocaleString()}`;
+  const diffStr =
+    diff >= 0 ? `+${diff.toLocaleString()}` : `${diff.toLocaleString()}`;
   const diffPct = plan > 0 ? (diff / plan) * 100 : 0;
-  const pctStr = diffPct >= 0 ? `+${diffPct.toFixed(1)}%` : `${diffPct.toFixed(1)}%`;
+  const pctStr =
+    diffPct >= 0 ? `+${diffPct.toFixed(1)}%` : `${diffPct.toFixed(1)}%`;
   return `${diffStr} (${pctStr})`;
+}
+
+function getTierColor(tier, theme) {
+  if (tier === "under") return theme.palette.error.main;
+  if (tier === "acceptable") return theme.palette.success.main;
+  if (tier === "over") return theme.palette.warning.main;
+  return theme.palette.text.disabled; // "unplanned" — no plan to compare against
 }
 
 function DeviationCell({ row }) {
   const theme = useTheme();
-  const color =
-    row.tier === "under"
-      ? theme.palette.error.main
-      : row.tier === "acceptable"
-        ? theme.palette.success.main
-        : theme.palette.warning.main;
+  const color = getTierColor(row.tier, theme);
 
   return (
     <Box component="span" sx={{ fontWeight: 600, color }}>
       {formatDeviation(row.diff, row.plan)}
+    </Box>
+  );
+}
+
+function FulfillmentCell({ row }) {
+  const theme = useTheme();
+  const color = getTierColor(row.tier, theme);
+
+  return (
+    <Box component="span" sx={{ fontWeight: 600, color }}>
+      {row.statusPct.toFixed(1)}%
     </Box>
   );
 }
@@ -127,12 +142,18 @@ export default function PlanComplianceDrillPanel({
   const sectionKey = SECTION_NAME[section] ?? section;
   const sectionTitle = (SECTION_TITLE[section] ?? section).toUpperCase();
 
-  const rowsToUse = drillRows?.length ? drillRows : rawRows ?? [];
+  const rowsToUse = drillRows?.length ? drillRows : (rawRows ?? []);
 
   const skuFeedNames =
     sectionKey === "TBM"
-      ? { fulfilled: "Building_Fulfilled_Qty_sku", planned: "Building_Planned_Qty_sku" }
-      : { fulfilled: "Curing_Fulfilled_Qty_sku", planned: "Curing_Planned_Qty_sku" };
+      ? {
+          fulfilled: "Building_Fulfilled_Qty_sku",
+          planned: "Building_Planned_Qty_sku",
+        }
+      : {
+          fulfilled: "Curing_Fulfilled_Qty_sku",
+          planned: "Curing_Planned_Qty_sku",
+        };
 
   const parsedSkuData = useMemo(() => {
     // Deduplicate input rows by unique key (date, granularity, kpiName, itemCode, productType, machine)
@@ -164,15 +185,18 @@ export default function PlanComplianceDrillPanel({
       !productType ||
       productType === "all" ||
       (aggProduct &&
-        canonicalizeProductType(productType) === canonicalizeProductType(aggProduct));
+        canonicalizeProductType(productType) ===
+          canonicalizeProductType(aggProduct));
 
     if (!isAggProduct) {
       const wantPt = canonicalizeProductType(productType);
       fulfilledRows = fulfilledRows.filter(
-        (r) => canonicalizeProductType(r.productType || r.product_type) === wantPt,
+        (r) =>
+          canonicalizeProductType(r.productType || r.product_type) === wantPt,
       );
       plannedRows = plannedRows.filter(
-        (r) => canonicalizeProductType(r.productType || r.product_type) === wantPt,
+        (r) =>
+          canonicalizeProductType(r.productType || r.product_type) === wantPt,
       );
     }
 
@@ -196,17 +220,18 @@ export default function PlanComplianceDrillPanel({
 
     // Zero plan + zero production is empty data, not a real comparison —
     // drop it so it never dilutes a tier bucket. Zero plan with ANY
-    // production is unplanned output, routed straight to Overproduced
-    // instead of through the 90/105 thresholds (which would read the
-    // placeholder 100% as Acceptable). Mirrors the same rule in
+    // production is unplanned output: fulfillment reads 0% (not a real
+    // production/plan ratio) and it gets its own "unplanned" tier rather
+    // than being forced into Under/Acceptable/Over, so it only shows up
+    // under the "All" status filter. Mirrors the same rule in
     // PlanComplianceTrendModal's SKU view.
     return [...itemMap.values()]
       .filter((entry) => entry.plan > 0 || entry.production > 0)
       .map((entry) => {
         const diff = entry.production - entry.plan;
         const hasPlan = entry.plan > 0;
-        const statusPct = hasPlan ? (entry.production / entry.plan) * 100 : 100;
-        const tier = hasPlan ? getStatusTier(statusPct) : "over";
+        const statusPct = hasPlan ? (entry.production / entry.plan) * 100 : 0;
+        const tier = hasPlan ? getStatusTier(statusPct) : "unplanned";
         return {
           ...entry,
           diff,
@@ -214,7 +239,13 @@ export default function PlanComplianceDrillPanel({
           tier,
         };
       });
-  }, [rowsToUse, skuFeedNames.fulfilled, skuFeedNames.planned, sectionKey, productType]);
+  }, [
+    rowsToUse,
+    skuFeedNames.fulfilled,
+    skuFeedNames.planned,
+    sectionKey,
+    productType,
+  ]);
 
   const filteredRows = useMemo(() => {
     if (statusFilter === "all") return parsedSkuData;
@@ -235,6 +266,7 @@ export default function PlanComplianceDrillPanel({
       plan: totalPlan,
       production: totalProd,
       diff: totalDiff,
+      pct: totalPct,
       tier: totalTier,
     };
   }, [filteredRows]);
@@ -276,7 +308,16 @@ export default function PlanComplianceDrillPanel({
       align: "right",
       sortable: true,
       value: (r) => r.production,
-      render: (r) => (r.production != null ? r.production.toLocaleString() : "—"),
+      render: (r) =>
+        r.production != null ? r.production.toLocaleString() : "—",
+    },
+    {
+      key: "statusPct",
+      label: "FULFILLMENT %",
+      align: "right",
+      sortable: true,
+      value: (r) => r.statusPct,
+      render: (r) => <FulfillmentCell row={r} />,
     },
     {
       key: "diff",
@@ -288,30 +329,43 @@ export default function PlanComplianceDrillPanel({
     },
   ];
 
-  const totalDeviationColor =
-    totals.tier === "under"
-      ? theme.palette.error.main
-      : totals.tier === "acceptable"
-        ? theme.palette.success.main
-        : theme.palette.warning.main;
+  const totalDeviationColor = getTierColor(totals.tier, theme);
 
   const footerRow = {
     item: `Total (${filteredRows.length} SKUs)`,
     plan: `${totals.plan.toLocaleString()} NOS`,
     production: `${totals.production.toLocaleString()} NOS`,
+    statusPct: (
+      <Box
+        component="span"
+        sx={{ fontWeight: 700, color: totalDeviationColor }}
+      >
+        {totals.pct.toFixed(1)}%
+      </Box>
+    ),
     diff: (
-      <Box component="span" sx={{ fontWeight: 700, color: totalDeviationColor }}>
+      <Box
+        component="span"
+        sx={{ fontWeight: 700, color: totalDeviationColor }}
+      >
         {formatDeviation(totals.diff, totals.plan)}
       </Box>
     ),
   };
 
-  const excelHeaders = ["SKU", "Plan", "Production", "Deviation"];
+  const excelHeaders = [
+    "SKU",
+    "Plan",
+    "Production",
+    "Fulfillment %",
+    "Deviation",
+  ];
   const excelRows = useMemo(() => {
     return filteredRows.map((r) => ({
       SKU: r.item,
       Plan: `${r.plan.toLocaleString()} NOS`,
       Production: `${r.production.toLocaleString()} NOS`,
+      "Fulfillment %": `${r.statusPct.toFixed(1)}%`,
       Deviation: formatDeviation(r.diff, r.plan),
     }));
   }, [filteredRows]);
@@ -320,6 +374,7 @@ export default function PlanComplianceDrillPanel({
     { label: "Underproduced (<90%)", color: theme.palette.error.main },
     { label: "Acceptable (90%-105%)", color: theme.palette.success.main },
     { label: "Overproduced (>105%)", color: theme.palette.warning.main },
+    { label: "No Plan Data", color: theme.palette.text.disabled },
   ];
 
   const title = `${sectionTitle} — SKU PLAN FULFILLMENT`;

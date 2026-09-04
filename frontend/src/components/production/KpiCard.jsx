@@ -371,32 +371,16 @@ function KpiCard({
       )}
 
       {/* Production vs Plan & Shortfall (SKU Plan Fulfillment) — Compact single-line row */}
-      {kpi.produced != null && kpi.planned != null && !isDrilling && !isDrilldown && (
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          sx={{ mt: 0.5, mb: 0.25, minWidth: 0, flexWrap: "wrap", gap: 0.5 }}
-        >
-          <Typography
-            sx={{
-              fontSize: 11.5,
-              fontWeight: 600,
-              color: "text.secondary",
-              whiteSpace: "nowrap",
-            }}
+      {kpi.produced != null &&
+        kpi.planned != null &&
+        !isDrilling &&
+        !isDrilldown && (
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mt: 0.5, mb: 0.25, minWidth: 0, flexWrap: "wrap", gap: 0.5 }}
           >
-            Prod / Plan:{" "}
-            <Box
-              component="span"
-              sx={{ fontWeight: 700, color: cardTheme.textColor }}
-            >
-              {formatIndianNumber(kpi.produced)}
-            </Box>{" "}
-            / {formatIndianNumber(kpi.planned)} {kpi.quantityUnit || "NOS"}
-          </Typography>
-
-          {kpi.shortfall != null && (
             <Typography
               sx={{
                 fontSize: 11.5,
@@ -405,53 +389,72 @@ function KpiCard({
                 whiteSpace: "nowrap",
               }}
             >
-              {kpi.shortfall > 0 ? (
-                <>
-                  Shortfall:{" "}
-                  <Box
-                    component="span"
-                    sx={{
-                      fontWeight: 700,
-                      color: theme.custom?.status?.red ?? "error.main",
-                    }}
-                  >
-                    {formatIndianNumber(kpi.shortfall)}
-                  </Box>{" "}
-                  {kpi.quantityUnit || "NOS"}
-                </>
-              ) : kpi.shortfall < 0 ? (
-                <>
-                  Surplus:{" "}
-                  <Box
-                    component="span"
-                    sx={{
-                      fontWeight: 700,
-                      color: theme.custom?.status?.green ?? "success.main",
-                    }}
-                  >
-                    +{formatIndianNumber(-kpi.shortfall)}
-                  </Box>{" "}
-                  {kpi.quantityUnit || "NOS"}
-                </>
-              ) : (
-                <>
-                  Shortfall:{" "}
-                  <Box
-                    component="span"
-                    sx={{
-                      fontWeight: 700,
-                      color: theme.custom?.status?.green ?? "success.main",
-                    }}
-                  >
-                    0
-                  </Box>{" "}
-                  {kpi.quantityUnit || "NOS"}
-                </>
-              )}
+              Prod / Plan:{" "}
+              <Box
+                component="span"
+                sx={{ fontWeight: 700, color: cardTheme.textColor }}
+              >
+                {formatIndianNumber(kpi.produced)}
+              </Box>{" "}
+              / {formatIndianNumber(kpi.planned)} {kpi.quantityUnit || "NOS"}
             </Typography>
-          )}
-        </Stack>
-      )}
+
+            {kpi.shortfall != null && (
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {kpi.shortfall > 0 ? (
+                  <>
+                    Shortfall:{" "}
+                    <Box
+                      component="span"
+                      sx={{
+                        fontWeight: 700,
+                        color: theme.custom?.status?.red ?? "error.main",
+                      }}
+                    >
+                      {formatIndianNumber(kpi.shortfall)}
+                    </Box>{" "}
+                    {kpi.quantityUnit || "NOS"}
+                  </>
+                ) : kpi.shortfall < 0 ? (
+                  <>
+                    Surplus:{" "}
+                    <Box
+                      component="span"
+                      sx={{
+                        fontWeight: 700,
+                        color: theme.custom?.status?.green ?? "success.main",
+                      }}
+                    >
+                      +{formatIndianNumber(-kpi.shortfall)}
+                    </Box>{" "}
+                    {kpi.quantityUnit || "NOS"}
+                  </>
+                ) : (
+                  <>
+                    Shortfall:{" "}
+                    <Box
+                      component="span"
+                      sx={{
+                        fontWeight: 700,
+                        color: theme.custom?.status?.green ?? "success.main",
+                      }}
+                    >
+                      0
+                    </Box>{" "}
+                    {kpi.quantityUnit || "NOS"}
+                  </>
+                )}
+              </Typography>
+            )}
+          </Stack>
+        )}
 
       {/* 4. Footer: Trend Badge & Action Icons */}
       <Stack
