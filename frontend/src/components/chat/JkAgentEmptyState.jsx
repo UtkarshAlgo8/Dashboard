@@ -8,30 +8,24 @@ import {
 } from "@mui/material";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
-import EngineeringIcon from "@mui/icons-material/Engineering";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
-import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import EngineeringIcon from "@mui/icons-material/Engineering";
 
 const SUGGESTED_PROMPTS = [
   {
+    icon: PrecisionManufacturingIcon,
+    title: "Cured Tyre Production",
+    query: "What is the production of cured tyre today",
+  },
+  {
     icon: QueryStatsIcon,
-    title: "Current Plant OEE",
-    query: "What is Banmore's current OEE across sections?",
+    title: "Plant OEE",
+    query: "What is today's overall plant OEE",
   },
   {
     icon: EngineeringIcon,
-    title: "Downtime Breakdown",
-    query: "Show me top downtime causes for yesterday",
-  },
-  {
-    icon: PrecisionManufacturingIcon,
-    title: "Scrap & Quality Rate",
-    query: "Explain the scrap rate in Curing and TBM sections",
-  },
-  {
-    icon: CompareArrowsIcon,
-    title: "Shift Comparison",
-    query: "Compare Shift A vs Shift B production output",
+    title: "Cured Tyre Scrap",
+    query: "Tell me about the cured tyre scrap for today",
   },
 ];
 
