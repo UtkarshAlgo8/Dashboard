@@ -1,9 +1,11 @@
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { RouterProvider } from "react-router-dom";
+
 import { PrintStyles, ToastProvider } from "@/components/common";
 import theme from "@/theme.js";
 import router from "@/router.jsx";
 import { AuthProvider } from "@/contexts/AuthContext.jsx";
+import ChatProvider from "@/contexts/ChatContext.jsx";
 
 function App() {
   return (
@@ -12,7 +14,9 @@ function App() {
       <PrintStyles />
       <AuthProvider>
         <ToastProvider>
-          <RouterProvider router={router} />
+          <ChatProvider>
+            <RouterProvider router={router} />
+          </ChatProvider>
         </ToastProvider>
       </AuthProvider>
     </ThemeProvider>

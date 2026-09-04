@@ -1,11 +1,12 @@
 import { UpstreamError } from "../utils/upstream.js";
+import { ChatUpstreamError } from "../utils/chatUpstream.js";
 import { QueryValidationError } from "../queries/dashboard-query.js";
 import { ApiError } from "../utils/ApiError.js";
 
 /** Central error handler — maps known errors to envelopes. */
 // eslint-disable-next-line no-unused-vars
 export function errorHandler(err, _req, res, _next) {
-  if (err instanceof UpstreamError) {
+  if (err instanceof UpstreamError || err instanceof ChatUpstreamError) {
     res
       .status(err.status)
       .json({ error: { code: err.type, message: err.message } });
