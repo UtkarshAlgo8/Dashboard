@@ -29,27 +29,37 @@ import {
   PROCESS_KPI_NAME,
 } from "@/api/quality.js";
 
-// The gold workbook covers 2026-04-01 → 2026-06-30, so the live view opens on
-// the FRD base date (real "today" is outside the data range). The header date
-// picker drives which snapshot the Process cards read.
+// The gold workbook is static (current snapshot 2026-04-01 → 2026-06-30), so
+// these constants are fallbacks used only by the per-KPI trend panel when
+// its caller doesn't pin a date range. The dashboard's main date state is
+// driven by the system clock in IST (see todayInIST below), not these.
 const QUALITY_DATA_DATE = "2026-06-10";
 const QUALITY_MONTH_FROM = "2026-06-01";
 const QUALITY_MONTH_TO = "2026-06-30";
 
-function qualityTodayIso() {
-  return QUALITY_DATA_DATE;
+// Dashboard date defaults are calendar-driven (system clock in IST), NOT pinned
+// to the gold workbook's latest row. The user can pick any month in the
+// dropdown — if it has no data, the cards render NA. Use Intl.DateTimeFormat so
+// the timezone conversion is correct regardless of the server's TZ.
+function todayInIST() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === "year").value;
+  const m = parts.find((p) => p.type === "month").value;
+  const d = parts.find((p) => p.type === "day").value;
+  return `${y}-${m}-${d}`;
 }
-function qualityMonthRange() {
-  return {
-    from: QUALITY_MONTH_FROM,
-    to: QUALITY_MONTH_TO,
-  };
+
+function currentMonthKeyInIST() {
+  return todayInIST().slice(0, 7);
 }
+
 function currentYearRange() {
   return { from: "2026-01-01", to: "2026-12-31" };
-}
-function qualityMonthKey() {
-  return QUALITY_MONTH_FROM.slice(0, 7);
 }
 function monthRangeFromKey(monthKey) {
   const [yStr, mStr] = String(monthKey).split("-");
@@ -15516,9 +15526,12 @@ export default function QualityDashboard({ plant, onBack }) {
   const [sub, setSub] = useState("");
   const [tf, setTf] = useState("today");
   const [shift, setShift] = useState("All");
-  const [tfFrom, setTfFrom] = useState(qualityTodayIso());
-  const [tfTo, setTfTo] = useState(qualityTodayIso());
-  const [tfMonth, setTfMonth] = useState(qualityMonthKey());
+  // Calendar-driven defaults in IST. Whatever the user picks in the dropdown
+  // (including months with no gold data — the cards will render NA) is what
+  // shows; we never pin to a hardcoded "data date".
+  const [tfFrom, setTfFrom] = useState(todayInIST());
+  const [tfTo, setTfTo] = useState(todayInIST());
+  const [tfMonth, setTfMonth] = useState(currentMonthKeyInIST());
   const [tyreType, setTyreType] = useState(
     isBanmorePlant(plant) ? "PCR" : "All",
   );
@@ -15612,14 +15625,20 @@ export default function QualityDashboard({ plant, onBack }) {
     const nextTo = typeof payload === "object" ? (payload?.to ?? "") : "";
     setTf(preset);
     if (preset === "today") {
-      const t = qualityTodayIso();
+      const t = todayInIST();
       setTfFrom(t);
       setTfTo(t);
     } else if (preset === "month") {
-      const r = qualityMonthRange();
-      setTfFrom(r.from);
-      setTfTo(r.to);
-      setTfMonth(r.from.slice(0, 7));
+      // Current calendar month in IST, 1st → last day. UTC math is fine for
+      // day-count — every month has a stable number of days regardless of TZ.
+      const mk = currentMonthKeyInIST();
+      const [yStr, mStr] = mk.split("-");
+      const lastDay = new Date(Date.UTC(Number(yStr), Number(mStr), 0)).getUTCDate();
+      const from = `${yStr}-${mStr}-01`;
+      const to = `${yStr}-${mStr}-${String(lastDay).padStart(2, "0")}`;
+      setTfFrom(from);
+      setTfTo(to);
+      setTfMonth(mk);
       setShift("All");
     } else if (preset === "year") {
       const r = currentYearRange();
@@ -15713,7 +15732,14 @@ export default function QualityDashboard({ plant, onBack }) {
               ? updater(timeRangeForHeader)
               : updater;
           // Map the production-shape update back into Quality's flat state.
-          if (next?.preset !== undefined) {
+          // ProductionHeader's month-dropdown click sends
+          // { preset: "month", month: "2026-07" } — that hits this branch
+          // FIRST so the user's pick reaches onHeaderMonthChange (which sets
+          // tfFrom/tfTo/tfMonth from monthRangeFromKey) instead of
+          // onHeaderPresetChange (which would hard-reset to the as-of month).
+          if (next?.month !== undefined && next.preset === "month") {
+            onHeaderMonthChange(next.month);
+          } else if (next?.preset !== undefined) {
             onHeaderPresetChange({
               preset: next.preset,
               from: next.from ?? "",
