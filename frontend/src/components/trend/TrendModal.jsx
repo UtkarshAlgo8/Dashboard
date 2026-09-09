@@ -753,12 +753,20 @@ function MultiSeriesTrendModal({
     (kpiName) => !qualityOverlayKpis.includes(kpiName),
   );
 
+  // Match the LegacyTrendModal's v2Granularity (L256-L260): ask Athena for
+  // pre-aggregated MONTH rows in Monthly view so the plot reads the same
+  // MTD roll-up the KPI card does. DAY view stays at DAY granularity.
+  // Without this, the modal averages DAY-level rows per month (buildMainChart
+  // + mainMonthlyAggregation = "average"), which is wrong for rate KPIs —
+  // OEE's MONTH row is monthly A×P×Q, not the mean of daily OEE values
+  // (see timeRange.js §presetToDateRange "month" branch).
+  const payloadGranularity = isMonthly || range === "year" ? "MONTH" : "DAY";
   const singlePayload = {
     plantId,
     context: {
       section: sectionName,
       category: "Productivity",
-      granularity: "DAY",
+      granularity: payloadGranularity,
       // Scope the request too, not just the rows we keep: an unscoped
       // Stock SKU fetch runs close to the 10k row cap and would silently
       // truncate days off the chart. The backend keeps product-agnostic
@@ -1278,8 +1286,20 @@ function buildMainChart({
   }
 
   if (isMonthly) {
+    // Prefer section-level rollups so a MONTH row isn't double-counted
+    // alongside its machine children. `drillOnly: true` skips the
+    // dashboard's LANDING_PREDICATE, so without this filter the SQL
+    // returns every machine's MONTH OEE_o row and `mainMonthlyAggregation
+    // = "average"` dilutes the section value (e.g. Mixing OEE 84.7 vs an
+    // averaged 78). Same filter the overlay chart applies (L988-L993)
+    // and that the section-oee endpoint enforces server-side, so the
+    // plotted value matches the KPI card.
+    const scopedMonthly = mainRows.filter(
+      (r) => !r.machine && !r.sub_section,
+    );
+    const rowsToPlot = scopedMonthly.length > 0 ? scopedMonthly : mainRows;
     const monthMap = new Map();
-    for (const r of mainRows) {
+    for (const r of rowsToPlot) {
       if (!r.date) continue;
       const mk = monthKey(r.date);
       if (!mk) continue;
