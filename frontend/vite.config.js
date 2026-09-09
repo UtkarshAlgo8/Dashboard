@@ -24,5 +24,17 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  server: {
+    proxy: {
+      // Vite dev-server proxy: the FE talks to a relative path, Vite forwards
+      // to the Node backend on :3001. Required for `/quality/*` calls from the
+      // Quality dashboard (otherwise Vite falls through to the SPA index and
+      // the FE silently sees an HTML response, masking the backend's data).
+      "/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
+    },
+  },
 });
 

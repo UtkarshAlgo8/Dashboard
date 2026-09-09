@@ -49,24 +49,26 @@ export const PROCESS_KPI_NAME = {
  * All→DAY and A/B/C→SHIFT x (FRD §0.9).
  * @returns {Promise<{context:object, values:Record<string,number|null>}>}
  */
-export function getProcessKpiValues({ date, shift = "All" }) {
+export function getProcessKpiValues({ date, shift = "All", granularity }) {
   const params = new URLSearchParams({
     plant: "BANMORE",
     date,
     shift,
     kpi_names: Object.values(PROCESS_KPI_NAME).join(","),
   });
+  if (granularity) params.set("granularity", granularity);
   return cachedQualityGet(
     `/quality/process/kpi-value-batch?${params.toString()}`,
   );
 }
 
-export function getProcessSummary({ date, shift = "All" }) {
+export function getProcessSummary({ date, shift = "All", granularity }) {
   const params = new URLSearchParams({
     plant: "BANMORE",
     date,
     shift,
   });
+  if (granularity) params.set("granularity", granularity);
   return cachedQualityGet(`/quality/process/summary?${params.toString()}`);
 }
 
@@ -79,6 +81,7 @@ export function getProcessKpiChildren({
   kpiNames,
   date,
   shift = "All",
+  granularity,
   section,
 }) {
   const params = new URLSearchParams({
@@ -87,6 +90,7 @@ export function getProcessKpiChildren({
     shift,
     kpi_names: kpiNames.join(","),
   });
+  if (granularity) params.set("granularity", granularity);
   if (section) params.set("section", section);
   return cachedQualityGet(`/quality/process/kpi-children?${params.toString()}`);
 }
@@ -96,6 +100,7 @@ export function getProcessKpiHistory({
   dateFrom,
   dateTo,
   shift = "All",
+  granularity,
   section,
   machine,
 }) {
@@ -106,6 +111,7 @@ export function getProcessKpiHistory({
     date_to: dateTo,
     shift,
   });
+  if (granularity) params.set("granularity", granularity);
   if (section) params.set("section", section);
   if (machine) params.set("machine", machine);
   return cachedQualityGet(`/quality/process/kpi-history?${params.toString()}`);

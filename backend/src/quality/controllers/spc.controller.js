@@ -29,6 +29,10 @@ function badRequest(res, message) {
   res.status(400).json({ error: { code: "VALIDATION_ERROR", message } });
 }
 
+function hasQueryValue(query, key) {
+  return Object.prototype.hasOwnProperty.call(query, key) && query[key] != null;
+}
+
 /** Latest snapshot date ≤ requested date, or null if the family is empty. */
 async function resolveSnapshot(date) {
   const rows = await runQuery(spcSnapshotQuery(date));
@@ -130,7 +134,7 @@ export async function getSpcWidgets(req, res, next) {
 export async function getSpcDetail(req, res, next) {
   try {
     const { date, machine, recipe, parameter, shift, plant } = req.query;
-    if (!machine || !recipe || !parameter) {
+    if (!hasQueryValue(req.query, "machine") || !hasQueryValue(req.query, "recipe") || !hasQueryValue(req.query, "parameter")) {
       return badRequest(res, "`machine`, `recipe`, and `parameter` are required.");
     }
     const key = buildCacheKey("/quality/spc/detail", req.query);
@@ -175,7 +179,7 @@ export async function getHistogramObservations(req, res, next) {
   try {
     const { machine, recipe, parameter, date } = req.query;
     const binIndex = Number.parseInt(req.query.bin_index, 10);
-    if (!machine || !recipe || !parameter || !Number.isFinite(binIndex)) {
+    if (!hasQueryValue(req.query, "machine") || !hasQueryValue(req.query, "recipe") || !hasQueryValue(req.query, "parameter") || !Number.isFinite(binIndex)) {
       return badRequest(res, "`machine`, `recipe`, `parameter`, `bin_index` are required.");
     }
     const snapshot = await resolveSnapshot(date);
@@ -214,7 +218,7 @@ export async function getPointObservations(req, res, next) {
     const { machine, recipe, parameter, date } = req.query;
     const chart = (req.query.chart ?? "X").toUpperCase() === "R" ? "r_chart" : "x_chart";
     const pointIndex = Number.parseInt(req.query.point_index, 10);
-    if (!machine || !recipe || !parameter || !Number.isFinite(pointIndex)) {
+    if (!hasQueryValue(req.query, "machine") || !hasQueryValue(req.query, "recipe") || !hasQueryValue(req.query, "parameter") || !Number.isFinite(pointIndex)) {
       return badRequest(res, "`machine`, `recipe`, `parameter`, `point_index` are required.");
     }
     const snapshot = await resolveSnapshot(date);

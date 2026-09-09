@@ -87,18 +87,30 @@ function ProductionHeader({
   const formattedTyreOptions = (tyreTypes || []).map((t) =>
     typeof t === "string" ? { id: t.toLowerCase(), label: t } : t,
   );
+  // Empty array means caller doesn't want a tyre-type selector at all
+  // (e.g. Quality has its own sub-tab row and locks to PCR). `undefined`
+  // falls back to DEFAULT_TYRE_TYPES.
+  const hasExplicitTyreTypes = Array.isArray(tyreTypes);
+  const showTyreTypes = hasExplicitTyreTypes && formattedTyreOptions.length > 0;
   const activeTyreId =
     typeof tyreType === "string" ? tyreType.toLowerCase() : "all";
+  const tyreTypeItems = showTyreTypes
+    ? formattedTyreOptions
+    : DEFAULT_TYRE_TYPES;
 
-  const formattedCategories =
-    Array.isArray(categoryTabs) && categoryTabs.length > 0
-      ? categoryTabs.map((t) => ({
-          id: t.id,
-          label: t.name || t.label,
-          disabled: t.enabled === false,
-          disabledTooltip: t.disabledTooltip ?? "Phase 2 — coming soon",
-        }))
-      : DEFAULT_CATEGORY_TABS;
+  // An explicit empty array means "no dept tabs in this dashboard" (e.g.
+  // Quality has its own sub-tab row, so the dept switcher is suppressed).
+  // `undefined` falls back to DEFAULT_CATEGORY_TABS.
+  const hasExplicitTabs = Array.isArray(categoryTabs);
+  const formattedCategories = hasExplicitTabs
+    ? categoryTabs.map((t) => ({
+        id: t.id,
+        label: t.name || t.label,
+        disabled: t.enabled === false,
+        disabledTooltip: t.disabledTooltip ?? "Phase 2 — coming soon",
+      }))
+    : DEFAULT_CATEGORY_TABS;
+  const showCategoryTabs = hasExplicitTabs && formattedCategories.length > 0;
 
   return (
     <Box component="header" sx={{ width: "100%" }}>
@@ -244,44 +256,48 @@ function ProductionHeader({
           pb: 0.75,
         }}
       >
-        {/* 1. Category Nav Pills in a Rounded Card */}
-        <Box
-          sx={{
-            boxShadow: theme.custom.floatingShadow,
-            borderRadius: 999,
-          }}
-        >
-          <NavTabs
-            items={formattedCategories}
-            value={activeCategory}
-            onChange={(catId) => onCategoryChange?.(catId)}
-            layoutId="categoryFilterFill"
-            size="lg"
-          />
-        </Box>
-
-        {/* 2. Tyre Type / Category Pills */}
-        <Box
-          sx={{
-            boxShadow: theme.custom.floatingShadow,
-            borderRadius: 999,
-          }}
-        >
-          <NavTabs
-            items={
-              formattedTyreOptions.length > 0
-                ? formattedTyreOptions
-                : DEFAULT_TYRE_TYPES
-            }
-            value={activeTyreId}
-            onChange={(id) => {
-              const match = formattedTyreOptions.find((t) => t.id === id);
-              onTyreTypeChange?.(match ? match.label : id);
+        {/* 1. Category Nav Pills in a Rounded Card (skipped when caller
+            passes an empty categoryTabs array — e.g. Quality has its own
+            sub-tab row and doesn't need the dept switcher). */}
+        {showCategoryTabs && (
+          <Box
+            sx={{
+              boxShadow: theme.custom.floatingShadow,
+              borderRadius: 999,
             }}
-            layoutId="tyreTypeFilterFill"
-            size="lg"
-          />
-        </Box>
+          >
+            <NavTabs
+              items={formattedCategories}
+              value={activeCategory}
+              onChange={(catId) => onCategoryChange?.(catId)}
+              layoutId="categoryFilterFill"
+              size="lg"
+            />
+          </Box>
+        )}
+
+        {/* 2. Tyre Type / Category Pills (skipped when caller passes an
+            empty tyreTypes array — Quality suppresses this and shows its
+            own sub-tab row, which is rendered above the right-side filters). */}
+        {showTyreTypes && (
+          <Box
+            sx={{
+              boxShadow: theme.custom.floatingShadow,
+              borderRadius: 999,
+            }}
+          >
+            <NavTabs
+              items={tyreTypeItems}
+              value={activeTyreId}
+              onChange={(id) => {
+                const match = tyreTypeItems.find((t) => t.id === id);
+                onTyreTypeChange?.(match ? match.label : id);
+              }}
+              layoutId="tyreTypeFilterFill"
+              size="lg"
+            />
+          </Box>
+        )}
 
         {/* 3. Time Range Pills + Export Button Cluster */}
         <Stack direction="row" alignItems="center" spacing={2}>

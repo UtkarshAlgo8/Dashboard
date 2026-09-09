@@ -7,7 +7,12 @@
  * ≤ the requested date (§2.1), which is a separate MAX(date) query.
  */
 import { config } from "../../config.js";
-import { escapeLiteral, departmentPredicate } from "../normalize.js";
+import {
+  escapeLiteral,
+  departmentPredicate,
+  DATE_YYYYMMDD,
+  isoToYyyymmdd,
+} from "../normalize.js";
 
 const TABLE = () => config.quality.sqlTable;
 
@@ -20,12 +25,20 @@ function spcScope() {
   );
 }
 
+function itemcodePredicate(recipe) {
+  return recipe === ""
+    ? "(itemcode IS NULL OR itemcode = '')"
+    : `itemcode = ${escapeLiteral(recipe)}`;
+}
+
 /**
  * Resolve the snapshot: the latest SPC date ≤ the requested date (§2.1).
  * With no date, the most recent snapshot overall. One row: { snapshot_date }.
  */
 export function spcSnapshotQuery(date) {
-  const upTo = date ? ` AND date <= ${escapeLiteral(date)}` : "";
+  const upTo = date
+    ? ` AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(date))}`
+    : "";
   // DISTINCT + ORDER BY DESC LIMIT 1 rather than MAX(date): `date` collides
   // with alasql's DATE keyword and MAX over date strings misbehaves; this form
   // is robust on both alasql and the upstream engine.
@@ -43,7 +56,7 @@ export function spcSummaryRowsQuery({ snapshot, machine }) {
   const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
   return (
     `SELECT machine, itemcode, kpi_name, status FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND date = ${escapeLiteral(snapshot)}${mc}`
+    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc}`
   );
 }
 
@@ -51,21 +64,21 @@ export function spcSummaryRowsQuery({ snapshot, machine }) {
 export function spcMachinesQuery({ snapshot }) {
   return (
     `SELECT DISTINCT machine FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND date = ${escapeLiteral(snapshot)} ` +
+    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND machine IS NOT NULL ORDER BY machine`
   );
 }
 export function spcRecipesQuery({ snapshot }) {
   return (
     `SELECT DISTINCT itemcode FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND date = ${escapeLiteral(snapshot)} ` +
+    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND itemcode IS NOT NULL ORDER BY itemcode`
   );
 }
 export function spcProductTypesQuery({ snapshot }) {
   return (
     `SELECT DISTINCT product_type FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND date = ${escapeLiteral(snapshot)} ` +
+    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND product_type IS NOT NULL ORDER BY product_type`
   );
 }
@@ -76,11 +89,11 @@ export function spcProductTypesQuery({ snapshot }) {
  */
 export function spcWidgetsRowsQuery({ snapshot, machine, recipe }) {
   const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
-  const rc = recipe ? ` AND itemcode = ${escapeLiteral(recipe)}` : "";
+  const rc = recipe ? ` AND ${itemcodePredicate(recipe)}` : "";
   return (
-    `SELECT machine, itemcode, kpi_name, status, actual_value, plot_data ` +
+    `SELECT machine, itemcode, kpi_name, status, actual_value ` +
     `FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND date = ${escapeLiteral(snapshot)}${mc}${rc}`
+    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc}${rc}`
   );
 }
 
@@ -95,9 +108,9 @@ export function spcDetailRowsQuery({ snapshot, machine, recipe, parameter }) {
   return (
     `SELECT machine, itemcode, kpi_name, status, actual_value, unit_of_measurement, plot_data ` +
     `FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND date = ${escapeLiteral(snapshot)} ` +
+    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND machine = ${escapeLiteral(machine)} ` +
-    `AND itemcode = ${escapeLiteral(recipe)} ` +
+    `AND ${itemcodePredicate(recipe)} ` +
     `AND kpi_name IN (${names})`
   );
 }

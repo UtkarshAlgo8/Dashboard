@@ -153,7 +153,7 @@ export const PLANTS = [
 export const FUNCTIONS = [
   { id: "ph", name: "Plant Head", enabled: false },
   { id: "prod", name: "Production", enabled: true },
-  { id: "qual", name: "Quality", enabled: false },
+  { id: "qual", name: "Quality", enabled: true },
   { id: "tech", name: "Technical", enabled: false },
   { id: "eng", name: "Engineering", enabled: false },
 ];

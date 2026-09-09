@@ -161,4 +161,21 @@ export const config = {
       .map((s) => Number(s.trim()))
       .filter((n) => Number.isFinite(n)),
   },
+  // Deterministic cache preheater — runs on a fixed interval (default 30 min)
+  // and replays every cache key the FE *could* legitimately ask for on the
+  // configured plants, regardless of whether real traffic has hit it yet.
+  // Companion to the reactive warmer (which only knows the top-20 most-
+  // requested signatures); the preheater is the deterministic floor that
+  // covers every (section, tab, period) combo so first-visit waits on the
+  // upstream API never happen.
+  preheat: {
+    enabled: optional("CACHE_PREHEAT_ENABLED", "true") !== "false",
+    intervalMs: asInt("CACHE_PREHEAT_INTERVAL_MS", 30 * 60 * 1000),
+    bootDelayMs: asInt("CACHE_PREHEAT_BOOT_DELAY_MS", 5_000),
+    plants: optional("CACHE_PREHEAT_PLANTS", "banmore")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    concurrency: asInt("CACHE_PREHEAT_CONCURRENCY", 2),
+  },
 };

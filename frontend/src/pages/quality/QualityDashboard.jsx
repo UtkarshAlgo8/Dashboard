@@ -8,10 +8,13 @@
  * the shared asset.
  */
 import { useState, useRef, useEffect, Fragment } from "react";
-import { IconButton, Tooltip } from "@mui/material";
+import { Box, Stack, Tooltip, Typography, IconButton } from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import jkLogo from "@/assets/jk-logo.png";
+import JKLoader from "@/components/JKLoader.jsx";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
+import ProductionHeader from "@/components/production/ProductionHeader.jsx";
+import NavTabs from "@/components/production/NavTabs.jsx";
 import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
@@ -32,6 +35,32 @@ import {
 const QUALITY_DATA_DATE = "2026-06-10";
 const QUALITY_MONTH_FROM = "2026-06-01";
 const QUALITY_MONTH_TO = "2026-06-30";
+
+function qualityTodayIso() {
+  return QUALITY_DATA_DATE;
+}
+function qualityMonthRange() {
+  return {
+    from: QUALITY_MONTH_FROM,
+    to: QUALITY_MONTH_TO,
+  };
+}
+function currentYearRange() {
+  return { from: "2026-01-01", to: "2026-12-31" };
+}
+function qualityMonthKey() {
+  return QUALITY_MONTH_FROM.slice(0, 7);
+}
+function monthRangeFromKey(monthKey) {
+  const [yStr, mStr] = String(monthKey).split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    from: `${y}-${_pad2(m)}-01`,
+    to: `${y}-${_pad2(m)}-${_pad2(lastDay)}`,
+  };
+}
 const QUALITY_USER = {
   ...MOCK_USER,
   name: "Quality Head",
@@ -70,6 +99,37 @@ const C = {
 };
 const rc = (v) => (v >= 90 ? C.gn : v >= 80 ? C.am : C.rd);
 const fmt = (n) => (typeof n === "number" ? n.toLocaleString("en-IN") : n);
+const productionCardBg = (color) =>
+  color === C.rd
+    ? "#FEF2F2"
+    : color === C.am
+      ? "#FFFBEB"
+      : color === C.gn
+        ? "#F0FDF4"
+        : color === C.bl
+          ? "#EFF6FF"
+          : "#FFFFFF";
+const numericKpiValue = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const n = parseFloat(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+};
+
+function QualityLoader({ minHeight = 360, message = "Please wait" }) {
+  return (
+    <div
+      style={{
+        minHeight,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <JKLoader message={message} />
+    </div>
+  );
+}
 
 const isBanmorePlant = (p) =>
   p &&
@@ -2519,7 +2579,14 @@ function TrendPanel({ kpi, onClose, tyreType, plant }) {
   );
 }
 
-function LiveProcessTrendPanel({ kpi, onClose, dateFrom, dateTo, shift }) {
+function LiveProcessTrendPanel({
+  kpi,
+  onClose,
+  dateFrom,
+  dateTo,
+  shift,
+  granularity,
+}) {
   const initialPreset =
     dateFrom === dateTo
       ? "day"
@@ -2573,6 +2640,7 @@ function LiveProcessTrendPanel({ kpi, onClose, dateFrom, dateTo, shift }) {
       dateFrom: trendFrom,
       dateTo: trendTo,
       shift,
+      granularity,
     })
       .then((res) => {
         if (!cancelled)
@@ -2591,7 +2659,7 @@ function LiveProcessTrendPanel({ kpi, onClose, dateFrom, dateTo, shift }) {
     return () => {
       cancelled = true;
     };
-  }, [kpi?.trendKpiName, trendFrom, trendTo, shift]);
+  }, [kpi?.trendKpiName, trendFrom, trendTo, shift, granularity]);
   if (!kpi) return null;
   const labels = points.map((p) => toDisplayDate(p.date) ?? "");
   const series = points.map((p) => Number(p.value));
@@ -3892,13 +3960,13 @@ function Card({ title, children, accent, style: s, hideExport }) {
     <div
       style={{
         background: C.cd,
-        borderRadius: C.r,
+        borderRadius: 10,
         border: "1px solid " + C.bd,
-        padding: "12px 14px",
-        boxShadow: C.sh,
+        padding: "14px 16px",
+        boxShadow: "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
         minWidth: 0,
         overflow: "hidden",
-        borderTop: accent ? "2px solid " + accent : undefined,
+        borderTop: accent ? "3px solid " + accent : undefined,
         position: "relative",
         ...s,
       }}
@@ -3916,11 +3984,11 @@ function Card({ title, children, accent, style: s, hideExport }) {
           {title ? (
             <div
               style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: C.md,
+                fontSize: 15,
+                fontWeight: 700,
+                color: accent || C.bl,
                 textTransform: "uppercase",
-                letterSpacing: ".4px",
+                letterSpacing: ".6px",
                 flex: 1,
                 minWidth: 0,
               }}
@@ -3943,8 +4011,8 @@ function Card({ title, children, accent, style: s, hideExport }) {
                   height: 22,
                   borderRadius: 4,
                   border: "1px solid " + C.bd,
-                  background: C.c2,
-                  color: C.mu,
+                  background: "#F8FAFC",
+                  color: C.bl,
                   fontSize: 14,
                   cursor: "pointer",
                   display: "flex",
@@ -4064,9 +4132,21 @@ function DTable({ cols, rows }) {
     }
   };
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div
+      style={{
+        overflowX: "auto",
+        border: "1px solid " + C.bd,
+        borderRadius: 10,
+        maxHeight: 320,
+      }}
+    >
       <table
-        style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
+        style={{
+          width: "100%",
+          borderCollapse: "separate",
+          borderSpacing: 0,
+          fontSize: 13,
+        }}
       >
         <thead>
           <tr>
@@ -4078,15 +4158,17 @@ function DTable({ cols, rows }) {
                   onClick={() => onH(i)}
                   title="Click to sort"
                   style={{
-                    textAlign: i === 0 ? "left" : "right",
-                    padding: "6px 8px",
+                    textAlign: "center",
+                    padding: "8px 10px",
                     background: C.thBg,
-                    color: a ? C.ac : C.tx,
+                    color: a ? C.bl : C.tx,
                     fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: ".6px",
                     borderBottom: "2px solid " + C.bd,
                     borderRight:
                       i === cols.length - 1 ? "none" : "1px solid " + C.bd,
-                    fontSize: 13,
+                    fontSize: 11,
                     cursor: "pointer",
                     userSelect: "none",
                     whiteSpace: "nowrap",
@@ -4105,7 +4187,13 @@ function DTable({ cols, rows }) {
         </thead>
         <tbody>
           {disp.map((row, ri) => (
-            <tr key={ri} style={{ background: ri % 2 === 0 ? C.cd : C.rowAlt }}>
+            <tr
+              key={ri}
+              style={{
+                background: ri % 2 === 0 ? C.cd : C.rowAlt,
+                transition: "background .15s ease",
+              }}
+            >
               {row.map((cell, ci) => {
                 const isS =
                   typeof cell === "string" &&
@@ -4148,13 +4236,13 @@ function DTable({ cols, rows }) {
                   <td
                     key={ci}
                     style={{
-                      padding: "6px 8px",
+                      padding: "8px 10px",
                       borderBottom: "1px solid " + C.bd,
                       borderRight:
                         ci === row.length - 1 ? "none" : "1px solid " + C.bd,
-                      textAlign: ci === 0 ? "left" : "right",
+                      textAlign: "center",
                       color: stC || C.tx,
-                      fontWeight: stC ? 600 : 400,
+                      fontWeight: ci === 0 || stC ? 600 : 400,
                     }}
                   >
                     {isS ? (
@@ -4200,6 +4288,7 @@ function StatusPill({ status }) {
     Accepted: { bg: C.gn + "18", fg: C.gn, t: "Accepted" },
     Rejected: { bg: C.rd + "18", fg: C.rd, t: "Rejected" },
     Manual: { bg: "#9CA3AF18", fg: "#6B7280", t: "Manual" },
+    Insufficient: { bg: "#9CA3AF18", fg: "#6B7280", t: "Insufficient" },
   };
   const s = map[status] || { bg: C.bd, fg: C.mu, t: status };
   return (
@@ -4344,6 +4433,13 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
           ? C.gn
           : "#9CA3AF");
   const v = tAdjust(kpi.v, kpi.n, tyreType, plant);
+  const numVal = numericKpiValue(v);
+  const progressPct =
+    numVal == null
+      ? 0
+      : kpi.u === "%"
+        ? Math.max(0, Math.min(100, numVal))
+        : Math.max(0, Math.min(100, numVal > 0 ? 100 : 0));
   const canTrend = !kpi.na && kpi.trendApi && typeof onTrend === "function";
   const trendClick = (e) => {
     e.stopPropagation();
@@ -4353,25 +4449,26 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
     <div
       onClick={onToggle}
       style={{
-        background: C.cd,
-        borderRadius: C.r,
-        border: "1px solid " + (isOpen ? C.ac + "88" : C.bd),
-        boxShadow: isOpen ? "0 0 0 1px " + C.ac + "40, " + C.sh : C.sh,
+        background: productionCardBg(stCol),
+        borderRadius: 10,
+        border: "1px solid " + (isOpen ? C.bl : stCol + "35"),
+        boxShadow: isOpen
+          ? "0 4px 14px rgba(0,0,0,.08)"
+          : "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
         cursor: kpi.drill ? "pointer" : "default",
         overflow: "hidden",
-        transition: "border-color .2s",
-        borderLeft: "3px solid " + stCol,
+        transition:
+          "border-color .15s ease, box-shadow .15s ease, transform .15s ease",
+        minHeight: 136,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
       }}
     >
-      <div style={{ padding: "10px 12px" }}>
+      <div style={{ padding: "14px 16px" }}>
         <div
           style={{
-            fontSize: 11,
-            color: C.mu,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: ".5px",
-            marginBottom: 4,
+            marginBottom: 8,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -4382,11 +4479,37 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
             style={{
               flex: 1,
               minWidth: 0,
+              fontSize: 15,
+              color: C.tx,
+              fontWeight: 700,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
           >
+            <span
+              style={{
+                display: "inline-flex",
+                width: 20,
+                height: 20,
+                borderRadius: 6,
+                background: stCol + "16",
+                color: stCol,
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: 8,
+                fontSize: 12,
+                verticalAlign: "middle",
+              }}
+            >
+              {kpi.id === "pqr"
+                ? "Q"
+                : kpi.id === "audit"
+                  ? "✓"
+                  : kpi.id === "mqv"
+                    ? "!"
+                    : "•"}
+            </span>
             {kpi.n}
             {kpi.manual && (
               <span
@@ -4416,12 +4539,12 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
                 onClick={trendClick}
                 title="View Trend (Daily / Monthly / Yearly)"
                 style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 7,
                   border: "1px solid " + C.bd,
-                  background: C.c2,
-                  color: C.mu,
+                  background: C.cd,
+                  color: C.bl,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -4436,7 +4559,7 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
               <span
                 title="Click card to drill down"
                 style={{
-                  color: isOpen ? C.ac : C.mu,
+                  color: isOpen ? C.bl : C.mu,
                   transform: isOpen ? "rotate(180deg)" : "",
                   transition: "transform .2s",
                   fontSize: 13,
@@ -4450,16 +4573,26 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
         <div
           style={{
             display: "flex",
-            alignItems: "flex-end",
+            alignItems: "center",
             justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-            <span style={{ fontSize: 22, fontWeight: 700, color: C.tx }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span
+              style={{
+                fontSize: 28,
+                fontWeight: 800,
+                color: stCol,
+                lineHeight: 1.1,
+              }}
+            >
               {v}
             </span>
             {kpi.u && (
-              <span style={{ fontSize: 12, color: C.mu }}>{kpi.u}</span>
+              <span style={{ fontSize: 13, color: C.mu, fontWeight: 600 }}>
+                {kpi.u}
+              </span>
             )}
           </div>
           {kpi.sp && (
@@ -4480,18 +4613,37 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
         </div>
         <div
           style={{
-            marginTop: 4,
+            marginTop: 12,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            minHeight: 22,
           }}
         >
           {kpi.target && (
-            <span style={{ fontSize: 12, color: C.mu }}>
+            <span style={{ fontSize: 12, color: C.mu, fontWeight: 500 }}>
               Target: {kpi.target}
             </span>
           )}
           {kpi.status && <StatusPill status={kpi.status} />}
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            height: 5,
+            borderRadius: 999,
+            background: "rgba(15,23,42,.10)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: progressPct + "%",
+              height: "100%",
+              borderRadius: 999,
+              background: stCol,
+            }}
+          />
         </div>
       </div>
     </div>
@@ -4711,7 +4863,7 @@ const LIVE_PROCESS_DRILLS = {
   },
 };
 
-function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
+function LiveProcessDrillPanel({ kpi, date, shift, granularity, summaryRows }) {
   const cfg = LIVE_PROCESS_DRILLS[kpi?.drill];
   const [sectionRows, setSectionRows] = useState([]);
   const [machineRows, setMachineRows] = useState([]);
@@ -4731,7 +4883,12 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
       return;
     }
     setLoading(true);
-    getProcessKpiChildren({ kpiNames: cfg.sectionKpis, date, shift })
+    getProcessKpiChildren({
+      kpiNames: cfg.sectionKpis,
+      date,
+      shift,
+      granularity,
+    })
       .then((res) => {
         if (!cancelled)
           setSectionRows(Array.isArray(res?.rows) ? res.rows : []);
@@ -4745,7 +4902,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
     return () => {
       cancelled = true;
     };
-  }, [cfg, date, shift, summaryRows]);
+  }, [cfg, date, shift, granularity, summaryRows]);
   useEffect(() => {
     if (!cfg || !selectedSection) {
       setMachineRows([]);
@@ -4757,6 +4914,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
       kpiNames: cfg.machineKpis,
       date,
       shift,
+      granularity,
       section: selectedSection,
     })
       .then((res) => {
@@ -4772,7 +4930,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
     return () => {
       cancelled = true;
     };
-  }, [cfg, date, shift, selectedSection]);
+  }, [cfg, date, shift, granularity, selectedSection]);
   if (!cfg) return null;
   if (error)
     return (
@@ -4783,8 +4941,9 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
       </Card>
     );
   const rowStyle = (active, i) => ({
-    background: active ? C.aL : i % 2 === 0 ? C.cd : C.rowAlt,
+    background: active ? C.bl + "10" : i % 2 === 0 ? C.cd : C.rowAlt,
     cursor: "pointer",
+    outline: active ? "1px solid " + C.bl : "none",
   });
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -4819,23 +4978,22 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
           </a>
         </div>
         {loading ? (
+          <QualityLoader minHeight={180} />
+        ) : (
           <div
             style={{
-              padding: 18,
-              textAlign: "center",
-              fontSize: 13,
-              color: C.mu,
+              overflowX: "auto",
+              border: "1px solid " + C.bd,
+              borderRadius: 10,
+              maxHeight: 320,
             }}
           >
-            Fetching drill rows...
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
             <table
               style={{
                 width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 14,
+                borderCollapse: "separate",
+                borderSpacing: 0,
+                fontSize: 13,
               }}
             >
               <thead>
@@ -4844,12 +5002,20 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
                     <th
                       key={h}
                       style={{
-                        textAlign: i === 0 ? "left" : "right",
-                        padding: "5px 8px",
-                        color: C.mu,
-                        fontWeight: 600,
-                        borderBottom: "1px solid " + C.bd,
-                        fontSize: 13,
+                        textAlign: "center",
+                        padding: "8px 10px",
+                        color: C.tx,
+                        background: C.thBg,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: ".6px",
+                        borderBottom: "2px solid " + C.bd,
+                        borderRight:
+                          i === cfg.columns.length - 1
+                            ? "none"
+                            : "1px solid " + C.bd,
+                        fontSize: 11,
+                        whiteSpace: "nowrap",
                       }}
                     >
                       {h}
@@ -4872,11 +5038,15 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
                         <td
                           key={ci}
                           style={{
-                            padding: "6px 8px",
+                            padding: "8px 10px",
                             borderBottom: "1px solid " + C.bd,
-                            textAlign: ci === 0 ? "left" : "right",
-                            fontWeight: active && ci === 0 ? 700 : 400,
-                            color: active && ci === 0 ? cfg.accent : C.tx,
+                            borderRight:
+                              ci === cfg.row(r).length - 1
+                                ? "none"
+                                : "1px solid " + C.bd,
+                            textAlign: "center",
+                            fontWeight: active || ci === 0 ? 700 : 400,
+                            color: active && ci === 0 ? C.bl : C.tx,
                           }}
                         >
                           {cell}
@@ -4909,16 +5079,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
         <Card title={`${selectedSection} — Machine Level`} accent={cfg.accent}>
           <Breadcrumb path={[...cfg.path, selectedSection, "Machines"]} />
           {machineLoading ? (
-            <div
-              style={{
-                padding: 18,
-                textAlign: "center",
-                fontSize: 13,
-                color: C.mu,
-              }}
-            >
-              Fetching machine rows...
-            </div>
+            <QualityLoader minHeight={180} />
           ) : (
             <DTable
               cols={cfg.machineColumns}
@@ -4950,6 +5111,7 @@ function ProcessDrillPanel({
   onOpenSPC,
   date,
   shift,
+  granularity,
   processSummary,
 }) {
   if (!kpi) return null;
@@ -4959,6 +5121,7 @@ function ProcessDrillPanel({
         kpi={kpi}
         date={date}
         shift={shift}
+        granularity={granularity}
         summaryRows={processSummary?.children?.[kpi.drill]?.rows}
       />
     );
@@ -12434,11 +12597,12 @@ function _SpcTile({ label, val, sub, col, onTrend, onClick, active }) {
       style={{
         flex: 1,
         minWidth: 118,
-        background: active ? (col || C.ac) + "12" : C.cd,
-        border: "1px solid " + (active ? col || C.ac : C.bd),
-        outline: active ? "1px solid " + (col || C.ac) : "none",
-        borderRadius: 8,
-        padding: "9px 11px",
+        background: active ? (col || C.bl) + "12" : productionCardBg(col),
+        border: "1px solid " + (active ? col || C.bl : (col || C.bd) + "35"),
+        outline: active ? "1px solid " + (col || C.bl) : "none",
+        borderRadius: 10,
+        padding: "12px 14px",
+        boxShadow: "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
         position: "relative",
         cursor: onClick ? "pointer" : "default",
       }}
@@ -12451,12 +12615,12 @@ function _SpcTile({ label, val, sub, col, onTrend, onClick, active }) {
             position: "absolute",
             top: 7,
             right: 7,
-            width: 20,
-            height: 20,
-            borderRadius: 4,
+            width: 26,
+            height: 26,
+            borderRadius: 7,
             border: "1px solid " + C.bd,
-            background: C.c2,
-            color: C.mu,
+            background: C.cd,
+            color: C.bl,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -12469,27 +12633,28 @@ function _SpcTile({ label, val, sub, col, onTrend, onClick, active }) {
       )}
       <div
         style={{
-          fontSize: 10.5,
+          fontSize: 11,
           color: C.mu,
-          fontWeight: 600,
+          fontWeight: 700,
           textTransform: "uppercase",
-          letterSpacing: ".3px",
+          letterSpacing: ".6px",
         }}
       >
         {label}
       </div>
       <div
         style={{
-          fontSize: 19,
-          fontWeight: 700,
+          fontSize: 24,
+          fontWeight: 800,
           color: col || C.tx,
-          marginTop: 2,
+          marginTop: 6,
+          lineHeight: 1.1,
         }}
       >
         {val}
       </div>
       {sub && (
-        <div style={{ fontSize: 10.5, color: C.mu, marginTop: 1 }}>{sub}</div>
+        <div style={{ fontSize: 11.5, color: C.mu, marginTop: 4 }}>{sub}</div>
       )}
     </div>
   );
@@ -12588,8 +12753,8 @@ function SPCOverview({ onSelect }) {
   const nOK = rows.filter((r) => r.s.status === "Green").length;
   const filtered = fMachine !== "All" || fSize !== "All";
   const sel = {
-    padding: "5px 10px",
-    borderRadius: 6,
+    padding: "7px 12px",
+    borderRadius: 8,
     border: "1px solid " + C.bd,
     background: C.cd,
     color: C.tx,
@@ -12661,9 +12826,9 @@ function SPCOverview({ onSelect }) {
           gap: 10,
           alignItems: "center",
           flexWrap: "wrap",
-          padding: "8px 10px",
-          background: C.c2,
-          borderRadius: 8,
+          padding: "10px 12px",
+          background: "#F8FAFC",
+          borderRadius: 10,
           border: "1px solid " + C.bd,
         }}
       >
@@ -14961,9 +15126,9 @@ function LiveSPCOverview({ date, shift, onSelect }) {
           gap: 10,
           alignItems: "center",
           flexWrap: "wrap",
-          padding: "8px 10px",
-          background: C.c2,
-          borderRadius: 8,
+          padding: "10px 12px",
+          background: "#F8FAFC",
+          borderRadius: 10,
           border: "1px solid " + C.bd,
         }}
       >
@@ -15055,121 +15220,128 @@ function LiveSPCOverview({ date, shift, onSelect }) {
           No SPC rows for this selection.
         </div>
       ) : null}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
-          gap: 10,
-        }}
-      >
-        {widgets.map((w, i) => {
-          const col =
-            w.headline_status === "Critical"
-              ? C.rd
-              : w.headline_status === "Warning"
-                ? C.am
-                : w.headline_status === "Healthy"
-                  ? C.gn
-                  : C.mu;
-          return (
-            <div
-              key={`${w.machine}|${w.recipe}|${w.parameter}|${i}`}
-              onClick={() =>
-                onSelect({
-                  machine: w.machine,
-                  recipe: w.recipe,
-                  parameter: w.parameter,
-                })
-              }
-              style={{
-                cursor: "pointer",
-                background: C.cd,
-                border: "1px solid " + C.bd,
-                borderLeft: "3px solid " + col,
-                borderRadius: 8,
-                padding: "12px 14px",
-              }}
-            >
+      {loading ? (
+        <QualityLoader minHeight={360} />
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
+            gap: 10,
+          }}
+        >
+          {widgets.map((w, i) => {
+            const col =
+              w.headline_status === "Critical"
+                ? C.rd
+                : w.headline_status === "Warning"
+                  ? C.am
+                  : w.headline_status === "Healthy"
+                    ? C.gn
+                    : C.mu;
+            return (
               <div
+                key={`${w.machine}|${w.recipe}|${w.parameter}|${i}`}
+                onClick={() =>
+                  onSelect({
+                    machine: w.machine,
+                    recipe: w.recipe,
+                    parameter: w.parameter,
+                  })
+                }
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  gap: 8,
+                  cursor: "pointer",
+                  background: productionCardBg(col),
+                  border: "1px solid " + col + "35",
+                  borderRadius: 10,
+                  padding: "14px 16px",
+                  boxShadow:
+                    "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
+                  minHeight: 150,
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: C.tx,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {w.parameter}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11.5,
-                      color: C.mu,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {w.machine + " · " + w.recipe}
-                  </div>
-                </div>
-                <StatusPill
-                  status={
-                    w.headline_status === "Critical"
-                      ? "Red"
-                      : w.headline_status === "Warning"
-                        ? "Yellow"
-                        : w.headline_status === "Healthy"
-                          ? "Green"
-                          : "Insufficient"
-                  }
-                />
-              </div>
-              {w.control_chart ? (
-                <LiveSpcMini chart={w.control_chart} />
-              ) : (
                 <div
                   style={{
-                    height: 58,
                     display: "flex",
-                    alignItems: "center",
-                    fontSize: 12,
-                    color: C.mu,
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 8,
                   }}
                 >
-                  Insufficient sample size {w.insufficient?.sample_size ?? "—"}
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: C.tx,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {w.parameter}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: C.mu,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {w.machine + " · " + w.recipe}
+                    </div>
+                  </div>
+                  <StatusPill
+                    status={
+                      w.headline_status === "Critical"
+                        ? "Red"
+                        : w.headline_status === "Warning"
+                          ? "Yellow"
+                          : w.headline_status === "Healthy"
+                            ? "Green"
+                            : "Insufficient"
+                    }
+                  />
                 </div>
-              )}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  marginTop: 6,
-                  fontSize: 11.5,
-                  alignItems: "center",
-                }}
-              >
-                <span style={{ color: C.mu }}>
-                  Cp <b style={{ color: col }}>{w.cp ?? "—"}</b>
-                </span>
-                <span style={{ color: C.mu }}>
-                  Cpk <b style={{ color: col }}>{w.cpk ?? "—"}</b>
-                </span>
+                {w.control_chart ? (
+                  <LiveSpcMini chart={w.control_chart} />
+                ) : (
+                  <div
+                    style={{
+                      height: 58,
+                      display: "flex",
+                      alignItems: "center",
+                      fontSize: 12,
+                      color: C.mu,
+                    }}
+                  >
+                    Insufficient sample size{" "}
+                    {w.insufficient?.sample_size ?? "—"}
+                  </div>
+                )}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    marginTop: 6,
+                    fontSize: 11.5,
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ color: C.mu }}>
+                    Cp <b style={{ color: col }}>{w.cp ?? "—"}</b>
+                  </span>
+                  <span style={{ color: C.mu }}>
+                    Cpk <b style={{ color: col }}>{w.cpk ?? "—"}</b>
+                  </span>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -15254,7 +15426,9 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
         </div>
         <span style={{ marginLeft: "auto" }}>
           {loading ? (
-            "Fetching..."
+            <span style={{ fontSize: 11.5, color: C.mu, fontWeight: 700 }}>
+              Loading
+            </span>
           ) : (
             <StatusPill
               status={
@@ -15270,49 +15444,55 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
           )}
         </span>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {["cp", "cpk", "pp", "ppk"].map((k) => {
-          const cell = cap[k] || {};
-          return (
+      {loading ? (
+        <QualityLoader minHeight={360} />
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["cp", "cpk", "pp", "ppk"].map((k) => {
+              const cell = cap[k] || {};
+              return (
+                <_SpcTile
+                  key={k}
+                  label={k.toUpperCase()}
+                  val={loading ? "..." : (cell.value ?? "—")}
+                  sub={cell.status || ""}
+                  col={capCol(cell.value)}
+                />
+              );
+            })}
             <_SpcTile
-              key={k}
-              label={k.toUpperCase()}
-              val={loading ? "..." : (cell.value ?? "—")}
-              sub={cell.status || ""}
-              col={capCol(cell.value)}
+              label="Sample"
+              val={loading ? "..." : (cap.sample_size ?? "—")}
+              sub="observations"
+              col={C.tx}
             />
-          );
-        })}
-        <_SpcTile
-          label="Sample"
-          val={loading ? "..." : (cap.sample_size ?? "—")}
-          sub="observations"
-          col={C.tx}
-        />
-      </div>
-      {detail?.insufficient ? (
-        <Card title="Insufficient Data" accent={C.am}>
-          <div style={{ fontSize: 13, color: C.md }}>
-            Sample size {detail.insufficient.sample_size ?? "—"} is below the
-            capability gate for live SPC charts.
           </div>
-        </Card>
-      ) : null}
-      {detail?.x_chart && (
-        <LiveSpcChart
-          title="Interactive Process Control — X Chart with Nelson Rules"
-          chart={detail.x_chart}
-          accent={C.pp}
-        />
+          {detail?.insufficient ? (
+            <Card title="Insufficient Data" accent={C.am}>
+              <div style={{ fontSize: 13, color: C.md }}>
+                Sample size {detail.insufficient.sample_size ?? "—"} is below
+                the capability gate for live SPC charts.
+              </div>
+            </Card>
+          ) : null}
+          {detail?.x_chart && (
+            <LiveSpcChart
+              title="Interactive Process Control — X Chart with Nelson Rules"
+              chart={detail.x_chart}
+              accent={C.pp}
+            />
+          )}
+          {detail?.r_chart && (
+            <LiveSpcChart
+              title="R Chart — subgroup range"
+              chart={detail.r_chart}
+              accent={C.pp}
+            />
+          )}
+          {detail?.histogram && <LiveHistogram histogram={detail.histogram} />}
+        </>
       )}
-      {detail?.r_chart && (
-        <LiveSpcChart
-          title="R Chart — subgroup range"
-          chart={detail.r_chart}
-          accent={C.pp}
-        />
-      )}
-      {detail?.histogram && <LiveHistogram histogram={detail.histogram} />}
     </div>
   );
 }
@@ -15336,8 +15516,9 @@ export default function QualityDashboard({ plant, onBack }) {
   const [sub, setSub] = useState("");
   const [tf, setTf] = useState("today");
   const [shift, setShift] = useState("All");
-  const [tfFrom, setTfFrom] = useState(QUALITY_DATA_DATE);
-  const [tfTo, setTfTo] = useState(QUALITY_DATA_DATE);
+  const [tfFrom, setTfFrom] = useState(qualityTodayIso());
+  const [tfTo, setTfTo] = useState(qualityTodayIso());
+  const [tfMonth, setTfMonth] = useState(qualityMonthKey());
   const [tyreType, setTyreType] = useState(
     isBanmorePlant(plant) ? "PCR" : "All",
   );
@@ -15346,12 +15527,21 @@ export default function QualityDashboard({ plant, onBack }) {
   // Live Process values from the Excel-backed backend (FRD §1). null until the
   // first fetch; {} on error keeps cards neutral instead of showing mock data.
   const [liveProcess, setLiveProcess] = useState(null);
+  const [processLoading, setProcessLoading] = useState(true);
   const [processSummary, setProcessSummary] = useState(null);
+  const processGranularity =
+    tf === "month" ? "MONTH" : tf === "year" ? "YEAR" : null;
+  const processDate = tf === "month" || tf === "year" ? tfFrom : tfTo;
 
   useEffect(() => {
     if (tab !== "process") return;
     let cancelled = false;
-    getProcessSummary({ date: tfTo, shift })
+    setProcessLoading(true);
+    getProcessSummary({
+      date: processDate,
+      shift,
+      granularity: processGranularity,
+    })
       .then((res) => {
         if (cancelled) return;
         setProcessSummary(res || null);
@@ -15367,11 +15557,14 @@ export default function QualityDashboard({ plant, onBack }) {
           setProcessSummary(null);
           setLiveProcess({});
         }
+      })
+      .finally(() => {
+        if (!cancelled) setProcessLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [tab, tfTo, shift]);
+  }, [tab, processDate, shift, processGranularity]);
 
   // Merge live overall values onto supported Process cards. KPI cards without
   // an API-backed value render as NA so the quality dashboard never shows dummy
@@ -15404,24 +15597,39 @@ export default function QualityDashboard({ plant, onBack }) {
           : complaintCards;
   const openObj = openKpi ? kpis.find((k) => k.id === openKpi) : null;
   const tabAccent = tab === "process" ? C.bl : tab === "product" ? C.tl : C.rd;
+  const bodyLoading = tab === "process" && processLoading;
 
   const toggle = (id) => {
     setOpenKpi(openKpi === id ? null : id);
     setSub("");
   };
-  const onHeaderPresetChange = (preset) => {
+  const onHeaderPresetChange = (payload) => {
+    // ProductionTimeRangeSelect passes `{ preset, from, to }` (object);
+    // accept either shape (string or object) so callers don't break.
+    const preset =
+      typeof payload === "string" ? payload : (payload?.preset ?? null);
+    const nextFrom = typeof payload === "object" ? (payload?.from ?? "") : "";
+    const nextTo = typeof payload === "object" ? (payload?.to ?? "") : "";
     setTf(preset);
     if (preset === "today") {
-      setTfFrom(QUALITY_DATA_DATE);
-      setTfTo(QUALITY_DATA_DATE);
+      const t = qualityTodayIso();
+      setTfFrom(t);
+      setTfTo(t);
     } else if (preset === "month") {
-      setTfFrom(QUALITY_MONTH_FROM);
-      setTfTo(QUALITY_MONTH_TO);
+      const r = qualityMonthRange();
+      setTfFrom(r.from);
+      setTfTo(r.to);
+      setTfMonth(r.from.slice(0, 7));
       setShift("All");
     } else if (preset === "year") {
-      setTfFrom("2026-01-01");
-      setTfTo("2026-12-31");
+      const r = currentYearRange();
+      setTfFrom(r.from);
+      setTfTo(r.to);
       setShift("All");
+    } else {
+      // Custom range (or null when the user opens the Date Range dialog).
+      if (nextFrom) setTfFrom(nextFrom);
+      if (nextTo) setTfTo(nextTo);
     }
   };
   const onHeaderFromChange = (value) => {
@@ -15436,251 +15644,225 @@ export default function QualityDashboard({ plant, onBack }) {
   };
   const onHeaderShiftChange = (value) =>
     setShift(value === "all" ? "All" : String(value).toUpperCase());
+  const onHeaderMonthChange = (monthKey) => {
+    setTf("month");
+    const r = monthRangeFromKey(monthKey);
+    setTfFrom(r.from);
+    setTfTo(r.to);
+    setTfMonth(monthKey);
+    setShift("All");
+  };
+
+  // ── ProductionHeader wiring ──
+  // Map Quality's flat time-range state (tf, tfFrom, tfTo, tfMonth) to the
+  // shape ProductionHeader expects, and convert the shift label to lowercase.
+  const timeRangeForHeader = {
+    preset: typeof tf === "string" ? tf.toLowerCase() : null,
+    from: tfFrom,
+    to: tfTo,
+    month: tfMonth,
+  };
+  const headerShift = typeof shift === "string" ? shift.toLowerCase() : "all";
+  const onHeaderExport = () => {
+    // Quality uses the print-page path for export (matches the inline
+    // ExportButton behaviour). Production uses html2canvas; either way the
+    // user expects a PDF download.
+    try {
+      window.print?.();
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
+
+  // Sub-tab items rendered in the header's Row 2 (where dept tabs go on
+  // production). The active tab is the current Quality sub-section.
+  const subTabItems = [
+    { id: "process", label: "Process", accent: C.bl },
+    { id: "product", label: "Product", accent: C.tl },
+    { id: "complaint", label: "Customer Complaint", accent: C.rd },
+    { id: "spc", label: "SPC", accent: C.pp },
+  ];
+  const onSubTabChange = (id) => {
+    setTab(id);
+    setOpenKpi(null);
+    setSub("");
+  };
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         minHeight: "100vh",
-        background: C.bg,
-        fontFamily: "'IBM Plex Sans',system-ui,sans-serif",
-        color: C.tx,
-        fontSize: 16,
+        backgroundColor: "background.default",
+        color: "text.primary",
+        fontFamily:
+          'Montserrat, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
       }}
     >
       <PrintStyles />
-      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
-      {/* Header */}
-      <div
-        style={{
-          background: C.cd,
-          borderBottom: "1px solid " + C.bd,
-          padding: "0 20px",
-          height: 64,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          boxShadow: "0 1px 4px rgba(0,0,0,.04)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <button
-            onClick={onBack}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: "1px solid " + C.bd,
-              background: C.c2,
-              color: C.mu,
-              fontSize: 18,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {"←"}
-          </button>
-          <img
-            src={LOGO}
-            alt="JK Tyre"
-            style={{
-              height: 28,
-              width: "auto",
-              objectFit: "contain",
-              display: "block",
-            }}
-          />
-          <div style={{ width: 1, height: 40, background: C.bd }} />
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>One Factory</div>
-            <div
-              style={{
-                fontSize: 11,
-                color: C.mu,
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                marginTop: 1,
-              }}
-            >
-              Quality Head Dashboard
-            </div>
-          </div>
-          <span
-            style={{
-              fontSize: 13,
-              color: C.tl,
-              fontWeight: 700,
-              background: C.tl + "18",
-              padding: "3px 10px",
-              borderRadius: 8,
-              marginLeft: 4,
-            }}
-          >
-            {plant ? plant.name.split(" ")[0].toUpperCase() : "BTP"}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <ProductionTimeRangeSelect
-            preset={tf}
-            onPresetChange={onHeaderPresetChange}
-            from={tfFrom}
-            to={tfTo}
-            onFromChange={onHeaderFromChange}
-            onToChange={onHeaderToChange}
-            shift={shift === "All" ? "all" : shift.toLowerCase()}
-            onShiftChange={onHeaderShiftChange}
-          />
-          <PcrOnlyBadge />
-          <ExportButton />
-          <SharedUserMenu user={QUALITY_USER} size={32} />
-        </div>
-      </div>
 
-      {/* Tab Navigation */}
-      <div
-        style={{
-          background: C.cd,
-          borderBottom: "1px solid " + C.bd,
-          padding: "0 16px",
-          display: "flex",
-          alignItems: "center",
-          position: "sticky",
-          top: 64,
-          zIndex: 99,
+      {/* Production-style top header — Row 1 brand + plant pill + avatar,
+          Row 2 dept tabs + tyre type + time range + export. The dept tabs
+          are wired to navigate between Banmore dashboards; Quality is the
+          active one. */}
+      <ProductionHeader
+        plant={plant}
+        timeRange={timeRangeForHeader}
+        onTimeRangeChange={(updater) => {
+          const next =
+            typeof updater === "function"
+              ? updater(timeRangeForHeader)
+              : updater;
+          // Map the production-shape update back into Quality's flat state.
+          if (next?.preset !== undefined) {
+            onHeaderPresetChange({
+              preset: next.preset,
+              from: next.from ?? "",
+              to: next.to ?? "",
+            });
+          } else if (next?.from) {
+            onHeaderFromChange(next.from);
+          } else if (next?.to) {
+            onHeaderToChange(next.to);
+          }
         }}
-      >
-        {[
-          { id: "process", n: "Process", i: "⚙" },
-          { id: "product", n: "Product", i: "◆" },
-          { id: "complaint", n: "Customer Complaint", i: "⚠" },
-          { id: "spc", n: "SPC", i: "∿" },
-        ].map((t) => {
-          const a = tab === t.id;
-          const tc =
-            t.id === "process"
-              ? C.bl
-              : t.id === "product"
-                ? C.tl
-                : t.id === "complaint"
-                  ? C.rd
-                  : C.pp;
-          return (
-            <button
-              key={t.id}
-              onClick={() => {
-                setTab(t.id);
-                setOpenKpi(null);
-                setSub("");
-              }}
-              style={{
-                padding: "12px 18px",
-                border: "none",
-                borderBottom: a ? "2px solid " + tc : "2px solid transparent",
-                background: "transparent",
-                fontSize: 14,
-                fontWeight: a ? 700 : 500,
-                color: a ? tc : C.mu,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              {t.n}
-            </button>
-          );
-        })}
-        <div style={{ flex: 1 }} />
-      </div>
+        shift={headerShift}
+        onShiftChange={onHeaderShiftChange}
+        onExport={onHeaderExport}
+        asOf={null}
+        lastUpdatedAt={null}
+        categoryTabs={subTabItems.map((t) => ({ id: t.id, label: t.label }))}
+        activeCategory={tab}
+        onCategoryChange={onSubTabChange}
+        tyreTypes={[]}
+        tyreType={tyreType}
+        onTyreTypeChange={setTyreType}
+      />
 
       {/* Main content */}
-      <div
-        style={{
-          padding: "16px 20px 40px",
+      <Box
+        sx={{
+          px: { xs: 2, md: 3 },
+          py: 2,
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: 2,
         }}
       >
-        {/* KPI Grid */}
-        <TyreTypeBanner tt={tyreType} plant={plant} />
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-            gap: 8,
-          }}
-        >
-          {kpis.map((k) => (
-            <QKpiCard
-              key={k.id}
-              kpi={k}
-              isOpen={openKpi === k.id}
-              onToggle={() => k.drill && toggle(k.id)}
-              onTrend={setTrendKpi}
-              tyreType={tyreType}
-              plant={plant}
-            />
-          ))}
-        </div>
-
-        {/* SPC tab */}
-        {tab === "spc" && (
-          <SPCTab
-            spcSel={spcSel}
-            setSpcSel={setSpcSel}
-            date={tfTo}
-            shift={shift}
-          />
-        )}
-
-        {/* Drill panel */}
-        {openObj && (
-          <div style={{ animation: "fadeIn .2s ease" }}>
-            {tab === "process" && (
-              <ProcessDrillPanel
-                kpi={openObj}
-                sub={sub}
-                setSub={setSub}
-                date={tfTo}
+        {bodyLoading ? (
+          <QualityLoader minHeight="calc(100vh - 220px)" />
+        ) : (
+          <>
+            <TyreTypeBanner tt={tyreType} plant={plant} />
+            {tab === "spc" ? (
+              <SPCTab
+                spcSel={spcSel}
+                setSpcSel={setSpcSel}
+                date={processDate}
                 shift={shift}
-                processSummary={processSummary}
-                onOpenSPC={(mc) => {
-                  setTab("spc");
-                  setSpcSel(mc);
-                  setOpenKpi(null);
-                  setSub("");
+              />
+            ) : (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: {
+                    xs: "column",
+                    lg: openObj ? "row" : "column",
+                  },
+                  gap: 2,
+                  alignItems: "flex-start",
+                  width: "100%",
+                  transition: "all .3s ease",
                 }}
-              />
+              >
+                <Box
+                  sx={{
+                    display: "grid",
+                    gap: 2,
+                    width: openObj ? { xs: "100%", lg: "340px" } : "100%",
+                    flex: openObj ? "0 0 340px" : "1 1 auto",
+                    gridTemplateColumns: openObj
+                      ? "1fr"
+                      : {
+                          xs: "1fr",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                          md: "repeat(4, minmax(0, 1fr))",
+                        },
+                    transition: "all .3s ease",
+                  }}
+                >
+                  {kpis.map((k) => (
+                    <QKpiCard
+                      key={k.id}
+                      kpi={k}
+                      isOpen={openKpi === k.id}
+                      onToggle={() => k.drill && toggle(k.id)}
+                      onTrend={setTrendKpi}
+                      tyreType={tyreType}
+                      plant={plant}
+                    />
+                  ))}
+                </Box>
+
+                {openObj && (
+                  <Box
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      width: "100%",
+                      pt: { xs: 0, lg: 0 },
+                      animation: "fadeIn .3s ease",
+                    }}
+                  >
+                    {tab === "process" && (
+                      <ProcessDrillPanel
+                        kpi={openObj}
+                        sub={sub}
+                        setSub={setSub}
+                        date={processDate}
+                        shift={shift}
+                        granularity={processGranularity}
+                        processSummary={processSummary}
+                        onOpenSPC={(mc) => {
+                          setTab("spc");
+                          setSpcSel(mc);
+                          setOpenKpi(null);
+                          setSub("");
+                        }}
+                      />
+                    )}
+                    {tab === "product" && (
+                      <ProductDrillPanel
+                        kpi={openObj}
+                        sub={sub}
+                        setSub={setSub}
+                        tyreType={tyreType}
+                        plant={plant}
+                      />
+                    )}
+                    {tab === "complaint" && (
+                      <ComplaintDrillPanel
+                        kpi={openObj}
+                        sub={sub}
+                        setSub={setSub}
+                      />
+                    )}
+                  </Box>
+                )}
+              </Box>
             )}
-            {tab === "product" && (
-              <ProductDrillPanel
-                kpi={openObj}
-                sub={sub}
-                setSub={setSub}
-                tyreType={tyreType}
-                plant={plant}
-              />
-            )}
-            {tab === "complaint" && (
-              <ComplaintDrillPanel kpi={openObj} sub={sub} setSub={setSub} />
-            )}
-          </div>
+          </>
         )}
-      </div>
+      </Box>
       {trendKpi && trendKpi.trendApi && (
         <LiveProcessTrendPanel
           kpi={trendKpi}
           onClose={() => setTrendKpi(null)}
           dateFrom={tfFrom}
-          dateTo={tfTo}
+          dateTo={processGranularity ? processDate : tfTo}
           shift={shift}
+          granularity={processGranularity}
         />
       )}
-    </div>
+    </Box>
   );
 }

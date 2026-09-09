@@ -13,6 +13,8 @@ import {
   escapeLiteral,
   processScopePredicate,
   granularityAllowListPredicate,
+  DATE_YYYYMMDD,
+  isoToYyyymmdd,
 } from "../normalize.js";
 
 const TABLE = () => config.quality.sqlTable;
@@ -43,7 +45,7 @@ export function kpiValueQuery({ kpiName, date, granularity, section, machine }) 
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date = ${escapeLiteral(date)}` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}` +
     scopeFragment({ section, machine })
   );
 }
@@ -60,7 +62,7 @@ export function kpiValueBatchQuery({ kpiNames, date, granularity, section, machi
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date = ${escapeLiteral(date)}` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}` +
     scopeFragment({ section, machine })
   );
 }
@@ -79,7 +81,7 @@ export function kpiChildrenQuery({ kpiNames, date, granularity, section }) {
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date = ${escapeLiteral(date)}` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}` +
     scopeFragment({ section })
   );
 }
@@ -96,7 +98,8 @@ export function kpiHistoryQuery({ kpiName, from, to, granularity, section, machi
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date >= ${escapeLiteral(from)} AND date <= ${escapeLiteral(to)}` +
+    `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+    `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))}` +
     scopeFragment({ section, machine }) +
     ` ORDER BY date ASC`
   );
