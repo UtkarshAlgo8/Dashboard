@@ -26,6 +26,7 @@ import { router as adminRouter } from "./routes/admin.js";
 import { router as chatRouter } from "./routes/chat.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
+import { router as qualityRouter } from "./quality/routes/quality.routes.js";
 
 // Auth slice — see backend/src/middlewares/auth.middleware.js
 import authRouter from "./routes/auth.js";
@@ -107,6 +108,7 @@ app.use("/api/v1/chat", gate, chatRouter);
 //   /api/v1/quality/spc/{summary,filter-options,widgets,detail,*-observations}
 app.use("/api/v1/quality/process", gate, qualityProcessRouter);
 app.use("/api/v1/quality/spc", gate, qualitySpcRouter);
+app.use("/api/v1/quality", gate, qualityRouter);
 
 app.use(notFound);
 app.use(errorHandler);

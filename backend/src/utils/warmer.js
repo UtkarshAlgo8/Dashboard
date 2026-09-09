@@ -30,7 +30,11 @@ let running = false;
  * recorder instead.
  */
 function staticTargets() {
-  const targets = [{ method: "GET", path: "/api/v1/plants" }];
+  const targets = [
+    { method: "GET", path: "/api/v1/plants" },
+    // Quality cross-family endpoints — plant-agnostic, single entry per URL.
+    { method: "GET", path: "/api/v1/quality/as-of" },
+  ];
   for (const plantId of config.warm.plants) {
     targets.push(
       { method: "GET", path: `/api/v1/plants/${plantId}/as-of` },

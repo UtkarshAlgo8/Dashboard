@@ -44,6 +44,17 @@ export const PROCESS_KPI_NAME = {
 };
 
 /**
+ * Latest available date in the Quality gold rows (BRD §13.5 mirror). Unscoped
+ * — Quality's workbook is plant-agnostic (Process rows label BTP, SPC rows
+ * BANMORE), so a plant filter would undercount. Mirrors Production's `getAsOf`
+ * shape.
+ * @returns {Promise<{ asOf: string | null }>}
+ */
+export function getQualityAsOf() {
+  return cachedQualityGet(`/quality/as-of`);
+}
+
+/**
  * Fetch the overall (_o) values for the supported Process cards in one call.
  * `shift` is the header value ("All" | "A" | "B" | "C"); the backend maps
  * All→DAY and A/B/C→SHIFT x (FRD §0.9).
