@@ -137,7 +137,7 @@ log "Branch: $BRANCH"
 cd "$REPO_ROOT"
 git fetch origin "$BRANCH"
 git checkout "$BRANCH"
-git pull origin "$BRANCH"
+git merge --ff-only "origin/$BRANCH"
 
 ensure_redis
 case "$TARGET" in
