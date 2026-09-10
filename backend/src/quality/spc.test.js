@@ -236,12 +236,12 @@ test("modeSetpoint: modal positive value; zeros are the idle marker, not a targe
   assert.equal(modeSetpoint([0, 0, null, ""]), null);
 });
 
-test("buildDistribution: Sturges bins, counts reconcile, spec window respected", () => {
+test("buildDistribution: Freedman-Diaconis bins, counts reconcile, spec window respected", () => {
   const values = Array.from({ length: 64 }, (_, i) => 100 + (i % 8));
   const d = buildDistribution(values, { target: 103, usl: 106, lsl: 100 });
   assert.equal(d.sample_size, 64);
   assert.equal(d.bins.reduce((a, b) => a + b.count, 0), 64);
-  assert.ok(d.bins.length >= 8 && d.bins.length <= 30);
+  assert.ok(d.bins.length >= 8 && d.bins.length <= 60);
   assert.equal(d.target, 103);
   assert.equal(d.out_of_spec.count, 8); // the eight readings at 107
   assert.equal(d.curve.x.length, d.curve.y.length);

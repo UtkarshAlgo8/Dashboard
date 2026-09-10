@@ -15023,33 +15023,42 @@ function LiveHistogram({ histogram }) {
   const sigmaGuides = [histogram.sigma_minus_3, histogram.sigma_plus_3].filter(
     (v) => typeof v === "number",
   );
-  const lo = Math.min(
-    ...bins.map((b) => b.from),
-    ...curveX,
-    ...refs.map((r) => r.value),
-    ...sigmaGuides,
+  // Domain is anchored to where the data actually lives (bins + curve), not
+  // to spec/sigma reference values, so a far-off LSL/USL doesn't compress
+  // the bars into a sliver of the chart. Refs/guides only get to stretch the
+  // domain a bounded amount; beyond that they're clamped to the edge when
+  // rendered (see clampX below).
+  const dataXs = [...bins.map((b) => b.from), ...bins.map((b) => b.to), ...curveX].filter(
+    (v) => typeof v === "number" && Number.isFinite(v),
   );
-  const hi = Math.max(
-    ...bins.map((b) => b.to),
-    ...curveX,
-    ...refs.map((r) => r.value),
-    ...sigmaGuides,
+  const dataLo = dataXs.length ? Math.min(...dataXs) : 0;
+  const dataHi = dataXs.length ? Math.max(...dataXs) : 1;
+  const dataPad = (dataHi - dataLo) * 0.06 || 1;
+  const domainLo0 = dataLo - dataPad;
+  const domainHi0 = dataHi + dataPad;
+  const extendSlack = (dataHi - dataLo) * 0.35 || 1;
+  const extendVals = [...refs.map((r) => r.value), ...sigmaGuides].filter(
+    (v) => v >= domainLo0 - extendSlack && v <= domainHi0 + extendSlack,
   );
+  const lo = Math.min(domainLo0, ...extendVals);
+  const hi = Math.max(domainHi0, ...extendVals);
+  const clampX = (v) => Math.min(hi, Math.max(lo, v));
   const W = 760,
     padL = 36,
     padR = 22,
-    padB = 24;
+    padB = 34;
   const pw = W - padL - padR;
   const X = (v) => padL + ((v - lo) / (hi - lo || 1)) * pw;
+  const ticks = Array.from({ length: 5 }, (_, i) => lo + (i / 4) * (hi - lo));
   const refRows = [];
   {
     const rowRight = [];
     [...refs]
-      .sort((a, b) => X(a.value) - X(b.value))
+      .sort((a, b) => X(clampX(a.value)) - X(clampX(b.value)))
       .forEach((r) => {
         const text = r.label + " " + _spcFmt(r.value);
         const halfW = (text.length * 5.6 + 6) / 2;
-        const x = X(r.value);
+        const x = X(clampX(r.value));
         let row = rowRight.findIndex((right) => x - halfW > right + 4);
         if (row === -1) {
           row = rowRight.length;
@@ -15104,6 +15113,30 @@ function LiveHistogram({ histogram }) {
             stroke={C.bd}
             strokeWidth="1"
           />
+          {ticks.map((v, i) => {
+            const x = X(v);
+            return (
+              <g key={`tick-${i}`} pointerEvents="none">
+                <line
+                  x1={x}
+                  y1={padT + ph}
+                  x2={x}
+                  y2={padT + ph + 4}
+                  stroke={C.bd}
+                  strokeWidth="1"
+                />
+                <text
+                  x={x}
+                  y={padT + ph + 15}
+                  fontSize="9"
+                  fill={C.mu}
+                  textAnchor="middle"
+                >
+                  {_spcFmt(v)}
+                </text>
+              </g>
+            );
+          })}
           {bins.map((b, i) => {
             const x = X(b.from),
               w = Math.max(1, X(b.to) - X(b.from) - 1),
@@ -15143,7 +15176,8 @@ function LiveHistogram({ histogram }) {
             />
           ) : null}
           {sigmaGuides.map((v, i) => {
-            const x = X(v);
+            const clamped = v !== clampX(v);
+            const x = X(clampX(v));
             return (
               <line
                 key={`sigma-${i}`}
@@ -15154,13 +15188,14 @@ function LiveHistogram({ histogram }) {
                 stroke={C.mu}
                 strokeWidth="1"
                 strokeDasharray="2 3"
-                opacity="0.55"
+                opacity={clamped ? 0.3 : 0.55}
                 pointerEvents="none"
               />
             );
           })}
           {refs.map((r) => {
-            const x = X(r.value);
+            const clamped = r.value !== clampX(r.value);
+            const x = X(clampX(r.value));
             const row = refRows.find((rr) => rr.key === r.key)?.row ?? 0;
             return (
               <g key={r.key} pointerEvents="none">
@@ -15171,7 +15206,10 @@ function LiveHistogram({ histogram }) {
                   y2={padT + ph}
                   stroke={r.color}
                   strokeWidth={r.key === "median" ? "1.5" : "1.8"}
-                  strokeDasharray={r.key === "median" ? "4 3" : undefined}
+                  strokeDasharray={
+                    clamped ? "3 2" : r.key === "median" ? "4 3" : undefined
+                  }
+                  opacity={clamped ? 0.6 : 1}
                 />
                 <text
                   x={x}
@@ -15267,7 +15305,7 @@ function LiveHistogram({ histogram }) {
   );
 }
 
-function LiveSPCOverview({ date, shift, onSelect }) {
+function LiveSPCOverview({ date, from, to, shift, onSelect }) {
   const [machine, setMachine] = useState("All");
   const [recipe, setRecipe] = useState("All");
   const [headline, setHeadline] = useState("All");
@@ -15282,9 +15320,9 @@ function LiveSPCOverview({ date, shift, onSelect }) {
     setLoading(true);
     setError(null);
     Promise.all([
-      getSpcFilterOptions({ date, shift }),
-      getSpcWidgets({ date, shift, machine, recipe }),
-      getSpcWidgets({ date, shift, machine, recipe, headlineStatus: headline }),
+      getSpcFilterOptions({ date: to || date, shift }),
+      getSpcWidgets({ date, from, to, shift, machine, recipe }),
+      getSpcWidgets({ date, from, to, shift, machine, recipe, headlineStatus: headline }),
     ])
       .then(([opt, baseBoard, board]) => {
         if (cancelled) return;
@@ -15309,7 +15347,7 @@ function LiveSPCOverview({ date, shift, onSelect }) {
     return () => {
       cancelled = true;
     };
-  }, [date, shift, machine, recipe, headline]);
+  }, [date, from, to, shift, machine, recipe, headline]);
   const baseCounts = baseWidgets.reduce(
     (acc, w) => {
       acc.total += 1;
@@ -15640,7 +15678,7 @@ function _SpcMeasurement({ m }) {
   );
 }
 
-function LiveSPCDetail({ selection, date, shift, onBack }) {
+function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15648,7 +15686,7 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getSpcDetail({ date, shift, ...selection })
+    getSpcDetail({ date, from, to, shift, ...selection })
       .then((res) => {
         if (!cancelled) setDetail(res);
       })
@@ -15663,6 +15701,8 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
     };
   }, [
     date,
+    from,
+    to,
     shift,
     selection?.machine,
     selection?.recipe,
@@ -15870,16 +15910,24 @@ function LiveSpcAlerts({ alerts }) {
   );
 }
 
-function SPCTab({ spcSel, setSpcSel, date, shift }) {
+function SPCTab({ spcSel, setSpcSel, date, from, to, shift }) {
   return spcSel ? (
     <LiveSPCDetail
       selection={spcSel}
       date={date}
+      from={from}
+      to={to}
       shift={shift}
       onBack={() => setSpcSel(null)}
     />
   ) : (
-    <LiveSPCOverview date={date} shift={shift} onSelect={setSpcSel} />
+    <LiveSPCOverview
+      date={date}
+      from={from}
+      to={to}
+      shift={shift}
+      onSelect={setSpcSel}
+    />
   );
 }
 
@@ -15908,6 +15956,11 @@ export default function QualityDashboard({ plant, onBack }) {
   const processGranularity =
     tf === "month" ? "MONTH" : tf === "year" ? "YEAR" : null;
   const processDate = tf === "month" || tf === "year" ? tfFrom : tfTo;
+  // SPC month/year view aggregates the whole range (tfFrom..tfTo) instead of
+  // pinning to a single as-of day; day view keeps passing a single date.
+  const spcRangeMode = tf === "month" || tf === "year";
+  const spcFrom = spcRangeMode ? tfFrom : null;
+  const spcTo = spcRangeMode ? tfTo : null;
 
   useEffect(() => {
     if (tab !== "process") return;
@@ -16147,6 +16200,8 @@ export default function QualityDashboard({ plant, onBack }) {
                 spcSel={spcSel}
                 setSpcSel={setSpcSel}
                 date={processDate}
+                from={spcFrom}
+                to={spcTo}
                 shift={shift}
               />
             ) : (

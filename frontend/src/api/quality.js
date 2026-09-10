@@ -143,9 +143,25 @@ export function getSpcFilterOptions({ date, shift = "All" } = {}) {
   return cachedQualityGet(`/quality/spc/filter-options?${params.toString()}`);
 }
 
-export function getSpcWidgets({ date, shift = "All", machine, recipe, headlineStatus } = {}) {
+// `from`/`to` request the whole range's SPC data (month/year view) instead of
+// a single as-of-day snapshot; pass either `date` (day view) or `from`+`to`
+// (range view), not both.
+export function getSpcWidgets({
+  date,
+  from,
+  to,
+  shift = "All",
+  machine,
+  recipe,
+  headlineStatus,
+} = {}) {
   const params = new URLSearchParams({ plant: "BANMORE", shift });
-  if (date) params.set("date", date);
+  if (from && to) {
+    params.set("from", from);
+    params.set("to", to);
+  } else if (date) {
+    params.set("date", date);
+  }
   if (machine && machine !== "All") params.set("machine", machine);
   if (recipe && recipe !== "All") params.set("recipe", recipe);
   if (headlineStatus && headlineStatus !== "All") {
@@ -156,6 +172,8 @@ export function getSpcWidgets({ date, shift = "All", machine, recipe, headlineSt
 
 export function getSpcDetail({
   date,
+  from,
+  to,
   shift = "All",
   machine,
   recipe,
@@ -163,11 +181,16 @@ export function getSpcDetail({
 }) {
   const params = new URLSearchParams({
     plant: "BANMORE",
-    date,
     shift,
     machine,
     recipe,
     parameter,
   });
+  if (from && to) {
+    params.set("from", from);
+    params.set("to", to);
+  } else if (date) {
+    params.set("date", date);
+  }
   return cachedQualityGet(`/quality/spc/detail?${params.toString()}`);
 }

@@ -37,6 +37,7 @@ import {
   SILVER_SOURCES,
   paramsForSource,
   shiftWindow,
+  addDays,
 } from "../spc/mapping.js";
 import {
   pickBaseline,
@@ -61,6 +62,15 @@ async function resolveSnapshot(date, granularity) {
   const rows = await runQuery(spcSnapshotQuery(date, granularity));
   const raw = rows[0]?.snapshot_date ?? null;
   return raw ? String(raw).slice(0, 10) : null;
+}
+
+/**
+ * Whole-range window (e.g. a calendar month), inclusive of both `from` and
+ * `to` dates — as opposed to `shiftWindow`, which windows a single day/shift.
+ * Used when the caller passes an explicit `from`/`to` instead of one `date`.
+ */
+function rangeWindow(from, to) {
+  return { from: `${from} 00:00:00`, to: `${addDays(to, 1)} 00:00:00` };
 }
 
 /**
@@ -253,16 +263,22 @@ export async function getSpcFilterOptions(req, res, next) {
   }
 }
 
-/** GET /quality/spc/widgets  ?date= [&shift= &machine= &recipe= &headline_status=] */
+/**
+ * GET /quality/spc/widgets  ?date= [&shift= &machine= &recipe= &headline_status=]
+ * Or, for a whole-range view (month/year): ?from= &to= instead of &date=.
+ * `from`/`to` widen the chart-point window to the whole range instead of a
+ * single day/shift; the headline capability snapshot still resolves to the
+ * latest one on or before `to` (capability rows are daily, not summable).
+ */
 export async function getSpcWidgets(req, res, next) {
   try {
-    const { date, machine, recipe, headline_status: headline, plant, shift } = req.query;
+    const { date, from, to, machine, recipe, headline_status: headline, plant, shift } = req.query;
     const granularity = spcGranularity(shift);
     const key = buildCacheKey("/quality/spc/widgets", req.query);
     const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date, granularity);
+      const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const window = shiftWindow(snapshot, shift);
+      const window = from && to ? rangeWindow(from, to) : shiftWindow(snapshot, shift);
       const [rows, limitsIndex, seriesIndex] = await Promise.all([
         runQuery(spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe })),
         loadLimitsIndex({ machine, isoDate: snapshot }),
@@ -301,10 +317,14 @@ export async function getSpcWidgets(req, res, next) {
   }
 }
 
-/** GET /quality/spc/detail  ?date= &machine= &recipe= &parameter= [&shift=] */
+/**
+ * GET /quality/spc/detail  ?date= &machine= &recipe= &parameter= [&shift=]
+ * Or, for a whole-range view (month/year): ?from= &to= instead of &date=.
+ * See getSpcWidgets for the from/to vs date semantics.
+ */
 export async function getSpcDetail(req, res, next) {
   try {
-    const { date, machine, recipe, parameter, shift, plant } = req.query;
+    const { date, from, to, machine, recipe, parameter, shift, plant } = req.query;
     if (
       !hasQueryValue(req.query, "machine") ||
       !hasQueryValue(req.query, "recipe") ||
@@ -315,9 +335,9 @@ export async function getSpcDetail(req, res, next) {
     const granularity = spcGranularity(shift);
     const key = buildCacheKey("/quality/spc/detail", req.query);
     const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date, granularity);
+      const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const window = shiftWindow(snapshot, shift);
+      const window = from && to ? rangeWindow(from, to) : shiftWindow(snapshot, shift);
       const src = resolveSilver(machine, parameter);
       const [rows, limitsIndex, points] = await Promise.all([
         runQuery(spcDetailRowsQuery({ snapshot, granularity, machine, recipe, parameter })),

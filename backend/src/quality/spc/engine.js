@@ -435,6 +435,21 @@ function median(values) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+/**
+ * Linear-interpolation percentile over already-sorted values (p in [0,1]).
+ * Used for the IQR that drives the Freedman-Diaconis bin width below.
+ */
+function percentile(sorted, p) {
+  if (sorted.length === 0) return null;
+  if (sorted.length === 1) return sorted[0];
+  const idx = p * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  const frac = idx - lo;
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * frac;
+}
+
 const round = (v, dp = 4) =>
   v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** dp) / 10 ** dp;
 
@@ -442,7 +457,12 @@ const round = (v, dp = 4) =>
  * Step 6 — the capability histogram, built from the INDIVIDUAL readings
  * (not the subgroup means).
  *
- *   bins  = ceil(log2(N) + 1), clamped to [8, 30]   (Sturges)
+ *   bins  = width from the Freedman-Diaconis rule (2 × IQR × N^(-1/3)),
+ *           bin_count = ceil((max-min) / width), clamped to [8, 60].
+ *           IQR-based, so a handful of outliers stretching [min,max] no
+ *           longer starves the bins where the bulk of the data sits (the
+ *           failure mode of Sturges, which only looks at N). Falls back to
+ *           the Sturges bin count when IQR is 0 (tight/identical readings).
  *   curve = the fitted normal PDF across [min,max], scaled by N × bin_width
  *           so it is directly comparable with the bar heights
  *
@@ -474,9 +494,13 @@ export function buildDistribution(values, { target = null, usl = null, lsl = nul
   }
   const lo = Math.min(...values);
   const hi = Math.max(...values);
-  const binCount = Math.min(30, Math.max(8, Math.ceil(Math.log2(n) + 1)));
   // A window of zero width (every reading identical) still needs one bin.
   const span = hi - lo || Math.abs(hi) * 1e-6 || 1;
+  const sorted = [...values].sort((a, b) => a - b);
+  const iqr = percentile(sorted, 0.75) - percentile(sorted, 0.25);
+  const sturgesCount = Math.ceil(Math.log2(n) + 1);
+  const fdCount = iqr > 0 ? Math.ceil(span / (2 * iqr * Math.pow(n, -1 / 3))) : sturgesCount;
+  const binCount = Math.min(60, Math.max(8, fdCount));
   const width = span / binCount;
   const counts = new Array(binCount).fill(0);
   for (const v of values) {
