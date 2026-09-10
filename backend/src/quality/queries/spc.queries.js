@@ -1,10 +1,24 @@
 /**
- * SQL builders for the Quality SPC module (Backend FRD §2–§4). Pure functions.
+ * SQL builders for the Quality SPC module — GOLD layer. Pure functions.
  *
  * SPC scope (§0.1): department='Quality', category='SPC', plant='BANMORE'
- * (the SPC family label — filtering SPC on BTP returns nothing). All SPC rows
- * are granularity='Real-time'; time selection resolves to the latest snapshot
- * ≤ the requested date (§2.1), which is a separate MAX(date) query.
+ * (the SPC family label — filtering SPC on BTP returns nothing).
+ *
+ * Gold carries two distinct kinds of SPC row and they must never be mixed:
+ *
+ *   capability rows  granularity Day | Shift A | Shift B | Shift C,
+ *                    kpi_name '<parameter> <Cp|Cpk|Pp|Ppk>', one set per
+ *                    (date, machine, itemcode, parameter).
+ *   baseline rows    granularity 'Baseline', status 'Reference',
+ *                    kpi_name '<parameter> <UCL|LCL>' — the control limits.
+ *                    Written per (machine, parameter); the itemcode on these
+ *                    rows is incidental (the UCL and LCL of one parameter
+ *                    carry DIFFERENT itemcodes), so limits are looked up on
+ *                    machine + parameter only.
+ *
+ * Every capability query is granularity-scoped. Without it a single date
+ * returns Day and all three shifts at once and the four metric rows of a
+ * combo silently overwrite each other.
  */
 import { config } from "../../config.js";
 import {
@@ -15,6 +29,10 @@ import {
 } from "../normalize.js";
 
 const TABLE = () => config.quality.sqlTable;
+
+export const METRICS = ["Cp", "Cpk", "Pp", "Ppk"];
+export const LIMITS = ["UCL", "LCL"];
+export const GRAN_BASELINE = "Baseline";
 
 /** Always-on SPC scope predicate (§0.1). */
 function spcScope() {
@@ -31,11 +49,26 @@ function itemcodePredicate(recipe) {
     : `itemcode = ${escapeLiteral(recipe)}`;
 }
 
+/** Gold capability granularity token for a UI shift ("All" → Day). */
+export function spcGranularity(shift) {
+  const s = String(shift ?? "All").trim().toUpperCase();
+  if (s === "A" || s === "SHIFT A") return "Shift A";
+  if (s === "B" || s === "SHIFT B") return "Shift B";
+  if (s === "C" || s === "SHIFT C") return "Shift C";
+  return "Day";
+}
+
+function granularityPredicate(granularity) {
+  return `granularity = ${escapeLiteral(granularity)}`;
+}
+
 /**
- * Resolve the snapshot: the latest SPC date ≤ the requested date (§2.1).
- * With no date, the most recent snapshot overall. One row: { snapshot_date }.
+ * Resolve the snapshot: the latest capability date ≤ the requested date.
+ * Scoped to the requested granularity so "latest Shift B" never resolves to
+ * a Day row. Baseline rows are excluded — they carry the limits' own write
+ * date (a single monthly stamp) and would pin every snapshot to it.
  */
-export function spcSnapshotQuery(date) {
+export function spcSnapshotQuery(date, granularity = "Day") {
   const upTo = date
     ? ` AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(date))}`
     : "";
@@ -44,73 +77,96 @@ export function spcSnapshotQuery(date) {
   // is robust on both alasql and the upstream engine.
   return (
     `SELECT DISTINCT date AS snapshot_date FROM ${TABLE()} ` +
-    `WHERE ${spcScope()}${upTo} ORDER BY date DESC LIMIT 1`
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)}${upTo} ` +
+    `ORDER BY date DESC LIMIT 1`
   );
 }
 
 /**
- * Lean rows for the landing summary (§2.2): status only, no plot_data (which
- * is large and unneeded for the headline counts). Optional machine filter.
+ * Capability rows for a snapshot — the four metric rows of every combo.
+ * `plot_data` is deliberately not selected: it is empty in the live gold
+ * table and the chart points come from silver instead.
  */
-export function spcSummaryRowsQuery({ snapshot, machine }) {
+export function spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe }) {
   const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
+  const rc = recipe ? ` AND ${itemcodePredicate(recipe)}` : "";
+  const names = METRICS.map((m) => `kpi_name LIKE ${escapeLiteral(`% ${m}`)}`).join(" OR ");
   return (
-    `SELECT machine, itemcode, kpi_name, status FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc}`
+    `SELECT machine, itemcode, product_type, kpi_name, status, actual_value, unit_of_measurement ` +
+    `FROM ${TABLE()} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc}${rc} ` +
+    `AND (${names})`
+  );
+}
+
+/** Back-compat alias — the summary reads the same capability rows. */
+export const spcSummaryRowsQuery = spcCapabilityRowsQuery;
+export const spcWidgetsRowsQuery = spcCapabilityRowsQuery;
+
+/**
+ * The four metric rows of ONE combo (machine × recipe × parameter).
+ */
+export function spcDetailRowsQuery({ snapshot, granularity, machine, recipe, parameter }) {
+  const names = METRICS.map((m) => escapeLiteral(`${parameter} ${m}`)).join(", ");
+  return (
+    `SELECT machine, itemcode, product_type, kpi_name, status, actual_value, unit_of_measurement ` +
+    `FROM ${TABLE()} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
+    `AND machine = ${escapeLiteral(machine)} ` +
+    `AND ${itemcodePredicate(recipe)} ` +
+    `AND kpi_name IN (${names})`
+  );
+}
+
+/**
+ * Control limits (Mapping sheet, Step 3).
+ *
+ * Baseline rows are written periodically, so an exact date match usually
+ * returns nothing — this pulls every baseline for the machines in scope and
+ * lets the caller pick the newest one on or before the chart date. Selecting
+ * in JS rather than SQL keeps it portable across alasql (no QUALIFY / window
+ * functions) and lets the caller fall back honestly when the only baseline
+ * post-dates the chart.
+ *
+ * No itemcode filter: baseline rows are per machine + parameter.
+ */
+export function spcLimitsQuery({ machine, parameter } = {}) {
+  const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
+  const pc = parameter
+    ? ` AND kpi_name IN (${LIMITS.map((l) => escapeLiteral(`${parameter} ${l}`)).join(", ")})`
+    : ` AND (${LIMITS.map((l) => `kpi_name LIKE ${escapeLiteral(`% ${l}`)}`).join(" OR ")})`;
+  return (
+    `SELECT machine, kpi_name, actual_value, date AS baseline_date ` +
+    `FROM ${TABLE()} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(GRAN_BASELINE)}${mc}${pc}`
   );
 }
 
 /** Distinct filter option lists for a snapshot (§3). Sentinels are null already. */
-export function spcMachinesQuery({ snapshot }) {
+export function spcMachinesQuery({ snapshot, granularity }) {
   return (
     `SELECT DISTINCT machine FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND machine IS NOT NULL ORDER BY machine`
   );
 }
-export function spcRecipesQuery({ snapshot }) {
+export function spcRecipesQuery({ snapshot, granularity, machine }) {
+  const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
   return (
     `SELECT DISTINCT itemcode FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc} ` +
     `AND itemcode IS NOT NULL ORDER BY itemcode`
   );
 }
-export function spcProductTypesQuery({ snapshot }) {
+export function spcProductTypesQuery({ snapshot, granularity }) {
   return (
     `SELECT DISTINCT product_type FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND product_type IS NOT NULL ORDER BY product_type`
-  );
-}
-
-/**
- * Full rows (with plot_data) for the widget board (§3/§4). Conjunctive
- * machine + recipe filters narrow the combo set (117 → 13 in the FRD).
- */
-export function spcWidgetsRowsQuery({ snapshot, machine, recipe }) {
-  const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
-  const rc = recipe ? ` AND ${itemcodePredicate(recipe)}` : "";
-  return (
-    `SELECT machine, itemcode, kpi_name, status, actual_value ` +
-    `FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc}${rc}`
-  );
-}
-
-/**
- * The 4 metric rows of ONE combo (§4/§5): machine × recipe × parameter.
- * kpi_name is the parameter plus each metric suffix.
- */
-export function spcDetailRowsQuery({ snapshot, machine, recipe, parameter }) {
-  const names = ["Cp", "Cpk", "Pp", "Ppk"]
-    .map((m) => escapeLiteral(`${parameter} ${m}`))
-    .join(", ");
-  return (
-    `SELECT machine, itemcode, kpi_name, status, actual_value, unit_of_measurement, plot_data ` +
-    `FROM ${TABLE()} ` +
-    `WHERE ${spcScope()} AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
-    `AND machine = ${escapeLiteral(machine)} ` +
-    `AND ${itemcodePredicate(recipe)} ` +
-    `AND kpi_name IN (${names})`
   );
 }

@@ -93,7 +93,7 @@ export const config = {
   // API Production uses. Everything else — SQL builders, transformers,
   // controllers — is unchanged across the switch.
   quality: {
-    dataSource: optional("QUALITY_DATA_SOURCE", "excel"), // "excel" | "db"
+    dataSource: optional("QUALITY_DATA_SOURCE", "db"), // "excel" | "db"
     // Reference workbook (FRD §B): sheet `result`, 23 columns.
     excelPath: optional(
       "QUALITY_EXCEL_PATH",
@@ -108,7 +108,7 @@ export const config = {
     ),
     // SQL FROM target. For the excel source this is the in-memory alasql
     // table name; for upstream it becomes the Quality gold table path.
-    sqlTable: optional("QUALITY_SQL_TABLE", "quality_gold"),
+    sqlTable: optional("QUALITY_SQL_TABLE", "gold.gold"),
   },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),
   // Cache backing store. "memory" (default) is a Map in this process and is
