@@ -128,21 +128,23 @@ export function getProcessKpiHistory({
   return cachedQualityGet(`/quality/process/kpi-history?${params.toString()}`);
 }
 
-export function getSpcSummary({ date, machine } = {}) {
-  const params = new URLSearchParams({ plant: "BANMORE" });
+// The shift selects both the gold granularity row ("Shift A" vs "Day") and
+// the silver time window, so every SPC endpoint needs it — not just detail.
+export function getSpcSummary({ date, shift = "All", machine } = {}) {
+  const params = new URLSearchParams({ plant: "BANMORE", shift });
   if (date) params.set("date", date);
   if (machine && machine !== "All") params.set("machine", machine);
   return cachedQualityGet(`/quality/spc/summary?${params.toString()}`);
 }
 
-export function getSpcFilterOptions({ date } = {}) {
-  const params = new URLSearchParams({ plant: "BANMORE" });
+export function getSpcFilterOptions({ date, shift = "All" } = {}) {
+  const params = new URLSearchParams({ plant: "BANMORE", shift });
   if (date) params.set("date", date);
   return cachedQualityGet(`/quality/spc/filter-options?${params.toString()}`);
 }
 
-export function getSpcWidgets({ date, machine, recipe, headlineStatus } = {}) {
-  const params = new URLSearchParams({ plant: "BANMORE" });
+export function getSpcWidgets({ date, shift = "All", machine, recipe, headlineStatus } = {}) {
+  const params = new URLSearchParams({ plant: "BANMORE", shift });
   if (date) params.set("date", date);
   if (machine && machine !== "All") params.set("machine", machine);
   if (recipe && recipe !== "All") params.set("recipe", recipe);

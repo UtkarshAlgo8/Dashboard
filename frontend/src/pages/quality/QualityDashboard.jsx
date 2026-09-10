@@ -24,7 +24,6 @@ import {
   getProcessSummary,
   getSpcDetail,
   getSpcFilterOptions,
-  getSpcSummary,
   getSpcWidgets,
   PROCESS_KPI_NAME,
 } from "@/api/quality.js";
@@ -108,6 +107,21 @@ const C = {
   r: 8,
 };
 const rc = (v) => (v >= 90 ? C.gn : v >= 80 ? C.am : C.rd);
+
+/**
+ * SPC headline statuses, worst-first. Gold publishes five: Critical, Major,
+ * Warning, Healthy, Insufficient Data. `Major` is a marginal process — a real
+ * status, not a missing one — so it gets its own colour and pill rather than
+ * falling through to "Insufficient".
+ */
+const SPC_STATUS = {
+  Critical: { col: C.rd, pill: "Red", label: "Out of specification" },
+  Major: { col: C.ac, pill: "Marginal", label: "Marginal" },
+  Warning: { col: C.am, pill: "Yellow", label: "Not capable" },
+  Healthy: { col: C.gn, pill: "Green", label: "Capable" },
+  "Insufficient Data": { col: C.mu, pill: "Insufficient", label: "Insufficient" },
+};
+const spcStatus = (s) => SPC_STATUS[s] || SPC_STATUS["Insufficient Data"];
 const fmt = (n) => (typeof n === "number" ? n.toLocaleString("en-IN") : n);
 const productionCardBg = (color) =>
   color === C.rd
@@ -4299,6 +4313,7 @@ function StatusPill({ status }) {
     Rejected: { bg: C.rd + "18", fg: C.rd, t: "Rejected" },
     Manual: { bg: "#9CA3AF18", fg: "#6B7280", t: "Manual" },
     Insufficient: { bg: "#9CA3AF18", fg: "#6B7280", t: "Insufficient" },
+    Marginal: { bg: C.ac + "18", fg: C.ac, t: "Marginal" },
   };
   const s = map[status] || { bg: C.bd, fg: C.mu, t: status };
   return (
@@ -14699,8 +14714,13 @@ function spcPointClass(rules = []) {
 function LiveSpcChart({ title, chart, accent }) {
   const points = Array.isArray(chart?.points) ? chart.points : [];
   const [hover, setHover] = useState(null);
+  const scrollRef = useRef(null);
   const plotPoints = points.filter((p) => typeof p.value === "number");
   const values = plotPoints.map((p) => p.value);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [plotPoints.length]);
   if (!values.length)
     return (
       <Card title={title} accent={accent}>
@@ -14717,12 +14737,14 @@ function LiveSpcChart({ title, chart, accent }) {
       </Card>
     );
   const timeAxis = /\bX\b|X Chart|X Control/i.test(title || "");
-  const W = 720,
-    H = timeAxis ? 250 : 230,
+  const POINT_GAP = 34,
+    VIEW_W = 720,
+    H = timeAxis ? 262 : 230,
     padL = 48,
     padR = 70,
     padT = 18,
-    padB = timeAxis ? 48 : 28;
+    padB = timeAxis ? 60 : 28;
+  const W = Math.max(VIEW_W, padL + padR + (values.length - 1) * POINT_GAP);
   const pw = W - padL - padR,
     ph = H - padT - padB;
   const lo0 = Math.min(chart.lcl ?? Infinity, ...values),
@@ -14736,17 +14758,28 @@ function LiveSpcChart({ title, chart, accent }) {
   const hoverPoint = hover != null ? plotPoints[hover] : null;
   const hoverRules = hoverPoint?.rules || [];
   const hoverClass = spcPointClass(hoverRules);
+  const BOX_W = 224;
   const tx =
     hover != null
-      ? Math.min(Math.max(X(hover) - 82, padL), padL + pw - 164)
+      ? Math.min(
+          Math.max(X(hover) - BOX_W / 2, padL),
+          padL + pw - BOX_W,
+        )
       : 0;
   const ty = hoverPoint ? Math.max(Y(hoverPoint.value) - 82, padT + 4) : 0;
   return (
     <Card title={title} accent={accent}>
+      <div ref={scrollRef} style={{ overflowX: "auto" }}>
       <svg
         viewBox={"0 0 " + W + " " + H}
         onMouseLeave={() => setHover(null)}
-        style={{ width: "100%", height: "auto", display: "block" }}
+        style={{
+          width: W,
+          minWidth: "100%",
+          height: "auto",
+          display: "block",
+          overflow: "visible",
+        }}
       >
         {chart.ucl != null && (
           <line
@@ -14813,20 +14846,21 @@ function LiveSpcChart({ title, chart, accent }) {
           />
         ))}
         {plotPoints.map((p, i) => {
-          const every = timeAxis
-            ? Math.max(1, Math.ceil(plotPoints.length / 10))
-            : 2;
+          const minLabelPx = timeAxis ? 56 : 40;
+          const every = Math.max(1, Math.round(minLabelPx / POINT_GAP));
           if (i % every !== 0 && i !== plotPoints.length - 1) return null;
           const label = timeAxis ? p.time || p.index : p.index;
+          const ly = H - 18;
           return (
             <text
               key={"t" + p.index}
               x={X(i)}
-              y={H - 10}
-              fontSize="8.5"
-              fill={C.mu}
+              y={ly}
+              fontSize="9.5"
+              fontWeight={timeAxis ? "600" : "400"}
+              fill={C.tx}
               textAnchor={timeAxis ? "end" : "middle"}
-              transform={timeAxis ? `rotate(-35 ${X(i)} ${H - 10})` : undefined}
+              transform={timeAxis ? `rotate(35 ${X(i)} ${ly})` : undefined}
             >
               {label}
             </text>
@@ -14872,7 +14906,7 @@ function LiveSpcChart({ title, chart, accent }) {
             <rect
               x={tx}
               y={ty}
-              width="164"
+              width={BOX_W}
               height={hoverRules.length ? 76 : 58}
               rx="6"
               fill="#fff"
@@ -14903,7 +14937,7 @@ function LiveSpcChart({ title, chart, accent }) {
               {hoverRules.length ? hoverClass.label : "No Nelson violation"}
             </text>
             {hoverRules.length > 0 && (
-              <text x={tx + 9} y={ty + 63} fontSize="10" fill={C.md}>
+              <text x={tx + 9} y={ty + 63} fontSize="9.5" fill={C.md}>
                 {"Rules: " +
                   hoverRules.map((r) => "R" + r).join(", ") +
                   " · z " +
@@ -14913,6 +14947,7 @@ function LiveSpcChart({ title, chart, accent }) {
           </g>
         )}
       </svg>
+      </div>
       <div
         style={{
           fontSize: 11.5,
@@ -14932,31 +14967,117 @@ function LiveSpcChart({ title, chart, accent }) {
         <span style={{ color: C.am }}>R5/R6/R8 Warning</span>
         <span style={{ color: C.bl }}>R2/R3/R4/R7 Run / Trend</span>
       </div>
+      {/* Where the limits came from. The dots are silver readings but the
+          band judging them is a gold baseline, and the two can disagree —
+          so say which baseline, and say when there is no usable pair at all
+          (Nelson is skipped there, and an unlabelled chart would hide it). */}
+      <div
+        style={{
+          fontSize: 11,
+          color: chart.limits_valid === false ? C.rd : C.mu,
+          marginTop: 4,
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        {chart.limits_source && <span>Limits: {chart.limits_source}</span>}
+        {chart.subgroup_size != null && (
+          <span>Subgroup n = {chart.subgroup_size}</span>
+        )}
+        {chart.sigma != null && <span>&sigma; {_spcFmt(chart.sigma)}</span>}
+        {chart.baseline_date && (
+          <span>
+            Baseline {chart.baseline_date}
+            {chart.baseline_on_or_before === false
+              ? " (later than the selected date)"
+              : ""}
+          </span>
+        )}
+        {chart.limits_valid === false && (
+          <span style={{ fontWeight: 700 }}>
+            Limits unusable{chart.limits_note ? ` — ${chart.limits_note}` : ""}.
+            Nelson rules not evaluated.
+          </span>
+        )}
+      </div>
     </Card>
   );
 }
 
 function LiveHistogram({ histogram }) {
   const bins = Array.isArray(histogram?.bins) ? histogram.bins : [];
+  const [hoverBin, setHoverBin] = useState(null);
   if (!bins.length) return null;
   const max = Math.max(...bins.map((b) => b.count || 0), 1);
+  const curveX = Array.isArray(histogram?.curve?.x) ? histogram.curve.x : [];
+  const curveY = Array.isArray(histogram?.curve?.y) ? histogram.curve.y : [];
+  const curveMax = Math.max(...curveY, 0);
   const refs = [
     { key: "lsl", label: "LSL", value: histogram.lsl, color: C.rd },
+    { key: "target", label: "Target", value: histogram.target, color: C.pp },
+    { key: "mean", label: "Mean", value: histogram.mean, color: C.bl },
     { key: "median", label: "Median", value: histogram.median, color: C.gn },
     { key: "usl", label: "USL", value: histogram.usl, color: C.rd },
   ].filter((r) => typeof r.value === "number");
-  const lo = Math.min(...bins.map((b) => b.from), ...refs.map((r) => r.value));
-  const hi = Math.max(...bins.map((b) => b.to), ...refs.map((r) => r.value));
+  const sigmaGuides = [histogram.sigma_minus_3, histogram.sigma_plus_3].filter(
+    (v) => typeof v === "number",
+  );
+  const lo = Math.min(
+    ...bins.map((b) => b.from),
+    ...curveX,
+    ...refs.map((r) => r.value),
+    ...sigmaGuides,
+  );
+  const hi = Math.max(
+    ...bins.map((b) => b.to),
+    ...curveX,
+    ...refs.map((r) => r.value),
+    ...sigmaGuides,
+  );
   const W = 760,
-    H = 205,
     padL = 36,
     padR = 22,
-    padT = 24,
     padB = 24;
-  const pw = W - padL - padR,
-    ph = H - padT - padB;
+  const pw = W - padL - padR;
   const X = (v) => padL + ((v - lo) / (hi - lo || 1)) * pw;
+  const refRows = [];
+  {
+    const rowRight = [];
+    [...refs]
+      .sort((a, b) => X(a.value) - X(b.value))
+      .forEach((r) => {
+        const text = r.label + " " + _spcFmt(r.value);
+        const halfW = (text.length * 5.6 + 6) / 2;
+        const x = X(r.value);
+        let row = rowRight.findIndex((right) => x - halfW > right + 4);
+        if (row === -1) {
+          row = rowRight.length;
+          rowRight.push(x + halfW);
+        } else {
+          rowRight[row] = x + halfW;
+        }
+        refRows.push({ key: r.key, row });
+      });
+  }
+  const rowCount = Math.max(1, ...refRows.map((r) => r.row + 1));
+  const padT = 16 + rowCount * 13;
+  const ph = 157;
+  const H = padT + ph + padB;
   const Y = (c) => padT + ph - (c / max) * ph;
+  const YCurve = (v) =>
+    padT + ph - (curveMax > 0 ? (v / curveMax) * ph * 0.92 : 0);
+  const curvePoints =
+    curveX.length && curveY.length
+      ? curveX
+          .map((x, i) =>
+            typeof x === "number" && typeof curveY[i] === "number"
+              ? `${X(x)},${YCurve(curveY[i])}`
+              : null,
+          )
+          .filter(Boolean)
+          .join(" ")
+      : "";
   return (
     <Card
       title="Process Capability — distribution vs specification"
@@ -14973,6 +15094,7 @@ function LiveHistogram({ histogram }) {
         <svg
           viewBox={"0 0 " + W + " " + H}
           style={{ width: "100%", height: "auto", display: "block" }}
+          onMouseLeave={() => setHoverBin(null)}
         >
           <line
             x1={padL}
@@ -14986,25 +15108,62 @@ function LiveHistogram({ histogram }) {
             const x = X(b.from),
               w = Math.max(1, X(b.to) - X(b.from) - 1),
               y = Y(b.count || 0);
+            const hovered = hoverBin === i;
             return (
-              <rect
-                key={i}
-                x={x}
-                y={y}
-                width={w}
-                height={padT + ph - y}
-                fill={b.out_of_spec ? C.rd : C.bl}
-                opacity={b.out_of_spec ? 0.9 : 0.58}
-                rx="2"
-              >
-                <title>{`${_spcFmt(b.from)} - ${_spcFmt(b.to)}: ${b.count}`}</title>
-              </rect>
+              <g key={i}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={padT + ph - y}
+                  fill={b.out_of_spec ? C.rd : C.bl}
+                  opacity={hovered ? 1 : b.out_of_spec ? 0.9 : 0.58}
+                  rx="2"
+                />
+                <rect
+                  x={x}
+                  y={padT}
+                  width={w}
+                  height={ph}
+                  fill="transparent"
+                  style={{ cursor: "crosshair" }}
+                  onMouseEnter={() => setHoverBin(i)}
+                />
+              </g>
             );
           })}
-          {refs.map((r, i) => {
-            const x = X(r.value);
+          {curvePoints ? (
+            <polyline
+              points={curvePoints}
+              fill="none"
+              stroke={C.pp}
+              strokeWidth="2"
+              opacity="0.85"
+              pointerEvents="none"
+            />
+          ) : null}
+          {sigmaGuides.map((v, i) => {
+            const x = X(v);
             return (
-              <g key={r.key}>
+              <line
+                key={`sigma-${i}`}
+                x1={x}
+                y1={padT}
+                x2={x}
+                y2={padT + ph}
+                stroke={C.mu}
+                strokeWidth="1"
+                strokeDasharray="2 3"
+                opacity="0.55"
+                pointerEvents="none"
+              />
+            );
+          })}
+          {refs.map((r) => {
+            const x = X(r.value);
+            const row = refRows.find((rr) => rr.key === r.key)?.row ?? 0;
+            return (
+              <g key={r.key} pointerEvents="none">
                 <line
                   x1={x}
                   y1={padT}
@@ -15016,7 +15175,7 @@ function LiveHistogram({ histogram }) {
                 />
                 <text
                   x={x}
-                  y={padT - 7 + (i % 2) * 11}
+                  y={padT - 8 - (rowCount - 1 - row) * 13}
                   fontSize="9.5"
                   fill={r.color}
                   fontWeight="700"
@@ -15027,13 +15186,82 @@ function LiveHistogram({ histogram }) {
               </g>
             );
           })}
+          {hoverBin != null &&
+            bins[hoverBin] &&
+            (() => {
+              const b = bins[hoverBin];
+              const bx = X(b.from),
+                bw = Math.max(1, X(b.to) - X(b.from) - 1),
+                by = Y(b.count || 0);
+              const boxW = 132,
+                boxH = 40;
+              const tx = Math.min(
+                Math.max(bx + bw / 2 - boxW / 2, padL),
+                padL + pw - boxW,
+              );
+              const ty = Math.max(by - boxH - 6, 2);
+              return (
+                <g pointerEvents="none">
+                  <rect
+                    x={tx}
+                    y={ty}
+                    width={boxW}
+                    height={boxH}
+                    rx="6"
+                    fill="#fff"
+                    stroke={b.out_of_spec ? C.rd : C.bl}
+                    strokeWidth="1.2"
+                  />
+                  <text x={tx + 8} y={ty + 16} fontSize="10" fill={C.mu}>
+                    {_spcFmt(b.from) + " – " + _spcFmt(b.to)}
+                  </text>
+                  <text
+                    x={tx + 8}
+                    y={ty + 31}
+                    fontSize="11"
+                    fontWeight="800"
+                    fill={C.tx}
+                  >
+                    {"Count: " + b.count}
+                  </text>
+                </g>
+              );
+            })()}
         </svg>
       </div>
       <div style={{ fontSize: 11.5, color: C.mu, marginTop: 6 }}>
         Sample size {histogram.sample_size ?? "—"} · Mean{" "}
         {histogram.mean != null ? _spcFmt(histogram.mean) : "—"} · Median{" "}
         {histogram.median != null ? _spcFmt(histogram.median) : "—"} · Std{" "}
-        {histogram.std != null ? _spcFmt(histogram.std) : "—"}
+        {histogram.std != null ? _spcFmt(histogram.std) : "—"} · OOS{" "}
+        {/* With no spec window there is nothing to be out of, so the count is
+            unknown rather than zero — "OOS 0" would read as a clean process. */}
+        {histogram.spec_limits_available
+          ? (histogram.out_of_spec?.count ?? 0)
+          : "—"}
+      </div>
+      {/* Only Belt 1 Length has a documented tolerance; the rest are either
+          extended from it ("assumed") or have none. An invented spec window
+          is worse than a missing one, so the chart draws no USL/LSL and this
+          line says why. */}
+      <div style={{ fontSize: 11, color: C.mu, marginTop: 3 }}>
+        {histogram.spec_limits_available ? (
+          <span
+            style={{
+              color: histogram.tolerance_provenance === "assumed" ? C.am : C.mu,
+            }}
+          >
+            Spec window: {histogram.spec_source}
+            {histogram.tolerance_provenance === "assumed"
+              ? " · tolerance assumed, not plant-documented"
+              : ""}
+          </span>
+        ) : (
+          <span>
+            Spec limits not shown
+            {histogram.spec_note ? ` — ${histogram.spec_note}` : ""}
+          </span>
+        )}
       </div>
     </Card>
   );
@@ -15043,9 +15271,10 @@ function LiveSPCOverview({ date, shift, onSelect }) {
   const [machine, setMachine] = useState("All");
   const [recipe, setRecipe] = useState("All");
   const [headline, setHeadline] = useState("All");
-  const [summary, setSummary] = useState(null);
   const [options, setOptions] = useState({ machines: [], recipes: [] });
+  const [baseWidgets, setBaseWidgets] = useState([]);
   const [widgets, setWidgets] = useState([]);
+  const [snapshotDate, setSnapshotDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -15053,15 +15282,23 @@ function LiveSPCOverview({ date, shift, onSelect }) {
     setLoading(true);
     setError(null);
     Promise.all([
-      getSpcSummary({ date, machine }),
-      getSpcFilterOptions({ date }),
-      getSpcWidgets({ date, machine, recipe, headlineStatus: headline }),
+      getSpcFilterOptions({ date, shift }),
+      getSpcWidgets({ date, shift, machine, recipe }),
+      getSpcWidgets({ date, shift, machine, recipe, headlineStatus: headline }),
     ])
-      .then(([sum, opt, board]) => {
+      .then(([opt, baseBoard, board]) => {
         if (cancelled) return;
-        setSummary(sum || null);
         setOptions(opt || { machines: [], recipes: [] });
+        setBaseWidgets(
+          Array.isArray(baseBoard?.widgets) ? baseBoard.widgets : [],
+        );
         setWidgets(Array.isArray(board?.widgets) ? board.widgets : []);
+        setSnapshotDate(
+          board?.context?.snapshot_date ??
+            baseBoard?.context?.snapshot_date ??
+            opt?.context?.snapshot_date ??
+            null,
+        );
       })
       .catch((err) => {
         if (!cancelled) setError(err);
@@ -15073,22 +15310,25 @@ function LiveSPCOverview({ date, shift, onSelect }) {
       cancelled = true;
     };
   }, [date, shift, machine, recipe, headline]);
+  const baseCounts = baseWidgets.reduce(
+    (acc, w) => {
+      acc.total += 1;
+      if (w.headline_status === "Critical") acc.critical += 1;
+      else if (w.headline_status === "Major") acc.major += 1;
+      else if (w.headline_status === "Warning") acc.warning += 1;
+      else if (w.headline_status === "Healthy") acc.healthy += 1;
+      else acc.insufficient += 1;
+      return acc;
+    },
+    { total: 0, critical: 0, major: 0, warning: 0, healthy: 0, insufficient: 0 },
+  );
   const tiles = [
-    ["Processes", summary?.total_parameters ?? 0, C.tx, "All"],
-    [
-      "Out of specification",
-      summary?.out_of_specification ?? 0,
-      C.rd,
-      "Critical",
-    ],
-    ["Not capable", summary?.not_capable ?? 0, C.am, "Warning"],
-    ["Capable", summary?.capable ?? 0, C.gn, "Healthy"],
-    [
-      "Insufficient",
-      summary?.insufficient_data ?? 0,
-      C.mu,
-      "Insufficient Data",
-    ],
+    ["Processes", baseCounts.total, C.tx, "All"],
+    ["Out of specification", baseCounts.critical, C.rd, "Critical"],
+    ["Marginal", baseCounts.major, C.ac, "Major"],
+    ["Not capable", baseCounts.warning, C.am, "Warning"],
+    ["Capable", baseCounts.healthy, C.gn, "Healthy"],
+    ["Insufficient", baseCounts.insufficient, C.mu, "Insufficient Data"],
   ];
   const sel = {
     padding: "5px 10px",
@@ -15212,9 +15452,17 @@ function LiveSPCOverview({ date, shift, onSelect }) {
           </button>
         )}
         <span style={{ marginLeft: "auto", fontSize: 11.5, color: C.mu }}>
-          {loading ? "Fetching SPC..." : `Showing ${widgets.length} charts`}
+          {loading
+            ? "Fetching SPC..."
+            : `Showing ${widgets.length} of ${baseCounts.total} charts`}
         </span>
       </div>
+      {snapshotDate ? (
+        <div style={{ fontSize: 11.5, color: C.mu }}>
+          Snapshot {snapshotDate}. SPC rows use the latest available snapshot
+          on or before the selected date.
+        </div>
+      ) : null}
       {!loading && widgets.length === 0 ? (
         <div
           style={{
@@ -15241,14 +15489,7 @@ function LiveSPCOverview({ date, shift, onSelect }) {
           }}
         >
           {widgets.map((w, i) => {
-            const col =
-              w.headline_status === "Critical"
-                ? C.rd
-                : w.headline_status === "Warning"
-                  ? C.am
-                  : w.headline_status === "Healthy"
-                    ? C.gn
-                    : C.mu;
+            const col = spcStatus(w.headline_status).col;
             return (
               <div
                 key={`${w.machine}|${w.recipe}|${w.parameter}|${i}`}
@@ -15304,15 +15545,7 @@ function LiveSPCOverview({ date, shift, onSelect }) {
                     </div>
                   </div>
                   <StatusPill
-                    status={
-                      w.headline_status === "Critical"
-                        ? "Red"
-                        : w.headline_status === "Warning"
-                          ? "Yellow"
-                          : w.headline_status === "Healthy"
-                            ? "Green"
-                            : "Insufficient"
-                    }
+                    status={spcStatus(w.headline_status).pill}
                   />
                 </div>
                 {w.control_chart ? (
@@ -15327,8 +15560,8 @@ function LiveSPCOverview({ date, shift, onSelect }) {
                       color: C.mu,
                     }}
                   >
-                    Insufficient sample size{" "}
-                    {w.insufficient?.sample_size ?? "—"}
+                    {w.insufficient?.reason ||
+                      `Insufficient sample size ${w.insufficient?.sample_size ?? "—"}`}
                   </div>
                 )}
                 <div
@@ -15346,12 +15579,63 @@ function LiveSPCOverview({ date, shift, onSelect }) {
                   <span style={{ color: C.mu }}>
                     Cpk <b style={{ color: col }}>{w.cpk ?? "—"}</b>
                   </span>
+                  {w.control_chart && (
+                    <span style={{ color: C.mu, marginLeft: "auto" }}>
+                      {w.subgroups} subgroups · {w.sample_size} readings
+                    </span>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Where the numbers on this page came from. The capability tiles are gold and
+ * the chart dots are silver readings, so the page names the silver table,
+ * column and window it actually read — the two layers are only comparable if
+ * you can see which window produced the dots.
+ */
+function _SpcMeasurement({ m }) {
+  const items = [
+    ["Source", m.source ? `${m.source}.${m.value_column}` : "not mapped"],
+    ["Readings", m.readings ?? "—"],
+    [
+      "Subgroups",
+      m.subgroups != null
+        ? `${m.subgroups} × n=${m.subgroup_size}` +
+          (m.readings_used != null && m.readings_used !== m.readings
+            ? ` (${m.readings - m.readings_used} readings dropped as a partial subgroup)`
+            : "")
+        : "—",
+    ],
+    ["Window", m.window ? `${m.window.from} → ${m.window.to}` : "—"],
+  ];
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 18,
+        flexWrap: "wrap",
+        padding: "8px 12px",
+        background: C.c2,
+        border: "1px solid " + C.bd,
+        borderRadius: 6,
+        fontSize: 11.5,
+        color: C.md,
+      }}
+    >
+      {items.map(([k, v]) => (
+        <span key={k}>
+          <span style={{ color: C.mu, fontWeight: 600 }}>{k}: </span>
+          {v}
+        </span>
+      ))}
+      {m.note && <span style={{ color: C.mu, fontStyle: "italic" }}>{m.note}</span>}
     </div>
   );
 }
@@ -15401,6 +15685,8 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
   const cap = detail?.capability || {};
   const capCol = (v) =>
     v == null ? C.mu : v < 1 ? C.rd : v < 1.33 ? C.am : C.gn;
+  const snapshotDate = detail?.context?.snapshot_date;
+  const shiftSupported = detail?.context?.shift_supported;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div
@@ -15432,6 +15718,8 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
           </div>
           <div style={{ fontSize: 12, color: C.mu }}>
             {selection.machine + " · " + selection.recipe}
+            {snapshotDate ? ` · Snapshot ${snapshotDate}` : ""}
+            {shiftSupported === false ? " · All shifts" : ""}
           </div>
         </div>
         <span style={{ marginLeft: "auto" }}>
@@ -15441,15 +15729,7 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
             </span>
           ) : (
             <StatusPill
-              status={
-                cap.headline_status === "Critical"
-                  ? "Red"
-                  : cap.headline_status === "Warning"
-                    ? "Yellow"
-                    : cap.headline_status === "Healthy"
-                      ? "Green"
-                      : "Insufficient"
-              }
+              status={spcStatus(cap.headline_status).pill}
             />
           )}
         </span>
@@ -15465,7 +15745,13 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
                 <_SpcTile
                   key={k}
                   label={k.toUpperCase()}
-                  val={loading ? "..." : (cell.value ?? "—")}
+                  val={
+                    loading
+                      ? "..."
+                      : typeof cell.value === "number"
+                        ? cell.value.toFixed(2)
+                        : (cell.value ?? "—")
+                  }
                   sub={cell.status || ""}
                   col={capCol(cell.value)}
                 />
@@ -15478,11 +15764,15 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
               col={C.tx}
             />
           </div>
+          {detail?.measurement && <_SpcMeasurement m={detail.measurement} />}
           {detail?.insufficient ? (
             <Card title="Insufficient Data" accent={C.am}>
               <div style={{ fontSize: 13, color: C.md }}>
-                Sample size {detail.insufficient.sample_size ?? "—"} is below
-                the capability gate for live SPC charts.
+                {detail.insufficient.reason
+                  ? detail.insufficient.reason[0].toUpperCase() +
+                    detail.insufficient.reason.slice(1) +
+                    "."
+                  : "No measurements available for this selection."}
               </div>
             </Card>
           ) : null}
@@ -15493,6 +15783,9 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
               accent={C.pp}
             />
           )}
+          {Array.isArray(detail?.alerts) && detail.alerts.length ? (
+            <LiveSpcAlerts alerts={detail.alerts} />
+          ) : null}
           {detail?.r_chart && (
             <LiveSpcChart
               title="R Chart — subgroup range"
@@ -15504,6 +15797,76 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
         </>
       )}
     </div>
+  );
+}
+
+function LiveSpcAlerts({ alerts }) {
+  const col = (severity) =>
+    severity === "Out of Control"
+      ? C.rd
+      : severity === "Warning"
+        ? C.am
+        : C.bl;
+  return (
+    <Card title="Nelson Rule Alert Feed" accent={C.pp}>
+      <div style={{ display: "grid", gap: 8 }}>
+        {alerts.slice(0, 12).map((a) => {
+          const color = col(a.severity);
+          return (
+            <div
+              key={a.alert_id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr auto",
+                gap: 10,
+                alignItems: "center",
+                padding: "9px 10px",
+                border: "1px solid " + color + "35",
+                borderRadius: 8,
+                background: color + "0D",
+              }}
+            >
+              <span
+                style={{
+                  minWidth: 34,
+                  textAlign: "center",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color,
+                }}
+              >
+                R{a.rule}
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: C.tx,
+                  }}
+                >
+                  {a.chart} chart · {a.severity}
+                </span>
+                <span style={{ display: "block", fontSize: 11.5, color: C.mu }}>
+                  Points {a.points?.first}
+                  {a.points?.last !== a.points?.first
+                    ? `-${a.points?.last}`
+                    : ""}{" "}
+                  · {a.time?.first || "time unavailable"}
+                  {a.time?.last && a.time.last !== a.time.first
+                    ? ` to ${a.time.last}`
+                    : ""}
+                </span>
+              </span>
+              <span style={{ fontSize: 11, color: C.mu, fontWeight: 700 }}>
+                {a.chart}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
