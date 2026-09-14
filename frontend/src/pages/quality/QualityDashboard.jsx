@@ -16113,8 +16113,8 @@ export default function QualityDashboard({ plant, onBack }) {
   // production). The active tab is the current Quality sub-section.
   const subTabItems = [
     { id: "process", label: "Process", accent: C.bl },
-    { id: "product", label: "Product", accent: C.tl },
-    { id: "complaint", label: "Customer Complaint", accent: C.rd },
+    { id: "product", label: "Product", accent: C.tl, enabled: false },
+    { id: "complaint", label: "Customer Complaint", accent: C.rd, enabled: false },
     { id: "spc", label: "SPC", accent: C.pp },
   ];
   const onSubTabChange = (id) => {
@@ -16172,7 +16172,11 @@ export default function QualityDashboard({ plant, onBack }) {
         onExport={onHeaderExport}
         asOf={null}
         lastUpdatedAt={null}
-        categoryTabs={subTabItems.map((t) => ({ id: t.id, label: t.label }))}
+        categoryTabs={subTabItems.map((t) => ({
+          id: t.id,
+          label: t.label,
+          enabled: t.enabled,
+        }))}
         activeCategory={tab}
         onCategoryChange={onSubTabChange}
         tyreTypes={[]}
