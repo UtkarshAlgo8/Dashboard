@@ -4982,7 +4982,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, granularity, summaryRows }) {
           }}
         >
           <a
-            href="http://192.168.225.62:3000/process-audit-logbook"
+            href="http://35.208.174.2:3001/"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -5262,7 +5262,7 @@ function ProcessDrillPanel({
             }}
           >
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -5516,7 +5516,7 @@ function ProcessDrillPanel({
             }}
           >
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -5608,7 +5608,7 @@ function ProcessDrillPanel({
             }}
           >
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -6381,7 +6381,7 @@ function ProcessDrillPanel({
               }
             </span>
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -14616,7 +14616,8 @@ function LiveSpcMini({ chart }) {
     return (
       <div
         style={{
-          height: 58,
+          height: "100%",
+          width: "100%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -14645,7 +14646,7 @@ function LiveSpcMini({ chart }) {
   return (
     <svg
       viewBox={"0 0 " + W + " " + H}
-      style={{ width: "100%", height: "auto", marginTop: 6 }}
+      style={{ width: "100%", height: "100%" }}
     >
       {chart.ucl != null && (
         <line
@@ -15547,6 +15548,8 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
                   boxShadow:
                     "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
                   minHeight: 150,
+                  display: "flex",
+                  flexDirection: "column",
                 }}
               >
                 <div
@@ -15586,42 +15589,44 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
                     status={spcStatus(w.headline_status).pill}
                   />
                 </div>
-                {w.control_chart ? (
-                  <LiveSpcMini chart={w.control_chart} />
-                ) : (
-                  <div
-                    style={{
-                      height: 58,
-                      display: "flex",
-                      alignItems: "center",
-                      fontSize: 12,
-                      color: C.mu,
-                    }}
-                  >
-                    {w.insufficient?.reason ||
-                      `Insufficient sample size ${w.insufficient?.sample_size ?? "—"}`}
-                  </div>
-                )}
+                <div
+                  style={{
+                    height: 64,
+                    marginTop: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    fontSize: 12,
+                    color: C.mu,
+                  }}
+                >
+                  {w.control_chart ? (
+                    <LiveSpcMini chart={w.control_chart} />
+                  ) : (
+                    w.insufficient?.reason ||
+                    `Insufficient sample size ${w.insufficient?.sample_size ?? "—"}`
+                  )}
+                </div>
                 <div
                   style={{
                     display: "flex",
                     gap: 10,
-                    marginTop: 6,
+                    marginTop: "auto",
+                    paddingTop: 6,
                     fontSize: 11.5,
                     alignItems: "center",
                   }}
                 >
                   <span style={{ color: C.mu }}>
-                    Cp <b style={{ color: col }}>{w.cp ?? "—"}</b>
+                    Cp <b style={{ color: col }}>{typeof w.cp === "number" ? w.cp.toFixed(2) : "—"}</b>
                   </span>
                   <span style={{ color: C.mu }}>
-                    Cpk <b style={{ color: col }}>{w.cpk ?? "—"}</b>
+                    Cpk <b style={{ color: col }}>{typeof w.cpk === "number" ? w.cpk.toFixed(2) : "—"}</b>
                   </span>
-                  {w.control_chart && (
-                    <span style={{ color: C.mu, marginLeft: "auto" }}>
-                      {w.subgroups} subgroups · {w.sample_size} readings
-                    </span>
-                  )}
+                  <span style={{ color: C.mu, marginLeft: "auto" }}>
+                    {w.subgroups ?? "—"} subgroups · {w.sample_size ?? "—"} readings
+                  </span>
                 </div>
               </div>
             );
@@ -15935,13 +15940,15 @@ export default function QualityDashboard({ plant, onBack }) {
   const [tab, setTab] = useState("process");
   const [openKpi, setOpenKpi] = useState(null);
   const [sub, setSub] = useState("");
-  const [tf, setTf] = useState("today");
+  const [tf, setTf] = useState("month");
   const [shift, setShift] = useState("All");
   // Calendar-driven defaults in IST. Whatever the user picks in the dropdown
   // (including months with no gold data — the cards will render NA) is what
-  // shows; we never pin to a hardcoded "data date".
-  const [tfFrom, setTfFrom] = useState(todayInIST());
-  const [tfTo, setTfTo] = useState(todayInIST());
+  // shows; we never pin to a hardcoded "data date". Default filter is the
+  // current calendar month.
+  const _defaultMonthRange = monthRangeFromKey(currentMonthKeyInIST());
+  const [tfFrom, setTfFrom] = useState(_defaultMonthRange.from);
+  const [tfTo, setTfTo] = useState(_defaultMonthRange.to);
   const [tfMonth, setTfMonth] = useState(currentMonthKeyInIST());
   const [tyreType, setTyreType] = useState(
     isBanmorePlant(plant) ? "PCR" : "All",
