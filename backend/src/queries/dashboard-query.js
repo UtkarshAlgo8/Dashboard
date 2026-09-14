@@ -29,7 +29,6 @@
 import { config } from "../config.js";
 import {
   plantDepartmentPredicate,
-  plantSqlTable,
   normalizeGranularity,
   allowedGranularities,
   excludeUnknownKpiPredicate,
@@ -42,6 +41,12 @@ import {
   tyreTypePredicate,
   TYRE_TYPE_ALL,
 } from "../utils/normalize.js";
+import { goldSource } from "./gold-source.js";
+import { DATE_YYYYMMDD, isoToYyyymmdd } from "./sql-date.js";
+
+// Re-exported so existing importers (e.g. static.controller.js) keep
+// working unchanged now that the definitions live in sql-date.js.
+export { DATE_YYYYMMDD, isoToYyyymmdd };
 
 export const ALLOWED_CONTEXT_KEYS = new Set([
   // plant + department are NO LONGER accepted from the caller — they are
@@ -242,25 +247,6 @@ const CONTEXT_ALLOW_LISTS = {
 };
 
 /**
- * SQL expression that normalizes the `date` column to a sortable,
- * comparable YYYYMMDD string REGARDLESS of stored type/format. The live
- * gold_dummy stores `date` as a real DATE type; older/CSV-backed envs
- * store it as a STRING in ISO `yyyy-mm-dd` or `DD-MM-YYYY`. We:
- *   1. CAST to VARCHAR first — SUBSTRING needs VARCHAR, and a DATE casts
- *      to ISO "yyyy-mm-dd"; a string passes through unchanged.
- *   2. Detect the format by dash position rather than assuming one:
- *        ISO         "2026-04-01" → dash at char 5 → YYYY MM DD inline
- *        DD-MM-YYYY  "01-04-2026" → dash at char 3 → reorder to YYYYMMDD
- * Engine-agnostic (Athena / DuckDB / Trino). No year/month/day column
- * predicate (those trigger upstream partition-path lookups that fail).
- */
-const DATE_STR = "CAST(date AS VARCHAR)";
-export const DATE_YYYYMMDD =
-  `(CASE WHEN SUBSTRING(${DATE_STR}, 5, 1) = '-' ` +
-  `THEN SUBSTRING(${DATE_STR}, 1, 4) || SUBSTRING(${DATE_STR}, 6, 2) || SUBSTRING(${DATE_STR}, 9, 2) ` +
-  `ELSE SUBSTRING(${DATE_STR}, 7, 4) || SUBSTRING(${DATE_STR}, 4, 2) || SUBSTRING(${DATE_STR}, 1, 2) END)`;
-
-/**
  * The gold table's 23 columns, in order. Listed explicitly because the
  * de-duplication below wraps the scan in a sub-query with a ROW_NUMBER()
  * helper column — selecting `*` from that sub-query would leak the helper
@@ -402,11 +388,6 @@ const DEDUPE_PARTITION = [
   "remarks",
   "status",
 ];
-
-/** ISO yyyy-mm-dd → YYYYMMDD digit string for comparison literals. */
-function isoToYyyymmdd(iso) {
-  return iso.replaceAll("-", "");
-}
 
 export class QueryValidationError extends Error {
   constructor(message) {
@@ -603,7 +584,7 @@ export function resolveGranularity(rawValue, isRangeMode = false) {
  * One cheap grouped query replaces N per-card lookups.
  */
 export function buildLatestDateQuery({ plantId = "banmore" } = {}) {
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const table = goldSource({ plantId, fromKey: null, toKey: null });
   const where = [
     plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
@@ -636,7 +617,7 @@ export function buildLatestDateQuery({ plantId = "banmore" } = {}) {
  * labels the day rather than rendering the artefact.
  */
 export function buildShiftCoverageQuery({ plantId = "banmore" } = {}) {
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const table = goldSource({ plantId, fromKey: null, toKey: null });
   const where = [
     plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
@@ -943,7 +924,23 @@ function buildScopeWhere({
     where.push(`${key} = ${escapeLiteral(value)}`);
   }
 
-  return where;
+  return { where, timeScope };
+}
+
+/**
+ * Resolved date scope (from resolveDatePredicate) → {fromKey, toKey}
+ * YYYYMMDD digit strings for goldSource's window resolution. Either side
+ * is null when that bound is open-ended.
+ */
+function timeScopeWindow(timeScope) {
+  if (timeScope.mode === "SINGLE_DAY") {
+    const key = timeScope.date ? isoToYyyymmdd(timeScope.date) : null;
+    return { fromKey: key, toKey: key };
+  }
+  return {
+    fromKey: timeScope.from ? isoToYyyymmdd(timeScope.from) : null,
+    toKey: timeScope.to ? isoToYyyymmdd(timeScope.to) : null,
+  };
 }
 
 /**
@@ -980,7 +977,7 @@ export function buildFetchQuery({
   // null/omitted → every landing-level kpi_name, the pre-existing behaviour.
   landingKpis = null,
 } = {}) {
-  const where = buildScopeWhere({
+  const { where, timeScope } = buildScopeWhere({
     plantId,
     context,
     parentFilters,
@@ -988,6 +985,7 @@ export function buildFetchQuery({
     from,
     to,
   });
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
 
   // 4. Drill shape. Null/undefined → landing only. Array → return BOTH
   //    landing rows AND drill children so the grid always has cards while
@@ -1080,7 +1078,7 @@ export function buildFetchQuery({
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
 
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const table = goldSource({ plantId, fromKey, toKey });
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   // Athena (Trino) has no `* EXCLUDE(...)` syntax and serializes a DATE
   // column to an ISO yyyy-mm-dd string natively, so a plain `SELECT *`
@@ -1234,7 +1232,7 @@ export function buildDrillAggregateQuery({
     }
   }
 
-  const where = buildScopeWhere({
+  const { where, timeScope } = buildScopeWhere({
     plantId,
     context,
     parentFilters,
@@ -1246,7 +1244,8 @@ export function buildDrillAggregateQuery({
 
   const lim = Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 100;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
+  const table = goldSource({ plantId, fromKey, toKey });
   const dateCol =
     config.upstream.engine === "databricks"
       ? "CAST(date AS VARCHAR) AS date"
@@ -1372,7 +1371,8 @@ export function buildProductOptionsQuery({
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 1000;
   const productType = cleanedColumn("product_type");
   const unit = cleanedColumn("unit_of_measurement");
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
+  const table = goldSource({ plantId, fromKey, toKey });
 
   return (
     `SELECT DISTINCT ${productType} AS product_type, ${unit} AS unit_of_measurement ` +
@@ -1440,12 +1440,13 @@ export function buildShiftComparisonQuery({
     where.push(canonicalDimensionPredicate("sub_section", safeSubSection));
   }
 
-  const { parts: dateParts } = dateWhereParts({ date, from, to });
+  const { parts: dateParts, timeScope } = dateWhereParts({ date, from, to });
   where.push(...dateParts);
 
   const lim =
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 10000;
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
+  const table = goldSource({ plantId, fromKey, toKey });
   const dateCol =
     config.upstream.engine === "databricks"
       ? "CAST(date AS VARCHAR) AS date"

@@ -23,10 +23,10 @@ import {
   escapeLiteral,
 } from "./dashboard-query.js";
 import {
-  plantSqlTable,
   plantDepartmentPredicate,
   excludeUnknownKpiPredicate,
 } from "../utils/normalize.js";
+import { goldSource } from "./gold-source.js";
 
 // GOLD_COLUMNS is private to dashboard-query.js but referenced via the same
 // dedupe shape; redeclare the projection explicitly here.
@@ -148,16 +148,13 @@ export function buildMaterializePullQuery({
   windowDays = 60,
   levels = [1, 2],
 } = {}) {
-  const table = plantSqlTable(plantId);
-  if (!table) {
-    throw new Error(`Unknown plant: ${plantId}`);
-  }
-
   const today = new Date().toISOString().slice(0, 10);
   const from = shiftIsoDays(today, -windowDays);
   if (!from) {
     throw new Error(`Could not compute window start`);
   }
+  // Trailing window, open-ended upward (no upper bound — "from" onward).
+  const table = goldSource({ plantId, fromKey: isoToYyyymmdd(from), toKey: null });
 
   // Quality parents have NULL drill_down_level + no detail cols. We
   // accept those (rows matching the LANDING_PREDICATE shape) by checking
@@ -200,12 +197,10 @@ export function buildMaterializeCountQuery({
   windowDays = 60,
   levels = [1, 2],
 } = {}) {
-  const table = plantSqlTable(plantId);
-  if (!table) throw new Error(`Unknown plant: ${plantId}`);
-
   const today = new Date().toISOString().slice(0, 10);
   const from = shiftIsoDays(today, -windowDays);
   if (!from) throw new Error(`Could not compute window start`);
+  const table = goldSource({ plantId, fromKey: isoToYyyymmdd(from), toKey: null });
 
   const levelsList = levels.map(Number);
   const levelsClause = levelsList.map((l) => String(l)).join(", ");

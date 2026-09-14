@@ -76,6 +76,14 @@ export const config = {
     // requires the `gold.gold` schema-qualified form.
     table: optional("AWS_DATA_TABLE", "databricks_table/gold"),
     sqlTable: optional("AWS_DATA_SQL_TABLE", "gold.gold"),
+    // Rolling ~48-day table: complete for today and the last couple of days
+    // (gold.gold is incomplete for those), but unreliable further back
+    // within its own window — reads older than `dailyFreshDays` always go
+    // to `sqlTable` instead. See queries/gold-source.js.
+    dailySqlTable: optional("AWS_DATA_SQL_TABLE_DAILY", "gold.gold_daily"),
+    // How many trailing days (from today, Asia/Kolkata) count as "fresh"
+    // and should read from dailySqlTable instead of sqlTable.
+    dailyFreshDays: asInt("GOLD_DAILY_FRESH_DAYS", 2),
     timeoutMs: asInt("AWS_DATA_TIMEOUT_MS", 30_000),
   },
   // JK KPI Assistant (chatbot) — separate FastAPI service, proxied so the

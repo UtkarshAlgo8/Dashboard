@@ -24,9 +24,50 @@ import { normalizeUnit, unitPredicate } from "../utils/normalize.js";
 
 const CURING = { section: "Curing", granularity: "DAY" };
 
+/**
+ * goldSource() embeds its OWN date predicates inside a UNION ALL table
+ * subquery whenever a window straddles the fresh/historical cutoff (see
+ * gold-source.js) — this happens for any query whose window is open-ended
+ * toward "today", which drifts with the real calendar. Strip that
+ * subquery out before asserting on date literals / the outer WHERE, so
+ * these SQL-shape assertions test the query builder's OWN predicates,
+ * not goldSource's, and stay stable as "today" moves forward.
+ */
+function stripGoldSourceUnion(sql) {
+  const marker = sql.indexOf(" UNION ALL ");
+  if (marker === -1) return sql;
+  let depth = 0;
+  let start = -1;
+  for (let i = marker; i >= 0; i--) {
+    if (sql[i] === ")") depth++;
+    else if (sql[i] === "(") {
+      if (depth === 0) {
+        start = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (start === -1) return sql;
+  depth = 0;
+  let end = -1;
+  for (let i = start; i < sql.length; i++) {
+    if (sql[i] === "(") depth++;
+    else if (sql[i] === ")") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  if (end === -1) return sql;
+  return sql.slice(0, start) + "__GOLD_SOURCE_UNION__" + sql.slice(end + 1);
+}
+
 /** Extract the YYYYMMDD date comparisons a built query emits. */
 function dateLiterals(sql) {
-  return [...sql.matchAll(/END\) (=|>=|<=) '(\d{8})'/g)].map(
+  return [...stripGoldSourceUnion(sql).matchAll(/END\) (=|>=|<=) '(\d{8})'/g)].map(
     (m) => `${m[1]} ${m[2]}`,
   );
 }
@@ -318,10 +359,11 @@ test("drill-aggregate rejects an unknown group-by column", () => {
  * tell a filter from a sort key.
  */
 function scopeWhere(sql) {
-  const start = sql.indexOf(" WHERE ");
-  const end = sql.indexOf(") WHERE (__dedupe_rn");
+  const stripped = stripGoldSourceUnion(sql);
+  const start = stripped.indexOf(" WHERE ");
+  const end = stripped.indexOf(") WHERE (__dedupe_rn");
   assert.ok(start > -1 && end > start, "unexpected query shape");
-  return sql.slice(start, end);
+  return stripped.slice(start, end);
 }
 
 test("landingKpis narrows the landing band to the rendered KPIs", () => {

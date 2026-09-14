@@ -2,11 +2,11 @@ import { cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
+import { goldSource } from "../queries/gold-source.js";
 import { toInventory } from "../utils/transformers.js";
 import {
   plantDepartmentPredicate,
   normalizePlantId,
-  plantSqlTable,
   excludeUnknownKpiPredicate,
 } from "../utils/normalize.js";
 
@@ -44,10 +44,11 @@ export async function getInventory(req, res, next) {
       const rangeClauses = [];
       if (from) rangeClauses.push(`AND ${DATE_YYYYMMDD} >= '${from}'`);
       if (to) rangeClauses.push(`AND ${DATE_YYYYMMDD} <= '${to}'`);
+      const table = goldSource({ plantId, fromKey: from, toKey: to });
       const sql = `
         SELECT CAST(date AS VARCHAR) AS date, section, product_type, itemcode,
                kpi_name, unit_of_measurement, actual_value, drill_down_level
-        FROM ${plantSqlTable(plantId)}
+        FROM ${table}
         WHERE ${plantDepartmentPredicate(plantId)}
           AND ${excludeUnknownKpiPredicate()}
           AND category = ${escapeLiteral("Inventory")}

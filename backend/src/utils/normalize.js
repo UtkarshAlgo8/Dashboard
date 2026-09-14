@@ -88,6 +88,12 @@ const PLANT_SCOPES = {
     tyreType: "PCR",
     tyreTypes: TYRE_TYPES_SINGLE_LINE,
     sqlTable: null,
+    // Present (as null) so plantScope() falls back to
+    // config.upstream.dailySqlTable, mirroring how `sqlTable: null` above
+    // falls back to config.upstream.sqlTable. Chennai has no daily
+    // counterpart — its scope below omits this key entirely rather than
+    // setting it to null, so it never resolves to a daily table.
+    dailySqlTable: null,
   },
   chennai: {
     id: "chennai",
@@ -134,11 +140,24 @@ export function plantScope(value = "banmore") {
   return {
     ...scope,
     sqlTable: scope.sqlTable ?? config.upstream.sqlTable,
+    // Only plants that declare the key at all (Banmore, as null) fall back
+    // to config.upstream.dailySqlTable. Chennai has no `dailySqlTable` key
+    // in its scope (no daily counterpart) and stays null/no-op — `??` alone
+    // can't express that distinction since Chennai's key would also be
+    // `undefined` if merely omitted without this guard.
+    dailySqlTable: Object.hasOwn(scope, "dailySqlTable")
+      ? scope.dailySqlTable ?? config.upstream.dailySqlTable
+      : null,
   };
 }
 
 export function plantSqlTable(value = "banmore") {
   return plantScope(value).sqlTable;
+}
+
+/** Rolling daily-table FROM target for a plant, or null if it has none. */
+export function plantDailySqlTable(value = "banmore") {
+  return plantScope(value).dailySqlTable;
 }
 
 /** Tyre-type options offered for a plant, first entry = default. */

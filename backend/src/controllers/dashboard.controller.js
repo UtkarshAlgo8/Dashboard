@@ -8,9 +8,9 @@ import {
 import {
   normalizePlantId,
   plantDepartmentPredicate,
-  plantSqlTable,
   canonicalizeSubSection,
 } from "../utils/normalize.js";
+import { goldSource } from "../queries/gold-source.js";
 import {
   buildDrillAggregateQuery,
   buildFetchQuery,
@@ -449,7 +449,7 @@ export async function getVocab(req, res, next) {
     const vocab = await cached(`dashboard:vocab:${plantId}`, async () => {
       const grab = (sql) =>
         runQuery(sql).then((rows) => rows.map((r) => Object.values(r)[0]));
-      const table = plantSqlTable(plantId);
+      const table = goldSource({ plantId, fromKey: null, toKey: null });
       const scope = plantDepartmentPredicate(plantId);
       const present = (col) =>
         `${col} IS NOT NULL AND ${col} != 'nan' AND ${col} != 'null' AND ${col} != ''`;

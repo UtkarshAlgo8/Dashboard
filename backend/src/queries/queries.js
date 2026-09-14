@@ -1,7 +1,5 @@
-import { config } from "../config.js";
 import {
   plantDepartmentPredicate,
-  plantSqlTable,
   normalizeGranularity,
   allowedGranularities,
   excludeUnknownKpiPredicate,
@@ -11,6 +9,8 @@ import {
   YEAR_GRANULARITY,
   tyreTypePredicate,
 } from "../utils/normalize.js";
+import { goldSource } from "./gold-source.js";
+import { DATE_YYYYMMDD } from "./sql-date.js";
 
 /**
  * SQL builders for gold_dummy. Pure functions, no side effects.
@@ -50,20 +50,22 @@ import {
  * via `dateRangeFilter` below.
  */
 
-const TABLE = (plantId = "banmore") =>
-  plantSqlTable(plantId) ?? config.upstream.sqlTable;
+/**
+ * Resolves the FROM target for one query, given the date window that
+ * query's own filters already narrowed it to (YYYYMMDD digit strings, or
+ * null for an open bound). See queries/gold-source.js.
+ */
+const TABLE = (plantId = "banmore", fromKey = null, toKey = null) =>
+  goldSource({ plantId, fromKey, toKey });
 
 /**
  * Format-robust YYYYMMDD ordering key over the real `date` DATE column
  * (realdata.md §10: true date type, ISO yyyy-mm-dd). The real `gold`
  * table has no reliable year/month/day INT columns, so every ORDER BY /
- * PARTITION uses this expression instead. Mirrors DATE_YYYYMMDD in
- * dashboard-query.js.
+ * PARTITION uses this expression instead. Shared with dashboard-query.js
+ * via sql-date.js.
  */
-const DATE_KEY =
-  "(CASE WHEN SUBSTRING(CAST(date AS VARCHAR), 5, 1) = '-' " +
-  "THEN SUBSTRING(CAST(date AS VARCHAR), 1, 4) || SUBSTRING(CAST(date AS VARCHAR), 6, 2) || SUBSTRING(CAST(date AS VARCHAR), 9, 2) " +
-  "ELSE SUBSTRING(CAST(date AS VARCHAR), 7, 4) || SUBSTRING(CAST(date AS VARCHAR), 4, 2) || SUBSTRING(CAST(date AS VARCHAR), 1, 2) END)";
+const DATE_KEY = DATE_YYYYMMDD;
 
 /**
  * The always-on core filter (realdata.md §1/§2/§9): plant = BANMORE
@@ -176,6 +178,12 @@ function parseIsoDate(iso) {
   throw new Error(`Cannot parse date literal: ${iso}`);
 }
 
+/** `from`/`to` literal (yyyy-mm-dd or dd-mm-yyyy) → YYYYMMDD key for
+ * goldSource's window resolution, or null when absent. */
+function dateKeyOrNull(literal) {
+  return literal ? yyyymmdd(parseIsoDate(literal)) : null;
+}
+
 /**
  * Allow-lists for the gold_dummy column values the frontend can send
  * directly on the wire. Backend reads URL params straight into the
@@ -270,7 +278,7 @@ export function kpiGridQuery({
                PARTITION BY kpi_name
                ORDER BY ${DATE_KEY} DESC
              ) AS rn
-      FROM ${TABLE(plant)}
+      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
       ${innerWhere}
         AND ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
@@ -303,7 +311,7 @@ export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to 
                PARTITION BY machine, drill_down_attribute
                ORDER BY ${DATE_KEY} DESC
              ) AS rn
-      FROM ${TABLE(plant)}
+      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
       ${innerWhere}
         AND NOT ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
@@ -345,7 +353,7 @@ export function productionDrillQuery({
                PARTITION BY kpi_name, machine, itemcode, product_type
                ORDER BY ${dateExpr} DESC
              ) AS rn
-      FROM ${TABLE(plant)}
+      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
       ${innerWhere}
         AND kpi_name IN (
           ${escapeLiteral("Production_m")},
@@ -373,7 +381,7 @@ export function downtimeDrillQuery({
 }) {
   return `
     SELECT machine, drill_down_attribute, actual_value, CAST(date AS VARCHAR) AS date
-    FROM ${TABLE(plant)}
+    FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
     ${whereClause({
       plant,
       department: "Production",
@@ -399,7 +407,7 @@ export function planComplianceDrillQuery({
 }) {
   return `
     SELECT machine, itemcode, drill_down_attribute, actual_value
-    FROM ${TABLE(plant)}
+    FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
     ${whereClause({
       plant,
       department: "Production",
@@ -442,7 +450,7 @@ export function scrapTraceQuery({
   return `
     SELECT production_ids, machine, itemcode, drill_down_attribute,
            actual_value, CAST(date AS VARCHAR) AS date
-    FROM ${TABLE(plant)}
+    FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
     ${whereClause({
       plant,
       department: "Production",
@@ -541,7 +549,7 @@ export function trendQuery({
                  PARTITION BY SUBSTRING(${dateExpr}, 1, 6)
                  ORDER BY ${dateExpr} DESC
                ) AS rn
-        FROM ${TABLE(plant)}
+        FROM ${TABLE(plant, null, null)}
         ${pinnedFilters(GRAN_MONTH)}
       ) ranked
       WHERE rn = 1
@@ -560,7 +568,7 @@ export function trendQuery({
                  PARTITION BY SUBSTRING(${dateExpr}, 1, 4)
                  ORDER BY ${dateExpr} DESC
                ) AS rn
-        FROM ${TABLE(plant)}
+        FROM ${TABLE(plant, null, null)}
         ${pinnedFilters(YEAR_GRANULARITY)}
       ) ranked
       WHERE rn = 1
@@ -584,7 +592,7 @@ export function trendQuery({
 
   return `
     SELECT CAST(date AS VARCHAR) AS date, actual_value
-    FROM ${TABLE(plant)}
+    FROM ${TABLE(plant, dateKeyOrNull(effectiveFrom), dateKeyOrNull(effectiveTo))}
     ${baseFilters}
       ${dateRangeFilter(effectiveFrom, effectiveTo)}
     ORDER BY ${DATE_KEY}
