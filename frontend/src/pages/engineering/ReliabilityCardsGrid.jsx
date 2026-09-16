@@ -1,0 +1,189 @@
+/**
+ * The Breakdown/MTBF/MTTR/Zero-Breakdown(/Top-Machine-Breakdowns) KPI card
+ * grid shared by the Overview and Reliability tabs (spec 16/17). One-value
+ * tile: uppercase label, big value+unit, colored left border, trend-icon
+ * button (opens TrendModal), chevron that expands a drill panel inline
+ * below the grid — mirrors the design mockup's `EKpiCard` interaction.
+ */
+import { useState } from "react";
+import {
+  Card,
+  ChevronIcon,
+  TrendIcon,
+  TrendModal,
+  ReliabilityDrillPanel,
+  BREAKDOWN_LEVELS,
+  MTBF_LEVELS,
+  MTTR_LEVELS,
+  C,
+  fmtNum,
+  fmtMinHrs,
+} from "./reliabilityShared.jsx";
+import { ZeroBreakdownPanel, TopMachineBreakdownsPanel, useZeroBreakdownTotal } from "./reliabilityPanels.jsx";
+
+function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }) {
+  return (
+    <div
+      onClick={onToggle}
+      style={{
+        background: C.cd,
+        borderRadius: 10,
+        border: "1px solid " + C.bd,
+        borderLeft: "4px solid " + accent,
+        padding: "14px 16px",
+        boxShadow: C.sh,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        cursor: "pointer",
+        minHeight: 96,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: C.mu }}>
+          {label}
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {onTrend && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTrend();
+              }}
+              title="Trend"
+              style={{
+                border: "1px solid " + C.bd,
+                background: C.c2,
+                borderRadius: 4,
+                width: 22,
+                height: 22,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: C.bl,
+                cursor: "pointer",
+              }}
+            >
+              <TrendIcon />
+            </button>
+          )}
+          <span style={{ color: C.mu }}>
+            <ChevronIcon open={expanded} />
+          </span>
+        </div>
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: C.tx }}>
+        {value}
+        {unit && <span style={{ fontSize: 13, fontWeight: 600, color: C.mu, marginLeft: 4 }}>{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * @param {{ values: Record<string, number|null>, date: string, granularity: string, includeTopMachines?: boolean }} props
+ */
+function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = false }) {
+  const [expanded, setExpanded] = useState(null);
+  const [trendKpi, setTrendKpi] = useState(null);
+  const zeroBreakdown = useZeroBreakdownTotal();
+
+  const toggle = (id) => setExpanded((e) => (e === id ? null : id));
+
+  const cards = [
+    {
+      id: "breakdown",
+      label: "Breakdown",
+      accent: C.rd,
+      value: fmtNum(values?.Breakdown_Pct_Overall, 2),
+      unit: "%",
+      sub: fmtMinHrs(values?.BreakdownMin_Overall),
+      trend: { kpiName: "Breakdown_Pct_Overall", unit: "%" },
+    },
+    {
+      id: "mtbf",
+      label: "MTBF",
+      accent: C.bl,
+      value: fmtMinHrs(values?.MTBF_Overall),
+      unit: "",
+      trend: { kpiName: "MTBF_Overall", unit: "min" },
+    },
+    {
+      id: "mttr",
+      label: "MTTR",
+      accent: C.am,
+      value: fmtMinHrs(values?.MTTR_Overall),
+      unit: "",
+      trend: { kpiName: "MTTR_Overall", unit: "min" },
+    },
+    {
+      id: "zeroBreakdown",
+      label: "Zero Breakdown Machines",
+      accent: C.gn,
+      value: zeroBreakdown.total == null ? "—" : fmtNum(zeroBreakdown.total),
+      unit: zeroBreakdown.asOf ? `as of ${zeroBreakdown.asOf}` : "",
+    },
+  ];
+  if (includeTopMachines) {
+    cards.push({
+      id: "topMachines",
+      label: "Top Machine Breakdowns",
+      accent: C.pp,
+      value: "Top 10",
+      unit: "",
+    });
+  }
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "grid",
+          gap: 12,
+          gridTemplateColumns: `repeat(${cards.length >= 5 ? 5 : 4}, minmax(0, 1fr))`,
+        }}
+      >
+        {cards.map((c) => (
+          <SummaryCard
+            key={c.id}
+            label={c.label}
+            value={c.value}
+            unit={c.unit}
+            accent={c.accent}
+            expanded={expanded === c.id}
+            onToggle={() => toggle(c.id)}
+            onTrend={c.trend ? () => setTrendKpi(c.trend) : undefined}
+          />
+        ))}
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 14 }}>
+          <Card title={cards.find((c) => c.id === expanded)?.label}>
+            {expanded === "breakdown" && (
+              <ReliabilityDrillPanel levels={BREAKDOWN_LEVELS} date={date} granularity={granularity} rootLabel="Breakdown" />
+            )}
+            {expanded === "mtbf" && (
+              <ReliabilityDrillPanel levels={MTBF_LEVELS} date={date} granularity={granularity} rootLabel="MTBF" />
+            )}
+            {expanded === "mttr" && (
+              <ReliabilityDrillPanel levels={MTTR_LEVELS} date={date} granularity={granularity} rootLabel="MTTR" />
+            )}
+            {expanded === "zeroBreakdown" && <ZeroBreakdownPanel />}
+            {expanded === "topMachines" && <TopMachineBreakdownsPanel date={date} granularity={granularity} />}
+          </Card>
+        </div>
+      )}
+
+      <TrendModal
+        open={!!trendKpi}
+        onClose={() => setTrendKpi(null)}
+        title={cards.find((c) => c.trend?.kpiName === trendKpi?.kpiName)?.label ?? ""}
+        kpiName={trendKpi?.kpiName}
+        unit={trendKpi?.unit}
+      />
+    </div>
+  );
+}
+
+export default ReliabilityCardsGrid;

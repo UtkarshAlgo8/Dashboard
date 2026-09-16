@@ -3648,10 +3648,10 @@ export const INVENTORY_BY_PLANT = {
 export const ENGINEERING_TABS = [
   { id: "overall", name: "Overall" },
   { id: "reliability", name: "Reliability" },
-  { id: "maintenance", name: "Maintenance" },
-  { id: "utilities", name: "Utilities" },
-  { id: "projects", name: "Capex Projects" },
-  { id: "ops", name: "Ops & Compliance" },
+  { id: "maintenance", name: "Maintenance", enabled: false },
+  { id: "utilities", name: "Utilities", enabled: false },
+  { id: "projects", name: "Capex Projects", enabled: false },
+  { id: "ops", name: "Ops & Compliance", enabled: false },
 ];
 
 /**

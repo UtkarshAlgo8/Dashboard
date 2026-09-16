@@ -32,6 +32,7 @@ backend/data/
 !backend/data/
 backend/data/*
 !backend/data/Quality_Dashboard_Gold_Layer_3Months.xlsx
+!backend/data/gold_mock.xlsx
 
 # Added by code-review-graph
 .code-review-graph/

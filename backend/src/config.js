@@ -118,6 +118,28 @@ export const config = {
     // table name; for upstream it becomes the Quality gold table path.
     sqlTable: optional("QUALITY_SQL_TABLE", "gold.gold"),
   },
+  // Engineering Head dashboard data layer (Overview + Reliability tabs,
+  // spec 16/17). Additive and fully decoupled — same shape as `quality`
+  // above, department='Engineering'/category='Reliability' instead of
+  // Quality's Process/SPC families.
+  engineering: {
+    // "db" is the default: Engineering serves the live gold table, never the
+    // mock. The excel path below is kept only as a local-dev escape hatch and
+    // must be opted into explicitly (ENGINEERING_DATA_SOURCE=excel) — a
+    // missing/blank env var must never silently fall back to mock numbers.
+    dataSource: optional("ENGINEERING_DATA_SOURCE", "db"), // "db" | "excel"
+    // Reference workbook: sheet `data`, 27 columns.
+    excelPath: optional(
+      "ENGINEERING_EXCEL_PATH",
+      path.join(projectRoot, "data", "gold_mock.xlsx"),
+    ),
+    excelSheet: optional("ENGINEERING_EXCEL_SHEET", "data"),
+    excelCachePath: optional(
+      "ENGINEERING_EXCEL_CACHE_PATH",
+      path.join(projectRoot, "data", ".engineering_gold.cache.json"),
+    ),
+    sqlTable: optional("ENGINEERING_SQL_TABLE", "gold.gold"),
+  },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),
   // Cache backing store. "memory" (default) is a Map in this process and is
   // wiped by every deploy — `npm run deploy` rebuilds the container, so the
