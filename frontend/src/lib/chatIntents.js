@@ -1,4 +1,3 @@
-import QuestionAnswerRoundedIcon from "@mui/icons-material/QuestionAnswerRounded";
 import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
@@ -12,8 +11,10 @@ import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
  * wire value are deliberately the same string so there is no mapping layer
  * to keep in sync.
  *
- * "query" is the default and has no slash command: it is what you get by
- * just typing a question, matching the upstream's own default.
+ * "query" is the default and is deliberately NOT listed here: it has no
+ * slash command and never appears in the palette. It is what you get by
+ * just typing a question, matching the upstream's own default. It is
+ * still a valid wire value — see DEFAULT_INTENT.
  *
  * TODO(traceability): no FRS/US id exists for the intent selector yet.
  *
@@ -22,15 +23,13 @@ import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 
 export const DEFAULT_INTENT = "query";
 
-/** @type {ReadonlyArray<{value: ChatIntent, command: string, label: string, description: string, Icon: unknown}>} */
+/**
+ * The commands offered in the palette — i.e. every intent EXCEPT the
+ * default "query".
+ *
+ * @type {ReadonlyArray<{value: ChatIntent, command: string, label: string, description: string, Icon: unknown}>}
+ */
 export const CHAT_INTENTS = Object.freeze([
-  {
-    value: "query",
-    command: "/query",
-    label: "Query",
-    description: "Answer from the plant data",
-    Icon: QuestionAnswerRoundedIcon,
-  },
   {
     value: "plot",
     command: "/plot",
