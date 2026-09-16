@@ -102,6 +102,7 @@ app.use("/api/v1/admin", gate, adminRouter);
 // JK Agent chatbot — proxies the JK KPI Assistant service.
 //   /api/v1/chat                                          → send a query
 //   /api/v1/chat/download/:resultId                       → full result JSON
+//   /api/v1/chat/report/:reportId/pdf                     → report PDF (binary)
 app.use("/api/v1/chat", gate, chatRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
