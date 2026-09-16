@@ -20,15 +20,16 @@
  * returns Day and all three shifts at once and the four metric rows of a
  * combo silently overwrite each other.
  */
-import { config } from "../../config.js";
 import {
   escapeLiteral,
   departmentPredicate,
   DATE_YYYYMMDD,
   isoToYyyymmdd,
 } from "../normalize.js";
-
-const TABLE = () => config.quality.sqlTable;
+import {
+  qualitySource,
+  qualitySourceForDate,
+} from "./gold-source.js";
 
 export const METRICS = ["Cp", "Cpk", "Pp", "Ppk"];
 export const LIMITS = ["UCL", "LCL"];
@@ -76,7 +77,8 @@ export function spcSnapshotQuery(date, granularity = "Day") {
   // with alasql's DATE keyword and MAX over date strings misbehaves; this form
   // is robust on both alasql and the upstream engine.
   return (
-    `SELECT DISTINCT date AS snapshot_date FROM ${TABLE()} ` +
+    `SELECT DISTINCT date AS snapshot_date ` +
+    `FROM ${qualitySource({ toKey: date ? isoToYyyymmdd(date) : null, granularity })} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(granularity)}${upTo} ` +
     `ORDER BY date DESC LIMIT 1`
   );
@@ -93,7 +95,7 @@ export function spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe 
   const names = METRICS.map((m) => `kpi_name LIKE ${escapeLiteral(`% ${m}`)}`).join(" OR ");
   return (
     `SELECT machine, itemcode, product_type, kpi_name, status, actual_value, unit_of_measurement ` +
-    `FROM ${TABLE()} ` +
+    `FROM ${qualitySourceForDate(snapshot, granularity)} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc}${rc} ` +
     `AND (${names})`
@@ -111,7 +113,7 @@ export function spcDetailRowsQuery({ snapshot, granularity, machine, recipe, par
   const names = METRICS.map((m) => escapeLiteral(`${parameter} ${m}`)).join(", ");
   return (
     `SELECT machine, itemcode, product_type, kpi_name, status, actual_value, unit_of_measurement ` +
-    `FROM ${TABLE()} ` +
+    `FROM ${qualitySourceForDate(snapshot, granularity)} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND machine = ${escapeLiteral(machine)} ` +
@@ -139,7 +141,7 @@ export function spcLimitsQuery({ machine, parameter } = {}) {
     : ` AND (${LIMITS.map((l) => `kpi_name LIKE ${escapeLiteral(`% ${l}`)}`).join(" OR ")})`;
   return (
     `SELECT machine, kpi_name, actual_value, date AS baseline_date ` +
-    `FROM ${TABLE()} ` +
+    `FROM ${qualitySource()} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(GRAN_BASELINE)}${mc}${pc}`
   );
 }
@@ -147,7 +149,7 @@ export function spcLimitsQuery({ machine, parameter } = {}) {
 /** Distinct filter option lists for a snapshot (§3). Sentinels are null already. */
 export function spcMachinesQuery({ snapshot, granularity }) {
   return (
-    `SELECT DISTINCT machine FROM ${TABLE()} ` +
+    `SELECT DISTINCT machine FROM ${qualitySourceForDate(snapshot, granularity)} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND machine IS NOT NULL ORDER BY machine`
@@ -156,7 +158,7 @@ export function spcMachinesQuery({ snapshot, granularity }) {
 export function spcRecipesQuery({ snapshot, granularity, machine }) {
   const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
   return (
-    `SELECT DISTINCT itemcode FROM ${TABLE()} ` +
+    `SELECT DISTINCT itemcode FROM ${qualitySourceForDate(snapshot, granularity)} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc} ` +
     `AND itemcode IS NOT NULL ORDER BY itemcode`
@@ -164,7 +166,7 @@ export function spcRecipesQuery({ snapshot, granularity, machine }) {
 }
 export function spcProductTypesQuery({ snapshot, granularity }) {
   return (
-    `SELECT DISTINCT product_type FROM ${TABLE()} ` +
+    `SELECT DISTINCT product_type FROM ${qualitySourceForDate(snapshot, granularity)} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))} ` +
     `AND product_type IS NOT NULL ORDER BY product_type`

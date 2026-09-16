@@ -354,8 +354,13 @@ test("spcLimitsQuery: baseline granularity, keyed on machine+parameter only", ()
   const sql = spcLimitsQuery({ machine: "VMI_MAXX_01", parameter: "Belt 1 Length" });
   assert.match(sql, new RegExp(`granularity\\s*=\\s*'${GRAN_BASELINE}'`));
   // The UCL and LCL of one parameter carry different itemcodes upstream, so
-  // filtering on recipe would drop half of every pair.
-  assert.ok(!/itemcode/.test(sql), "limits must not be filtered by recipe");
+  // filtering on recipe would drop half of every pair. `itemcode` may still
+  // appear as a SELECTED column — the gold/gold_daily UNION ALL subquery
+  // projects all 27 gold columns — so assert on the PREDICATE, not the name.
+  assert.ok(
+    !/itemcode\s*(=|IN|IS)/i.test(sql),
+    "limits must not be filtered by recipe",
+  );
 });
 
 /* ------------------------- detail assembly ---------------------- */

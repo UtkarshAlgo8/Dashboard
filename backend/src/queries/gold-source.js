@@ -101,11 +101,36 @@ function windowClamp(fromKey, toKey) {
  *   used in SQL.
  */
 export function goldSource({ plantId, fromKey = null, toKey = null } = {}) {
-  const baseTable = plantSqlTable(plantId);
-  const dailyTable = plantDailySqlTable(plantId);
+  return resolveGoldSource({
+    baseTable: plantSqlTable(plantId),
+    dailyTable: plantDailySqlTable(plantId),
+    fromKey,
+    toKey,
+  });
+}
 
-  // No daily counterpart for this plant (Chennai) — always the base table.
-  if (!dailyTable) return baseTable;
+/**
+ * The plant-agnostic core of goldSource(), shared with the Quality module
+ * (see quality/queries/gold-source.js). Production resolves its two tables
+ * from the plant scope; Quality resolves them from its own config keys —
+ * the base/daily split rule below is identical for both, so it lives once.
+ *
+ * @param {object} input
+ * @param {string} input.baseTable   full-history table (gold.gold)
+ * @param {string|null} input.dailyTable rolling table, or null/"" to disable
+ * @param {string|null} [input.fromKey] YYYYMMDD digit string, or null (unbounded)
+ * @param {string|null} [input.toKey]   YYYYMMDD digit string, or null (unbounded)
+ * @returns {string} a table name, or a parenthesized UNION ALL subquery.
+ */
+export function resolveGoldSource({
+  baseTable,
+  dailyTable,
+  fromKey = null,
+  toKey = null,
+}) {
+  // No daily counterpart (Chennai, or Quality with the daily table
+  // disabled) — always the base table.
+  if (!dailyTable || dailyTable === baseTable) return baseTable;
 
   const cutoff = freshCutoffKey();
 

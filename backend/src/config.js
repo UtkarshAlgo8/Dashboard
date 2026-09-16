@@ -117,6 +117,13 @@ export const config = {
     // SQL FROM target. For the excel source this is the in-memory alasql
     // table name; for upstream it becomes the Quality gold table path.
     sqlTable: optional("QUALITY_SQL_TABLE", "gold.gold"),
+    // Rolling daily counterpart of `sqlTable`, read for the trailing
+    // `upstream.dailyFreshDays` days exactly as Production does — the base
+    // table is incomplete for today (verified 2026-09-16: Quality rows for
+    // today were ~2x more numerous in gold_daily than in gold). Set to ""
+    // to disable and read `sqlTable` for every date. Ignored entirely by
+    // the excel source, which has only the one in-memory table.
+    dailySqlTable: optional("QUALITY_SQL_TABLE_DAILY", "gold.gold_daily"),
   },
   // Engineering Head dashboard data layer (Overview + Reliability tabs,
   // spec 16/17). Additive and fully decoupled — same shape as `quality`
