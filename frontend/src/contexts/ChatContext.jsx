@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { sendChatMessage } from "@/api/chat.js";
+import { DEFAULT_INTENT } from "@/lib/chatIntents.js";
 import { useAuth } from "@/hooks/useAuth.js";
 
 const SESSION_KEY = "jkdash.chatSession";
@@ -184,8 +185,13 @@ export function ChatProvider({ children }) {
     writeStoredMessages(sessionId, []);
   }, [sessionId]);
 
+  /**
+   * @param {string} text the question, with any slash command already
+   *   stripped by the input — `query` never carries the command.
+   * @param {import("@/lib/chatIntents.js").ChatIntent} [intent]
+   */
   const sendMessage = useCallback(
-    async (text) => {
+    async (text, intent = DEFAULT_INTENT) => {
       const cleanText = text?.trim();
       if (!cleanText || isTyping || !sessionId) return;
 
@@ -193,6 +199,7 @@ export function ChatProvider({ children }) {
         id: `user-${Date.now()}`,
         sender: "user",
         text: cleanText,
+        intent,
         timestamp: new Date().toISOString(),
       };
 
@@ -204,6 +211,7 @@ export function ChatProvider({ children }) {
         const response = await sendChatMessage({
           query: cleanText,
           session_id: sessionId,
+          intent,
         });
 
         const agentMessage = {
@@ -215,14 +223,21 @@ export function ChatProvider({ children }) {
             "I couldn't generate a response for that.",
           timestamp: new Date().toISOString(),
           isError: Boolean(response.execution_error),
+          intent: response.intent ?? intent,
           resultId: response.result_id ?? null,
+          // Gated on download_available alone: the upstream sets it for
+          // small results too (is_large_result is only about truncation).
           downloadAvailable: Boolean(
-            response.is_large_result && response.download_available,
+            response.download_available && response.result_id,
           ),
-          columns: response.columns ?? null,
+          rowCount: response.row_count ?? null,
           wantsPlot: Boolean(response.wants_plot && response.plot_spec),
           plotSpec: response.plot_spec ?? null,
-          previewRows: response.preview_rows ?? null,
+          reportId: response.report_id ?? null,
+          reportType: response.report_type ?? null,
+          reportAvailable: Boolean(
+            response.report_available && response.report_id,
+          ),
         };
 
         setMessages((prev) => [...prev, agentMessage]);

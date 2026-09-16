@@ -8,7 +8,7 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
  * Shaped like the real ChatResponse so the rest of the app has exactly
  * one response contract to deal with, mock or live.
  */
-function getMockResponse(userMessage = "") {
+function getMockResponse(userMessage = "", intent = "query") {
   const query = userMessage.toLowerCase().trim();
 
   let finalAnswer;
@@ -67,33 +67,60 @@ function getMockResponse(userMessage = "") {
       "You can ask me specific details regarding **OEE**, **downtime reasons**, **scrap percentages**, or **shift comparisons**.";
   }
 
-  return {
+  // Shaped like the live ChatResponse: no `columns` / `preview_rows`, and
+  // the report fields the `report` intent populates.
+  const base = {
     session_id: null,
+    intent,
     final_answer: finalAnswer,
     execution_error: null,
     current_kpi_family: null,
     generated_sql: null,
     result_id: null,
     row_count: null,
-    columns: null,
-    preview_rows: null,
     is_large_result: false,
     download_available: false,
     wants_plot: false,
     plot_spec: null,
+    report_id: null,
+    report_type: null,
+    report_available: false,
   };
+
+  if (intent === "plot") {
+    return {
+      ...base,
+      result_id: "mock-result-plot",
+      row_count: 16,
+      download_available: true,
+      wants_plot: true,
+      plot_spec: { chart_type: "line", x: "date", y: "actual_value", group_by: null },
+    };
+  }
+  if (intent === "report") {
+    return {
+      ...base,
+      report_id: "mock-report-1",
+      report_type: "production_summary",
+      report_available: true,
+    };
+  }
+  if (intent === "analyze") {
+    return { ...base, result_id: "mock-result-analyze", row_count: 42, download_available: true };
+  }
+  return base;
 }
 
 /**
  * Sends a query to the JK Agent (JK KPI Assistant, proxied via the
  * backend) or a simulated assistant when mocking.
  *
- * @param {{ query: string, session_id: string }} payload
+ * @param {{ query: string, session_id: string, intent: import("@/lib/chatIntents.js").ChatIntent }} payload
  * @returns {Promise<object>} ChatResponse
  */
 export function sendChatMessage(payload) {
   if (USE_MOCK) {
-    const result = getMockResponse(payload.query);
+    const result = getMockResponse(payload.query, payload.intent);
     return mockDelay(result, 600, 1100);
   }
 
@@ -101,12 +128,40 @@ export function sendChatMessage(payload) {
 }
 
 /**
- * Fetches the full cached result set for a chat response, e.g. to build
- * an Excel download from a large/truncated preview.
+ * Fetches the full cached result set for a chat response — used both for
+ * the CSV download and to supply the rows a `plot_spec` is charted from,
+ * since the upstream no longer returns `preview_rows` inline.
  *
  * @param {string} resultId
  * @returns {Promise<{ result_id: string, row_count: number, columns: string[], rows: object[] }>}
  */
 export function downloadChatResult(resultId) {
   return client.get(`/chat/download/${encodeURIComponent(resultId)}`);
+}
+
+/**
+ * Fetches a generated report PDF as a Blob.
+ *
+ * The backend route is auth-gated, so this goes through the API client to
+ * pick up the Bearer header rather than being linked to directly. The
+ * interceptor's `{ data }` unwrapping does not apply to a blob response,
+ * so the raw axios body is returned.
+ *
+ * @param {string} reportId
+ * @returns {Promise<Blob>}
+ */
+export async function downloadChatReportPdf(reportId) {
+  if (USE_MOCK) {
+    return mockDelay(
+      new Blob(["Mock JK Agent report"], { type: "application/pdf" }),
+      400,
+      800,
+    );
+  }
+
+  const response = await client.get(
+    `/chat/report/${encodeURIComponent(reportId)}/pdf`,
+    { responseType: "blob", rawEnvelope: true },
+  );
+  return response;
 }
