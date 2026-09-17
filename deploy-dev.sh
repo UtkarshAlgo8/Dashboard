@@ -33,7 +33,11 @@
 set -euo pipefail
 
 BRANCH="${BRANCH:-dev-quality}"
-VM_HOST="${VM_HOST:-136.112.107.154}"
+# The VM these stacks run on. It is NOT cosmetic: the frontend bundle calls
+# the backend at an absolute URL (nginx.conf proxies nothing), and Vite inlines
+# that URL at BUILD time -- so a wrong value here ships a bundle that talks to
+# the wrong machine. It is also the CORS origin the backend accepts.
+VM_HOST="${VM_HOST:-35.224.200.66}"
 
 BE_PORT="${BE_PORT:-8814}"
 FE_PORT="${FE_PORT:-3014}"
@@ -133,6 +137,7 @@ deploy_backend() {
     -e REDIS_URL="redis://${REDIS_NAME}:6379" \
     -e CACHE_KEY_PREFIX="$CACHE_KEY_PREFIX" \
     -e FRONTEND_ORIGIN="http://${VM_HOST}:${FE_PORT}" \
+    -e RESET_PASSWORD_REDIRECT_URL="http://${VM_HOST}:${FE_PORT}/reset-password" \
     "$BE_NAME" >/dev/null
   echo "started"
 }
