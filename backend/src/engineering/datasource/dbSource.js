@@ -6,10 +6,10 @@
  * switching from the local workbook to the live gold table is just a
  * source selection change (ENGINEERING_DATA_SOURCE=db).
  *
- * TODO: the real Engineering gold table naming/schema on the upstream
- * Lambda has not been confirmed yet — this stub is unverified until a real
- * `gold.gold` (or equivalent) table carrying department='Engineering' rows
- * is reachable and `ENGINEERING_SQL_TABLE` is pointed at it. Only "excel"
- * mode has been exercised end-to-end.
+ * Confirmed against the live table: `gold.gold` carries
+ * department='Engineering', category='Reliability', plant='BTP' rows for all
+ * 40 Reliability kpi_names at both DAY and MONTH grain, and every drill level
+ * of every KPI family resolves through it (re-verified 2026-09-17). This is
+ * the default source; `excel` is the local escape hatch.
  */
 export { runQuery } from "../../utils/upstream.js";

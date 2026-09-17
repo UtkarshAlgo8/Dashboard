@@ -9,17 +9,17 @@ import JKLoader from "@/components/JKLoader.jsx";
 import { C } from "./reliabilityShared.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
 
-function EngineeringReliabilitySection({ date, from, to, granularity = "MONTH" }) {
+function EngineeringReliabilitySection({ date, granularity = "MONTH" }) {
   // The response is stamped with the period it answered for, so "still
   // loading" is DERIVED (stamp !== current period) rather than held in its
   // own state. That covers the first render and every period change with one
   // rule, and avoids a setState-in-effect cascading render.
-  const requestKey = `${date}|${from ?? ""}|${to ?? ""}|${granularity}`;
+  const requestKey = `${date}|${granularity}`;
   const [result, setResult] = useState({ key: null, values: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
-    getReliabilitySummary({ date, from, to, granularity })
+    getReliabilitySummary({ date, granularity })
       .then(
         (res) =>
           !cancelled &&
@@ -31,7 +31,7 @@ function EngineeringReliabilitySection({ date, from, to, granularity = "MONTH" }
     return () => {
       cancelled = true;
     };
-  }, [date, from, to, granularity, requestKey]);
+  }, [date, granularity, requestKey]);
 
   if (result.key !== requestKey) {
     return <JKLoader message="Loading reliability KPIs" />;

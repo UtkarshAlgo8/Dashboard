@@ -7,7 +7,6 @@
  * (escapeLiteral, DATE_YYYYMMDD, isoToYyyymmdd) rather than cross-importing
  * from Quality — matches the existing per-family-duplication convention.
  */
-import { config } from "../config.js";
 
 /* ----------------------------------------------------------------- *
  * SQL literal escaping                                              *
@@ -52,27 +51,35 @@ export function engineeringScopePredicate() {
 export const GRAN_DAY = "DAY";
 export const GRAN_MONTH = "MONTH";
 
-// The workbook carries only these two granularities for Engineering
-// Reliability (MONTH for every KPI, DAY only for the Zero-Breakdown pair).
+// The two granularities Engineering Reliability is served at. Both are now
+// published upstream for EVERY KPI in the hierarchy (verified 2026-09-17
+// against gold.gold: all 40 Reliability kpi_names carry both DAY rows
+// Jan-01..today and MONTH rows Jan-01..Sep-01). The workbook carries the
+// same two (MONTH for every KPI, DAY only for the Zero-Breakdown pair).
 const ALLOWED_GRANULARITIES = new Set([GRAN_DAY, GRAN_MONTH]);
 
 /**
  * Resolve the UI's granularity selection to a canonical gold token.
  *
- * When `granularity` is omitted, the default depends on the active data
- * source (Engineering has no shift concept, unlike Quality): the mock
- * workbook (`excel`) only carries MONTH-grain Reliability rows, while the
- * real upstream table (`db`) only carries DAY/SHIFT-grain rows for this
- * category — there is no MONTH granularity there. Returns null for
- * anything not on the allow-list so callers can 400.
+ * MONTH is the default for both data sources. It used to depend on the
+ * active source, because the live upstream carried no MONTH rows for
+ * category='Reliability' and `db` mode had to fall back to DAY. That gap is
+ * closed: every Reliability KPI now has a published MONTH row dated the 1st
+ * of its month, so the page is month-first again — which is what the KPI
+ * spec asks for and what the excel mock always did.
+ *
+ * MONTH rows are a live month-to-date rollup, not a frozen end-of-month
+ * figure: the 2026-09-01 row's components equal the sum of that month's DAY
+ * rows through today, checked KPI by KPI. So reading the published MONTH row
+ * is exact for the running month too, never stale.
+ *
+ * Returns null for anything not on the allow-list so callers can 400.
  *
  * @param {{granularity?: string}} input
  * @returns {string|null}
  */
 export function resolveGranularity({ granularity } = {}) {
-  if (!granularity) {
-    return config.engineering.dataSource === "db" ? GRAN_DAY : GRAN_MONTH;
-  }
+  if (!granularity) return GRAN_MONTH;
   const g = String(granularity).trim().toUpperCase();
   return ALLOWED_GRANULARITIES.has(g) ? g : null;
 }

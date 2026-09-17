@@ -27,13 +27,12 @@ import {
 // carries the same Reliability KPI hierarchy but mislabeled under
 // category IN ('Breakdown Maintenance', 'Loss Tree') instead of
 // 'Reliability' (whatever ETL job writes it disagrees with the one that
-// writes `gold.gold`), and at investigation time (2026-09-15) `gold.gold`'s
-// own Reliability feed was already as fresh or fresher than gold_daily's
-// for this brand-new feed — the reverse of the general "gold_daily is
-// fresher" assumption `queries/gold-source.js` was built around for
-// Production. Unioning them now risks double-counting or silently
-// dropping data. Revisit once the ETL team fixes the category label or
-// confirms the intended freshness semantics for this feed.
+// writes `gold.gold`), and `gold.gold`'s own Reliability feed is as fresh —
+// re-checked 2026-09-17: it carries DAY rows through today and a MONTH
+// rollup that already includes today. That is the reverse of the general
+// "gold_daily is fresher" assumption `queries/gold-source.js` was built
+// around for Production, so unioning them would only risk double-counting.
+// Revisit if the ETL team fixes the category label.
 const TABLE = () => config.engineering.sqlTable;
 
 // Columns every Reliability response needs. drill_down_attribute is
@@ -64,8 +63,11 @@ export const COMPONENT_KPIS = [
 
 /**
  * Period totals of the component measurements above, summed across every
- * machine and every DAY row in [from, to]. Always DAY grain: the live feed
- * publishes this category daily and has no month rows to read instead.
+ * machine and every DAY row in [from, to]. Always DAY grain, by definition:
+ * this is the rebuild path for an ARBITRARY range that is not a whole
+ * calendar month. A whole month must NOT come through here — it has a
+ * published MONTH row (`kpiValueBatchQuery` at granularity='MONTH'), which
+ * is the same arithmetic done upstream, over one row instead of ~10^6.
  */
 export function componentAggregateQuery({ from, to }) {
   const list = COMPONENT_KPIS.map(escapeLiteral).join(", ");
@@ -82,9 +84,11 @@ export function componentAggregateQuery({ from, to }) {
 }
 
 /**
- * Loss Tree over a period. Lost time and occurrence counts are plain
- * additive quantities, so unlike the KPIs above these simply sum — the
- * transformer groups by product_type exactly as it does for a single day.
+ * Loss Tree over an arbitrary (non-whole-month) period. Lost time and
+ * occurrence counts are plain additive quantities, so unlike the KPIs above
+ * these simply sum — the transformer groups by product_type exactly as it
+ * does for a single day. A whole month reads its published MONTH rows
+ * instead, via `kpiChildrenQuery`.
  */
 export function lossTreeRangeQuery({ kpiNames, from, to }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
@@ -162,8 +166,9 @@ export function kpiChildrenQuery({
 }
 
 /**
- * kpi-history: a MONTH series for a card's trend modal (Jan–Sep). date is
- * ISO so lexicographic BETWEEN is a correct range.
+ * kpi-history: a MONTH series for a card's trend modal. Every MONTH row is
+ * dated the 1st of its month, so a 1st-of-first-month → 1st-of-last-month
+ * window selects exactly those months and nothing else.
  */
 export function kpiHistoryQuery({
   kpiName,
@@ -217,6 +222,10 @@ export function latestDateQuery({ kpiName, granularity }) {
  * so today can hold a real `Breakdown_Pct_Overall` (0.0) while MTBF/MTTR/
  * Breakdown-minutes have not landed — anchoring there shows one number and
  * three blanks. Requiring the whole set lands on the last COMPLETE day.
+ *
+ * At MONTH grain the same rule picks the latest month in which all four
+ * headline KPIs are published — which is the running month, because the
+ * MONTH rollup is maintained day by day rather than written at month end.
  *
  * `GROUP BY ... HAVING COUNT(DISTINCT kpi_name) = n` (no subquery) so the
  * same SQL runs on Athena and alasql. Deliberately NO `ORDER BY ... LIMIT 1`:

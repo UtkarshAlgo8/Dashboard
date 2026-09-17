@@ -91,7 +91,7 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
   } else if (loading) {
     body = <JKLoader message="Loading loss tree" />;
   } else if (!rows || rows.length === 0) {
-    body = <div style={{ padding: 30, textAlign: "center", color: C.mu, fontSize: 13 }}>No loss data for this month.</div>;
+    body = <div style={{ padding: 30, textAlign: "center", color: C.mu, fontSize: 13 }}>No loss data for this period.</div>;
   } else {
     body = (
       <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
@@ -163,6 +163,13 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
  * latest available date for DaysWithoutBreakdown_m — the two can differ,
  * see engineering/queries/reliability.queries.js latestDateQuery). "Last
  * Breakdown date" = the machine table's as-of date minus the day count.
+ *
+ * Deliberately NOT wired to the page's selected period, unlike every other
+ * card here. Both KPIs are running counters ("days since this machine last
+ * broke"), so they answer "as of when?", not "during which month?" — and
+ * the last-breakdown date is only derivable by subtracting a day count from
+ * a DAY-grain as-of date. Both are published at MONTH grain too; reading
+ * them there would silently change what the card means.
  */
 export function ZeroBreakdownPanel() {
   const [sectionDate, setSectionDate] = useState(null);
@@ -306,7 +313,8 @@ export function ZeroBreakdownPanel() {
 
 /**
  * Zero Breakdown card headline total: sum of ZeroBreakdownMachines_Section
- * across sections for its latest available DAY date. Cheap — the underlying
+ * across sections for its latest available DAY date — a running as-of
+ * figure, independent of the selected report period (see ZeroBreakdownPanel). Cheap — the underlying
  * GET is shared (5 min in-module cache in api/engineering.js) with
  * `ZeroBreakdownPanel`'s own section-tile fetch when the card is expanded.
  */
@@ -397,5 +405,5 @@ export function TopMachineBreakdownsPanel({ date, granularity }) {
   if (loading) {
     return <JKLoader message="Loading" />;
   }
-  return <DTable columns={columns} rows={rows} getRowKey={(r) => r.machine} emptyMessage="No breakdowns recorded this month." />;
+  return <DTable columns={columns} rows={rows} getRowKey={(r) => r.machine} emptyMessage="No breakdowns recorded in this period." />;
 }

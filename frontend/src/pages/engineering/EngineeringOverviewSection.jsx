@@ -12,7 +12,7 @@ import { Card, C, ReliabilityDrillPanel, LOSS_TREE_LEVELS } from "./reliabilityS
 import { LossTreePie } from "./reliabilityPanels.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
 
-function EngineeringOverviewSection({ date, from, to, granularity = "MONTH" }) {
+function EngineeringOverviewSection({ date, granularity = "MONTH" }) {
   const [lossRows, setLossRows] = useState([]);
   const [lossLoading, setLossLoading] = useState(true);
   const [lossError, setLossError] = useState(null);
@@ -29,27 +29,27 @@ function EngineeringOverviewSection({ date, from, to, granularity = "MONTH" }) {
     setLossLoading(true);
     setLossError(null);
     setSelectedCategory(null);
-    getEngineeringLossTree({ date, from, to, granularity })
+    getEngineeringLossTree({ date, granularity })
       .then((res) => !cancelled && setLossRows(Array.isArray(res?.rows) ? res.rows : []))
       .catch((err) => !cancelled && setLossError(err))
       .finally(() => !cancelled && setLossLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [date, from, to, granularity]);
+  }, [date, granularity]);
 
   useEffect(() => {
     let cancelled = false;
     setSummaryLoading(true);
     setSummaryError(null);
-    getReliabilitySummary({ date, from, to, granularity })
+    getReliabilitySummary({ date, granularity })
       .then((res) => !cancelled && setSummaryValues(res?.values ?? null))
       .catch((err) => !cancelled && setSummaryError(err))
       .finally(() => !cancelled && setSummaryLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [date, from, to, granularity]);
+  }, [date, granularity]);
 
   if (lossLoading || summaryLoading) {
     return <JKLoader message="Loading Engineering overview" />;

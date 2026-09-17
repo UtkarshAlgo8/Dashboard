@@ -31,10 +31,16 @@ function cachedEngineeringGet(url, ttlMs = ENGINEERING_CACHE_TTL_MS) {
  * response envelope is unwrapped the same way as every other resource
  * module. Mirrors api/quality.js's shape.
  *
- * The backend reads the Excel gold workbook today
- * (ENGINEERING_DATA_SOURCE=excel) and the DB later — the frontend is
- * identical across that switch. Only Banmore (BTP) ships Engineering today,
- * so `plant` is hardcoded rather than threaded through from the caller.
+ * The backend serves the live gold table (ENGINEERING_DATA_SOURCE=db) and
+ * the Excel workbook as a local escape hatch — the frontend is identical
+ * across that switch, and both now carry every Reliability KPI at DAY and
+ * MONTH grain. Only Banmore (BTP) ships Engineering today, so `plant` is
+ * hardcoded rather than threaded through from the caller.
+ *
+ * `granularity` defaults to "MONTH" here and on the backend: a MONTH row is
+ * published for every KPI, dated the 1st of its month, and the running
+ * month's row is kept up to date day by day. Pass "DAY" with a full ISO
+ * date for a single day.
  */
 
 function withScope(params = {}) {
@@ -51,9 +57,15 @@ function withScope(params = {}) {
  * @returns {Promise<{context:object, values:Record<string,number|null>}>}
  */
 export function getReliabilitySummary({ date, from, to, granularity = "MONTH" }) {
-  // A range (from/to) makes the backend REBUILD the four headline KPIs from
-  // machine-level components — MTBF/MTTR/Breakdown % are rates and cannot be
-  // summed or averaged across days. A single `date` reads the published row.
+  // A single `date` reads the published `_Overall` row at `granularity` —
+  // this is the path every period the UI offers takes, including a whole
+  // month (its MONTH row IS the rollup).
+  //
+  // `from`/`to` are the escape hatch for an ARBITRARY range that is not a
+  // whole calendar month: the backend then rebuilds the four headline KPIs
+  // from machine-level DAY components, because MTBF/MTTR/Breakdown % are
+  // rates and cannot be summed or averaged. Nothing in the UI sends them
+  // today; they stay because the endpoint supports them.
   const params = withScope({ date, date_from: from, date_to: to, granularity });
   return cachedEngineeringGet(`/engineering/reliability/summary?${params}`);
 }
@@ -129,10 +141,9 @@ export function getReliabilityKpiHistory({
  * latest DAY for the two Zero-Breakdown KPIs before drawing that card, and
  * by the page shell to resolve its default period/granularity on mount).
  *
- * `granularity` defaults to null/omitted from the query string — the
- * backend's `resolveGranularity` then applies its own mode-aware default
- * (MONTH under excel, DAY under db). Pass an explicit granularity when the
- * caller needs a specific one regardless of data-source mode.
+ * `granularity` defaults to null/omitted from the query string, which the
+ * backend resolves to MONTH. Pass "DAY" for the Zero-Breakdown panels,
+ * which track a running as-of day rather than the selected report period.
  * @returns {Promise<{context:object, date:string|null}>}
  */
 export function getReliabilityLatestDate({
@@ -157,7 +168,9 @@ export function getReliabilityLatestDate({
  * @returns {Promise<{context:object, group_by:string, rows:object[]}>}
  */
 export function getEngineeringLossTree({ date, from, to, granularity = "MONTH" }) {
-  // Lost time is additive, so a range simply sums the days.
+  // As with the summary: `date` + `granularity` reads published rows (a
+  // month included). `from`/`to` sum the DAY rows of an arbitrary range —
+  // valid here without recomputation, since lost time is additive.
   const params = withScope({ date, date_from: from, date_to: to, granularity });
   return cachedEngineeringGet(`/engineering/reliability/loss-tree?${params}`);
 }

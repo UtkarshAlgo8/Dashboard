@@ -75,6 +75,18 @@ export function formatDayLabel(iso) {
   return month ? `${Number(m[3])} ${month} ${m[1]}` : String(iso);
 }
 
+/**
+ * "2026-09" (or "2026-09-14") -> "Sep 2026". The label for a MONTH-grain
+ * period: the page reads one published MONTH row, so naming a day range
+ * would misdescribe what is on screen.
+ */
+export function formatMonthLabel(monthKey) {
+  const m = /^(\d{4})-(\d{2})/.exec(String(monthKey));
+  if (!m) return String(monthKey);
+  const month = MONTH_LABELS[Number(m[2]) - 1];
+  return month ? `${month} ${m[1]}` : String(monthKey);
+}
+
 /** "2026-09" -> { from: "2026-09-01", to: "2026-09-30" }. */
 export function monthRangeFromKey(monthKey) {
   const [yStr, mStr] = String(monthKey).split("-");
@@ -86,7 +98,10 @@ export function monthRangeFromKey(monthKey) {
   return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(lastDay)}` };
 }
 
-/** Today in IST, truncated to the first of the month — the default report month. */
+/**
+ * Today in IST, truncated to the first of the month. Every MONTH row in gold
+ * is dated the 1st, so this doubles as "the current month's MONTH-row date".
+ */
 export function currentMonthKeyInIST() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -96,6 +111,16 @@ export function currentMonthKeyInIST() {
   const y = parts.find((p) => p.type === "year").value;
   const m = parts.find((p) => p.type === "month").value;
   return `${y}-${m}-01`;
+}
+
+/**
+ * The 1st of the month `offset` months from the current IST month, e.g.
+ * -11 -> "2025-10-01". Used for the trend modal's rolling window.
+ */
+export function monthKeyShiftedInIST(offset) {
+  const [y, m] = currentMonthKeyInIST().split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + offset, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
 /** number|null -> "1,234.56" | "—" */
@@ -588,8 +613,23 @@ export function TrendChart({ labels, values, unit }) {
   return <HighchartsReact highcharts={Highcharts} options={options} />;
 }
 
-/** Modal wrapper around TrendChart, fetching a MONTH history series on open. */
-export function TrendModal({ open, onClose, title, kpiName, unit, dateFrom = "2026-01-01", dateTo = "2026-09-01" }) {
+/**
+ * Modal wrapper around TrendChart, fetching a MONTH history series on open.
+ *
+ * The window ends at the CURRENT month rather than a hardcoded date — the
+ * feed's MONTH rollup includes the running month, and a pinned end date
+ * would silently stop extending the trend once the calendar moved past it.
+ * It starts 11 months earlier, so the chart is a rolling 12-month view.
+ */
+export function TrendModal({
+  open,
+  onClose,
+  title,
+  kpiName,
+  unit,
+  dateFrom = monthKeyShiftedInIST(-11),
+  dateTo = currentMonthKeyInIST(),
+}) {
   const [points, setPoints] = useState([]);
   const [loading, setLoading] = useState(true);
 
