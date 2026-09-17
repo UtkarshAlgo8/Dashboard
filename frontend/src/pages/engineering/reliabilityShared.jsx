@@ -7,7 +7,7 @@
  * QualityDashboard.jsx so the visual language matches), fetch-in-useEffect
  * drill panels. Backend wiring is real (not mock) — see api/engineering.js.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import {
@@ -280,7 +280,16 @@ export function Breadcrumb({ path, onNav }) {
  * `DTable`, generalized to take {label, render} column descriptors and an
  * optional row click handler (drill navigation).
  */
-export function DTable({ columns, rows, getRowKey, onRowClick, emptyMessage }) {
+export function DTable({
+  columns,
+  rows,
+  getRowKey,
+  onRowClick,
+  emptyMessage,
+  // Optional: the getRowKey value of the row that is currently drilled into.
+  // Matched against getRowKey, so callers do not need a second key scheme.
+  selectedRowKey,
+}) {
   const [sc, setSc] = useState(null);
   const [sd, setSd] = useState("desc");
 
@@ -364,13 +373,17 @@ export function DTable({ columns, rows, getRowKey, onRowClick, emptyMessage }) {
           </tr>
         </thead>
         <tbody>
-          {disp.map((row, ri) => (
+          {disp.map((row, ri) => {
+            const rowKey = getRowKey ? getRowKey(row, ri) : ri;
+            const selected = selectedRowKey != null && rowKey === selectedRowKey;
+            return (
             <tr
-              key={getRowKey ? getRowKey(row, ri) : ri}
+              key={rowKey}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               style={{
-                background: ri % 2 === 0 ? C.cd : C.rowAlt,
+                background: selected ? C.aL : ri % 2 === 0 ? C.cd : C.rowAlt,
                 cursor: onRowClick ? "pointer" : "default",
+                boxShadow: selected ? `inset 3px 0 0 ${C.ac}` : undefined,
               }}
             >
               {columns.map((col, ci) => (
@@ -390,7 +403,8 @@ export function DTable({ columns, rows, getRowKey, onRowClick, emptyMessage }) {
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -479,10 +493,119 @@ export const LOSS_TREE_LEVELS = [
 ];
 
 /**
- * Generic recursive drill panel — breadcrumb trail + sortable table, click a
- * row to go one level deeper. Reused for Breakdown/MTBF/MTTR (agg=undefined,
- * ancestor dims pinned so each group is one row) and Loss Tree levels 2-4
- * (agg="sum", status/section never pinned).
+ * One level of a drill: its own fetch, its own loading/error state, its own
+ * table. Owning the fetch per level is what lets the panel keep every level
+ * on screen at once — a shared `rows` state could only ever describe the
+ * deepest one.
+ */
+function DrillLevelTable({
+  level,
+  date,
+  granularity,
+  agg,
+  filters,
+  caption,
+  selectedRowKey,
+  onRowClick,
+  autoScroll,
+}) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const ref = useRef(null);
+
+  // Compared by value: `filters` is rebuilt by the parent on every render.
+  const filtersKey = JSON.stringify(filters);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getReliabilityKpiChildren({
+      kpiNames: level.kpiNames,
+      date,
+      granularity,
+      groupBy: level.groupBy,
+      agg,
+      ...filters,
+    })
+      .then((res) => {
+        if (!cancelled) setRows(Array.isArray(res?.rows) ? res.rows : []);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [level, date, granularity, agg, filtersKey]);
+
+  // A newly opened level is usually below the fold, and the tables above it
+  // stay on screen now — so without this a click looks like it did nothing.
+  // `block: "nearest"` only scrolls when the table really is out of view.
+  useEffect(() => {
+    if (!autoScroll || loading) return;
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [autoScroll, loading]);
+
+  const groupColumn = {
+    key: level.groupBy,
+    label: level.groupBy === "status" ? "Machine Category" : level.groupLabel,
+    render: (r) =>
+      level.groupBy === "status" ? <GradeChip grade={r[level.groupBy]} /> : (r[level.groupBy] ?? "—"),
+  };
+
+  return (
+    <div ref={ref}>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: C.md,
+          textTransform: "uppercase",
+          letterSpacing: ".5px",
+          marginBottom: 6,
+        }}
+      >
+        {caption}
+      </div>
+      {error ? (
+        <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
+          Drill fetch failed: {error.message || "Request failed"}
+        </div>
+      ) : loading ? (
+        <JKLoader message="Loading drill-down" />
+      ) : (
+        <DTable
+          columns={[groupColumn, ...level.columns]}
+          rows={rows}
+          getRowKey={(r) => r[level.groupBy]}
+          onRowClick={onRowClick}
+          selectedRowKey={selectedRowKey}
+          emptyMessage={`No data for ${caption}.`}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Generic recursive drill panel — a breadcrumb trail over a STACK of tables,
+ * one per level opened. Clicking a row appends the next level's table BELOW
+ * the current one instead of replacing it, so the whole path stays readable
+ * at once: the section you picked, the machines in it, the disciplines on
+ * that machine. The row you drilled through stays highlighted in its table.
+ *
+ * Clicking a different row in any table replaces everything below it, and a
+ * breadcrumb click collapses back to that level — both are the same
+ * `slice(0, i + 1)` truncation of `history`.
+ *
+ * Reused for Breakdown/MTBF/MTTR (agg=undefined, ancestor dims pinned so
+ * each group is one row) and Loss Tree levels 2-4 (agg="sum", status/section
+ * never pinned).
  *
  * `initialFilters`/`initialLabel` seed the root view — Loss Tree opens
  * already scoped to the clicked pie category (productType), so its root
@@ -497,91 +620,77 @@ export function ReliabilityDrillPanel({
   initialFilters = {},
   initialLabel,
 }) {
-  const [history, setHistory] = useState([
-    { filters: initialFilters, crumbs: initialLabel ? [initialLabel] : [] },
-  ]);
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // `picked` is the group value clicked in the PARENT table to open this
+  // level — it is what keeps that parent row highlighted once the child
+  // table is on screen. The root level has no parent, hence null.
+  const seed = () => [
+    { filters: initialFilters, crumbs: initialLabel ? [initialLabel] : [], picked: null },
+  ];
+  const [history, setHistory] = useState(seed);
 
-  // Reset the drill when the caller opens a different KPI/date.
+  // `initialFilters` is a fresh object literal on every render of the caller,
+  // so it can only be compared by value — as a dep by identity it would reset
+  // the drill on every render and no row click would ever stick.
+  const initialFiltersKey = JSON.stringify(initialFilters);
+
+  // Reset the drill when the caller opens a different KPI/date — or reseeds
+  // it with a different scope. That last case is the Loss Tree pie: clicking
+  // a second slice changes only `initialFilters`/`initialLabel`, so without
+  // them here the panel kept the FIRST slice's productType filter and
+  // appeared not to respond to any slice after the first.
   useEffect(() => {
-    setHistory([{ filters: initialFilters, crumbs: initialLabel ? [initialLabel] : [] }]);
-  }, [levels, date, granularity]);
+    // seed() not seed — a bare function reaching setState is read as an
+    // updater, and this is a plain replacement.
+    setHistory(seed());
+  }, [levels, date, granularity, initialFiltersKey, initialLabel]);
 
-  const current = history[history.length - 1];
-  const levelIndex = history.length - 1;
-  const level = levels[levelIndex];
-
-  useEffect(() => {
-    if (!level) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    getReliabilityKpiChildren({
-      kpiNames: level.kpiNames,
-      date,
-      granularity,
-      groupBy: level.groupBy,
-      agg,
-      ...current.filters,
-    })
-      .then((res) => {
-        if (!cancelled) setRows(Array.isArray(res?.rows) ? res.rows : []);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [level, date, granularity, agg, JSON.stringify(current.filters)]);
-
-  if (!level) return null;
-
-  const isLastLevel = levelIndex >= levels.length - 1;
-  const onRowClick = isLastLevel
-    ? undefined
-    : (row) => {
-        if (row.drill_down && row.drill_down.is_leaf) return;
-        const param = GROUP_TO_PARAM[level.groupBy];
-        const label = String(row[level.groupBy] ?? "—");
-        setHistory((h) => [
-          ...h,
-          { filters: { ...current.filters, [param]: row[level.groupBy] }, crumbs: [...current.crumbs, label] },
-        ]);
-      };
-
-  const groupColumn = {
-    key: level.groupBy,
-    label: level.groupBy === "status" ? "Machine Category" : level.groupLabel,
-    render: (r) =>
-      level.groupBy === "status" ? <GradeChip grade={r[level.groupBy]} /> : (r[level.groupBy] ?? "—"),
-  };
-  const columns = [groupColumn, ...level.columns];
-  const path = [rootLabel, ...current.crumbs];
+  const deepest = history[history.length - 1];
+  const path = [rootLabel, ...deepest.crumbs];
 
   return (
     <div>
       <Breadcrumb path={path} onNav={(i) => setHistory((h) => h.slice(0, i + 1))} />
-      {error ? (
-        <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
-          Drill fetch failed: {error.message || "Request failed"}
-        </div>
-      ) : loading ? (
-        <JKLoader message="Loading drill-down" />
-      ) : (
-        <DTable
-          columns={columns}
-          rows={rows}
-          getRowKey={(r) => r[level.groupBy]}
-          onRowClick={onRowClick}
-          emptyMessage={`No data for ${path[path.length - 1]}.`}
-        />
-      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {history.map((entry, i) => {
+          const level = levels[i];
+          if (!level) return null;
+          const isLastLevel = i >= levels.length - 1;
+          const scope = entry.crumbs[entry.crumbs.length - 1];
+          return (
+            <DrillLevelTable
+              key={i}
+              level={level}
+              date={date}
+              granularity={granularity}
+              agg={agg}
+              filters={entry.filters}
+              caption={scope ? `${level.groupLabel} · ${scope}` : level.groupLabel}
+              // Highlight the row this table was drilled through, if any.
+              selectedRowKey={history[i + 1]?.picked}
+              autoScroll={i > 0 && i === history.length - 1}
+              onRowClick={
+                isLastLevel
+                  ? undefined
+                  : (row) => {
+                      if (row.drill_down && row.drill_down.is_leaf) return;
+                      const value = row[level.groupBy];
+                      const param = GROUP_TO_PARAM[level.groupBy];
+                      setHistory((h) => [
+                        // Everything below this table is replaced, so picking
+                        // a different row re-roots the stack from here down.
+                        ...h.slice(0, i + 1),
+                        {
+                          filters: { ...entry.filters, [param]: value },
+                          crumbs: [...entry.crumbs, String(value ?? "—")],
+                          picked: value,
+                        },
+                      ]);
+                    }
+              }
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
