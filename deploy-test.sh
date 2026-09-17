@@ -23,7 +23,7 @@ BRANCH="${BRANCH:-test/redis-cache}"
 # the backend at an absolute URL (nginx.conf proxies nothing), and Vite inlines
 # that URL at BUILD time -- so a wrong value here ships a bundle that talks to
 # the wrong machine. It is also the CORS origin the backend accepts.
-VM_HOST="${VM_HOST:-35.224.200.66}"
+VM_HOST="${VM_HOST:-136.112.107.154}"
 
 BE_PORT="${BE_PORT:-8815}"
 FE_PORT="${FE_PORT:-3015}"
