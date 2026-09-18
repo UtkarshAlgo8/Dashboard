@@ -205,6 +205,13 @@ export function ZeroBreakdownPanel() {
       date: sectionDate,
       granularity: "DAY",
       groupBy: "section",
+      // SUM, not join: this KPI is published per (status, section), so a
+      // section spans up to five rows. The join transform keeps only the
+      // first of them, which silently dropped every machine outside a
+      // section's first-listed category — on 2026-09-17 that read 3 clean
+      // machines where the published rows add to 5. Counts are additive,
+      // so summing them is the same arithmetic the tiles claim to show.
+      agg: "sum",
     })
       .then((res) => !cancelled && setSectionRows(Array.isArray(res?.rows) ? res.rows : []))
       .catch((err) => !cancelled && setError(err));
@@ -333,6 +340,9 @@ export function useZeroBreakdownTotal() {
           date: res.date,
           granularity: "DAY",
           groupBy: "section",
+          // Same per-(status, section) publication as the panel above —
+          // summed, or the headline under-reports.
+          agg: "sum",
         });
       })
       .then((res) => {
