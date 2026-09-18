@@ -396,7 +396,7 @@ export function DTable({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {col.render ? col.render(row) : (row[col.key] ?? "—")}
+                  {col.render ? col.render(row, rows) : (row[col.key] ?? "—")}
                 </td>
               ))}
             </tr>
@@ -420,57 +420,231 @@ const GROUP_TO_PARAM = {
   product_type: "productType",
 };
 
-function breakdownLevel(groupBy, groupLabel, pctKpi, minKpi) {
+/**
+ * Rule 5: "5 disciplines, fixed list: Mechanical · Electronics · Electrical ·
+ * Instrumentation · Utility. Show all five with an em-dash where empty."
+ *
+ * A discipline with no breakdown in the period has no published row, so the
+ * API returns four rows and the fifth silently vanishes — which reads as "we
+ * have four disciplines", not "this one was clean". Levels grouped by
+ * `sub_section` pad up to the fixed five; the padded rows carry no measures,
+ * so every column renders its own em-dash.
+ */
+export const DISCIPLINES = [
+  "Mechanical",
+  "Electronics",
+  "Electrical",
+  "Instrumentation",
+  "Utility",
+];
+
+/**
+ * "Share of parent" — the spec lists it as a drill column at four levels and
+ * names it in rule 3 as one of the five the UI is allowed to calculate.
+ *
+ * It is always a share of an ADDITIVE measure (downtime minutes, lost time),
+ * never of a ratio: the rows at one drill level are exactly the children of
+ * the level above, so their values sum to the parent and a plain percentage
+ * of that sum is the share. Sharing a Breakdown % or an MTBF would be rule 8
+ * arithmetic on a rate, so no share column is ever built over one.
+ *
+ * `sortValue` is the raw measure — share is monotonic in it, so the column
+ * sorts without the header having to recompute anything.
+ */
+function shareColumn(valueKey, label = "Share") {
+  return {
+    key: `share_of_${valueKey}`,
+    label,
+    align: "right",
+    sortValue: (r) => r[valueKey],
+    render: (r, rows) => {
+      const total = rows.reduce((sum, row) => sum + (row[valueKey] ?? 0), 0);
+      const value = r[valueKey];
+      if (value == null || !total) return "—";
+      return fmtNum((value / total) * 100, 1) + "%";
+    },
+  };
+}
+
+/**
+ * @param {string} machinesKpi - `BreakdownMachines_*` for this level, where the
+ *   spec publishes one (grade and grade×section only — deeper levels have no
+ *   such file, and at machine level the count is 1 by definition).
+ */
+function breakdownLevel(groupBy, groupLabel, pctKpi, minKpi, machinesKpi) {
+  const columns = [
+    { key: pctKpi, label: "Breakdown %", align: "right", render: (r) => fmtNum(r[pctKpi], 2) + "%" },
+    {
+      key: minKpi,
+      label: "Downtime",
+      align: "right",
+      // The ETL publishes a 0% breakdown row for a machine that ran clean
+      // but no downtime row at all, which rendered as "0.00% … —". A
+      // published 0% IS 0 minutes by definition, so show it rather than
+      // leaving a gap — this reads the stored 0, it does not invent one.
+      render: (r) => fmtMinHrs(r[minKpi] ?? (r[pctKpi] === 0 ? 0 : null)),
+    },
+  ];
+  if (machinesKpi) {
+    columns.push({
+      key: machinesKpi,
+      label: "Machines",
+      align: "right",
+      render: (r) => fmtNum(r[machinesKpi]),
+    });
+  }
+  columns.push(shareColumn(minKpi));
   return {
     groupBy,
     groupLabel,
-    kpiNames: [pctKpi, minKpi],
-    columns: [
-      { key: pctKpi, label: "Breakdown %", align: "right", render: (r) => fmtNum(r[pctKpi], 2) + "%" },
-      {
-        key: minKpi,
-        label: "Downtime",
-        align: "right",
-        // The ETL publishes a 0% breakdown row for a machine that ran clean
-        // but no downtime row at all, which rendered as "0.00% … —". A
-        // published 0% IS 0 minutes by definition, so show it rather than
-        // leaving a gap — this reads the stored 0, it does not invent one.
-        render: (r) => fmtMinHrs(r[minKpi] ?? (r[pctKpi] === 0 ? 0 : null)),
-      },
-    ],
+    kpiNames: machinesKpi ? [pctKpi, minKpi, machinesKpi] : [pctKpi, minKpi],
+    columns,
+  };
+}
+
+/**
+ * Turn a level into its DATE-WISE form: keyed by (its dimension, date) and
+ * read at DAY grain over the whole period the panel is showing, so the last
+ * table answers WHEN each failure happened rather than only its total for
+ * the month.
+ *
+ * The rows are still published values, one per (failure, day) — nothing is
+ * summed or averaged here, so the Breakdown % column stays a stored rate at
+ * its own grain (rule 8). The daily rows of one failure therefore do NOT
+ * add up to the monthly Breakdown % on the level above; the Downtime column,
+ * being additive, does.
+ */
+function dateWise(level) {
+  return {
+    ...level,
+    groupBy: `${level.groupBy},date`,
+    groupLabels: [level.groupLabel, "Date"],
+    granularity: "DAY",
   };
 }
 
 export const BREAKDOWN_LEVELS = [
-  breakdownLevel("status", "Machine Category", "Breakdown_Pct_Grade", "BreakdownMin_Grade"),
-  breakdownLevel("section", "Section", "Breakdown_Pct_Grade_Section", "BreakdownMin_Grade_Section"),
+  breakdownLevel("status", "Machine Category", "Breakdown_Pct_Grade", "BreakdownMin_Grade", "BreakdownMachines_Grade"),
+  breakdownLevel("section", "Section", "Breakdown_Pct_Grade_Section", "BreakdownMin_Grade_Section", "BreakdownMachines_Grade_Section"),
   breakdownLevel("machine", "Machine", "Breakdown_Pct_m", "BreakdownMin_m"),
-  breakdownLevel("sub_section", "Discipline", "Breakdown_Pct_m_Discipline", "BreakdownMin_m_Discipline"),
-  breakdownLevel("remarks", "Failure", "Breakdown_Pct_m_Failure", "BreakdownMin_m_Failure"),
+  { ...breakdownLevel("sub_section", "Discipline", "Breakdown_Pct_m_Discipline", "BreakdownMin_m_Discipline"), padTo: DISCIPLINES },
+  dateWise(
+    breakdownLevel("remarks", "Failure", "Breakdown_Pct_m_Failure", "BreakdownMin_m_Failure"),
+  ),
 ];
 
-function singleMetricLevel(groupBy, groupLabel, kpiName, label) {
-  return {
-    groupBy,
-    groupLabel,
-    kpiNames: [kpiName],
-    columns: [{ key: kpiName, label, align: "right", render: (r) => fmtMinHrs(r[kpiName]) }],
-  };
+/**
+ * An MTBF or MTTR level: the rate itself, plus whichever of the spec's two
+ * companion columns the engine actually publishes at that grain.
+ *
+ * The spec asks for "breakdown events" beside both rates, and "total repair
+ * minutes" beside MTTR. Its own file list decides where each can appear:
+ *
+ *   events  — `BreakdownOcc_m` and `BreakdownOcc_m_Failure` only. There is no
+ *             occurrence file at grade, grade×section or discipline grain, so
+ *             those levels carry no events column rather than a column of
+ *             em-dashes. Occurrence counts also do NOT sum between levels
+ *             (19,186 → 19,302 → 19,369), so one could not be built by
+ *             rolling the machine file up either.
+ *   minutes — `BreakdownMin_*` exists at every grain, so MTTR carries repair
+ *             minutes all the way down.
+ *   operating — MTBF's "operating time (min)" is `OperatingMin_m`, published
+ *             at machine grain only (confirmed against gold.gold: 2,690 MONTH
+ *             rows). No grade, section or discipline equivalent exists.
+ */
+function rateLevel(groupBy, groupLabel, kpiName, label, { minutesKpi, occKpi, operatingKpi } = {}) {
+  const kpiNames = [kpiName];
+  const columns = [{ key: kpiName, label, align: "right", render: (r) => fmtMinHrs(r[kpiName]) }];
+  if (occKpi) {
+    kpiNames.push(occKpi);
+    columns.push({
+      key: occKpi,
+      label: "Events",
+      align: "right",
+      render: (r) => fmtNum(r[occKpi]),
+    });
+  }
+  if (minutesKpi) {
+    kpiNames.push(minutesKpi);
+    columns.push({
+      key: minutesKpi,
+      label: "Repair time",
+      align: "right",
+      render: (r) => fmtMinHrs(r[minutesKpi]),
+    });
+  }
+  if (operatingKpi) {
+    kpiNames.push(operatingKpi);
+    columns.push({
+      key: operatingKpi,
+      label: "Operating time",
+      align: "right",
+      render: (r) => fmtMinHrs(r[operatingKpi]),
+    });
+  }
+  return { groupBy, groupLabel, kpiNames, columns };
 }
 
+/**
+ * Why every discipline row reads HIGHER than the machine it sits under, which
+ * looks at a glance like the machine filter was dropped on the way down.
+ *
+ * It was not — checked against gold.gold on 2026-09-18 for 0203 / Sep 2026:
+ * `MTBF_m_Discipline` publishes exactly the six rows the table draws
+ * (Electronics 3,896 · Mechanical 2,125 · Utility 23,376 · Instrumentation
+ * 7,792 · Electrical and Other blank), and every one of them carries
+ * machine='0203', section='Mixing', status='A', so all three ancestor pins
+ * bite. The plant-wide figures are different numbers entirely.
+ *
+ * The rows are larger because a discipline's MTBF counts the SAME operating
+ * minutes against only ITS OWN failures. Fewer failures in the denominator,
+ * longer mean time between them — so a discipline is always above the machine
+ * total, and it is the RATES that add, not the times:
+ *
+ *   1/3,896 + 1/2,125 + 1/23,376 + 1/7,792 = 1/1,113 = MTBF_m(0203)
+ *
+ * which closes to the minute. A discipline row is "how long 0203 runs before
+ * THIS discipline fails it", never a slice of the 1,113.
+ */
+const MTBF_DISCIPLINE_NOTE =
+  "Each discipline counts this machine's operating time against its own failures only, " +
+  "so every row sits above the machine's overall MTBF — the rates add up to it, not the times.";
+
 export const MTBF_LEVELS = [
-  singleMetricLevel("status", "Machine Category", "MTBF_Grade", "MTBF"),
-  singleMetricLevel("section", "Section", "MTBF_Grade_Section", "MTBF"),
-  singleMetricLevel("machine", "Machine", "MTBF_m", "MTBF"),
-  singleMetricLevel("sub_section", "Discipline", "MTBF_m_Discipline", "MTBF"),
+  rateLevel("status", "Machine Category", "MTBF_Grade", "MTBF"),
+  rateLevel("section", "Section", "MTBF_Grade_Section", "MTBF"),
+  rateLevel("machine", "Machine", "MTBF_m", "MTBF", {
+    occKpi: "BreakdownOcc_m",
+    operatingKpi: "OperatingMin_m",
+  }),
+  {
+    ...rateLevel("sub_section", "Discipline", "MTBF_m_Discipline", "MTBF"),
+    padTo: DISCIPLINES,
+    note: MTBF_DISCIPLINE_NOTE,
+  },
 ];
 
 export const MTTR_LEVELS = [
-  singleMetricLevel("status", "Machine Category", "MTTR_Grade", "MTTR"),
-  singleMetricLevel("section", "Section", "MTTR_Grade_Section", "MTTR"),
-  singleMetricLevel("machine", "Machine", "MTTR_m", "MTTR"),
-  singleMetricLevel("sub_section", "Discipline", "MTTR_m_Discipline", "MTTR"),
-  singleMetricLevel("remarks", "Failure", "MTTR_m_Failure", "MTTR"),
+  rateLevel("status", "Machine Category", "MTTR_Grade", "MTTR", {
+    minutesKpi: "BreakdownMin_Grade",
+  }),
+  rateLevel("section", "Section", "MTTR_Grade_Section", "MTTR", {
+    minutesKpi: "BreakdownMin_Grade_Section",
+  }),
+  rateLevel("machine", "Machine", "MTTR_m", "MTTR", {
+    occKpi: "BreakdownOcc_m",
+    minutesKpi: "BreakdownMin_m",
+  }),
+  {
+    ...rateLevel("sub_section", "Discipline", "MTTR_m_Discipline", "MTTR", {
+      minutesKpi: "BreakdownMin_m_Discipline",
+    }),
+    padTo: DISCIPLINES,
+  },
+  rateLevel("remarks", "Failure", "MTTR_m_Failure", "MTTR", {
+    occKpi: "BreakdownOcc_m_Failure",
+    minutesKpi: "BreakdownMin_m_Failure",
+  }),
 ];
 
 function lossLevel(groupBy, groupLabel, timeKpi, occKpi) {
@@ -480,6 +654,9 @@ function lossLevel(groupBy, groupLabel, timeKpi, occKpi) {
   if (occKpi) {
     columns.push({ key: occKpi, label: "Occurrences", align: "right", render: (r) => fmtNum(r[occKpi]) });
   }
+  // Lost time is a plain total, so its share of the level is the spec's
+  // "share" column at Loss Tree levels 2-4.
+  columns.push(shareColumn(timeKpi));
   return { groupBy, groupLabel, kpiNames: occKpi ? [timeKpi, occKpi] : [timeKpi], columns };
 }
 
@@ -514,6 +691,16 @@ function DrillLevelTable({
   // Compared by value: `filters` is rebuilt by the parent on every render.
   const filtersKey = JSON.stringify(filters);
 
+  // A level may read at its OWN granularity: the date-wise Failure level is
+  // DAY grain inside a MONTH panel. One published DAY row is one day, so
+  // covering the panel's month means asking for its whole date window —
+  // without it the level would show the 1st of the month and nothing else.
+  const levelGranularity = level.granularity ?? granularity;
+  const dayWindow =
+    levelGranularity === "DAY" && granularity === "MONTH"
+      ? monthRangeFromKey(date)
+      : null;
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -521,7 +708,9 @@ function DrillLevelTable({
     getReliabilityKpiChildren({
       kpiNames: level.kpiNames,
       date,
-      granularity,
+      from: dayWindow?.from,
+      to: dayWindow?.to,
+      granularity: levelGranularity,
       groupBy: level.groupBy,
       agg,
       ...filters,
@@ -548,12 +737,47 @@ function DrillLevelTable({
     ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [autoScroll, loading]);
 
-  const groupColumn = {
-    key: level.groupBy,
-    label: level.groupBy === "status" ? "Machine Category" : level.groupLabel,
-    render: (r) =>
-      level.groupBy === "status" ? <GradeChip grade={r[level.groupBy]} /> : (r[level.groupBy] ?? "—"),
-  };
+  // One column per key dimension: a plain level has one, the date-wise
+  // Failure level has two (the failure and the day it happened).
+  const dims = level.groupBy.split(",");
+  const groupColumns = dims.map((dim, i) => ({
+    key: dim,
+    label: dim === "status" ? "Machine Category" : (level.groupLabels?.[i] ?? level.groupLabel),
+    render: (r) => {
+      if (dim === "status") return <GradeChip grade={r[dim]} />;
+      if (dim === "date") return r.date ? formatDayLabel(r.date) : "—";
+      return r[dim] ?? "—";
+    },
+    // Sorted on the raw ISO string, which is already chronological — the
+    // rendered "4 Aug 2026" is not.
+    sortValue: dim === "date" ? (r) => r.date ?? null : undefined,
+  }));
+  // Single-dim levels keep the RAW group value as their key — the parent
+  // highlights a drilled-through row by comparing it against the value it
+  // clicked, and a stringified numeric machine code would never match.
+  const rowKey = (r) =>
+    dims.length === 1 ? r[dims[0]] : dims.map((d) => r[d] ?? "—").join(" · ");
+
+  // Rule 5 — a level with a fixed member list shows every member, whether or
+  // not the period published a row for it. The padded row carries the group
+  // name and nothing else, so each measure renders its own em-dash and a
+  // clean discipline reads as clean rather than as missing.
+  const shownRows = useMemo(() => {
+    if (!level.padTo) return rows;
+    const present = new Set(rows.map((r) => r[level.groupBy]));
+    const missing = level.padTo
+      .filter((name) => !present.has(name))
+      .map((name) => ({ [level.groupBy]: name }));
+    return missing.length ? [...rows, ...missing] : rows;
+  }, [rows, level]);
+
+  // A date-keyed level arrives in whatever order the rows were published;
+  // chronological is the only order that reads as a timeline. Any header
+  // click still re-sorts from here.
+  const orderedRows = useMemo(() => {
+    if (!dims.includes("date")) return shownRows;
+    return [...shownRows].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  }, [shownRows, level.groupBy]);
 
   return (
     <div ref={ref}>
@@ -577,13 +801,18 @@ function DrillLevelTable({
         <JKLoader message="Loading drill-down" />
       ) : (
         <DTable
-          columns={[groupColumn, ...level.columns]}
-          rows={rows}
-          getRowKey={(r) => r[level.groupBy]}
+          columns={[...groupColumns, ...level.columns]}
+          rows={orderedRows}
+          getRowKey={rowKey}
           onRowClick={onRowClick}
           selectedRowKey={selectedRowKey}
           emptyMessage={`No data for ${caption}.`}
         />
+      )}
+      {level.note && !error && !loading && (
+        <div style={{ fontSize: 11.5, color: C.mu, lineHeight: 1.5, marginTop: 6 }}>
+          {level.note}
+        </div>
       )}
     </div>
   );

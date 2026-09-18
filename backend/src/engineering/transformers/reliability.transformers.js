@@ -34,32 +34,71 @@ const CARRY_FORWARD_DIMS = [
 ];
 
 /**
+ * A `group_by` is one dimension ("machine") or a comma-separated tuple of
+ * them ("remarks,date"). The tuple form is what the date-wise Failure level
+ * reads: one row per (failure, day) over a month of DAY rows, so the drill
+ * can show WHEN each failure happened instead of only its monthly total.
+ *
+ * @param {string} groupBy
+ * @returns {string[]}
+ */
+function groupDims(groupBy) {
+  return String(groupBy)
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean);
+}
+
+// Key for a row's group. A row missing ANY part of the key belongs to no
+// group and is dropped — never bucketed under a blank, which would silently
+// merge unrelated measurements into one line.
+const KEY_SEP = "\u0000";
+
+function groupKey(row, dims) {
+  const parts = dims.map((d) => {
+    const v = row[d];
+    // A `date` key is the DAY, not the instant: the feed writes some rows as
+    // "2026-08-04" and some as "2026-08-04 00:00:00", and ungrouped those
+    // would be two lines for one day. Same ISO slice `toLatestDate` takes.
+    return d === "date" && v != null ? String(v).slice(0, 10) : v;
+  });
+  if (parts.some((v) => v == null || v === "")) return null;
+  return parts.join(KEY_SEP);
+}
+
+/**
  * kpi-children: pivots flat rows into one row per group (whichever
- * dimension is `groupBy` at this drill level), JOINing the requested
- * kpi_names as sibling columns. Valid when the scope filters already pin
- * every OTHER dimension to a single value, so each group has at most one
- * row per kpi_name (true for Breakdown/MTBF/MTTR/Top-Machine/Zero-
- * Breakdown — NOT for Loss Tree, which never pins status/section; see
- * `toLossTree` below for that family).
+ * dimension — or tuple of dimensions — is `groupBy` at this drill level),
+ * JOINing the requested kpi_names as sibling columns. Valid when the scope
+ * filters already pin every OTHER dimension to a single value, so each
+ * group has at most one row per kpi_name (true for Breakdown/MTBF/MTTR/
+ * Top-Machine/Zero-Breakdown — NOT for Loss Tree, which never pins
+ * status/section; see `toLossTree` below for that family).
  *
  * @param {Array} rows
  * @param {{ kpiNames: string[], groupBy: string }} opts
  */
 export function toKpiChildren(rows, { kpiNames, groupBy }) {
+  const dims = groupDims(groupBy);
   // Preserve first-seen order of groups.
-  const groups = [];
+  const keys = [];
   const seen = new Set();
   for (const r of rows) {
-    const g = r[groupBy];
-    if (g != null && !seen.has(g)) {
-      seen.add(g);
-      groups.push(g);
+    const k = groupKey(r, dims);
+    if (k != null && !seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
     }
   }
   const anchor = kpiNames[0]; // drill anchor = the clicked/primary base
-  const outRows = groups.map((group) => {
-    const scopeRows = rows.filter((r) => r[groupBy] === group);
-    const out = { [groupBy]: group };
+  const outRows = keys.map((key) => {
+    const scopeRows = rows.filter((r) => groupKey(r, dims) === key);
+    // Each dimension stays its own field, so the UI labels the tuple with
+    // one column per part rather than parsing a joined string back apart.
+    const out = {};
+    dims.forEach((dim, i) => {
+      out[dim] = key.split(KEY_SEP)[i];
+    });
     for (const name of kpiNames) {
       const row = scopeRows.find((r) => r.kpi_name === name);
       out[name] = row ? valueOrNull(row.actual_value) : null;
@@ -67,7 +106,7 @@ export function toKpiChildren(rows, { kpiNames, groupBy }) {
     const anchorRow = scopeRows.find((r) => r.kpi_name === anchor) ?? scopeRows[0];
     out.drill_down = parseDrillDown(anchorRow?.drill_down_attribute);
     for (const dim of CARRY_FORWARD_DIMS) {
-      if (dim === groupBy) continue;
+      if (dims.includes(dim)) continue;
       if (anchorRow && anchorRow[dim] != null) out[dim] = anchorRow[dim];
     }
     return out;

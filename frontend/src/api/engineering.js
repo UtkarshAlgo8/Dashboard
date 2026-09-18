@@ -79,6 +79,11 @@ export function getReliabilitySummary({ date, from, to, granularity = "MONTH" })
 export function getReliabilityKpiChildren({
   kpiNames,
   date,
+  // Optional window. With `granularity: "DAY"` it turns a level keyed by
+  // `remarks,date` into the date-wise Failure table: one row per (failure,
+  // day) across the month, instead of one row per failure for the month.
+  from,
+  to,
   granularity = "MONTH",
   groupBy,
   status,
@@ -94,6 +99,8 @@ export function getReliabilityKpiChildren({
   const params = withScope({
     kpi_names: kpiNames.join(","),
     date,
+    date_from: from,
+    date_to: to,
     granularity,
     group_by: groupBy,
     status,

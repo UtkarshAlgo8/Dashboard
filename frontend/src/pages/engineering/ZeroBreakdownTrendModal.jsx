@@ -2,78 +2,99 @@
 /**
  * Zero Breakdown Machines behind its trend icon.
  *
- * Look and interaction follow the mock's `chart: "progress"` treatment for
- * this KPI — a rounded count bar with the figure inside it, the share
- * underneath, then a "TRAJECTORY" line (reliabilityChrome.jsx carries the
- * shell and blocks).
+ * Look and interaction are the mock's `TrendPanel` for a `chart: "progress"`
+ * KPI, block for block: a 740px card centred on screen, a TIME RANGE row
+ * under the header, then "Progress to Target" — 0 on the left and the amber
+ * target on the right, a rounded bar with the count inside it and an amber
+ * tick where the target falls, "84% of target" underneath with an ON TRACK
+ * chip once the bar clears it — and finally the TRAJECTORY line.
+ *
+ * The mock's range presets are Today/Week/Month/Year. Gold publishes DAY and
+ * MONTH rows only (backend `ALLOWED_GRANULARITIES`), so the row carries the
+ * two the data can actually answer: Daily walks the last 30 days, Monthly the
+ * last 12 months.
  *
  * Data follows the KPI spec:
- *   - the count and the trajectory are `ZeroBreakdownMachines_Section` at
- *     DAY grain, summed across each day's (status, section) rows — rule 3b,
- *     "sum their rows for the unfiltered figure"; a count is additive.
- *   - the spec's card reads "17 / 221 machines", so the bar is measured
- *     against the machine fleet — one published `ScheduledMin_m` row per
- *     machine scheduled in the period. There is no target for this KPI in
- *     the spec, so none is drawn.
- *   - DAY grain throughout, to agree with the card: both are "as of" a
- *     running date, not "during a month" (see reliabilityPanels.jsx).
+ *   - the count and the trajectory are `ZeroBreakdownMachines_Section`,
+ *     summed across each period's (status, section) rows — rule 3b, "sum
+ *     their rows for the unfiltered figure"; a count is additive.
+ *   - the target is the mock's ≥50, carried in reliabilityTargets.js. The
+ *     spec publishes no `threshold_value` for this KPI.
+ *   - the headline count stays at DAY grain to agree with the card, which is
+ *     "as of" a running date rather than "during a month" (see
+ *     reliabilityPanels.jsx). Only the trajectory follows the range chips.
  */
 import { useEffect, useState } from "react";
-import {
-  getReliabilityKpiChildren,
-  getReliabilityKpiHistory,
-} from "@/api/engineering.js";
+import { getReliabilityKpiHistory } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C, TrendChart, fmtNum } from "./reliabilityShared.jsx";
-import { AnalysisModal, Block } from "./reliabilityChrome.jsx";
+import {
+  AnalysisModal,
+  Block,
+  Chip,
+  ControlLabel,
+  ControlRow,
+} from "./reliabilityChrome.jsx";
+import { TARGETS } from "./reliabilityTargets.js";
+
+const RANGES = {
+  daily: { id: "daily", label: "Daily", granularity: "DAY", back: 29, unit: "day" },
+  monthly: { id: "monthly", label: "Monthly", granularity: "MONTH", back: 11, unit: "month" },
+};
+
+/** Start of the window, `back` days or months before `asOf`. */
+function windowStart(asOf, range) {
+  const d = new Date(asOf + "T00:00:00Z");
+  if (range.unit === "day") d.setUTCDate(d.getUTCDate() - range.back);
+  else {
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() - range.back);
+  }
+  return d.toISOString().slice(0, 10);
+}
 
 /**
- * @param {{ open: boolean, onClose: () => void, total: number|null, asOf: string|null,
- *           date: string, granularity: string }} props
+ * @param {{ open: boolean, onClose: () => void, total: number|null, asOf: string|null }} props
  */
-function ZeroBreakdownTrendModal({ open, onClose, total, asOf, date, granularity }) {
+function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
+  const [rangeId, setRangeId] = useState("daily");
   const [points, setPoints] = useState([]);
-  const [fleet, setFleet] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const range = RANGES[rangeId];
+  const target = TARGETS.zeroBreakdownMachines;
 
   useEffect(() => {
     if (!open || !asOf) return;
     let cancelled = false;
     setLoading(true);
-    const from = new Date(asOf + "T00:00:00Z");
-    from.setUTCDate(from.getUTCDate() - 29);
-    Promise.all([
-      getReliabilityKpiHistory({
-        kpiName: "ZeroBreakdownMachines_Section",
-        dateFrom: from.toISOString().slice(0, 10),
-        dateTo: asOf,
-        granularity: "DAY",
-      }),
-      getReliabilityKpiChildren({
-        kpiNames: ["ScheduledMin_m"],
-        date,
-        granularity,
-        groupBy: "machine",
-      }),
-    ])
-      .then(([hist, fleetRes]) => {
+    getReliabilityKpiHistory({
+      kpiName: "ZeroBreakdownMachines_Section",
+      dateFrom: windowStart(asOf, range),
+      dateTo: asOf,
+      granularity: range.granularity,
+    })
+      .then((hist) => {
         if (cancelled) return;
-        const perDay = new Map();
+        const perPeriod = new Map();
         for (const p of Array.isArray(hist?.points) ? hist.points : []) {
           if (p.value == null) continue;
-          const day = String(p.date).slice(0, 10);
-          perDay.set(day, (perDay.get(day) ?? 0) + p.value);
+          const key = String(p.date).slice(0, 10);
+          perPeriod.set(key, (perPeriod.get(key) ?? 0) + p.value);
         }
-        setPoints([...perDay.entries()].sort((a, b) => a[0].localeCompare(b[0])));
-        setFleet(Array.isArray(fleetRes?.rows) ? fleetRes.rows.length : null);
+        setPoints([...perPeriod.entries()].sort((a, b) => a[0].localeCompare(b[0])));
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [open, asOf, date, granularity]);
+  }, [open, asOf, range]);
 
-  const share = total != null && fleet ? (total / fleet) * 100 : null;
+  const pct = total == null ? null : Math.min(150, Math.max(0, (total / target) * 100));
+  const onTarget = pct != null && pct >= 100;
+  // The tick sits where the target falls on a bar scaled to whichever of the
+  // two is larger — the mock's rule, so the target never runs off the end.
+  const tickPct = Math.min(100, (target / Math.max(total ?? 0, target)) * 100);
 
   return (
     <AnalysisModal
@@ -82,11 +103,18 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf, date, granularity
       eyebrow="KPI Trend Analysis"
       title="Zero Breakdown Machines"
       maxWidth={740}
+      align="center"
     >
-      <Block
-        title={`Machines running clean${asOf ? ` — as of ${asOf}` : ""}`}
-        note="Counted from ZeroBreakdownMachines_Section at DAY grain, summed across that day's section rows, against the machines scheduled to run in this period. No target is published for this KPI, so the bar carries no goal line."
-      >
+      <ControlRow last>
+        <ControlLabel>Time range</ControlLabel>
+        {Object.values(RANGES).map((r) => (
+          <Chip key={r.id} on={rangeId === r.id} onClick={() => setRangeId(r.id)}>
+            {r.label}
+          </Chip>
+        ))}
+      </ControlRow>
+
+      <Block title={`Progress to Target${asOf ? ` — as of ${asOf}` : ""}`}>
         <div
           style={{
             display: "flex",
@@ -98,9 +126,7 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf, date, granularity
           }}
         >
           <span style={{ fontWeight: 600 }}>0</span>
-          <span style={{ fontWeight: 600 }}>
-            {fleet == null ? "—" : `${fmtNum(fleet)} machines scheduled`}
-          </span>
+          <span style={{ fontWeight: 700, color: C.am }}>Target: {target} machines</span>
         </div>
         <div
           style={{
@@ -114,10 +140,10 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf, date, granularity
         >
           <div
             style={{
-              width: `${Math.min(100, Math.max(share ?? 0, 0))}%`,
+              width: `${Math.min(100, pct ?? 0)}%`,
               minWidth: 64,
               height: "100%",
-              background: C.gn,
+              background: onTarget ? C.gn : C.bl,
               display: "flex",
               alignItems: "center",
               justifyContent: "flex-end",
@@ -126,37 +152,73 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf, date, granularity
             }}
           >
             <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>
-              {total == null ? "—" : fmtNum(total)}
+              {total == null ? "—" : `${fmtNum(total)} machines`}
             </span>
           </div>
+          <div
+            style={{
+              position: "absolute",
+              left: `${tickPct}%`,
+              top: -3,
+              bottom: -3,
+              width: 2,
+              background: C.am,
+              transform: "translateX(-1px)",
+            }}
+          />
         </div>
         <div
-          style={{ textAlign: "center", marginTop: 12, fontSize: 16, fontWeight: 700, color: C.tx }}
+          style={{
+            textAlign: "center",
+            marginTop: 12,
+            fontSize: 16,
+            fontWeight: 700,
+            color: onTarget ? C.gn : C.tx,
+          }}
         >
-          {share == null ? "—" : `${fmtNum(share, 1)}% of the fleet`}
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.mu, marginLeft: 8 }}>
-            {fleet == null ? "" : `${fmtNum(total ?? 0)} of ${fmtNum(fleet)} machines`}
-          </span>
-        </div>
-      </Block>
-
-      <div style={{ marginTop: 14 }}>
-        <Block title="Trajectory — last 30 days">
-          {loading ? (
-            <JKLoader message="Loading trajectory" />
-          ) : points.length === 0 ? (
-            <div style={{ padding: 12, color: C.mu, fontSize: 13 }}>
-              No daily rows in this window.
-            </div>
-          ) : (
-            <TrendChart
-              labels={points.map(([day]) => day.slice(5))}
-              values={points.map(([, value]) => value)}
-              unit=""
-            />
+          {pct == null ? "—" : `${Math.round(pct)}% of target`}
+          {onTarget && (
+            <span
+              style={{
+                fontSize: 13,
+                marginLeft: 6,
+                padding: "2px 7px",
+                borderRadius: 4,
+                background: C.gn + "18",
+                color: C.gn,
+              }}
+            >
+              ON TRACK
+            </span>
           )}
-        </Block>
-      </div>
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: C.mu,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            marginTop: 14,
+            marginBottom: 2,
+          }}
+        >
+          Trajectory
+        </div>
+        {loading ? (
+          <JKLoader message="Loading trajectory" />
+        ) : points.length === 0 ? (
+          <div style={{ padding: 12, color: C.mu, fontSize: 13 }}>
+            No {range.label.toLowerCase()} rows in this window.
+          </div>
+        ) : (
+          <TrendChart
+            labels={points.map(([key]) => (range.unit === "day" ? key.slice(5) : key.slice(0, 7)))}
+            values={points.map(([, value]) => value)}
+            unit=""
+            target={target}
+          />
+        )}
+      </Block>
     </AnalysisModal>
   );
 }

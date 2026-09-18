@@ -25,4 +25,13 @@ export const TARGETS = {
    */
   mtbfHrs: 500,
   mtbfNeedsRebaseline: true,
+
+  /**
+   * Zero Breakdown Machines — target ≥ 50. This one comes from the design
+   * mock's card ("42 · machines / 205 · target ≥50"), not from the KPI spec,
+   * which states no target for this KPI. It is here because the mock draws
+   * the progress bar against a goal line and the bar is meaningless without
+   * one. Replace it the moment the business states a real figure.
+   */
+  zeroBreakdownMachines: 50,
 };

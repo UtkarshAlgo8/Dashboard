@@ -37,6 +37,8 @@ function contextOf(query, extra = {}) {
   const keys = [
     "plant",
     "date",
+    "date_from",
+    "date_to",
     "granularity",
     "status",
     "section",
@@ -126,8 +128,13 @@ export async function getSummary(req, res, next) {
 /**
  * GET /engineering/reliability/kpi-children
  *   ?kpi_names=a,b &date= &granularity= &group_by=
+ *   [&date_from= &date_to=]
  *   [&status= &section= &machine= &sub_section= &product_type=]
  *   [&sort= &order=asc|desc &limit=] [&agg=sum]
+ *
+ * `group_by` is one dimension, or a comma-separated tuple ("remarks,date")
+ * for a level keyed by more than one — with `date_from`/`date_to` and
+ * `granularity=DAY`, that is the date-wise Failure level.
  *
  * The ONE generic drill endpoint — every level of Breakdown %/Min, MTBF,
  * MTTR, Top Machine Breakdowns, Zero Breakdown Machines, and Loss Tree
@@ -140,6 +147,8 @@ export async function getKpiChildren(req, res, next) {
     const kpiNames = parseNameList(req.query.kpi_names);
     const {
       date,
+      date_from: from,
+      date_to: to,
       status,
       section,
       machine,
@@ -167,6 +176,11 @@ export async function getKpiChildren(req, res, next) {
           kpiChildrenQuery({
             kpiNames,
             date,
+            // Optional window: `date_from`/`date_to` widen the level from one
+            // published date to every published date in the range — the
+            // date-wise Failure level's `granularity=DAY` over a month.
+            from,
+            to,
             granularity,
             status,
             section,

@@ -13,7 +13,15 @@
 import { useEffect } from "react";
 import { C, fmtNum } from "./reliabilityShared.jsx";
 
-/** Modal shell: overlay, eyebrow + title, ✕, Escape and click-out. */
+/**
+ * Modal shell: overlay, eyebrow + title, ✕, Escape and click-out.
+ *
+ * The mock has two shells, and `align` picks between them. Its `TrendPanel`
+ * (the KPI Trend Analysis panels) is a 740px card centred in the viewport,
+ * capped at 90vh with the card itself scrolling; its `BreakdownParetoPanel`
+ * is a 1000px card pinned to the top of a scrolling overlay, because a
+ * Pareto plus its table is taller than any screen.
+ */
 export function AnalysisModal({
   open,
   onClose,
@@ -21,6 +29,7 @@ export function AnalysisModal({
   title,
   headerExtra,
   maxWidth = 1000,
+  align = "start",
   children,
 }) {
   useEffect(() => {
@@ -32,6 +41,8 @@ export function AnalysisModal({
 
   if (!open) return null;
 
+  const centred = align === "center";
+
   return (
     <div
       onClick={onClose}
@@ -41,10 +52,10 @@ export function AnalysisModal({
         background: "rgba(15,23,42,0.55)",
         zIndex: 1000,
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: centred ? "center" : "flex-start",
         justifyContent: "center",
-        padding: "40px 18px",
-        overflowY: "auto",
+        padding: centred ? 20 : "40px 18px",
+        overflowY: centred ? "hidden" : "auto",
       }}
     >
       <div
@@ -56,6 +67,8 @@ export function AnalysisModal({
           boxShadow: "0 20px 60px rgba(0,0,0,.25)",
           width: "100%",
           maxWidth,
+          maxHeight: centred ? "90vh" : undefined,
+          overflow: centred ? "auto" : undefined,
         }}
       >
         <div

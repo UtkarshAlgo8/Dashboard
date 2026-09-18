@@ -9,8 +9,8 @@
  *
  *   Breakdown                → Breakdown chart: Pareto (Machine · Failure)
  *                              and the monthly Breakdown % line, toggled
- *   MTBF / MTTR              → the one MTBF/MTTR chart (Section · Machine ×
- *                              MTBF · MTTR), opened on the clicked measure
+ *   MTBF / MTTR              → that measure's own bar chart, View by
+ *                              Section (pooled) or Machine
  *   Zero Breakdown Machines  → daily line of the clean-run count
  *   Top Machine Breakdowns   → Pareto of BreakdownMin_m by machine, top 10
  */
@@ -183,7 +183,13 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
               <ReliabilityDrillPanel levels={MTTR_LEVELS} date={date} granularity={granularity} rootLabel="MTTR" />
             )}
             {expanded === "zeroBreakdown" && <ZeroBreakdownPanel />}
-            {expanded === "topMachines" && <TopMachineBreakdownsPanel date={date} granularity={granularity} />}
+            {expanded === "topMachines" && (
+              <TopMachineBreakdownsPanel
+                date={date}
+                granularity={granularity}
+                totalMinutes={values?.BreakdownMin_Overall}
+              />
+            )}
           </Card>
         </div>
       )}
@@ -208,12 +214,14 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
         maxBars={10}
       />
 
+      {/* A panel per measure — MTBF and MTTR each open their own, with the
+          spec's View by (Section · Machine) as the only control inside. */}
       <MtbfMttrChartModal
         open={trendCard === "mtbf" || trendCard === "mttr"}
         onClose={closeTrend}
         date={date}
         granularity={granularity}
-        initialMeasure={trendCard === "mttr" ? "mttr" : "mtbf"}
+        measure={trendCard === "mttr" ? "mttr" : "mtbf"}
       />
 
       <ZeroBreakdownTrendModal
@@ -221,8 +229,6 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
         onClose={closeTrend}
         total={zeroBreakdown.total}
         asOf={zeroBreakdown.asOf}
-        date={date}
-        granularity={granularity}
       />
     </div>
   );

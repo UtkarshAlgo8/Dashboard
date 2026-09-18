@@ -44,6 +44,35 @@ export function engineeringScopePredicate() {
   );
 }
 
+/**
+ * The upstream asset master leaves some machines without a grade or a
+ * section, and the ETL publishes them under the literal bucket 'Unmapped' in
+ * BOTH columns (it appears nowhere else — never in sub_section, machine,
+ * product_type or remarks; checked against gold.gold on 2026-09-18). It is a
+ * data-quality placeholder, not a plant category, so nothing that draws a
+ * table or a chart shows it: the drill endpoint drops those rows outright,
+ * which takes the 'Unmapped' category row, the 'Unmapped' section row/bar and
+ * the machines behind them off every level at once.
+ *
+ * Deliberately NOT applied to the summary cards or the trend series. Those
+ * read the published `_Overall` rows, which the ETL computed over the whole
+ * plant including these machines; re-deriving them here would mean
+ * recomputing rates the UI is not allowed to recompute (spec rule 8). So a
+ * card total is the plant, and the drill under it is the MAPPED plant — the
+ * levels no longer sum to the card, which is the accepted cost of hiding the
+ * bucket.
+ *
+ * COALESCE, not a bare `<>`: on Athena a NULL dimension makes `<> 'Unmapped'`
+ * evaluate to NULL and the row is dropped, which would silently delete every
+ * `_Overall` row (they carry no dims at all).
+ */
+export const UNMAPPED = "Unmapped";
+
+export function excludeUnmappedPredicate() {
+  const lit = escapeLiteral(UNMAPPED);
+  return `COALESCE(status, '') <> ${lit} AND COALESCE(section, '') <> ${lit}`;
+}
+
 /* ----------------------------------------------------------------- *
  * Granularity                                                        *
  * ----------------------------------------------------------------- */

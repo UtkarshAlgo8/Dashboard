@@ -368,7 +368,16 @@ const GRADE_WEIGHT = { A: 3, B: 2, C: 1, D: 1, Unmapped: 1 };
  * `Weighted` = downtime × grade weight, computed client-side only (never
  * server-side) per the KPI spec's UI-calculates-only rule.
  */
-export function TopMachineBreakdownsPanel({ date, granularity }) {
+/**
+ * @param {{ date: string, granularity: string, totalMinutes?: number|null }} props
+ *   `totalMinutes` is the period's plant-wide `BreakdownMin_Overall`, handed
+ *   down from the summary the card grid already fetched. The spec's Share
+ *   column is a machine's share of PLANT breakdown ("2.4% of plant
+ *   breakdown"), and this table is capped at ten rows — so the denominator
+ *   cannot come from the rows on screen without silently turning it into a
+ *   share of the top ten. Without the total the column reads "—".
+ */
+export function TopMachineBreakdownsPanel({ date, granularity, totalMinutes = null }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -377,7 +386,7 @@ export function TopMachineBreakdownsPanel({ date, granularity }) {
     let cancelled = false;
     setLoading(true);
     getReliabilityKpiChildren({
-      kpiNames: ["BreakdownMin_m", "MTTR_m", "MTBF_m"],
+      kpiNames: ["BreakdownMin_m", "MTTR_m", "MTBF_m", "BreakdownOcc_m"],
       date,
       granularity,
       groupBy: "machine",
@@ -398,6 +407,19 @@ export function TopMachineBreakdownsPanel({ date, granularity }) {
     { key: "section", label: "Section" },
     { key: "status", label: "Category", render: (r) => <GradeChip grade={r.status} /> },
     { key: "BreakdownMin_m", label: "Downtime", align: "right", render: (r) => fmtMinHrs(r.BreakdownMin_m) },
+    {
+      key: "share",
+      label: "Share",
+      align: "right",
+      sortValue: (r) => r.BreakdownMin_m,
+      render: (r) =>
+        totalMinutes && r.BreakdownMin_m != null
+          ? fmtNum((r.BreakdownMin_m / totalMinutes) * 100, 1) + "%"
+          : "—",
+    },
+    // Spec KPI 6: the machine-level counter, never the summed failure rows —
+    // those overcount on seven machines (0206 reads 78 instead of 70).
+    { key: "BreakdownOcc_m", label: "Occurrences", align: "right", render: (r) => fmtNum(r.BreakdownOcc_m) },
     { key: "MTTR_m", label: "MTTR", align: "right", render: (r) => fmtMinHrs(r.MTTR_m) },
     { key: "MTBF_m", label: "MTBF", align: "right", render: (r) => fmtMinHrs(r.MTBF_m) },
     {
