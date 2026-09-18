@@ -692,8 +692,12 @@ export function ReliabilityDrillPanel({
   );
 }
 
-/** Trend modal line chart (MONTH series Jan-Sep), reusing Highcharts. */
-export function TrendChart({ labels, values, unit }) {
+/**
+ * Trend line chart, reusing Highcharts. `target`, when given, is drawn as
+ * the spec's dashed reference line — it is a hardcoded business target (see
+ * reliabilityTargets.js), never a value read from the row.
+ */
+export function TrendChart({ labels, values, unit, target }) {
   const options = useMemo(() => {
     const cleaned = values.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null));
     return {
@@ -708,6 +712,30 @@ export function TrendChart({ labels, values, unit }) {
         gridLineWidth: 1,
         gridLineColor: C.bd,
         labels: { formatter: function () { return unit ? `${this.value}${unit}` : this.value; } },
+        // A target above every plotted value is outside the axis extremes,
+        // and Highcharts then draws nothing at all — the line vanishes with
+        // no warning. Breakdown % runs 1.07-2.17 against a 3.0 target, so
+        // the axis has to be told to reach it.
+        softMax: target == null ? undefined : target * 1.05,
+        plotLines:
+          target == null
+            ? []
+            : [
+                {
+                  value: target,
+                  color: C.am,
+                  dashStyle: "Dash",
+                  width: 1.5,
+                  zIndex: 3,
+                  label: {
+                    text: `Target ${target}${unit || ""}`,
+                    align: "right",
+                    x: -6,
+                    y: -5,
+                    style: { color: C.am, fontSize: "10px", fontWeight: "700" },
+                  },
+                },
+              ],
       },
       tooltip: { valueSuffix: unit ? ` ${unit}` : "" },
       plotOptions: {
@@ -715,6 +743,6 @@ export function TrendChart({ labels, values, unit }) {
       },
       series: [{ name: "Actual", data: cleaned }],
     };
-  }, [labels, values, unit]);
+  }, [labels, values, unit, target]);
   return <HighchartsReact highcharts={Highcharts} options={options} />;
 }
