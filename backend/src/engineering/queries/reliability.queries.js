@@ -18,6 +18,7 @@ import { config } from "../../config.js";
 import {
   escapeLiteral,
   engineeringScopePredicate,
+  excludeUnmappedPredicate,
   hasValuePredicate,
   DATE_YYYYMMDD,
   isoToYyyymmdd,
@@ -97,6 +98,7 @@ export function lossTreeRangeQuery({ kpiNames, from, to }) {
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = 'DAY' ` +
+    `AND ${excludeUnmappedPredicate()} ` +
     `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
     `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))}`
   );
@@ -111,6 +113,27 @@ function scopeFragment({ status, section, machine, subSection, productType } = {
   if (subSection) parts.push(`sub_section = ${escapeLiteral(subSection)}`);
   if (productType) parts.push(`product_type = ${escapeLiteral(productType)}`);
   return parts.length ? " AND " + parts.join(" AND ") : "";
+}
+
+/**
+ * One published day/month, or every published day in a window.
+ *
+ * A window is what the date-wise Failure level reads (FRS: date-wise
+ * breakdown drill): it asks for `granularity='DAY'` across the month the
+ * panel is showing, so the rows it gets back are one per (failure, day)
+ * rather than one per failure. Every other caller pins a single `date` and
+ * is unaffected. Nothing is summed here — each row is still a published
+ * value, which is what keeps a rate column (Breakdown %) honest at this
+ * grain (rule 8).
+ */
+function datePredicate({ date, from, to }) {
+  if (from && to) {
+    return (
+      `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+      `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))}`
+    );
+  }
+  return `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}`;
 }
 
 /**
@@ -147,6 +170,8 @@ export function kpiValueBatchQuery({ kpiNames, date, granularity }) {
 export function kpiChildrenQuery({
   kpiNames,
   date,
+  from,
+  to,
   granularity,
   status,
   section,
@@ -160,7 +185,10 @@ export function kpiChildrenQuery({
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}` +
+    // Every drill table and every chart is fed from here, so this one line
+    // is what keeps the 'Unmapped' bucket off all of them.
+    `AND ${excludeUnmappedPredicate()} ` +
+    datePredicate({ date, from, to }) +
     scopeFragment({ status, section, machine, subSection, productType })
   );
 }

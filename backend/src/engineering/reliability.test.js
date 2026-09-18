@@ -1,24 +1,25 @@
 /**
- * Engineering Reliability transformer tests (spec 16/17). Pure-unit coverage
- * of the kpi-children group keys, including the COMPOSITE `group_by`
- * ("machine,remarks") the Breakdown Pareto's "Machine × Phenomenon" lens
- * reads — one row per (machine, failure) pair, summed over the disciplines
- * the gold table splits that pair across.
+ * Engineering Reliability drill tests (spec 16/17). Covers the two pieces
+ * the DATE-WISE Failure level rests on: the composite `group_by`
+ * ("remarks,date") that keys one row per (failure, day), and the optional
+ * `date_from`/`date_to` window `kpiChildrenQuery` reads it over.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toKpiChildren, toLossTree } from "./transformers/reliability.transformers.js";
+import { toKpiChildren } from "./transformers/reliability.transformers.js";
+import { kpiChildrenQuery } from "./queries/reliability.queries.js";
 
-const KPIS = ["BreakdownMin_m_Failure", "BreakdownOcc_m_Failure"];
+const KPIS = ["Breakdown_Pct_m_Failure", "BreakdownMin_m_Failure"];
 
-/** One gold row, with the dimensions the Reliability feed carries. */
-function row(machine, subSection, remarks, kpiName, value) {
+/** One gold row at the Failure leaf's grain (ancestor dims already pinned). */
+function row(remarks, date, kpiName, value) {
   return {
+    date,
     status: "A",
     section: "Mixing",
-    sub_section: subSection,
-    machine,
+    sub_section: "Electrical",
+    machine: "0201",
     remarks,
     kpi_name: kpiName,
     actual_value: value,
@@ -28,78 +29,104 @@ function row(machine, subSection, remarks, kpiName, value) {
 
 /* ------------------------- happy path ------------------------- */
 
-test("toLossTree: composite group_by sums a (machine, failure) pair across disciplines", () => {
+test("toKpiChildren: 'remarks,date' yields one row per (failure, day)", () => {
   const rows = [
-    row("0201", "Mechanical", "RAM", "BreakdownMin_m_Failure", 15),
-    row("0201", "Electronics", "RAM", "BreakdownMin_m_Failure", 25),
-    row("0201", "Mechanical", "RAM", "BreakdownOcc_m_Failure", 1),
-    row("0201", "Electronics", "RAM", "BreakdownOcc_m_Failure", 2),
-    row("0202", "Mechanical", "RAM", "BreakdownMin_m_Failure", 10),
+    row("DUMP MILL", "2026-08-04", "Breakdown_Pct_m_Failure", 0.21),
+    row("DUMP MILL", "2026-08-04", "BreakdownMin_m_Failure", 50),
+    row("DUMP MILL", "2026-08-17", "Breakdown_Pct_m_Failure", 0.3),
+    row("DUMP MILL", "2026-08-17", "BreakdownMin_m_Failure", 70),
+    row("BATCH-OFF MILL", "2026-08-09", "BreakdownMin_m_Failure", 42),
   ];
 
-  const out = toLossTree(rows, { kpiNames: KPIS, groupBy: "machine,remarks" });
+  const out = toKpiChildren(rows, { kpiNames: KPIS, groupBy: "remarks,date" });
 
-  assert.equal(out.group_by, "machine,remarks");
-  assert.equal(out.rows.length, 2);
-  // Each dimension comes back as its own field, so the UI can label the pair.
-  assert.equal(out.rows[0].machine, "0201");
-  assert.equal(out.rows[0].remarks, "RAM");
-  assert.equal(out.rows[0].BreakdownMin_m_Failure, 40);
-  assert.equal(out.rows[0].BreakdownOcc_m_Failure, 3);
-  assert.equal(out.rows[1].machine, "0202");
-  assert.equal(out.rows[1].BreakdownMin_m_Failure, 10);
-  // Absent, not zero-filled — the Engineering gap rule.
-  assert.equal(out.rows[1].BreakdownOcc_m_Failure, null);
-});
-
-test("toLossTree: a single group_by is unchanged by the composite path", () => {
-  const rows = [
-    row("0201", "Mechanical", "RAM", "BreakdownMin_m_Failure", 15),
-    row("0202", "Mechanical", "RAM", "BreakdownMin_m_Failure", 25),
-    row("0202", "Mechanical", "MAIN MOTOR", "BreakdownMin_m_Failure", 5),
-  ];
-
-  const out = toLossTree(rows, { kpiNames: KPIS, groupBy: "remarks" });
-
+  assert.equal(out.group_by, "remarks,date");
+  assert.equal(out.rows.length, 3);
+  // Each dimension stays its own field, so the table labels the pair with
+  // one column each.
   assert.deepEqual(
-    out.rows.map((r) => [r.remarks, r.BreakdownMin_m_Failure]),
+    out.rows.map((r) => [r.remarks, r.date, r.BreakdownMin_m_Failure]),
     [
-      ["RAM", 40],
-      ["MAIN MOTOR", 5],
+      ["DUMP MILL", "2026-08-04", 50],
+      ["DUMP MILL", "2026-08-17", 70],
+      ["BATCH-OFF MILL", "2026-08-09", 42],
     ],
   );
+  // Absent, not zero-filled — the Engineering gap rule.
+  assert.equal(out.rows[2].Breakdown_Pct_m_Failure, null);
+});
+
+test("kpiChildrenQuery: from/to widen the level to a window; date alone pins one day", () => {
+  const windowed = kpiChildrenQuery({
+    kpiNames: KPIS,
+    date: "2026-08-01",
+    from: "2026-08-01",
+    to: "2026-08-31",
+    granularity: "DAY",
+    machine: "0201",
+  });
+  assert.match(windowed, />= '20260801'/);
+  assert.match(windowed, /<= '20260831'/);
+  // `END) = ` — the equality form, not the tail of `>=`/`<=`.
+  assert.doesNotMatch(windowed, /END\) = '/);
+
+  const single = kpiChildrenQuery({
+    kpiNames: KPIS,
+    date: "2026-08-01",
+    granularity: "MONTH",
+  });
+  assert.match(single, /END\) = '20260801'/);
+  assert.doesNotMatch(single, />=/);
 });
 
 /* --------------------------- edge case --------------------------- */
 
-test("toKpiChildren/toLossTree: a row missing part of its key is dropped, not blank-grouped", () => {
+test("toKpiChildren: a timestamped date groups with its bare-date twin", () => {
   const rows = [
-    row("0201", "Mechanical", "RAM", "BreakdownMin_m_Failure", 15),
-    // No failure text: this minute count belongs to no (machine, failure) pair.
-    row("0201", "Mechanical", "", "BreakdownMin_m_Failure", 99),
-    row(null, "Mechanical", "RAM", "BreakdownMin_m_Failure", 77),
+    row("DUMP MILL", "2026-08-04 00:00:00", "BreakdownMin_m_Failure", 50),
+    row("DUMP MILL", "2026-08-04", "Breakdown_Pct_m_Failure", 0.21),
   ];
 
-  const summed = toLossTree(rows, { kpiNames: KPIS, groupBy: "machine,remarks" });
-  assert.equal(summed.rows.length, 1);
-  assert.equal(summed.rows[0].BreakdownMin_m_Failure, 15);
+  const out = toKpiChildren(rows, { kpiNames: KPIS, groupBy: "remarks,date" });
 
-  const joined = toKpiChildren(rows, { kpiNames: KPIS, groupBy: "machine,remarks" });
-  assert.equal(joined.rows.length, 1);
-  assert.equal(joined.rows[0].machine, "0201");
-  assert.equal(joined.rows[0].remarks, "RAM");
+  assert.equal(out.rows.length, 1);
+  assert.equal(out.rows[0].date, "2026-08-04");
+  assert.equal(out.rows[0].BreakdownMin_m_Failure, 50);
+  assert.equal(out.rows[0].Breakdown_Pct_m_Failure, 0.21);
+});
+
+test("toKpiChildren: a single group_by is unchanged by the composite path", () => {
+  const rows = [
+    row("DUMP MILL", "2026-08-04", "BreakdownMin_m_Failure", 50),
+    row("DUMP MILL", "2026-08-17", "BreakdownMin_m_Failure", 70),
+  ];
+
+  const out = toKpiChildren(rows, { kpiNames: KPIS, groupBy: "remarks" });
+
+  // One row for the failure: the JOIN path takes the first published row per
+  // kpi_name, exactly as it did before dates were a key.
+  assert.equal(out.rows.length, 1);
+  assert.equal(out.rows[0].remarks, "DUMP MILL");
+  assert.equal(out.rows[0].BreakdownMin_m_Failure, 50);
 });
 
 /* --------------------------- error case --------------------------- */
 
-test("toLossTree: no rows for the scope yields an empty table, not a throw", () => {
-  const out = toLossTree([], { kpiNames: KPIS, groupBy: "machine,remarks" });
-  assert.deepEqual(out, { group_by: "machine,remarks", rows: [] });
+test("toKpiChildren: a row missing part of the key is dropped, not blank-grouped", () => {
+  const rows = [
+    row("DUMP MILL", "2026-08-04", "BreakdownMin_m_Failure", 50),
+    // No failure text, and no date: neither belongs to a (failure, day).
+    row("", "2026-08-05", "BreakdownMin_m_Failure", 99),
+    row("DUMP MILL", null, "BreakdownMin_m_Failure", 77),
+  ];
 
-  // Rows that carry only OTHER kpi_names are equally not an error.
-  const other = toLossTree([row("0201", "Mechanical", "RAM", "MTTR_m_Failure", 5)], {
-    kpiNames: KPIS,
-    groupBy: "machine,remarks",
-  });
-  assert.deepEqual(other.rows, []);
+  const out = toKpiChildren(rows, { kpiNames: KPIS, groupBy: "remarks,date" });
+
+  assert.equal(out.rows.length, 1);
+  assert.equal(out.rows[0].BreakdownMin_m_Failure, 50);
+});
+
+test("toKpiChildren: no rows for the scope yields an empty table, not a throw", () => {
+  const out = toKpiChildren([], { kpiNames: KPIS, groupBy: "remarks,date" });
+  assert.deepEqual(out, { group_by: "remarks,date", rows: [] });
 });

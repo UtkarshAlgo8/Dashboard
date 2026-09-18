@@ -22,49 +22,6 @@ export function toKpiValueBatch(rows, kpiNames) {
   return out;
 }
 
-/* ----------------------------------------------------------------- *
- * Group keys                                                        *
- * ----------------------------------------------------------------- */
-
-// A `group_by` may name SEVERAL dimensions ("machine,remarks") — the
-// Breakdown Pareto's "Machine × Phenomenon" lens, where one row is one
-// (machine, failure) pair. One dimension is the ordinary case and reads as a
-// one-element list, so both paths share this code.
-const GROUP_KEY_SEP = "\u241F"; // ␟ — a separator no dimension value carries.
-
-/** "machine,remarks" -> ["machine", "remarks"]. */
-function groupDims(groupBy) {
-  return String(groupBy)
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/**
- * The composite key of a row's group, or null when any dimension is empty —
- * a row missing part of its key does not belong to a group and is dropped,
- * rather than collapsing into a blank-labelled one.
- */
-function groupKeyOf(row, dims) {
-  const parts = [];
-  for (const dim of dims) {
-    const v = row[dim];
-    if (v == null || v === "") return null;
-    parts.push(String(v));
-  }
-  return parts.join(GROUP_KEY_SEP);
-}
-
-/** Spread a composite key back into one field per dimension. */
-function keyToDims(key, dims) {
-  const parts = key.split(GROUP_KEY_SEP);
-  const out = {};
-  dims.forEach((dim, i) => {
-    out[dim] = parts[i];
-  });
-  return out;
-}
-
 // Display-only columns carried forward from the anchor row of each group —
 // useful to the frontend for rendering without a second round trip (e.g. the
 // Top Machine Breakdowns table wants `section`/`status` alongside `machine`).
@@ -77,14 +34,46 @@ const CARRY_FORWARD_DIMS = [
 ];
 
 /**
+ * A `group_by` is one dimension ("machine") or a comma-separated tuple of
+ * them ("remarks,date"). The tuple form is what the date-wise Failure level
+ * reads: one row per (failure, day) over a month of DAY rows, so the drill
+ * can show WHEN each failure happened instead of only its monthly total.
+ *
+ * @param {string} groupBy
+ * @returns {string[]}
+ */
+function groupDims(groupBy) {
+  return String(groupBy)
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean);
+}
+
+// Key for a row's group. A row missing ANY part of the key belongs to no
+// group and is dropped — never bucketed under a blank, which would silently
+// merge unrelated measurements into one line.
+const KEY_SEP = "\u0000";
+
+function groupKey(row, dims) {
+  const parts = dims.map((d) => {
+    const v = row[d];
+    // A `date` key is the DAY, not the instant: the feed writes some rows as
+    // "2026-08-04" and some as "2026-08-04 00:00:00", and ungrouped those
+    // would be two lines for one day. Same ISO slice `toLatestDate` takes.
+    return d === "date" && v != null ? String(v).slice(0, 10) : v;
+  });
+  if (parts.some((v) => v == null || v === "")) return null;
+  return parts.join(KEY_SEP);
+}
+
+/**
  * kpi-children: pivots flat rows into one row per group (whichever
- * dimension — or comma-separated dimensions — `groupBy` names at this drill
- * level), JOINing the requested
- * kpi_names as sibling columns. Valid when the scope filters already pin
- * every OTHER dimension to a single value, so each group has at most one
- * row per kpi_name (true for Breakdown/MTBF/MTTR/Top-Machine/Zero-
- * Breakdown — NOT for Loss Tree, which never pins status/section; see
- * `toLossTree` below for that family).
+ * dimension — or tuple of dimensions — is `groupBy` at this drill level),
+ * JOINing the requested kpi_names as sibling columns. Valid when the scope
+ * filters already pin every OTHER dimension to a single value, so each
+ * group has at most one row per kpi_name (true for Breakdown/MTBF/MTTR/
+ * Top-Machine/Zero-Breakdown — NOT for Loss Tree, which never pins
+ * status/section; see `toLossTree` below for that family).
  *
  * @param {Array} rows
  * @param {{ kpiNames: string[], groupBy: string }} opts
@@ -94,19 +83,22 @@ export function toKpiChildren(rows, { kpiNames, groupBy }) {
   // Preserve first-seen order of groups.
   const keys = [];
   const seen = new Set();
-  const keyByRow = new Map();
   for (const r of rows) {
-    const key = groupKeyOf(r, dims);
-    keyByRow.set(r, key);
-    if (key != null && !seen.has(key)) {
-      seen.add(key);
-      keys.push(key);
+    const k = groupKey(r, dims);
+    if (k != null && !seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
     }
   }
   const anchor = kpiNames[0]; // drill anchor = the clicked/primary base
   const outRows = keys.map((key) => {
-    const scopeRows = rows.filter((r) => keyByRow.get(r) === key);
-    const out = keyToDims(key, dims);
+    const scopeRows = rows.filter((r) => groupKey(r, dims) === key);
+    // Each dimension stays its own field, so the UI labels the tuple with
+    // one column per part rather than parsing a joined string back apart.
+    const out = {};
+    dims.forEach((dim, i) => {
+      out[dim] = key.split(KEY_SEP)[i];
+    });
     for (const name of kpiNames) {
       const row = scopeRows.find((r) => r.kpi_name === name);
       out[name] = row ? valueOrNull(row.actual_value) : null;
@@ -133,37 +125,30 @@ export function toKpiChildren(rows, { kpiNames, groupBy }) {
  * A kpi_name with zero contributing rows in a group stays `null` (absent),
  * never a fabricated 0 — the same gap rule as everywhere else here.
  *
- * Also the Breakdown Pareto's path: `groupBy` may name several dimensions
- * ("machine,remarks"), and a (machine, failure) pair spans one row per
- * sub_section, so those rows must be added together too.
- *
  * @param {Array} rows
  * @param {{ kpiNames: string[], groupBy: string }} opts
  */
 export function toLossTree(rows, { kpiNames, groupBy }) {
-  const dims = groupDims(groupBy);
-  const sums = new Map(); // group key -> { kpiName: number }
+  const sums = new Map(); // group -> { kpiName: number }
   const order = [];
-  const keyByRow = new Map();
   for (const r of rows) {
-    const key = groupKeyOf(r, dims);
-    keyByRow.set(r, key);
-    if (key == null || !kpiNames.includes(r.kpi_name)) continue;
-    if (!sums.has(key)) {
-      sums.set(key, {});
-      order.push(key);
+    const g = r[groupBy];
+    if (g == null || !kpiNames.includes(r.kpi_name)) continue;
+    if (!sums.has(g)) {
+      sums.set(g, {});
+      order.push(g);
     }
     const v = valueOrNull(r.actual_value);
     if (v == null) continue;
-    const bucket = sums.get(key);
+    const bucket = sums.get(g);
     bucket[r.kpi_name] = (bucket[r.kpi_name] ?? 0) + v;
   }
-  const outRows = order.map((key) => {
-    const bucket = sums.get(key);
-    const out = keyToDims(key, dims);
+  const outRows = order.map((group) => {
+    const bucket = sums.get(group);
+    const out = { [groupBy]: group };
     for (const name of kpiNames) out[name] = bucket[name] ?? null;
     const anchorRow = rows.find(
-      (r) => keyByRow.get(r) === key && r.kpi_name === kpiNames[0],
+      (r) => r[groupBy] === group && r.kpi_name === kpiNames[0],
     );
     out.drill_down = parseDrillDown(anchorRow?.drill_down_attribute);
     return out;

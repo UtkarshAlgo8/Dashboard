@@ -5,14 +5,14 @@
  * button, chevron that expands a drill panel inline below the grid —
  * mirrors the design mockup's `EKpiCard` interaction.
  *
- * Each card's trend icon opens the chart the design reference gives THAT
- * KPI, not one line chart for all five (reference: `RELIABILITY_KPIS`, where
- * the per-KPI `chart` / `pareto` flags pick the panel):
+ * Each card's trend icon opens the chart the KPI SPEC gives that KPI:
  *
- *   Breakdown                → the Pareto, machine × phenomenon
- *   MTBF / MTTR              → by-section bars + the plant's monthly trend
- *   Zero Breakdown Machines  → the clean-run count against the fleet, + 30-day trajectory
- *   Top Machine Breakdowns   → the same Pareto, on the Machine lens
+ *   Breakdown                → Breakdown chart: Pareto (Machine · Failure)
+ *                              and the monthly Breakdown % line, toggled
+ *   MTBF / MTTR              → that measure's own bar chart, View by
+ *                              Section (pooled) or Machine
+ *   Zero Breakdown Machines  → daily line of the clean-run count
+ *   Top Machine Breakdowns   → Pareto of BreakdownMin_m by machine, top 10
  */
 import { useState } from "react";
 import {
@@ -28,13 +28,9 @@ import {
   fmtMinHrs,
 } from "./reliabilityShared.jsx";
 import { ZeroBreakdownPanel, TopMachineBreakdownsPanel, useZeroBreakdownTotal } from "./reliabilityPanels.jsx";
-import BreakdownParetoModal from "./BreakdownParetoModal.jsx";
-import {
-  TrendAnalysisModal,
-  MtbfTrendBody,
-  MttrTrendBody,
-  ZeroBreakdownTrendBody,
-} from "./ReliabilityTrendModal.jsx";
+import BreakdownChartModal from "./BreakdownChartModal.jsx";
+import MtbfMttrChartModal from "./MtbfMttrChartModal.jsx";
+import ZeroBreakdownTrendModal from "./ZeroBreakdownTrendModal.jsx";
 
 function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }) {
   return (
@@ -187,47 +183,53 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
               <ReliabilityDrillPanel levels={MTTR_LEVELS} date={date} granularity={granularity} rootLabel="MTTR" />
             )}
             {expanded === "zeroBreakdown" && <ZeroBreakdownPanel />}
-            {expanded === "topMachines" && <TopMachineBreakdownsPanel date={date} granularity={granularity} />}
+            {expanded === "topMachines" && (
+              <TopMachineBreakdownsPanel
+                date={date}
+                granularity={granularity}
+                totalMinutes={values?.BreakdownMin_Overall}
+              />
+            )}
           </Card>
         </div>
       )}
 
-      <BreakdownParetoModal
+      <BreakdownChartModal
         open={trendCard === "breakdown"}
         onClose={closeTrend}
         date={date}
         granularity={granularity}
       />
 
-      <BreakdownParetoModal
+      {/* Spec KPI 7: "Pareto (bar + cum. line) | machine | downtime (min) |
+          BreakdownMin_m, current period, sorted desc, top 10" — the same
+          chart as Breakdown's, pinned to the Machine lens and capped at 10. */}
+      <BreakdownChartModal
         open={trendCard === "topMachines"}
         onClose={closeTrend}
         date={date}
         granularity={granularity}
         title="Top Machine Breakdowns"
-        initialView="machine"
+        initialViewBy="machine"
+        maxBars={10}
       />
 
-      <TrendAnalysisModal open={trendCard === "mtbf"} onClose={closeTrend} title="MTBF">
-        <MtbfTrendBody date={date} granularity={granularity} />
-      </TrendAnalysisModal>
+      {/* A panel per measure — MTBF and MTTR each open their own, with the
+          spec's View by (Section · Machine) as the only control inside. */}
+      <MtbfMttrChartModal
+        open={trendCard === "mtbf" || trendCard === "mttr"}
+        onClose={closeTrend}
+        date={date}
+        granularity={granularity}
+        measure={trendCard === "mttr" ? "mttr" : "mtbf"}
+      />
 
-      <TrendAnalysisModal open={trendCard === "mttr"} onClose={closeTrend} title="MTTR">
-        <MttrTrendBody date={date} granularity={granularity} />
-      </TrendAnalysisModal>
-
-      <TrendAnalysisModal
+      <ZeroBreakdownTrendModal
         open={trendCard === "zeroBreakdown"}
         onClose={closeTrend}
-        title="Zero Breakdown Machines"
-      >
-        <ZeroBreakdownTrendBody
-          total={zeroBreakdown.total}
-          asOf={zeroBreakdown.asOf}
-          date={date}
-          granularity={granularity}
-        />
-      </TrendAnalysisModal>
+        total={zeroBreakdown.total}
+        asOf={zeroBreakdown.asOf}
+      />
     </div>
   );
 }
