@@ -3,12 +3,19 @@
  * The Breakdown chart, opened from the Breakdown card's trend icon.
  *
  * Built to the KPI spec ("Breakdown chart — opens from the Breakdown card
- * trend icon", plus KPI 2's "Trend icon → two views, toggled"):
+ * trend icon"):
  *
- *   VIEW         Pareto · Monthly trend
- *   VIEW BY      Machine · Failure            (Pareto view)
+ *   VIEW BY      Machine · Failure
  *   MEASURE      Downtime (min) · Occurrences
- *   Machine      enabled ONLY when VIEW BY = Failure — "filter first, then group"
+ *   FILTER       Category · Section · Machine  — "filter first, then group"
+ *
+ * The three filters compose and cascade: picking a category narrows the
+ * section list, and both narrow the machine list, so a combination that
+ * selects nothing can never be built. Category and Section are the machine's
+ * published `status` and `section`; the machine lens applies them to the
+ * machine rows (both measures are additive totals, so a filtered sum is the
+ * scope's own figure), and the failure lens hands them to the engine, which
+ * is the only place a failure row can be cut by them.
  *
  * Files, one pair serving both lenses, read as published:
  *
@@ -49,21 +56,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
-import {
-  getReliabilityKpiChildren,
-  getReliabilityKpiHistory,
-} from "@/api/engineering.js";
+import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import {
-  C,
-  DTable,
-  GradeChip,
-  TrendChart,
-  fmtNum,
-  formatMonthLabel,
-  currentMonthKeyInIST,
-  monthKeyShiftedInIST,
-} from "./reliabilityShared.jsx";
+import { C, DTable, GradeChip, fmtNum } from "./reliabilityShared.jsx";
 import {
   AnalysisModal,
   ChartCaption,
@@ -73,7 +68,6 @@ import {
   ScopeBanner,
   selectStyle,
 } from "./reliabilityChrome.jsx";
-import { TARGETS } from "./reliabilityTargets.js";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
@@ -257,67 +251,14 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
   return <HighchartsReact highcharts={Highcharts} options={options} />;
 }
 
-/** Spec KPI 2: "line chart of Breakdown % by month". */
-function MonthlyBreakdownTrend() {
-  const [points, setPoints] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    getReliabilityKpiHistory({
-      kpiName: "Breakdown_Pct_Overall",
-      dateFrom: monthKeyShiftedInIST(-11),
-      dateTo: currentMonthKeyInIST(),
-      granularity: "MONTH",
-    })
-      .then((res) => !cancelled && setPoints(Array.isArray(res?.points) ? res.points : []))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Spec: "September is a partial month — mark partial periods or drop the
-  // last point, or every trend will appear to fall at the right edge."
-  const runningMonth = currentMonthKeyInIST().slice(0, 7);
-  const labels = points.map((p) => {
-    const month = String(p.date).slice(0, 7);
-    return formatMonthLabel(month) + (month === runningMonth ? " (partial)" : "");
-  });
-
-  if (loading) return <JKLoader message="Loading monthly trend" />;
-  if (points.length === 0) {
-    return (
-      <div style={{ padding: 16, color: C.mu, fontSize: 13 }}>
-        No published MONTH rows for Breakdown %.
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <TrendChart
-        labels={labels}
-        values={points.map((p) => p.value)}
-        unit="%"
-        target={TARGETS.breakdownPct}
-      />
-      <div style={{ fontSize: 12, color: C.mu, textAlign: "center", lineHeight: 1.5, marginTop: 6 }}>
-        Plant Breakdown % per month, read from the engine's MONTH rows — a ratio is never
-        rebuilt from daily values. Target is a hardcoded {fmtNum(TARGETS.breakdownPct, 1)}%; no
-        threshold is published. The running month is partial.
-      </div>
-    </div>
-  );
-}
-
 /**
  * @param {{ date: string, granularity: string, initialViewBy?: string, maxBars?: number }} props
  */
 function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
   const [viewBy, setViewBy] = useState(initialViewBy ?? "machine");
   const [measure, setMeasure] = useState("downtime");
+  const [category, setCategory] = useState("");
+  const [section, setSection] = useState("");
   const [machine, setMachine] = useState("");
 
   const [machineRows, setMachineRows] = useState([]);
@@ -347,8 +288,8 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     };
   }, [date, granularity]);
 
-  // Spec: the machine filter applies to the Failure lens only — "filter
-  // first, then group".
+  // "Filter first, then group": all three filters go to the engine, which is
+  // the only place a failure row knows its machine's category and section.
   useEffect(() => {
     if (viewBy !== "failure") return;
     let cancelled = false;
@@ -359,6 +300,8 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
       granularity,
       groupBy: "remarks",
       agg: "sum",
+      status: category || undefined,
+      section: section || undefined,
       machine: machine || undefined,
     })
       .then((res) => {
@@ -370,30 +313,80 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     return () => {
       cancelled = true;
     };
-  }, [viewBy, date, granularity, machine]);
+  }, [viewBy, date, granularity, category, section, machine]);
+
+  // Every option list is cut by the filters above it, so no combination can
+  // select an empty scope.
+  const categoryOptions = useMemo(
+    () => [...new Set(machineRows.map((r) => r.status).filter(Boolean))].sort(),
+    [machineRows],
+  );
+
+  const sectionOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          machineRows
+            .filter((r) => !category || r.status === category)
+            .map((r) => r.section)
+            .filter(Boolean),
+        ),
+      ].sort(),
+    [machineRows, category],
+  );
+
+  // The scope the machine lens plots and the scope every share is taken on.
+  // Both measures are additive totals, so filtering rows and summing them is
+  // the scope's own figure, not a recomputed one.
+  const scopeRows = useMemo(
+    () =>
+      machineRows.filter(
+        (r) =>
+          (!category || r.status === category) &&
+          (!section || r.section === section) &&
+          (!machine || r.machine === machine),
+      ),
+    [machineRows, category, section, machine],
+  );
 
   const machineOptions = useMemo(
     () =>
-      [...new Set(machineRows.map((r) => r.machine).filter((m) => m != null && m !== ""))].sort(),
-    [machineRows],
+      [
+        ...new Set(
+          machineRows
+            .filter((r) => (!category || r.status === category) && (!section || r.section === section))
+            .map((r) => r.machine)
+            .filter((m) => m != null && m !== ""),
+        ),
+      ].sort(),
+    [machineRows, category, section],
   );
+
+  // A narrowed filter can strand the selection below it — drop it rather
+  // than describe the chart with a scope it no longer has.
+  useEffect(() => {
+    if (section && !sectionOptions.includes(section)) setSection("");
+  }, [section, sectionOptions]);
+  useEffect(() => {
+    if (machine && !machineOptions.includes(machine)) setMachine("");
+  }, [machine, machineOptions]);
 
   const scope = useMemo(() => {
     let minutes = 0;
     let occurrences = 0;
-    for (const r of machineRows) {
+    for (const r of scopeRows) {
       minutes += r.BreakdownMin_m ?? 0;
       occurrences += r.BreakdownOcc_m ?? 0;
     }
-    return { minutes, occurrences, machines: machineRows.filter((r) => r.BreakdownMin_m > 0).length };
-  }, [machineRows]);
+    return { minutes, occurrences, machines: scopeRows.filter((r) => r.BreakdownMin_m > 0).length };
+  }, [scopeRows]);
 
   const measureKey = MEASURES.find((m) => m.id === measure).key;
 
   const allRows = useMemo(() => {
     const built =
       viewBy === "machine"
-        ? machineRows.map((r) => ({
+        ? scopeRows.map((r) => ({
             key: r.machine,
             label: r.machine ?? "—",
             section: r.section,
@@ -422,7 +415,7 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
 
     const total = ranked.reduce((s, r) => s + r.value, 0);
     return ranked.map((r) => ({ ...r, share: total ? (r.value / total) * 100 : 0 }));
-  }, [viewBy, machineRows, failureRows, measureKey]);
+  }, [viewBy, scopeRows, failureRows, measureKey, machine]);
 
   const measureTotal = useMemo(() => allRows.reduce((s, r) => s + r.value, 0), [allRows]);
 
@@ -485,13 +478,7 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
             key={v.id}
             on={viewBy === v.id}
             color={C.pp}
-            onClick={() => {
-              setViewBy(v.id);
-              // The machine pin belongs to the Failure lens; leaving it set
-              // while the Machine lens is on screen would describe a scope
-              // the bars do not have.
-              if (v.id === "machine") setMachine("");
-            }}
+            onClick={() => setViewBy(v.id)}
           >
             {v.label}
           </Chip>
@@ -508,21 +495,33 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
       <ControlRow last>
         <ControlLabel>Filter</ControlLabel>
         <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          style={{ ...selectStyle, maxWidth: 200 }}
+        >
+          <option value="">All categories</option>
+          {categoryOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <select
+          value={section}
+          onChange={(e) => setSection(e.target.value)}
+          style={{ ...selectStyle, maxWidth: 220 }}
+        >
+          <option value="">All sections</option>
+          {sectionOptions.map((sec) => (
+            <option key={sec} value={sec}>
+              {sec}
+            </option>
+          ))}
+        </select>
+        <select
           value={machine}
-          disabled={viewBy !== "failure"}
           onChange={(e) => setMachine(e.target.value)}
-          title={
-            viewBy === "failure"
-              ? "Filter to one machine, then group by failure"
-              : "Enabled in the Failure view only — the Machine view already is one bar per machine"
-          }
-          style={{
-            ...selectStyle,
-            background: viewBy === "failure" ? C.cd : C.c2,
-            color: viewBy === "failure" ? C.tx : C.mu,
-            cursor: viewBy === "failure" ? "pointer" : "not-allowed",
-            maxWidth: 220,
-          }}
+          style={{ ...selectStyle, maxWidth: 220 }}
         >
           <option value="">All machines</option>
           {machineOptions.map((m) => (
@@ -531,15 +530,18 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
             </option>
           ))}
         </select>
-        {viewBy === "failure" && machine && (
-          <Chip on color={C.pp} onClick={() => setMachine("")}>
+        {(category || section || machine) && (
+          <Chip
+            on
+            color={C.pp}
+            onClick={() => {
+              setCategory("");
+              setSection("");
+              setMachine("");
+            }}
+          >
             Clear
           </Chip>
-        )}
-        {viewBy !== "failure" && (
-          <span style={{ fontSize: 10.5, color: C.mu }}>
-            Machine filter applies to the Failure view — this view is already one bar per machine.
-          </span>
         )}
       </ControlRow>
 
@@ -553,6 +555,7 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
         <>
           <ScopeBanner>
             <b style={{ color: C.tx }}>Scope: </b>
+            {category || "All categories"} · {section || "all sections"} ·{" "}
             {machine ? `machine ${machine}` : `${fmtNum(scope.machines)} machines with a breakdown`} —{" "}
             <b style={{ color: C.tx }}>{fmtNum(scope.minutes)} min</b> over{" "}
             <b style={{ color: C.tx }}>{fmtNum(scope.occurrences)}</b> breakdowns.{" "}
@@ -603,17 +606,11 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
   );
 }
 
-const MODAL_VIEWS = [
-  { id: "pareto", label: "Pareto" },
-  { id: "trend", label: "Monthly trend" },
-];
-
 /**
- * The modal: the spec's two toggled views behind the Breakdown trend icon.
+ * The modal behind the Breakdown trend icon: one Pareto, three filters.
  *
  * @param {{ open: boolean, onClose: () => void, date: string, granularity: string,
- *           title?: string, initialViewBy?: string, maxBars?: number,
- *           paretoOnly?: boolean }} props
+ *           title?: string, initialViewBy?: string, maxBars?: number }} props
  */
 function BreakdownChartModal({
   open,
@@ -623,10 +620,7 @@ function BreakdownChartModal({
   title = "Breakdown",
   initialViewBy,
   maxBars,
-  paretoOnly = false,
 }) {
-  const [view, setView] = useState("pareto");
-
   return (
     <AnalysisModal
       open={open}
@@ -634,28 +628,13 @@ function BreakdownChartModal({
       eyebrow="Pareto Analysis"
       title={title}
       maxWidth={1000}
-      headerExtra={
-        paretoOnly ? null : (
-          <div style={{ display: "flex", gap: 6, marginLeft: 20 }}>
-            {MODAL_VIEWS.map((v) => (
-              <Chip key={v.id} on={view === v.id} onClick={() => setView(v.id)}>
-                {v.label}
-              </Chip>
-            ))}
-          </div>
-        )
-      }
     >
-      {view === "pareto" || paretoOnly ? (
-        <ParetoView
-          date={date}
-          granularity={granularity}
-          initialViewBy={initialViewBy}
-          maxBars={maxBars}
-        />
-      ) : (
-        <MonthlyBreakdownTrend />
-      )}
+      <ParetoView
+        date={date}
+        granularity={granularity}
+        initialViewBy={initialViewBy}
+        maxBars={maxBars}
+      />
     </AnalysisModal>
   );
 }

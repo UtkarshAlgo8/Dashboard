@@ -197,8 +197,7 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
 
       {/* Spec KPI 7: "Pareto (bar + cum. line) | machine | downtime (min) |
           BreakdownMin_m, current period, sorted desc, top 10" — the same
-          chart as Breakdown's, pinned to the Machine lens and capped at 10,
-          with no monthly view (this card has no % of its own). */}
+          chart as Breakdown's, pinned to the Machine lens and capped at 10. */}
       <BreakdownChartModal
         open={trendCard === "topMachines"}
         onClose={closeTrend}
@@ -207,7 +206,6 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
         title="Top Machine Breakdowns"
         initialViewBy="machine"
         maxBars={10}
-        paretoOnly
       />
 
       <MtbfMttrChartModal
