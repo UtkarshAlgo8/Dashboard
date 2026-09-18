@@ -23,12 +23,28 @@
  *    machines (0206 reads 78 instead of 70, plant 2,174 instead of 2,152),
  *    so the machine lens reads the machine-level counter.
  * 2. "Cap the bars … Default to the top 15-20 with the rest in an 'Other'
- *    bar." Minutes and occurrences are on the spec's "safe to sum in the UI"
- *    list, so an Other bar is a plain total and the cumulative line reaches
- *    100%.
- * 3. No Breakdown % column. Rule 2 — "never recompute a % or a rate in the
- *    UI" — and the spec's own Breakdown-chart tables carry Downtime and
- *    Occurrences only. Share % is the one ratio rule 3 permits the UI.
+ *    bar." The cap is here; the pooled bar is NOT, and that is a considered
+ *    departure. Breakdown is spread almost evenly — the spec says so itself,
+ *    "no single machine dominates, the worst is 2.4%" — so pooling the tail
+ *    produces a bar that dwarfs the chart: 221 machines sum to 96,207 min
+ *    against a 3,108-min leader, 31x the tallest real bar, flattening every
+ *    row it was meant to make readable. That defeats the instruction's own
+ *    stated purpose ("or the axis is unreadable"), and the design mock's
+ *    Pareto pools nothing either. The tail is reported in words under the
+ *    chart instead, so nothing it carried is lost.
+ * 3. The Breakdown % the mock shows under each bar and in the table is only
+ *    ever a PUBLISHED value, never a recomputed one (rule 2). It exists at
+ *    two grains and nowhere else:
+ *      Machine lens                → `Breakdown_Pct_m`
+ *      Failure lens + machine pin  → `Breakdown_Pct_m_Failure`, which is
+ *                                    published per (machine, failure)
+ *    In the unpinned Failure lens a failure spans machines with different
+ *    denominators, so there is no published figure and the column reads "—"
+ *    rather than inventing one.
+ *
+ * Look and interaction follow the mock (reliabilityChrome.jsx carries its
+ * chips, labels, banner and modal shell); the data, the controls and the
+ * figures follow the KPI spec.
  */
 import { useEffect, useMemo, useState } from "react";
 import Highcharts from "highcharts";
@@ -48,12 +64,26 @@ import {
   currentMonthKeyInIST,
   monthKeyShiftedInIST,
 } from "./reliabilityShared.jsx";
+import {
+  AnalysisModal,
+  ChartCaption,
+  Chip,
+  ControlLabel,
+  ControlRow,
+  ScopeBanner,
+  selectStyle,
+} from "./reliabilityChrome.jsx";
 import { TARGETS } from "./reliabilityTargets.js";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
-const MACHINE_KPIS = ["BreakdownMin_m", "BreakdownOcc_m"];
-const FAILURE_KPIS = ["BreakdownMin_m_Failure", "BreakdownOcc_m_Failure"];
+const MACHINE_KPIS = ["BreakdownMin_m", "BreakdownOcc_m", "Breakdown_Pct_m"];
+const FAILURE_KPIS = [
+  "BreakdownMin_m_Failure",
+  "BreakdownOcc_m_Failure",
+  // Only meaningful when a machine is pinned — see the header note.
+  "Breakdown_Pct_m_Failure",
+];
 
 const VIEWS_BY = [
   { id: "machine", label: "Machine" },
@@ -65,52 +95,9 @@ const MEASURES = [
   { id: "occurrences", label: "Occurrences", key: "occurrences" },
 ];
 
-// Spec: "Default to the top 15-20 with the rest in an 'Other' bar."
+// Spec: "Cap the bars … Default to the top 15-20". See the header note on
+// why the tail is reported in the caption rather than pooled into a bar.
 const MAX_BARS = 15;
-const OTHER_LABEL = "Other";
-
-function Pill({ active, accent = C.bl, disabled, children, onClick }) {
-  return (
-    <button
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      style={{
-        padding: "7px 14px",
-        borderRadius: 8,
-        border: "1px solid " + (active ? accent : C.bd),
-        background: active ? accent + "10" : C.cd,
-        color: disabled ? C.mu : active ? accent : C.md,
-        fontSize: 12.5,
-        fontWeight: 700,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.6 : 1,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ControlRow({ label, children }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: C.mu,
-          textTransform: "uppercase",
-          letterSpacing: ".4px",
-          minWidth: 62,
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </div>
-  );
-}
 
 function truncate(text, max = 30) {
   const s = String(text ?? "—");
@@ -159,8 +146,19 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
             textOverflow: "none",
             width: "190px",
           },
+          useHTML: true,
           formatter: function () {
-            return truncate(this.value);
+            // The mock's axis label: the name, and under it that row's own
+            // Breakdown %. The second line appears only where the figure is
+            // published (see the header note) — never computed to fill it.
+            const row = rows[this.pos];
+            const own = row?.pct == null ? null : fmtNum(row.pct, 2) + "%";
+            return (
+              `<div style="line-height:1.3">` +
+              `<div style="color:${C.md}">${truncate(this.value)}</div>` +
+              (own ? `<div style="color:${C.mu}">${own}</div>` : "") +
+              `</div>`
+            );
           },
         },
       },
@@ -210,6 +208,7 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
           return (
             `<b>${row.label}</b><br/>` +
             `${measureLabel}: <b>${fmtNum(row.value)}</b><br/>` +
+            (row.pct == null ? "" : `Breakdown %: <b>${fmtNum(row.pct, 2)}%</b><br/>`) +
             `Share of scope: <b>${fmtNum(row.share, 1)}%</b><br/>` +
             `Cumulative: <b>${fmtNum(cumulative[idx], 1)}%</b>`
           );
@@ -237,9 +236,9 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
           yAxis: 0,
           data: rows.map((r, i) => ({
             y: r.value,
-            // Solid up to the 80% cut, faded after it; the pooled tail is
-            // greyed, since it is many rows rather than one thing to act on.
-            color: r.isOther ? C.mu + "55" : i < barsTo80 ? C.bl : C.bl + "66",
+            // Solid up to the 80% cut, faded after it — the mock's `i < cut`
+            // rule, which says where the rows worth acting on end.
+            color: i < barsTo80 ? C.bl : C.bl + "66",
           })),
         },
         {
@@ -403,12 +402,16 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
             // Spec rule: the machine-level counter, never the summed
             // failure rows.
             occurrences: r.BreakdownOcc_m,
+            pct: r.Breakdown_Pct_m,
           }))
         : failureRows.map((r) => ({
             key: r.remarks,
             label: r.remarks ?? "—",
             minutes: r.BreakdownMin_m_Failure,
             occurrences: r.BreakdownOcc_m_Failure,
+            // Published per (machine, failure) — so it describes this row
+            // only while a machine is pinned.
+            pct: machine ? r.Breakdown_Pct_m_Failure : null,
           }));
 
     const ranked = built
@@ -423,24 +426,15 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
 
   const measureTotal = useMemo(() => allRows.reduce((s, r) => s + r.value, 0), [allRows]);
 
-  // Spec: top N, then everything else pooled into one "Other" bar, so the
-  // bars still add to the scope and the cumulative line still reaches 100%.
-  const barRows = useMemo(() => {
-    if (allRows.length <= maxBars) return allRows;
-    const head = allRows.slice(0, maxBars);
-    const tail = allRows.slice(maxBars);
-    const value = tail.reduce((s, r) => s + r.value, 0);
-    return [
-      ...head,
-      {
-        key: OTHER_LABEL,
-        label: `${OTHER_LABEL} (${fmtNum(tail.length)})`,
-        value,
-        share: measureTotal ? (value / measureTotal) * 100 : 0,
-        isOther: true,
-      },
-    ];
-  }, [allRows, maxBars, measureTotal]);
+  const barRows = useMemo(() => allRows.slice(0, maxBars), [allRows, maxBars]);
+
+  // What the plotted head actually covers, stated in the caption — this is
+  // the figure the pooled "Other" bar would have shown.
+  const plottedShare = useMemo(
+    () =>
+      measureTotal ? (barRows.reduce((s, r) => s + r.value, 0) / measureTotal) * 100 : 0,
+    [barRows, measureTotal],
+  );
 
   // Counted over the REAL rows, never over the pooled bar: "Other" is 345
   // failures in one rectangle, so including it answers "16 of 16 bars", which
@@ -471,17 +465,26 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
       : []),
     { key: "minutes", label: "Downtime (min)", align: "right", render: (r) => fmtNum(r.minutes) },
     { key: "occurrences", label: "Occurrences", align: "right", render: (r) => fmtNum(r.occurrences) },
+    {
+      key: "pct",
+      label: "Breakdown %",
+      align: "right",
+      // Published or "—": a failure spanning machines has no percentage of
+      // its own, and the UI does not make one up.
+      render: (r) => (r.pct == null ? "—" : fmtNum(r.pct, 2) + "%"),
+    },
     { key: "share", label: "Share of scope", align: "right", render: (r) => fmtNum(r.share, 1) + "%" },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <ControlRow label="View by">
+    <div>
+      <ControlRow>
+        <ControlLabel>View by</ControlLabel>
         {VIEWS_BY.map((v) => (
-          <Pill
+          <Chip
             key={v.id}
-            active={viewBy === v.id}
-            accent={C.pp}
+            on={viewBy === v.id}
+            color={C.pp}
             onClick={() => {
               setViewBy(v.id);
               // The machine pin belongs to the Failure lens; leaving it set
@@ -491,28 +494,19 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
             }}
           >
             {v.label}
-          </Pill>
+          </Chip>
         ))}
         <span style={{ width: 12 }} />
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: C.mu,
-            textTransform: "uppercase",
-            letterSpacing: ".4px",
-          }}
-        >
-          Measure
-        </span>
+        <ControlLabel gutter={false}>Measure</ControlLabel>
         {MEASURES.map((m) => (
-          <Pill key={m.id} active={measure === m.id} onClick={() => setMeasure(m.id)}>
+          <Chip key={m.id} on={measure === m.id} onClick={() => setMeasure(m.id)}>
             {m.label}
-          </Pill>
+          </Chip>
         ))}
       </ControlRow>
 
-      <ControlRow label="Machine">
+      <ControlRow last>
+        <ControlLabel>Filter</ControlLabel>
         <select
           value={machine}
           disabled={viewBy !== "failure"}
@@ -523,13 +517,9 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
               : "Enabled in the Failure view only — the Machine view already is one bar per machine"
           }
           style={{
-            padding: "7px 10px",
-            borderRadius: 8,
-            border: "1px solid " + C.bd,
+            ...selectStyle,
             background: viewBy === "failure" ? C.cd : C.c2,
             color: viewBy === "failure" ? C.tx : C.mu,
-            fontSize: 12.5,
-            fontWeight: 700,
             cursor: viewBy === "failure" ? "pointer" : "not-allowed",
             maxWidth: 220,
           }}
@@ -541,9 +531,14 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
             </option>
           ))}
         </select>
+        {viewBy === "failure" && machine && (
+          <Chip on color={C.pp} onClick={() => setMachine("")}>
+            Clear
+          </Chip>
+        )}
         {viewBy !== "failure" && (
-          <span style={{ fontSize: 11.5, color: C.mu }}>
-            Available in the Failure view — the Machine view is already one bar per machine.
+          <span style={{ fontSize: 10.5, color: C.mu }}>
+            Machine filter applies to the Failure view — this view is already one bar per machine.
           </span>
         )}
       </ControlRow>
@@ -556,18 +551,8 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
         <JKLoader message="Loading breakdown chart" />
       ) : (
         <>
-          <div
-            style={{
-              border: "1px solid " + C.bd,
-              background: C.c2,
-              borderRadius: 8,
-              padding: "10px 12px",
-              fontSize: 12.5,
-              color: C.md,
-              lineHeight: 1.6,
-            }}
-          >
-            <b style={{ color: C.tx }}>Scope:</b>{" "}
+          <ScopeBanner>
+            <b style={{ color: C.tx }}>Scope: </b>
             {machine ? `machine ${machine}` : `${fmtNum(scope.machines)} machines with a breakdown`} —{" "}
             <b style={{ color: C.tx }}>{fmtNum(scope.minutes)} min</b> over{" "}
             <b style={{ color: C.tx }}>{fmtNum(scope.occurrences)}</b> breakdowns.{" "}
@@ -576,7 +561,7 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
               : `${fmtNum(rowsTo80)} of ${fmtNum(allRows.length)} ${
                   groupLabel === "Machine" ? "machines" : "failures"
                 } carry 80% of the ${activeMeasure.label.toLowerCase()}.`}
-          </div>
+          </ScopeBanner>
 
           {barRows.length > 0 && (
             <>
@@ -586,23 +571,32 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
                 total={measureTotal}
                 barsTo80={rowsTo80}
               />
-              <div style={{ fontSize: 12, color: C.mu, textAlign: "center", lineHeight: 1.5 }}>
+              <ChartCaption>
                 Bars = {activeMeasure.label.toLowerCase()} (additive) · amber line = cumulative % of
                 scope
+                {viewBy === "machine" || machine
+                  ? " · small figure = that row's own Breakdown %"
+                  : ""}
                 {allRows.length > maxBars &&
-                  ` · top ${maxBars} of ${fmtNum(allRows.length)}, the remaining ${fmtNum(
-                    allRows.length - maxBars,
-                  )} pooled into "Other"`}
-              </div>
+                  ` · top ${maxBars} of ${fmtNum(allRows.length)} = ${fmtNum(
+                    plottedShare,
+                    1,
+                  )}% of scope; the remaining ${fmtNum(allRows.length - maxBars)} carry ${fmtNum(
+                    100 - plottedShare,
+                    1,
+                  )}%`}
+              </ChartCaption>
             </>
           )}
 
-          <DTable
-            columns={columns}
-            rows={allRows}
-            getRowKey={(r) => r.key}
-            emptyMessage="No breakdowns recorded in this scope."
-          />
+          <div style={{ marginTop: 10 }}>
+            <DTable
+              columns={columns}
+              rows={allRows}
+              getRowKey={(r) => r.key}
+              emptyMessage="No breakdowns recorded in this scope."
+            />
+          </div>
         </>
       )}
     </div>
@@ -633,106 +627,36 @@ function BreakdownChartModal({
 }) {
   const [view, setView] = useState("pareto");
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(15,23,42,.55)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        padding: "40px 18px",
-        overflowY: "auto",
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.cd,
-          borderRadius: 12,
-          border: "1px solid " + C.bd,
-          boxShadow: "0 20px 60px rgba(0,0,0,.25)",
-          width: "100%",
-          maxWidth: 1100,
-        }}
-      >
-        <div
-          style={{
-            padding: "14px 18px",
-            borderBottom: "1px solid " + C.bd,
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                color: C.mu,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: ".5px",
-              }}
-            >
-              Breakdown Analysis
-            </div>
-            <div style={{ fontSize: 19, fontWeight: 700, color: C.tx, marginTop: 2 }}>{title}</div>
+    <AnalysisModal
+      open={open}
+      onClose={onClose}
+      eyebrow="Pareto Analysis"
+      title={title}
+      maxWidth={1000}
+      headerExtra={
+        paretoOnly ? null : (
+          <div style={{ display: "flex", gap: 6, marginLeft: 20 }}>
+            {MODAL_VIEWS.map((v) => (
+              <Chip key={v.id} on={view === v.id} onClick={() => setView(v.id)}>
+                {v.label}
+              </Chip>
+            ))}
           </div>
-          {!paretoOnly && (
-            <div style={{ display: "flex", gap: 8, marginLeft: 24 }}>
-              {MODAL_VIEWS.map((v) => (
-                <Pill key={v.id} active={view === v.id} onClick={() => setView(v.id)}>
-                  {v.label}
-                </Pill>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              marginLeft: "auto",
-              width: 30,
-              height: 30,
-              borderRadius: 8,
-              border: "1px solid " + C.bd,
-              background: C.c2,
-              color: C.mu,
-              fontSize: 19,
-              lineHeight: 1,
-              cursor: "pointer",
-            }}
-          >
-            {"✕"}
-          </button>
-        </div>
-        <div style={{ padding: "16px 18px" }}>
-          {view === "pareto" || paretoOnly ? (
-            <ParetoView
-              date={date}
-              granularity={granularity}
-              initialViewBy={initialViewBy}
-              maxBars={maxBars}
-            />
-          ) : (
-            <MonthlyBreakdownTrend />
-          )}
-        </div>
-      </div>
-    </div>
+        )
+      }
+    >
+      {view === "pareto" || paretoOnly ? (
+        <ParetoView
+          date={date}
+          granularity={granularity}
+          initialViewBy={initialViewBy}
+          maxBars={maxBars}
+        />
+      ) : (
+        <MonthlyBreakdownTrend />
+      )}
+    </AnalysisModal>
   );
 }
 

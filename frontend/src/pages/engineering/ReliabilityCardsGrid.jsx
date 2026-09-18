@@ -30,7 +30,7 @@ import {
 import { ZeroBreakdownPanel, TopMachineBreakdownsPanel, useZeroBreakdownTotal } from "./reliabilityPanels.jsx";
 import BreakdownChartModal from "./BreakdownChartModal.jsx";
 import MtbfMttrChartModal from "./MtbfMttrChartModal.jsx";
-import { TrendAnalysisModal, ZeroBreakdownTrendBody } from "./ReliabilityTrendModal.jsx";
+import ZeroBreakdownTrendModal from "./ZeroBreakdownTrendModal.jsx";
 
 function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }) {
   return (
@@ -218,13 +218,14 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
         initialMeasure={trendCard === "mttr" ? "mttr" : "mtbf"}
       />
 
-      <TrendAnalysisModal
+      <ZeroBreakdownTrendModal
         open={trendCard === "zeroBreakdown"}
         onClose={closeTrend}
-        title="Zero Breakdown Machines"
-      >
-        <ZeroBreakdownTrendBody asOf={zeroBreakdown.asOf} />
-      </TrendAnalysisModal>
+        total={zeroBreakdown.total}
+        asOf={zeroBreakdown.asOf}
+        date={date}
+        granularity={granularity}
+      />
     </div>
   );
 }

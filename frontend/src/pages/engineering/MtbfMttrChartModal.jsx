@@ -31,16 +31,28 @@
  * The single piece of UI arithmetic is Contribution % — `BreakdownMin_m` for
  * that machine ÷ the sum of `BreakdownMin_m` in scope × 100 — which rule 3
  * permits by name as "a plain share of a total".
+ *
+ * Look and interaction follow the mock: its `TrendPanel` shell and its
+ * `HBarChart` — horizontal bars, label left, value at the bar end, a dashed
+ * amber target tick per row, and bars going green or red against that
+ * target. Both live in reliabilityChrome.jsx. The data, the controls and the
+ * figures follow the KPI spec.
  */
 import { useEffect, useMemo, useState } from "react";
-import Highcharts from "highcharts";
-import HighchartsReactImport from "highcharts-react-official";
 import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C, DTable, GradeChip, fmtNum } from "./reliabilityShared.jsx";
+import {
+  AnalysisModal,
+  Block,
+  ChartCaption,
+  Chip,
+  ControlLabel,
+  ControlRow,
+  HBarChart,
+  ScopeBanner,
+} from "./reliabilityChrome.jsx";
 import { TARGETS } from "./reliabilityTargets.js";
-
-const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
 // One fetch serves both measures and the whole table.
 const MACHINE_KPIS = ["MTBF_m", "MTTR_m", "BreakdownMin_m", "BreakdownOcc_m"];
@@ -71,112 +83,6 @@ const MEASURES = {
 // MTBF and MTTR are ratios, and rule 8 forbids summing or averaging them, so
 // a pooled tail bar could not be computed honestly.
 const MAX_BARS = 20;
-
-function Pill({ active, accent = C.bl, children, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "7px 14px",
-        borderRadius: 8,
-        border: "1px solid " + (active ? accent : C.bd),
-        background: active ? accent + "10" : C.cd,
-        color: active ? accent : C.md,
-        fontSize: 12.5,
-        fontWeight: 700,
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {active ? children : children}
-    </button>
-  );
-}
-
-/** Bars of the active measure in hours, with the hardcoded target line. */
-function MeasureBars({ rows, measure }) {
-  const options = useMemo(() => {
-    const longest = rows.reduce((n, r) => Math.max(n, String(r.label).length), 0);
-    const upright = longest > 8;
-    const labelRoom = upright ? Math.min(240, Math.max(90, longest * 6.2 + 30)) : 70;
-    return {
-      chart: {
-        type: "column",
-        height: 290 + labelRoom,
-        marginBottom: labelRoom,
-        backgroundColor: "transparent",
-        spacing: [12, 8, 4, 8],
-      },
-      title: { text: null },
-      credits: { enabled: false },
-      accessibility: { enabled: false },
-      legend: { enabled: false },
-      xAxis: {
-        categories: rows.map((r) => r.label),
-        lineColor: C.bd,
-        tickLength: 0,
-        labels: {
-          rotation: upright ? -90 : 0,
-          align: upright ? "right" : "center",
-          overflow: "allow",
-          crop: false,
-          style: { fontSize: "11px", color: C.md, whiteSpace: "nowrap", textOverflow: "none" },
-        },
-      },
-      yAxis: {
-        title: { text: null },
-        gridLineColor: C.bd,
-        labels: { style: { fontSize: "11px", color: C.mu } },
-        // Bars are sorted, so both ends of the plot are occupied and an
-        // inline plot-line label sits on top of one. The target is named in
-        // the legend line above the chart instead.
-        softMax: measure.targetHrs * 1.05,
-        plotLines: [
-          {
-            value: measure.targetHrs,
-            color: C.am,
-            dashStyle: "Dash",
-            width: 1.5,
-            zIndex: 3,
-          },
-        ],
-      },
-      tooltip: {
-        useHTML: true,
-        formatter: function () {
-          const row = rows[this.point.index];
-          if (!row) return false;
-          return (
-            `<b>${row.label}</b><br/>` +
-            `MTBF: <b>${row.mtbf == null ? "—" : fmtNum(row.mtbf / 60, 1) + " hrs"}</b><br/>` +
-            `MTTR: <b>${row.mttr == null ? "—" : fmtNum(row.mttr / 60, 2) + " hrs"}</b><br/>` +
-            `Downtime: <b>${fmtNum(row.minutes)} min</b><br/>` +
-            `Events: <b>${fmtNum(row.events)}</b>`
-          );
-        },
-      },
-      plotOptions: {
-        column: {
-          color: C.bl,
-          borderWidth: 0,
-          borderRadius: 4,
-          groupPadding: 0.12,
-          pointPadding: 0.06,
-          dataLabels: {
-            enabled: true,
-            style: { fontSize: "11px", fontWeight: "700", color: C.tx, textOutline: "none" },
-            formatter: function () {
-              return fmtNum(this.y, this.y < 10 ? 2 : 1);
-            },
-          },
-        },
-      },
-      series: [{ name: `${measure.label} (hrs)`, type: "column", data: rows.map((r) => r.hours) }],
-    };
-  }, [rows, measure]);
-
-  return <HighchartsReact highcharts={Highcharts} options={options} />;
-}
 
 /**
  * @param {{ open: boolean, onClose: () => void, date: string, granularity: string,
@@ -273,227 +179,98 @@ function MtbfMttrChartModal({ open, onClose, date, granularity, initialMeasure =
     },
   ];
 
-  if (!open) return null;
-
   const machineCount = machines.filter((m) => m[measureId] != null).length;
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(15,23,42,.55)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        padding: "40px 18px",
-        overflowY: "auto",
-      }}
+    <AnalysisModal
+      open={open}
+      onClose={onClose}
+      eyebrow="KPI Trend Analysis"
+      title="MTBF / MTTR"
+      maxWidth={1000}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.cd,
-          borderRadius: 12,
-          border: "1px solid " + C.bd,
-          boxShadow: "0 20px 60px rgba(0,0,0,.25)",
-          width: "100%",
-          maxWidth: 1100,
-        }}
-      >
-        <div
-          style={{
-            padding: "14px 18px",
-            borderBottom: "1px solid " + C.bd,
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                color: C.mu,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: ".5px",
-              }}
-            >
-              Reliability Analysis
+      <ControlRow>
+        <ControlLabel>View by</ControlLabel>
+        {VIEWS_BY.map((v) => (
+          <Chip key={v.id} on={viewBy === v.id} color={C.pp} onClick={() => setViewBy(v.id)}>
+            {v.label}
+          </Chip>
+        ))}
+        <span style={{ width: 12 }} />
+        <ControlLabel gutter={false}>Measure</ControlLabel>
+        {Object.values(MEASURES).map((m) => (
+          <Chip key={m.id} on={measureId === m.id} onClick={() => setMeasureId(m.id)}>
+            {m.label}
+          </Chip>
+        ))}
+      </ControlRow>
+
+      {viewBy === "section" ? (
+        <Block title={`${measure.label} by Section`}>
+          <div style={{ fontSize: 12.5, color: C.md, lineHeight: 1.6 }}>
+            <b style={{ color: C.tx }}>This view needs a KPI the engine is not publishing.</b>
+            <div style={{ marginTop: 6 }}>
+              It reads <code>MTBF_Section</code> and <code>MTTR_Section</code> directly. Gold
+              carries no such rows today — only the <code>_Grade_Section</code> pairs, which are cut
+              by machine category as well as section.
             </div>
-            <div style={{ fontSize: 19, fontWeight: 700, color: C.tx, marginTop: 2 }}>
-              MTBF / MTTR
+            <div style={{ marginTop: 6 }}>
+              A section cannot be rebuilt from those: the spec measured it — Curing pooled by the
+              engine is 7,600 min, while averaging its grade rows gives 7,554 — and rules 2, 3 and 8
+              forbid recomputing a rate in the UI. So this view stays empty until the two files
+              land. Use the <b>Machine</b> view meanwhile.
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              marginLeft: "auto",
-              width: 30,
-              height: 30,
-              borderRadius: 8,
-              border: "1px solid " + C.bd,
-              background: C.c2,
-              color: C.mu,
-              fontSize: 19,
-              lineHeight: 1,
-              cursor: "pointer",
-            }}
-          >
-            {"✕"}
-          </button>
+        </Block>
+      ) : error ? (
+        <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
+          MTBF/MTTR fetch failed: {error.message || "Request failed"}
         </div>
-
-        <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: C.mu,
-                textTransform: "uppercase",
-                letterSpacing: ".4px",
-                minWidth: 62,
-              }}
-            >
-              View by
-            </span>
-            {VIEWS_BY.map((v) => (
-              <Pill
-                key={v.id}
-                active={viewBy === v.id}
-                accent={C.pp}
-                onClick={() => setViewBy(v.id)}
-              >
-                {v.label}
-              </Pill>
-            ))}
-            <span style={{ width: 12 }} />
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: C.mu,
-                textTransform: "uppercase",
-                letterSpacing: ".4px",
-              }}
-            >
-              Measure
-            </span>
-            {Object.values(MEASURES).map((m) => (
-              <Pill key={m.id} active={measureId === m.id} onClick={() => setMeasureId(m.id)}>
-                {m.label}
-              </Pill>
-            ))}
-          </div>
-
-          {viewBy === "section" ? (
-            <div
-              style={{
-                border: "1px solid " + C.bd,
-                background: C.c2,
-                borderRadius: 8,
-                padding: "16px 14px",
-                fontSize: 13,
-                color: C.md,
-                lineHeight: 1.6,
-              }}
-            >
-              <b style={{ color: C.tx }}>Section view needs a KPI the engine is not publishing.</b>
-              <div style={{ marginTop: 6 }}>
-                It reads <code>MTBF_Section</code> and <code>MTTR_Section</code> directly. Gold
-                carries no such rows today — only the <code>_Grade_Section</code> pairs, which are
-                cut by machine category as well as section.
-              </div>
-              <div style={{ marginTop: 6 }}>
-                A section cannot be rebuilt from those: the spec measured it — Curing pooled by the
-                engine is 7,600 min, while averaging its grade rows gives 7,554 — and rules 2, 3
-                and 8 forbid recomputing a rate in the UI. So this view stays empty until the two
-                files land. Use the <b>Machine</b> view meanwhile.
-              </div>
-            </div>
-          ) : error ? (
-            <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
-              MTBF/MTTR fetch failed: {error.message || "Request failed"}
-            </div>
-          ) : loading ? (
-            <JKLoader message="Loading machines" />
-          ) : barRows.length === 0 ? (
-            <div style={{ padding: 16, color: C.mu, fontSize: 13 }}>
-              No {measure.label} rows published for this period.
-            </div>
-          ) : (
-            <>
-              {topMachine && (
-                <div
-                  style={{
-                    border: "1px solid " + C.bd,
-                    background: C.c2,
-                    borderRadius: 8,
-                    padding: "10px 12px",
-                    fontSize: 12.5,
-                    color: C.md,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  <b style={{ color: C.tx }}>Top machine:</b> {topMachine.label} (
-                  {topMachine.section ?? "—"}) — <b style={{ color: C.tx }}>{fmtNum(topMachine.minutes)} min</b>,{" "}
-                  {fmtNum(topMachine.contribution, 1)}% of plant breakdown
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 11.5,
-                  color: C.md,
-                  fontWeight: 600,
-                }}
-              >
-                <span
-                  style={{
-                    width: 16,
-                    borderTop: "1.5px dashed " + C.am,
-                    display: "inline-block",
-                  }}
-                />
-                Target {measure.id === "mtbf" ? "≥" : "<"} {fmtNum(measure.targetHrs)} hrs
-                <span style={{ color: C.mu, fontWeight: 500 }}>
-                  (hardcoded — no threshold_value is published)
-                </span>
-              </div>
-
-              <MeasureBars rows={barRows} measure={measure} />
-
-              <div style={{ fontSize: 12, color: C.mu, textAlign: "center", lineHeight: 1.5 }}>
-                {measure.label} in hours per machine ({measure.sense}), read from{" "}
-                {measure.kpi} and divided by 60 · sorted by {measure.label} · top {MAX_BARS} of{" "}
-                {fmtNum(machineCount)}
-                {". "}
-                No pooled "Other" bar: {measure.label} is a ratio, and a ratio may not be summed or
-                averaged.{" "}
-                {measure.id === "mtbf" && TARGETS.mtbfNeedsRebaseline
-                  ? `Target ${fmtNum(TARGETS.mtbfHrs)} hrs is the stated figure and is flagged in the spec for re-baselining — it assumed 24 h/day, while the plant runs 480 min × active shifts.`
-                  : "Target is hardcoded; no threshold is published."}
-              </div>
-
-              <DTable
-                columns={columns}
-                rows={machines}
-                getRowKey={(r) => r.key}
-                emptyMessage="No machines published for this period."
-              />
-            </>
+      ) : loading ? (
+        <JKLoader message="Loading machines" />
+      ) : barRows.length === 0 ? (
+        <div style={{ padding: 16, color: C.mu, fontSize: 13 }}>
+          No {measure.label} rows published for this period.
+        </div>
+      ) : (
+        <>
+          {topMachine && (
+            <ScopeBanner>
+              <b style={{ color: C.tx }}>Top machine: </b>
+              {topMachine.label} ({topMachine.section ?? "—"}) —{" "}
+              <b style={{ color: C.tx }}>{fmtNum(topMachine.minutes)} min</b>,{" "}
+              {fmtNum(topMachine.contribution, 1)}% of plant breakdown
+            </ScopeBanner>
           )}
-        </div>
-      </div>
-    </div>
+
+          <Block title={`${measure.label} by Machine (hrs) — ${measure.sense}`}>
+            <HBarChart
+              items={barRows.map((r) => ({ label: r.label, value: r.hours }))}
+              unit="hrs"
+              target={measure.targetHrs}
+              higherIsBetter={measure.id === "mtbf"}
+            />
+            <ChartCaption>
+              Read from {measure.kpi} and divided by 60 · sorted by {measure.label} · top{" "}
+              {MAX_BARS} of {fmtNum(machineCount)} · bars are green on target, red off it. No pooled
+              "Other" bar: {measure.label} is a ratio, and a ratio may not be summed or averaged.
+              {measure.id === "mtbf" && TARGETS.mtbfNeedsRebaseline
+                ? ` The ${fmtNum(TARGETS.mtbfHrs)} hr target is the stated figure and is flagged in the spec for re-baselining — it assumed 24 h/day, while the plant runs 480 min × active shifts, putting real plant MTBF near 91 hrs.`
+                : " The target is hardcoded; no threshold_value is published."}
+            </ChartCaption>
+          </Block>
+
+          <div style={{ marginTop: 10 }}>
+            <DTable
+              columns={columns}
+              rows={machines}
+              getRowKey={(r) => r.key}
+              emptyMessage="No machines published for this period."
+            />
+          </div>
+        </>
+      )}
+    </AnalysisModal>
   );
 }
 
