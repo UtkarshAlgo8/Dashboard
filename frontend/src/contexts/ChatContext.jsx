@@ -214,24 +214,37 @@ export function ChatProvider({ children }) {
           intent,
         });
 
+        // The intent the upstream actually served, which is what every
+        // rendering decision below keys off — not the one we asked for.
+        const servedIntent = response.intent ?? intent;
+
         const agentMessage = {
           id: `agent-${Date.now()}`,
           sender: "agent",
-          text:
-            response.final_answer ??
-            response.execution_error ??
-            "I couldn't generate a response for that.",
+          // No fallback line: `final_answer` is legitimately null in
+          // `plot` mode, where the chart is the whole answer, and an
+          // apology under a rendered chart just reads as a failure.
+          text: response.final_answer ?? response.execution_error ?? "",
           timestamp: new Date().toISOString(),
           isError: Boolean(response.execution_error),
-          intent: response.intent ?? intent,
+          intent: servedIntent,
           resultId: response.result_id ?? null,
-          // Gated on download_available alone: the upstream sets it for
-          // small results too (is_large_result is only about truncation).
+          // `query` answers the question in prose, so the CSV is offered
+          // only when the result was truncated and the rows are the only
+          // way to see the rest. The other intents hand back a dataset,
+          // so there `download_available` alone is the gate.
           downloadAvailable: Boolean(
-            response.download_available && response.result_id,
+            response.download_available &&
+              response.result_id &&
+              (servedIntent !== "query" || response.is_large_result),
           ),
           rowCount: response.row_count ?? null,
-          wantsPlot: Boolean(response.wants_plot && response.plot_spec),
+          // Only `plot` charts. The upstream carries `plot_spec` forward
+          // across turns in a session, so without this an `analyze` or
+          // `report` answer re-renders the previous question's chart.
+          wantsPlot: Boolean(
+            servedIntent === "plot" && response.wants_plot && response.plot_spec,
+          ),
           plotSpec: response.plot_spec ?? null,
           reportId: response.report_id ?? null,
           reportType: response.report_type ?? null,
