@@ -10,10 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
-import {
-  getReliabilityKpiChildren,
-  getReliabilityKpiHistory,
-} from "@/api/engineering.js";
+import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 
 // highcharts-react-official 3.x ships as a UMD bundle; normalize the
@@ -720,88 +717,4 @@ export function TrendChart({ labels, values, unit }) {
     };
   }, [labels, values, unit]);
   return <HighchartsReact highcharts={Highcharts} options={options} />;
-}
-
-/**
- * Modal wrapper around TrendChart, fetching a MONTH history series on open.
- *
- * The window ends at the CURRENT month rather than a hardcoded date — the
- * feed's MONTH rollup includes the running month, and a pinned end date
- * would silently stop extending the trend once the calendar moved past it.
- * It starts 11 months earlier, so the chart is a rolling 12-month view.
- */
-export function TrendModal({
-  open,
-  onClose,
-  title,
-  kpiName,
-  unit,
-  dateFrom = monthKeyShiftedInIST(-11),
-  dateTo = currentMonthKeyInIST(),
-}) {
-  const [points, setPoints] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!open || !kpiName) return;
-    let cancelled = false;
-    setLoading(true);
-    getReliabilityKpiHistory({ kpiName, dateFrom, dateTo, granularity: "MONTH" })
-      .then((res) => {
-        if (!cancelled) setPoints(Array.isArray(res?.points) ? res.points : []);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, kpiName, dateFrom, dateTo]);
-
-  if (!open) return null;
-
-  const labels = points.map((p) => p.date?.slice(0, 7) ?? "");
-  const values = points.map((p) => p.value);
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.35)",
-        zIndex: 500,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.cd,
-          borderRadius: 10,
-          padding: 18,
-          width: "min(640px, 92vw)",
-          boxShadow: "0 8px 30px rgba(0,0,0,.25)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, textTransform: "uppercase" }}>{title} — Trend</div>
-          <button
-            onClick={onClose}
-            style={{ border: "none", background: "transparent", fontSize: 18, cursor: "pointer", color: C.mu }}
-            aria-label="Close"
-          >
-            {"×"}
-          </button>
-        </div>
-        {loading ? (
-          <JKLoader message="Loading trend" />
-        ) : (
-          <TrendChart labels={labels} values={values} unit={unit} />
-        )}
-      </div>
-    </div>
-  );
 }

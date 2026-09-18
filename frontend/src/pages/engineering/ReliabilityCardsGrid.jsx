@@ -2,15 +2,23 @@
  * The Breakdown/MTBF/MTTR/Zero-Breakdown(/Top-Machine-Breakdowns) KPI card
  * grid shared by the Overview and Reliability tabs (spec 16/17). One-value
  * tile: uppercase label, big value+unit, colored left border, trend-icon
- * button (opens TrendModal), chevron that expands a drill panel inline
- * below the grid — mirrors the design mockup's `EKpiCard` interaction.
+ * button, chevron that expands a drill panel inline below the grid —
+ * mirrors the design mockup's `EKpiCard` interaction.
+ *
+ * Each card's trend icon opens the chart the design reference gives THAT
+ * KPI, not one line chart for all five (reference: `RELIABILITY_KPIS`, where
+ * the per-KPI `chart` / `pareto` flags pick the panel):
+ *
+ *   Breakdown                → the Pareto, machine × phenomenon
+ *   MTBF / MTTR              → by-section bars + the plant's monthly trend
+ *   Zero Breakdown Machines  → the clean-run count against the fleet, + 30-day trajectory
+ *   Top Machine Breakdowns   → the same Pareto, on the Machine lens
  */
 import { useState } from "react";
 import {
   Card,
   ChevronIcon,
   TrendIcon,
-  TrendModal,
   ReliabilityDrillPanel,
   BREAKDOWN_LEVELS,
   MTBF_LEVELS,
@@ -20,6 +28,13 @@ import {
   fmtMinHrs,
 } from "./reliabilityShared.jsx";
 import { ZeroBreakdownPanel, TopMachineBreakdownsPanel, useZeroBreakdownTotal } from "./reliabilityPanels.jsx";
+import BreakdownParetoModal from "./BreakdownParetoModal.jsx";
+import {
+  TrendAnalysisModal,
+  MtbfTrendBody,
+  MttrTrendBody,
+  ZeroBreakdownTrendBody,
+} from "./ReliabilityTrendModal.jsx";
 
 function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }) {
   return (
@@ -85,10 +100,14 @@ function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }
  */
 function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = false }) {
   const [expanded, setExpanded] = useState(null);
-  const [trendKpi, setTrendKpi] = useState(null);
+  // Which card's trend icon is open, by card id — every card's icon opens a
+  // different analysis, so one id covers all of them. Chevrons are separate
+  // (`expanded`) and still open the inline drill panels.
+  const [trendCard, setTrendCard] = useState(null);
   const zeroBreakdown = useZeroBreakdownTotal();
 
   const toggle = (id) => setExpanded((e) => (e === id ? null : id));
+  const closeTrend = () => setTrendCard(null);
 
   const cards = [
     {
@@ -98,7 +117,6 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       value: fmtNum(values?.Breakdown_Pct_Overall, 2),
       unit: "%",
       sub: fmtMinHrs(values?.BreakdownMin_Overall),
-      trend: { kpiName: "Breakdown_Pct_Overall", unit: "%" },
     },
     {
       id: "mtbf",
@@ -106,7 +124,6 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       accent: C.bl,
       value: fmtMinHrs(values?.MTBF_Overall),
       unit: "",
-      trend: { kpiName: "MTBF_Overall", unit: "min" },
     },
     {
       id: "mttr",
@@ -114,7 +131,6 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       accent: C.am,
       value: fmtMinHrs(values?.MTTR_Overall),
       unit: "",
-      trend: { kpiName: "MTTR_Overall", unit: "min" },
     },
     {
       id: "zeroBreakdown",
@@ -152,7 +168,8 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
             accent={c.accent}
             expanded={expanded === c.id}
             onToggle={() => toggle(c.id)}
-            onTrend={c.trend ? () => setTrendKpi(c.trend) : undefined}
+            // Every Reliability card has an analysis behind its icon.
+            onTrend={() => setTrendCard(c.id)}
           />
         ))}
       </div>
@@ -175,13 +192,42 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
         </div>
       )}
 
-      <TrendModal
-        open={!!trendKpi}
-        onClose={() => setTrendKpi(null)}
-        title={cards.find((c) => c.trend?.kpiName === trendKpi?.kpiName)?.label ?? ""}
-        kpiName={trendKpi?.kpiName}
-        unit={trendKpi?.unit}
+      <BreakdownParetoModal
+        open={trendCard === "breakdown"}
+        onClose={closeTrend}
+        date={date}
+        granularity={granularity}
       />
+
+      <BreakdownParetoModal
+        open={trendCard === "topMachines"}
+        onClose={closeTrend}
+        date={date}
+        granularity={granularity}
+        title="Top Machine Breakdowns"
+        initialView="machine"
+      />
+
+      <TrendAnalysisModal open={trendCard === "mtbf"} onClose={closeTrend} title="MTBF">
+        <MtbfTrendBody date={date} granularity={granularity} />
+      </TrendAnalysisModal>
+
+      <TrendAnalysisModal open={trendCard === "mttr"} onClose={closeTrend} title="MTTR">
+        <MttrTrendBody date={date} granularity={granularity} />
+      </TrendAnalysisModal>
+
+      <TrendAnalysisModal
+        open={trendCard === "zeroBreakdown"}
+        onClose={closeTrend}
+        title="Zero Breakdown Machines"
+      >
+        <ZeroBreakdownTrendBody
+          total={zeroBreakdown.total}
+          asOf={zeroBreakdown.asOf}
+          date={date}
+          granularity={granularity}
+        />
+      </TrendAnalysisModal>
     </div>
   );
 }
