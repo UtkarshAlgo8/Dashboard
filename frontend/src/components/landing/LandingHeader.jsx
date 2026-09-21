@@ -19,9 +19,11 @@ function LandingHeader({
   range,
   from,
   to,
+  month = null,
   onRangeChange,
   onFromChange,
   onToChange,
+  onMonthChange,
 }) {
   const theme = useTheme();
   return (
@@ -85,6 +87,8 @@ function LandingHeader({
           onPresetChange={onRangeChange}
           onFromChange={onFromChange}
           onToChange={onToChange}
+          month={month}
+          onMonthChange={onMonthChange}
           hideYear
           presetLabels={{ today: "Today", month: "Month", year: "Year" }}
         />

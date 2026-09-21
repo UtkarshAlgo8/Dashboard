@@ -125,6 +125,19 @@ export function buildMonthOptions(asOf = null, count = 12) {
   return out;
 }
 
+/**
+ * "yyyy-MM" -> { from: "yyyy-MM-01", to: "yyyy-MM-<last>" }, the calendar
+ * window for a month picked from the header dropdown. Callers that talk to
+ * an endpoint taking only from/to (the landing page's /plants) use this
+ * instead of presetToDateRange, which also carries granularity/mode.
+ * Returns null for anything that isn't a month key.
+ */
+export function monthKeyToRange(monthKey) {
+  const anchor = parseMonthKey(monthKey);
+  if (!anchor) return null;
+  return { from: toIso(startOfMonth(anchor)), to: toIso(endOfMonth(anchor)) };
+}
+
 export function presetToDateRange(timeRange, asOf = null) {
   if (!timeRange) {
     return { granularity: null, from: null, to: null, mode: "snapshot" };

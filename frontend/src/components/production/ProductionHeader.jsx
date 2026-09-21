@@ -319,6 +319,9 @@ function ProductionHeader({
                   preset: p.preset,
                   from: p.from,
                   to: p.to,
+                  // Carry the picker's month reset through; otherwise the
+                  // spread above keeps a month pinned from the dropdown.
+                  month: p.month ?? null,
                 }))
               }
               onFromChange={(v) =>

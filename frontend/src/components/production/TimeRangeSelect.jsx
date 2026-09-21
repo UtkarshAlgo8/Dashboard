@@ -34,12 +34,26 @@ function TimeRangeSelect({
   const toDateVal = parseSafe(to);
   const isCustomRange =
     Boolean(from || to) && preset !== "today" && preset !== "month";
-  const customLabel = isCustomRange
-    ? formatRangeLabel(fromDate, toDateVal)
-    : "Date Range";
 
   const monthOptions = useMemo(() => buildMonthOptions(asOf), [asOf]);
-  const selectedMonthKey = month ?? asOfMonthKey(asOf);
+  const defaultMonthKey = asOfMonthKey(asOf);
+  const selectedMonthKey = month ?? defaultMonthKey;
+  // A PAST month picked from the dropdown. Without this the control gave the
+  // choice no feedback at all: "This Month" stayed lit and the dropdown pill
+  // still read "Date Range", so a page correctly showing Aug looked like it
+  // had ignored the click and stayed on the current month. The pinned month
+  // now owns the dropdown pill (lit, labelled "Aug 2026") and releases the
+  // "This Month" pill, which is what "this month" actually means.
+  const isPinnedMonth =
+    preset === "month" && selectedMonthKey !== defaultMonthKey;
+  const isMonthPreset = preset === "month" && !isPinnedMonth;
+  const dropdownActive = isCustomRange || isPinnedMonth;
+  const customLabel = isCustomRange
+    ? formatRangeLabel(fromDate, toDateVal)
+    : isPinnedMonth
+      ? (monthOptions.find((o) => o.key === selectedMonthKey)?.label ??
+        selectedMonthKey)
+      : "Date Range";
   const showShift = preset === "today" && typeof onShiftChange === "function";
   const isTrendVariant = variant === "trend";
   const presetLabel = (id, fallback) => presetLabels?.[id] ?? fallback;
@@ -48,7 +62,11 @@ function TimeRangeSelect({
       onPresetChange(nextPreset);
       return;
     }
-    onPresetChange({ preset: nextPreset, from: "", to: "" });
+    // `month: null` is explicit, not incidental: consumers build their next
+    // state by spreading the previous one, so a month left over from the
+    // dropdown would survive a pill click and silently pin the page to that
+    // past month. Clicking "This Month" has to mean this month.
+    onPresetChange({ preset: nextPreset, from: "", to: "", month: null });
   };
 
   const shiftOptions = [
@@ -157,24 +175,24 @@ function TimeRangeSelect({
           onClick={() => selectPreset("month")}
           sx={{
             ...pad,
-            m: preset === "month" ? "-1px" : 0,
-            zIndex: preset === "month" ? 1 : 0,
-            fontWeight: preset === "month" ? 600 : 500,
+            m: isMonthPreset ? "-1px" : 0,
+            zIndex: isMonthPreset ? 1 : 0,
+            fontWeight: isMonthPreset ? 600 : 500,
             whiteSpace: "nowrap",
             userSelect: "none",
             borderRadius: 999,
             cursor: "pointer",
             border: 1,
-            borderColor: preset === "month" ? "primary.main" : "transparent",
-            backgroundColor:
-              preset === "month" ? theme.custom.pills.activeBg : "transparent",
-            color: preset === "month" ? "primary.main" : "text.primary",
+            borderColor: isMonthPreset ? "primary.main" : "transparent",
+            backgroundColor: isMonthPreset
+              ? theme.custom.pills.activeBg
+              : "transparent",
+            color: isMonthPreset ? "primary.main" : "text.primary",
             transition: "all 0.15s ease",
             "&:hover": {
-              backgroundColor:
-                preset === "month"
-                  ? theme.custom.pills.activeBg
-                  : theme.custom.surface.soft,
+              backgroundColor: isMonthPreset
+                ? theme.custom.pills.activeBg
+                : theme.custom.surface.soft,
             },
           }}
         >
@@ -207,22 +225,22 @@ function TimeRangeSelect({
             alignItems: "center",
             gap: 0.5,
             ...pad,
-            m: isCustomRange ? "-1px" : 0,
-            zIndex: isCustomRange ? 1 : 0,
-            fontWeight: isCustomRange ? 600 : 500,
+            m: dropdownActive ? "-1px" : 0,
+            zIndex: dropdownActive ? 1 : 0,
+            fontWeight: dropdownActive ? 600 : 500,
             whiteSpace: "nowrap",
             userSelect: "none",
             borderRadius: 999,
             cursor: "pointer",
             border: 1,
-            borderColor: isCustomRange ? "primary.main" : "transparent",
-            backgroundColor: isCustomRange
+            borderColor: dropdownActive ? "primary.main" : "transparent",
+            backgroundColor: dropdownActive
               ? theme.custom.pills.activeBg
               : "transparent",
-            color: isCustomRange ? "primary.main" : "text.primary",
+            color: dropdownActive ? "primary.main" : "text.primary",
             transition: "all 0.15s ease",
             "&:hover": {
-              backgroundColor: isCustomRange
+              backgroundColor: dropdownActive
                 ? theme.custom.pills.activeBg
                 : theme.custom.surface.soft,
             },
