@@ -40,7 +40,14 @@ import {
   spcLimitsQuery,
   GRAN_BASELINE,
 } from "./queries/spc.queries.js";
-import { shiftWindow, partitionDays, resolveSilver } from "./spc/mapping.js";
+import {
+  shiftWindow,
+  partitionDays,
+  resolveSilver,
+  sourceForMachine,
+  paramsForSource,
+} from "./spc/mapping.js";
+import { silverBoardQuery } from "./queries/silver.queries.js";
 
 /* ---------------------------- engine ---------------------------- */
 
@@ -487,4 +494,75 @@ test("toSpcDetail: an unmapped machine says so rather than charting nothing", ()
   assert.equal(detail.measurement.source, null);
   assert.match(detail.insufficient.reason, /not mapped to a silver source/);
   assert.equal(detail.capability.headline_status, "Insufficient Data");
+});
+
+/* ----------------------- silver board query ---------------------- */
+
+const BOARD_SRC = sourceForMachine("VMIEXXIUM02");
+const BOARD_PARAMS = paramsForSource(BOARD_SRC);
+const BOARD_SCOPE = {
+  from: "2026-09-01 00:00:00",
+  to: "2026-10-01 00:00:00",
+  size: 5,
+  points: 60,
+};
+
+test("silverBoardQuery: thins to `points` per machine+recipe, in SQL", () => {
+  // A month of untouched subgroups is ~10 MB per table — past the upstream
+  // response ceiling, which came back as one error and blanked every card
+  // on the board. The stride has to be applied before the wire, not after.
+  const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, BOARD_SCOPE);
+  assert.match(
+    sql,
+    /WHERE \(rn2 - 1\) % GREATEST\(CAST\(CEIL\(n_subgroups \/ 60\.0\) AS BIGINT\), 1\) = 0 OR rn2 = n_subgroups/,
+  );
+  // Whole subgroups only, and the window still prunes to its partitions.
+  assert.match(sql, /HAVING COUNT\(\*\) = 5/);
+  assert.match(sql, /year = 2026 AND month = 9 AND day = 1/);
+});
+
+test("silverBoardQuery: the untouched totals ride along, per parameter", () => {
+  // Thinned rows cannot be counted for the card's "N subgroups · M
+  // readings" — a parameter that is null in some subgroups has its own
+  // total, so one shared count would overstate it.
+  const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, BOARD_SCOPE);
+  assert.match(
+    sql,
+    /COUNT\(\*\) OVER \(PARTITION BY machine, recipe\) AS n_subgroups/,
+  );
+  for (const p of Object.values(BOARD_PARAMS)) {
+    assert.match(
+      sql,
+      new RegExp(
+        `COUNT\\(${p.valueColumn}\\) OVER \\(PARTITION BY machine, recipe\\) AS n_${p.valueColumn}`,
+      ),
+      `missing window count for ${p.valueColumn}`,
+    );
+  }
+});
+
+test("silverBoardQuery: a single-subgroup group is kept, not divided by zero", () => {
+  // CEIL(1 / 60.0) is 1, but GREATEST(..., 1) is what stops a stride of 0
+  // throwing for any `points` a caller passes.
+  const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, {
+    ...BOARD_SCOPE,
+    points: 0,
+  });
+  assert.match(sql, /GREATEST\(CAST\(CEIL\(n_subgroups \/ 0\.0\) AS BIGINT\), 1\)/);
+  // The last subgroup is kept whatever the stride, so the sparkline ends
+  // where the window does.
+  assert.match(sql, /OR rn2 = n_subgroups/);
+});
+
+test('silverBoardQuery: "All" is the absence of a recipe filter, not a value', () => {
+  const all = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, {
+    ...BOARD_SCOPE,
+    recipe: "All",
+  });
+  assert.equal(all.includes("item_code = 'All'"), false);
+  const one = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, {
+    ...BOARD_SCOPE,
+    recipe: "185/65R15-TAXIMAX-88H-TL-VMIMAXX",
+  });
+  assert.match(one, /item_code = '185\/65R15-TAXIMAX-88H-TL-VMIMAXX'/);
 });

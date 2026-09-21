@@ -124,8 +124,12 @@ function splitLimitName(kpiName) {
  * of them simultaneously — the board query groups once and averages each
  * parameter column within that grouping.
  *
- * @returns {Map<string, {means:number[], times:string[], readings:number}>}
- *          keyed `MACHINE|||recipe|||Parameter`
+ * The query returns an already-thinned series (a month of untouched
+ * subgroups for one table exceeds the upstream response ceiling and the
+ * whole board comes back empty), plus the true per-parameter totals.
+ *
+ * @returns {Map<string, {means:number[], times:string[], readings:number,
+ *          subgroups_total:number}>} keyed `MACHINE|||recipe|||Parameter`
  */
 async function loadBoardSeries({ machine, recipe, from, to }) {
   const sources = machine
@@ -137,12 +141,22 @@ async function loadBoardSeries({ machine, recipe, from, to }) {
       const params = paramsForSource(src);
       try {
         const rows = await runQuery(
-          silverBoardQuery(src, params, { machine, recipe, from, to, size: SUBGROUP_SIZE }),
+          silverBoardQuery(src, params, {
+            machine,
+            recipe,
+            from,
+            to,
+            size: SUBGROUP_SIZE,
+            points: BOARD_SPARK_POINTS,
+          }),
         );
         return { src, params, rows };
-      } catch {
+      } catch (err) {
         // One unavailable silver table must not blank the whole board; the
-        // affected widgets fall back to "no measurements in window".
+        // affected widgets fall back to "no measurements in window". Log it:
+        // silently swallowed, an upstream failure is indistinguishable from
+        // a genuinely empty window, and the board just looks like no data.
+        console.warn(`[spc] board series ${src.table}: ${err.message}`);
         return { src, params, rows: [] };
       }
     }),
@@ -155,48 +169,27 @@ async function loadBoardSeries({ machine, recipe, from, to }) {
         const key = `${String(row.machine).toUpperCase()}|||${row.recipe}|||${parameter}`;
         let series = index.get(key);
         if (!series) {
-          series = { means: [], times: [], readings: 0 };
+          // Counts are window-wide and identical on every row of the group,
+          // so they are read once, from the first row that creates it.
+          const total = toNumber(row[`n_${p.valueColumn}`]) ?? 0;
+          series = {
+            means: [],
+            times: [],
+            subgroups_total: total,
+            readings: total * SUBGROUP_SIZE,
+          };
           index.set(key, series);
         }
         series.means.push(Math.round(v * 1e4) / 1e4);
         series.times.push(normalizeTime(row.event_time));
-        series.readings += SUBGROUP_SIZE;
       }
     }
-  }
-  // A ~300px sparkline cannot show 450 points; sending them all made the
-  // full board a 580 KB response. Thin to BOARD_SPARK_POINTS on an even
-  // stride (the last point always kept) and report the true counts
-  // alongside, so the card stays honest about what it is a picture of.
-  for (const series of index.values()) {
-    const thinned = thin(series.means, series.times, BOARD_SPARK_POINTS);
-    series.subgroups_total = series.means.length;
-    series.means = thinned.values;
-    series.times = thinned.times;
   }
   return index;
 }
 
 /** Points kept in a widget sparkline. The detail chart is never thinned. */
 const BOARD_SPARK_POINTS = 60;
-
-/** Even-stride downsample that always keeps the first and last point. */
-function thin(values, times, max) {
-  if (values.length <= max) return { values, times };
-  const stride = Math.ceil(values.length / max);
-  const outV = [];
-  const outT = [];
-  for (let i = 0; i < values.length; i += stride) {
-    outV.push(values[i]);
-    outT.push(times[i]);
-  }
-  const last = values.length - 1;
-  if (outV[outV.length - 1] !== values[last]) {
-    outV.push(values[last]);
-    outT.push(times[last]);
-  }
-  return { values: outV, times: outT };
-}
 
 /** GET /quality/spc/summary  ?date= [&shift= &machine=] */
 export async function getSpcSummary(req, res, next) {
