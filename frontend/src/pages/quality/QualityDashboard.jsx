@@ -15496,7 +15496,12 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
             : `Showing ${widgets.length} of ${baseCounts.total} charts`}
         </span>
       </div>
-      {snapshotDate ? (
+      {from && to ? (
+        <div style={{ fontSize: 11.5, color: C.mu }}>
+          Cp / Cpk / Pp / Ppk are averaged over {from} to {to} — gold publishes
+          SPC capability per day only, so a range has no snapshot of its own.
+        </div>
+      ) : snapshotDate ? (
         <div style={{ fontSize: 11.5, color: C.mu }}>
           Snapshot {snapshotDate}. SPC rows use the latest available snapshot
           on or before the selected date.
@@ -15763,7 +15768,11 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
           </div>
           <div style={{ fontSize: 12, color: C.mu }}>
             {selection.machine + " · " + selection.recipe}
-            {snapshotDate ? ` · Snapshot ${snapshotDate}` : ""}
+            {from && to
+              ? ` · Average ${from} to ${to}`
+              : snapshotDate
+                ? ` · Snapshot ${snapshotDate}`
+                : ""}
             {shiftSupported === false ? " · All shifts" : ""}
           </div>
         </div>

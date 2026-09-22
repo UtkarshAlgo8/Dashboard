@@ -18,6 +18,8 @@ import {
   spcRecipesQuery,
   spcProductTypesQuery,
   spcDetailRowsQuery,
+  spcCapabilityRangeQuery,
+  spcDetailRangeQuery,
   spcLimitsQuery,
   spcGranularity,
 } from "../queries/spc.queries.js";
@@ -44,6 +46,8 @@ import {
   subgroups,
   toNumber,
   validateLimits,
+  statusForValue,
+  parseKpiName,
   buildDistribution,
   normalizeTime,
   SUBGROUP_SIZE,
@@ -62,6 +66,18 @@ async function resolveSnapshot(date, granularity) {
   const rows = await runQuery(spcSnapshotQuery(date, granularity));
   const raw = rows[0]?.snapshot_date ?? null;
   return raw ? String(raw).slice(0, 10) : null;
+}
+
+/**
+ * Grade averaged capability rows. The range queries return no status — it is
+ * published per day and a month's average has none — so each row is graded
+ * from its own averaged value, in the same bands gold uses.
+ */
+function gradeRangeRows(rows) {
+  return rows.map((r) => ({
+    ...r,
+    status: statusForValue(parseKpiName(r.kpi_name).metric, r.actual_value),
+  }));
 }
 
 /**
@@ -272,8 +288,16 @@ export async function getSpcWidgets(req, res, next) {
       const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
       const window = from && to ? rangeWindow(from, to) : dayWindow(date, snapshot, shift);
+      // Month / date-range views average the days in the range; a single-day
+      // view reads that day's published rows.
+      const capabilityRows =
+        from && to
+          ? runQuery(
+              spcCapabilityRangeQuery({ from, to, granularity, machine, recipe }),
+            ).then(gradeRangeRows)
+          : runQuery(spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe }));
       const [rows, limitsIndex, seriesIndex] = await Promise.all([
-        runQuery(spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe })),
+        capabilityRows,
         loadLimitsIndex({ machine, isoDate: snapshot }),
         loadBoardSeries({ machine, recipe, from: window.from, to: window.to }),
       ]);
@@ -332,8 +356,16 @@ export async function getSpcDetail(req, res, next) {
       if (!snapshot) return { snapshot: null };
       const window = from && to ? rangeWindow(from, to) : dayWindow(date, snapshot, shift);
       const src = resolveSilver(machine, parameter);
+      const capabilityRows =
+        from && to
+          ? runQuery(
+              spcDetailRangeQuery({ from, to, granularity, machine, recipe, parameter }),
+            ).then(gradeRangeRows)
+          : runQuery(
+              spcDetailRowsQuery({ snapshot, granularity, machine, recipe, parameter }),
+            );
       const [rows, limitsIndex, points] = await Promise.all([
-        runQuery(spcDetailRowsQuery({ snapshot, granularity, machine, recipe, parameter })),
+        capabilityRows,
         loadLimitsIndex({ machine, parameter, isoDate: snapshot }),
         src
           ? runQuery(

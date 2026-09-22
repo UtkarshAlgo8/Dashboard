@@ -16,6 +16,7 @@ import test from "node:test";
 import {
   parseKpiName,
   headlineStatus,
+  statusForValue,
   evaluateNelson,
   deriveAlerts,
   alertSlug,
@@ -37,6 +38,8 @@ import {
 import {
   spcGranularity,
   spcCapabilityRowsQuery,
+  spcCapabilityRangeQuery,
+  spcDetailRangeQuery,
   spcLimitsQuery,
   GRAN_BASELINE,
 } from "./queries/spc.queries.js";
@@ -385,6 +388,69 @@ test("spcCapabilityRowsQuery: scoped to one granularity, Baseline excluded", () 
   // and a combo's four metric rows overwrite each other.
   assert.match(sql, /granularity\s*=\s*'Shift A'/);
   assert.ok(!sql.includes("plot_data"), "plot_data is empty upstream and no longer read");
+});
+
+test("spcCapabilityRangeQuery: averages the range's days per combo+metric", () => {
+  const sql = spcCapabilityRangeQuery({
+    from: "2026-08-01",
+    to: "2026-08-31",
+    granularity: "Day",
+    machine: "VMIEXXIUM02",
+  });
+  assert.match(sql, /AVG\(actual_value\) AS actual_value/);
+  assert.match(sql, /COUNT\(actual_value\) AS days/);
+  assert.match(sql, /GROUP BY machine, itemcode, product_type, kpi_name/);
+  assert.match(sql, /granularity\s*=\s*'Day'/);
+  assert.match(sql, />=\s*'20260801'/);
+  assert.match(sql, /<=\s*'20260831'/);
+  // A per-day status must not ride along with an average of many days.
+  assert.ok(!/SELECT[^]*?\bstatus\b[^]*?FROM/.test(sql), "status is derived, not selected");
+});
+
+test("spcDetailRangeQuery: one combo, its four metrics, averaged", () => {
+  const sql = spcDetailRangeQuery({
+    from: "2026-08-01",
+    to: "2026-08-31",
+    granularity: "Day",
+    machine: "VMIEXXIUM02",
+    recipe: "185/65R15",
+    parameter: "PLY1 Splice",
+  });
+  assert.match(sql, /kpi_name IN \('PLY1 Splice Cp', 'PLY1 Splice Cpk', 'PLY1 Splice Pp', 'PLY1 Splice Ppk'\)/);
+  assert.match(sql, /AVG\(actual_value\) AS actual_value/);
+  assert.match(sql, /itemcode = '185\/65R15'/);
+});
+
+test("spcDetailRangeQuery: the empty recipe stays the null/empty sentinel, not a value", () => {
+  const sql = spcDetailRangeQuery({
+    from: "2026-08-01",
+    to: "2026-08-31",
+    granularity: "Day",
+    machine: "VMIEXXIUM02",
+    recipe: "",
+    parameter: "PLY1 Splice",
+  });
+  assert.match(sql, /\(itemcode IS NULL OR itemcode = ''\)/);
+});
+
+test("statusForValue: grades an average in the bands gold uses per metric", () => {
+  // Cp/Cpk: Major from 1.00, Warning from 1.33, Healthy from 1.67.
+  assert.equal(statusForValue("Cp", 0.99), "Critical");
+  assert.equal(statusForValue("Cpk", 1.0), "Major");
+  assert.equal(statusForValue("Cp", 1.33), "Warning");
+  assert.equal(statusForValue("Cpk", 1.67), "Healthy");
+  // Pp/Ppk sit a band lower: Warning from 1.20, Healthy from 1.50.
+  assert.equal(statusForValue("Pp", 1.25), "Warning");
+  assert.equal(statusForValue("Ppk", 1.5), "Healthy");
+  // Cp at the same 1.25 is still only Major — the bands differ by metric.
+  assert.equal(statusForValue("Cp", 1.25), "Major");
+});
+
+test("statusForValue: no value, or an unknown metric, is Insufficient Data", () => {
+  assert.equal(statusForValue("Cp", null), "Insufficient Data");
+  assert.equal(statusForValue("Cp", ""), "Insufficient Data");
+  assert.equal(statusForValue("Cp", "not a number"), "Insufficient Data");
+  assert.equal(statusForValue("Nope", 1.5), "Insufficient Data");
 });
 
 test("spcLimitsQuery: baseline granularity, keyed on machine+parameter only", () => {

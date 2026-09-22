@@ -66,6 +66,41 @@ export function headlineStatus(statuses) {
   return active[0];
 }
 
+/**
+ * Status bands for an averaged capability value.
+ *
+ * Gold publishes a status per day, so a single-day view never needs these —
+ * but the average of a month of values has no published status of its own,
+ * and carrying one day's status next to a month's average would be a lie.
+ *
+ * The bands are read off the live gold layer, not invented: across every
+ * graded SPC row, Cp/Cpk sit at Major [1.00, 1.33), Warning [1.33, 1.67),
+ * Healthy >= 1.67 and Pp/Ppk at Major [1.00, 1.20), Warning [1.20, 1.50),
+ * Healthy >= 1.50, with Critical below 1.00 for both.
+ */
+const STATUS_BANDS = {
+  Cp: { major: 1.0, warning: 1.33, healthy: 1.67 },
+  Cpk: { major: 1.0, warning: 1.33, healthy: 1.67 },
+  Pp: { major: 1.0, warning: 1.2, healthy: 1.5 },
+  Ppk: { major: 1.0, warning: 1.2, healthy: 1.5 },
+};
+
+/**
+ * Grade one averaged capability value the way gold grades a daily one.
+ * @param {string} metric Cp | Cpk | Pp | Ppk
+ * @param {number|string|null} value
+ * @returns {string} one of STATUS_SEVERITY, or "Insufficient Data"
+ */
+export function statusForValue(metric, value) {
+  const band = STATUS_BANDS[metric];
+  const v = toNumber(value);
+  if (!band || v == null) return INSUFFICIENT;
+  if (v < band.major) return "Critical";
+  if (v < band.warning) return "Major";
+  if (v < band.healthy) return "Warning";
+  return "Healthy";
+}
+
 /** Parse a stored plot_data cell (JSON string or already-parsed object). */
 export function parsePlotData(raw) {
   if (raw == null) return null;

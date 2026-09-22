@@ -29,6 +29,7 @@ import {
 import {
   qualitySource,
   qualitySourceForDate,
+  qualitySourceForRange,
 } from "./gold-source.js";
 
 export const METRICS = ["Cp", "Cpk", "Pp", "Ppk"];
@@ -99,6 +100,55 @@ export function spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe 
     `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(snapshot))}${mc}${rc} ` +
     `AND (${names})`
+  );
+}
+
+/**
+ * Capability rows AVERAGED over an inclusive date range — the month and
+ * date-range views.
+ *
+ * Gold publishes SPC capability per day only: there are no MONTH or YEAR
+ * SPC rows, so a range view used to pin the tiles to the range's last
+ * published day. The average over the days that do exist is what "this
+ * month's Cp" can honestly mean.
+ *
+ * `status` is deliberately NOT selected: it is a per-day grade and the
+ * average has none. The caller derives it from the averaged value
+ * (see statusForValue). `days` is the number of daily rows behind each
+ * average, so an average of one day is distinguishable from one of thirty.
+ */
+export function spcCapabilityRangeQuery({ from, to, granularity, machine, recipe }) {
+  const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
+  const rc = recipe ? ` AND ${itemcodePredicate(recipe)}` : "";
+  const names = METRICS.map((m) => `kpi_name LIKE ${escapeLiteral(`% ${m}`)}`).join(" OR ");
+  return (
+    `SELECT machine, itemcode, product_type, kpi_name, ` +
+    `AVG(actual_value) AS actual_value, COUNT(actual_value) AS days, ` +
+    `MAX(unit_of_measurement) AS unit_of_measurement ` +
+    `FROM ${qualitySourceForRange(from, to, granularity)} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+    `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))}${mc}${rc} ` +
+    `AND (${names}) ` +
+    `GROUP BY machine, itemcode, product_type, kpi_name`
+  );
+}
+
+/** The range average of ONE combo's four metrics. */
+export function spcDetailRangeQuery({ from, to, granularity, machine, recipe, parameter }) {
+  const names = METRICS.map((m) => escapeLiteral(`${parameter} ${m}`)).join(", ");
+  return (
+    `SELECT machine, itemcode, product_type, kpi_name, ` +
+    `AVG(actual_value) AS actual_value, COUNT(actual_value) AS days, ` +
+    `MAX(unit_of_measurement) AS unit_of_measurement ` +
+    `FROM ${qualitySourceForRange(from, to, granularity)} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+    `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))} ` +
+    `AND machine = ${escapeLiteral(machine)} ` +
+    `AND ${itemcodePredicate(recipe)} ` +
+    `AND kpi_name IN (${names}) ` +
+    `GROUP BY machine, itemcode, product_type, kpi_name`
   );
 }
 
