@@ -16125,6 +16125,9 @@ export default function QualityDashboard({ plant, onBack }) {
     { id: "spc", label: "SPC", accent: C.pp },
   ];
   const onSubTabChange = (id) => {
+    // SPC has no month view, so the header's "This Month" pill is disabled
+    // there; a month range carried in from another tab falls back to Today.
+    if (id === "spc" && tf === "month") onHeaderPresetChange("today");
     setTab(id);
     setOpenKpi(null);
     setSub("");
@@ -16189,6 +16192,7 @@ export default function QualityDashboard({ plant, onBack }) {
         tyreTypes={[]}
         tyreType={tyreType}
         onTyreTypeChange={setTyreType}
+        disabledPresets={tab === "spc" ? ["month"] : []}
       />
 
       {/* Main content */}

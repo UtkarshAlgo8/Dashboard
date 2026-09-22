@@ -24,6 +24,9 @@ function TimeRangeSelect({
   asOf = null,
   month = null,
   onMonthChange,
+  // Preset ids the host page does not support (e.g. SPC has no month view).
+  // Rendered greyed out and non-clickable, like the Yearly pill.
+  disabledPresets = [],
   size = "md",
 }) {
   const theme = useTheme();
@@ -54,6 +57,7 @@ function TimeRangeSelect({
       ? (monthOptions.find((o) => o.key === selectedMonthKey)?.label ??
         selectedMonthKey)
       : "Date Range";
+  const monthDisabled = disabledPresets.includes("month");
   const showShift = preset === "today" && typeof onShiftChange === "function";
   const isTrendVariant = variant === "trend";
   const presetLabel = (id, fallback) => presetLabels?.[id] ?? fallback;
@@ -172,7 +176,9 @@ function TimeRangeSelect({
 
         {/* 2. This Month Pill */}
         <Box
-          onClick={() => selectPreset("month")}
+          onClick={monthDisabled ? undefined : () => selectPreset("month")}
+          aria-disabled={monthDisabled || undefined}
+          title={monthDisabled ? "Not available on this view" : undefined}
           sx={{
             ...pad,
             m: isMonthPreset ? "-1px" : 0,
@@ -181,18 +187,24 @@ function TimeRangeSelect({
             whiteSpace: "nowrap",
             userSelect: "none",
             borderRadius: 999,
-            cursor: "pointer",
+            cursor: monthDisabled ? "not-allowed" : "pointer",
             border: 1,
             borderColor: isMonthPreset ? "primary.main" : "transparent",
             backgroundColor: isMonthPreset
               ? theme.custom.pills.activeBg
               : "transparent",
-            color: isMonthPreset ? "primary.main" : "text.primary",
+            color: monthDisabled
+              ? "text.disabled"
+              : isMonthPreset
+                ? "primary.main"
+                : "text.primary",
             transition: "all 0.15s ease",
             "&:hover": {
-              backgroundColor: isMonthPreset
-                ? theme.custom.pills.activeBg
-                : theme.custom.surface.soft,
+              backgroundColor: monthDisabled
+                ? "transparent"
+                : isMonthPreset
+                  ? theme.custom.pills.activeBg
+                  : theme.custom.surface.soft,
             },
           }}
         >

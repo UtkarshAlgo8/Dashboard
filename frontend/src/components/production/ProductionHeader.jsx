@@ -62,6 +62,8 @@ function ProductionHeader({
   tyreTypes = ["All", "PCR", "TBR"],
   tyreType = "All",
   onTyreTypeChange,
+  // Time-range presets this page cannot serve (e.g. ["month"] on Quality SPC).
+  disabledPresets = [],
 }) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -339,6 +341,7 @@ function ProductionHeader({
                 }))
               }
               asOf={asOf}
+              disabledPresets={disabledPresets}
               month={timeRange?.month ?? null}
               onMonthChange={(monthKey) =>
                 onTimeRangeChange?.((prev) => ({
