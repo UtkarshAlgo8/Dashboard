@@ -42,6 +42,7 @@ import {
 } from "./queries/spc.queries.js";
 import {
   shiftWindow,
+  dayWindow,
   partitionDays,
   resolveSilver,
   sourceForMachine,
@@ -319,6 +320,35 @@ test("shiftWindow: A/B/C boundaries, C crosses midnight", () => {
     from: "2026-09-01 00:00:00",
     to: "2026-09-02 00:00:00",
   });
+});
+
+test("dayWindow: silver follows the requested date, not the lagging snapshot", () => {
+  // SPC gold publishes T-1: on 22 Sep the latest capability row is 21 Sep.
+  // The chart must still show 22 Sep readings.
+  assert.deepEqual(dayWindow("2026-09-22", "2026-09-21", "All"), {
+    from: "2026-09-22 00:00:00",
+    to: "2026-09-23 00:00:00",
+  });
+  // Shift narrowing still applies to the requested date.
+  assert.deepEqual(dayWindow("2026-09-22", "2026-09-21", "B"), {
+    from: "2026-09-22 15:00:00",
+    to: "2026-09-22 23:00:00",
+  });
+});
+
+test("dayWindow: falls back to the snapshot when no date was requested", () => {
+  assert.deepEqual(dayWindow(null, "2026-09-21", "All"), {
+    from: "2026-09-21 00:00:00",
+    to: "2026-09-22 00:00:00",
+  });
+  assert.deepEqual(dayWindow("", "2026-09-21", "All"), {
+    from: "2026-09-21 00:00:00",
+    to: "2026-09-22 00:00:00",
+  });
+});
+
+test("dayWindow: with neither date nor snapshot it throws rather than inventing a window", () => {
+  assert.throws(() => dayWindow(null, null, "All"));
 });
 
 test("partitionDays: shift C spans two partitions so both are pruned in", () => {

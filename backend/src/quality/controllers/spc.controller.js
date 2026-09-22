@@ -36,7 +36,7 @@ import {
   sourceForMachine,
   SILVER_SOURCES,
   paramsForSource,
-  shiftWindow,
+  dayWindow,
   addDays,
 } from "../spc/mapping.js";
 import {
@@ -271,7 +271,7 @@ export async function getSpcWidgets(req, res, next) {
     const body = await cached(key, async () => {
       const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const window = from && to ? rangeWindow(from, to) : shiftWindow(snapshot, shift);
+      const window = from && to ? rangeWindow(from, to) : dayWindow(date, snapshot, shift);
       const [rows, limitsIndex, seriesIndex] = await Promise.all([
         runQuery(spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe })),
         loadLimitsIndex({ machine, isoDate: snapshot }),
@@ -330,7 +330,7 @@ export async function getSpcDetail(req, res, next) {
     const body = await cached(key, async () => {
       const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const window = from && to ? rangeWindow(from, to) : shiftWindow(snapshot, shift);
+      const window = from && to ? rangeWindow(from, to) : dayWindow(date, snapshot, shift);
       const src = resolveSilver(machine, parameter);
       const [rows, limitsIndex, points] = await Promise.all([
         runQuery(spcDetailRowsQuery({ snapshot, granularity, machine, recipe, parameter })),
@@ -416,7 +416,7 @@ export async function getHistogramObservations(req, res, next) {
     if (!snapshot || !src) {
       return res.json({ observations_available: false, bin: null });
     }
-    const window = shiftWindow(snapshot, shift);
+    const window = dayWindow(date, snapshot, shift);
     const points = await runQuery(
       silverPointsQuery(src, { machine, recipe, from: window.from, to: window.to }),
     ).catch(() => []);
@@ -469,7 +469,7 @@ export async function getPointObservations(req, res, next) {
     if (!snapshot || !src) {
       return res.json({ observations_available: false, point: null });
     }
-    const window = shiftWindow(snapshot, shift);
+    const window = dayWindow(date, snapshot, shift);
     const rows = await runQuery(
       silverPointsQuery(src, { machine, recipe, from: window.from, to: window.to }),
     ).catch(() => []);

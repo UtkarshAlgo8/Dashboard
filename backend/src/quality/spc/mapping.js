@@ -179,6 +179,18 @@ export function shiftWindow(isoDate, shift) {
   return { from: `${isoDate} 00:00:00`, to: `${next} 00:00:00` };
 }
 
+/**
+ * Silver window for a single-day request. The chart shows the date the USER
+ * asked for; `snapshot` only backs the gold capability figures (Cp/Cpk/Pp/
+ * Ppk), which lag silver — SPC gold publishes T-1, so on 2026-09-22 the
+ * latest capability row was 2026-09-21. Windowing silver on the snapshot hid
+ * today's readings entirely and the page looked a day stale. `snapshot` is
+ * still the fallback for callers that pass no date.
+ */
+export function dayWindow(date, snapshot, shift) {
+  return shiftWindow(date || snapshot, shift);
+}
+
 /** yyyy-mm-dd + n days, UTC-safe. */
 export function addDays(isoDate, n) {
   const d = new Date(`${isoDate}T00:00:00Z`);
