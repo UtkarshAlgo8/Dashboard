@@ -63,6 +63,17 @@ export function denanDimension(value) {
   return isEmptyToken(value) ? null : value;
 }
 
+/**
+ * True when a row carries a real machine. CTP's gold table emits rows with
+ * no machine (SQL NULL or the "nan"/"null"/"" sentinels) alongside the
+ * machine-level ones; anything that PRESENTS machine data — a machine-wise
+ * table, a per-machine series, a machine count or dropdown — must skip them
+ * rather than render an anonymous "—" row.
+ */
+export function hasMachine(row) {
+  return denanDimension(row?.machine) != null;
+}
+
 export function isProductAgnosticKpi(kpiName) {
   return PRODUCT_AGNOSTIC_KPIS.has(kpiName);
 }

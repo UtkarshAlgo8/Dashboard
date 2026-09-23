@@ -587,6 +587,9 @@ export function lookupDrillAggregate(body) {
     if (!rowMatchesContext(row, context, row.kpi_name)) continue;
     if (!rowMatchesTime(row, { date, from, to })) continue;
     if (!rowMatchesParentFilters(row, parentFilters)) continue;
+    // Mirrors buildDrillAggregateQuery: a machine-grouped lens shows machine
+    // data, so rows carrying no machine are not one of its rows.
+    if (cols.includes("machine") && isEmpty(row.machine)) continue;
 
     const keyParts = cols.map((c) => normalizeForCompare(row[c]) ?? "");
     const key = keyParts.join("\x00");

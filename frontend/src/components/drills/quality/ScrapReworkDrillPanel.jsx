@@ -120,8 +120,15 @@ function ScrapReworkDrillPanel({
   // Rows for the selected subsection at the active View By lens.
   const detailRows = useMemo(() => {
     if (!selectedSub) return [];
+    // The Machine and Machine+SKU lenses show a Machine column; a row with
+    // no machine (toDrillRows already denan's it to null) is not one of
+    // theirs — it would group under an anonymous "—".
+    const needsMachine = viewBy === "machine" || viewBy === "both";
     const matched = atGranularity.filter(
-      (r) => r.kpiName === leafKpi && sameSub(r.subSection, selectedSub),
+      (r) =>
+        r.kpiName === leafKpi &&
+        sameSub(r.subSection, selectedSub) &&
+        (!needsMachine || r.machine != null),
     );
     const groups = new Map();
     const keyOf = (r) => {

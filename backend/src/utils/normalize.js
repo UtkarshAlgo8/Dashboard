@@ -45,6 +45,15 @@ export function emptyColumnPredicate(column) {
   return `(${column} IS NULL OR LOWER(${column}) = 'nan' OR LOWER(${column}) = 'null' OR ${column} = '')`;
 }
 
+/**
+ * SQL fragment: does `column` hold a REAL value? The negation of
+ * `emptyColumnPredicate`, safe against NULL because `IS NULL` short-circuits
+ * the OR chain before any LOWER() comparison can yield NULL.
+ */
+export function nonEmptyColumnPredicate(column) {
+  return `NOT ${emptyColumnPredicate(column)}`;
+}
+
 /* ----------------------------------------------------------------- *
  * Plant / department                                                *
  * ----------------------------------------------------------------- */

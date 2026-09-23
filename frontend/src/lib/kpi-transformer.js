@@ -1304,7 +1304,7 @@ function selectSeries(
             machineTotals: new Map(),
           });
         const bucket = prev ?? perDate.get(d);
-        if (r.machine && r.machine !== "nan") {
+        if (!isEmptyToken(r.machine)) {
           bucket.machines.add(r.machine);
           bucket.machineTotals.set(
             r.machine,

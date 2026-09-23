@@ -17,17 +17,21 @@ const REWORK_DATA = [
 ];
 
 export default function ReworkDrillPanel({ drillRows, onClose }) {
+  // The table has a Machine column, so rows carrying no machine are skipped
+  // (toDrillRows already maps the "nan"/"null"/"" sentinels to null).
   const rows =
     drillRows && drillRows.length > 0
-      ? drillRows.map((r) => [
-          r.itemCode ?? "—",
-          r.machine ?? "—",
-          r.productType ?? r.drillDown?.[0] ?? "—",
-          typeof r.actual === "number"
-            ? formatIndianNumber(r.actual)
-            : (r.actual ?? "—"),
-          r.status ?? "Pending",
-        ])
+      ? drillRows
+          .filter((r) => r.machine != null)
+          .map((r) => [
+            r.itemCode ?? "—",
+            r.machine,
+            r.productType ?? r.drillDown?.[0] ?? "—",
+            typeof r.actual === "number"
+              ? formatIndianNumber(r.actual)
+              : (r.actual ?? "—"),
+            r.status ?? "Pending",
+          ])
       : REWORK_DATA;
 
   return (

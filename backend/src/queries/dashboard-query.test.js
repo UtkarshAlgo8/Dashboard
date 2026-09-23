@@ -310,6 +310,28 @@ test("drill-aggregate groups by both dimensions for the Machine + SKU lens", () 
   assert.match(sql, /ORDER BY machine, itemcode/);
 });
 
+test("drill-aggregate drops machine-less rows from a machine lens", () => {
+  // CTP's gold table carries Production_m rows with no machine; grouped,
+  // they collapse into one anonymous bucket that belongs to no machine.
+  const sql = buildDrillAggregateQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+    kpiName: "Production_m",
+    groupBy: ["machine"],
+  });
+  assert.match(sql, /NOT \(machine IS NULL OR LOWER\(machine\) = 'nan'/);
+});
+
+test("drill-aggregate leaves a SKU-only lens unfiltered by machine", () => {
+  const sql = buildDrillAggregateQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+    kpiName: "Production_sku",
+    groupBy: ["itemcode"],
+  });
+  assert.ok(!sql.includes("NOT (machine IS NULL"));
+});
+
 test("drill-aggregate refuses a KPI that SUM would misaggregate", () => {
   // A rate KPI needs AVERAGE and a level KPI the latest day — summing either
   // yields a plausible, silently wrong number, so they are rejected outright.

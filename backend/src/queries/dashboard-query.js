@@ -33,6 +33,7 @@ import {
   allowedGranularities,
   excludeUnknownKpiPredicate,
   emptyColumnPredicate,
+  nonEmptyColumnPredicate,
   canonicalizeProductType,
   canonicalizeSubSection,
   canonicalDimensionPredicate,
@@ -1241,6 +1242,15 @@ export function buildDrillAggregateQuery({
     to,
   });
   where.push(`kpi_name = ${escapeLiteral(safeKpi)}`);
+
+  // A machine-grouped lens is machine data: rows that carry no machine
+  // (SQL NULL or the "nan"/"null"/"" sentinels) would collapse into one
+  // anonymous bucket and render as a "—" row whose total belongs to no
+  // machine on the floor. CTP's gold table has such rows; drop them at
+  // source so the page window, the row count and the totals all agree.
+  if (cols.includes("machine")) {
+    where.push(nonEmptyColumnPredicate("machine"));
+  }
 
   const lim = Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 100;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;

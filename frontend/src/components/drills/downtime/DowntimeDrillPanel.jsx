@@ -19,6 +19,7 @@ import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 import { dateKey } from "@/lib/drillDate.js";
+import { hasMachine } from "@/lib/dashboardRowScopes.js";
 
 const SECTION_NAME = {
   mix: "Mixing",
@@ -95,7 +96,7 @@ function DowntimeDrillPanel({
       if (r.section && r.section !== sectionName) continue;
       if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
       if (r.granularity !== granularity) continue;
-      if (r.machine && r.machine !== "nan") seen.add(r.machine);
+      if (hasMachine(r)) seen.add(r.machine);
     }
     return seen.size;
   }, [rows, sectionName, granularity]);
@@ -111,7 +112,7 @@ function DowntimeDrillPanel({
       if (r.section && r.section !== sectionName) continue;
       if (!DOWNTIME_REASONS.includes(r.kpi_name)) continue;
       if (r.granularity !== granularity) continue;
-      if (r.machine && r.machine !== "nan") seen.add(r.machine);
+      if (hasMachine(r)) seen.add(r.machine);
     }
     return [...seen].sort((a, b) => a.localeCompare(b));
   }, [rows, sectionName, granularity]);
@@ -133,7 +134,7 @@ function DowntimeDrillPanel({
       if (v == null) continue;
       const prev = byReason.get(r.kpi_name) ?? 0;
       byReason.set(r.kpi_name, prev + v);
-      if (r.machine && r.machine !== "nan") {
+      if (hasMachine(r)) {
         const machines = byReasonMachines.get(r.kpi_name) ?? new Set();
         machines.add(r.machine);
         byReasonMachines.set(r.kpi_name, machines);
@@ -164,17 +165,20 @@ function DowntimeDrillPanel({
   // Level 2: per-event rows for the selected reason.
   const eventRows = useMemo(() => {
     if (!selectedReason || !Array.isArray(rows)) return [];
+    // This table has a Machine column, so a row with no machine has nothing
+    // to say here — it used to render as an anonymous "—" event.
     return rows
       .filter(
         (r) =>
           (!r.section || r.section === sectionName) &&
           r.kpi_name === selectedReason &&
           r.granularity === granularity &&
+          hasMachine(r) &&
           (!selectedMachine || r.machine === selectedMachine),
       )
       .map((r) => ({
         date: r.date,
-        machine: r.machine && r.machine !== "nan" ? r.machine : "—",
+        machine: r.machine,
         value: numOrNull(r.actual_value) ?? 0,
         shift: r.granularity && r.granularity !== "DAY" ? r.granularity : "—",
       }))

@@ -36,6 +36,7 @@ import {
   canonicalizeProductType,
   canonicalizeSubSection,
   denanDimension,
+  hasMachine,
   isProductAgnosticKpi,
   preferScopedRows,
 } from "@/lib/dashboardRowScopes.js";
@@ -856,7 +857,7 @@ function MultiSeriesTrendModal({
   // options for each filter. Empty while loading.
   const machineOptions = useMemo(() => {
     const set = new Set();
-    for (const r of scopedRows) if (r.machine) set.add(r.machine);
+    for (const r of scopedRows) if (hasMachine(r)) set.add(r.machine);
     return [...set].sort();
   }, [scopedRows]);
 
@@ -903,15 +904,19 @@ function MultiSeriesTrendModal({
   // Apply the Machines + SKU filters to mainRows before grouping.
   // Empty selection in either = all rows pass through that filter.
   const filteredMainRows = useMemo(() => {
-    if (machines.length === 0 && sku.length === 0) return mainRows;
+    // Under the Machine lens every series IS a machine, so a row with no
+    // machine has no series to belong to — it used to draw a "nan" line.
+    const machineGrouped = config.groupField(viewBy) === "machine";
+    const base = machineGrouped ? mainRows.filter(hasMachine) : mainRows;
+    if (machines.length === 0 && sku.length === 0) return base;
     const allowedMachines = machines.length > 0 ? new Set(machines) : null;
     const allowedSku = sku.length > 0 ? new Set(sku) : null;
-    return mainRows.filter((r) => {
+    return base.filter((r) => {
       if (allowedMachines && !allowedMachines.has(r.machine)) return false;
       if (allowedSku && !allowedSku.has(r[skuField])) return false;
       return true;
     });
-  }, [mainRows, machines, sku, skuField]);
+  }, [mainRows, machines, sku, skuField, config, viewBy]);
 
   const overlayRowsByKpi = useMemo(() => {
     const out = {};
@@ -991,12 +996,12 @@ function MultiSeriesTrendModal({
       if (isMonthly && machineView) {
         rows = rows.filter(
           (r) =>
-            r.machine && (!allowedMachines || allowedMachines.has(r.machine)),
+            hasMachine(r) && (!allowedMachines || allowedMachines.has(r.machine)),
         );
       } else if (isMonthly) {
         // Prefer section rollups so an overall chart does not double-count
         // a rollup row together with its machine children.
-        const overallRows = rows.filter((r) => !r.machine);
+        const overallRows = rows.filter((r) => !hasMachine(r));
         if (overallRows.length > 0) rows = overallRows;
       }
       return { overlayValue, rows };
@@ -1295,7 +1300,7 @@ function buildMainChart({
     // and that the section-oee endpoint enforces server-side, so the
     // plotted value matches the KPI card.
     const scopedMonthly = mainRows.filter(
-      (r) => !r.machine && !r.sub_section,
+      (r) => !hasMachine(r) && !r.sub_section,
     );
     const rowsToPlot = scopedMonthly.length > 0 ? scopedMonthly : mainRows;
     const monthMap = new Map();

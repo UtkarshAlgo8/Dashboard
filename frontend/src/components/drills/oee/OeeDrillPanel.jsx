@@ -21,7 +21,7 @@ import client from "@/api/client.js";
 import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
-import { denanDimension } from "@/lib/dashboardRowScopes.js";
+import { denanDimension, hasMachine } from "@/lib/dashboardRowScopes.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
@@ -130,7 +130,7 @@ function OeeDrillPanel({
         }
       }
       if (OEE_CORE_KPIS.has(r.kpi_name)) return true;
-      return Boolean(r.machine && r.machine !== "nan");
+      return hasMachine(r);
     });
     if (cardDate) {
       // C3/C6: pinned to the card's day — no "latest date" resolution at all.
@@ -258,8 +258,7 @@ function OeeDrillPanel({
             (!trench ||
               selectedTredge == null ||
               r.sub_section === selectedTredge) &&
-            r.machine &&
-            r.machine !== "nan",
+            hasMachine(r),
         )
         .map((r) => r.machine),
     );
