@@ -1,0 +1,3984 @@
+{
+  "schema_version": "1.0.0",
+  "plant": "Chennai",
+  "plant_id": "chennai",
+  "function": "Production",
+  "navigation": "Inventory",
+  "as_of": "2026-09-23T06:00:00+05:30",
+  "data_origin": "synthetic-deterministic (seed 20260923); replace lots[] with Gold-layer output",
+  "status_master": [
+    {
+      "key": "READY",
+      "label": "Ready to Use",
+      "column": "Ready to use",
+      "color": "gn",
+      "source_field": "status",
+      "source_value": "Ready to Use",
+      "gold_metric": "Ready_To_Use",
+      "usable": true,
+      "blocked": false
+    },
+    {
+      "key": "PART",
+      "label": "Part Use",
+      "column": "Part use",
+      "color": "bl",
+      "source_field": "status",
+      "source_value": "Part Use",
+      "gold_metric": "Part_Use",
+      "usable": true,
+      "blocked": false
+    },
+    {
+      "key": "ATE",
+      "label": "About_To_Expire",
+      "column": "About_To_Expire",
+      "color": "am",
+      "source_field": "status",
+      "source_value": "About_To_Expire",
+      "gold_metric": "About_To_Expire",
+      "usable": true,
+      "blocked": false
+    },
+    {
+      "key": "EXP",
+      "label": "Expired",
+      "column": "Expired",
+      "color": "rd",
+      "source_field": "status",
+      "source_value": "Expired",
+      "gold_metric": "Expired",
+      "usable": false,
+      "blocked": true
+    },
+    {
+      "key": "HOLD",
+      "label": "ON Hold",
+      "column": "Held",
+      "color": "pp",
+      "source_field": "status",
+      "source_value": "ON Hold",
+      "gold_metric": "Held",
+      "usable": false,
+      "blocked": true
+    }
+  ],
+  "metrics": [
+    {
+      "kpi_name": "Total_Inventory",
+      "ui_expr": "SUM(lots.quantity)",
+      "grain": "lot"
+    },
+    {
+      "kpi_name": "MHE_Count",
+      "ui_expr": "COUNT(DISTINCT lots.mhe_code)",
+      "grain": "lot"
+    },
+    {
+      "kpi_name": "Days_Cover",
+      "ui_expr": "SUM(quantity WHERE status.usable) / SUM(items.daily_consumption)",
+      "grain": "item|product_type",
+      "gold": "(Ready_To_Use + Part_Use + About_To_Expire) / Daily_Consumption"
+    },
+    {
+      "kpi_name": "Oldest_Blocked_Lot",
+      "ui_expr": "MAX(age_days WHERE status.blocked)",
+      "gold": "Oldest_Blocked_Lot_Days"
+    }
+  ],
+  "gold_metric_reference": [
+    { "kpi_name": "Total_Inventory", "gold_expr": "SUM(inventory_qty)" },
+    { "kpi_name": "MHE_Count", "gold_expr": "COUNT(DISTINCT mhe_code)" },
+    {
+      "kpi_name": "Ready_To_Use",
+      "gold_expr": "SUM(CASE WHEN status='Ready To Use' THEN inventory_qty ELSE 0 END)"
+    },
+    {
+      "kpi_name": "Part_MHE",
+      "gold_expr": "SUM(CASE WHEN status='Part MHE' THEN inventory_qty ELSE 0 END)"
+    },
+    {
+      "kpi_name": "About_To_Expire",
+      "gold_expr": "SUM(CASE WHEN expiry_status='About To Expire' THEN inventory_qty ELSE 0 END)"
+    },
+    {
+      "kpi_name": "Expired",
+      "gold_expr": "SUM(CASE WHEN expiry_status='Expired' THEN inventory_qty ELSE 0 END)"
+    }
+  ],
+  "insight_cards": [
+    {
+      "id": "short_cover",
+      "title": "Categories Under 1 Day Cover",
+      "type": "cover_below",
+      "threshold_days": 1,
+      "color": "rd"
+    },
+    {
+      "id": "on_hold",
+      "title": "On Hold Inventory",
+      "type": "status_qty",
+      "status": "HOLD",
+      "color": "pp"
+    },
+    {
+      "id": "expired",
+      "title": "Expired Inventory",
+      "type": "status_qty",
+      "status": "EXP",
+      "color": "rd"
+    },
+    {
+      "id": "oldest_blocked",
+      "title": "Oldest Blocked Lot",
+      "type": "oldest_blocked",
+      "warn_days": 3,
+      "color": "am"
+    }
+  ],
+  "table": { "default_sort": { "key": "READY", "dir": "desc" }, "top_n": 10 },
+  "uom_display": { "MTR": "m", "KG": "kg", "NOS": "nos" },
+  "validation": {
+    "expected_total_inventory": 2054,
+    "expected_mhe_count": 204,
+    "lots": 271,
+    "items": 134
+  },
+  "sections": [
+    {
+      "name": "Mixing",
+      "source_codes": ["Mixing"],
+      "accent": "ac",
+      "product_types": [
+        {
+          "name": "Master Compound",
+          "source_name": "Master Compund",
+          "tyre_type": "Both",
+          "sub_section": "Master Compound",
+          "uom": "KG",
+          "shelf_life_days": 10,
+          "mapping_source": "Overage Material and CTP Organisaion chart.xlsx",
+          "gold_kpi_groups": ["inventory_master_compound_and_final_compound"],
+          "items": [
+            {
+              "item_code": "MC001",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 5,
+              "lots": [
+                {
+                  "lot_id": "MC001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-119",
+                  "production_date": "2026-09-16 00:05",
+                  "age_days": 7.2,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "MC001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-177",
+                  "production_date": "2026-09-17 04:16",
+                  "age_days": 6.1,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "MC002",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "MC002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-160",
+                  "production_date": "2026-09-22 15:19",
+                  "age_days": 0.6,
+                  "expiry_date": "2026-10-02",
+                  "quantity": 24
+                }
+              ]
+            },
+            {
+              "item_code": "MC003",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "MC003-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-116",
+                  "production_date": "2026-09-10 06:19",
+                  "age_days": 13.0,
+                  "expiry_date": "2026-09-20",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "MC004",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 6,
+              "lots": [
+                {
+                  "lot_id": "MC004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-055",
+                  "production_date": "2026-09-17 17:40",
+                  "age_days": 5.5,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "MC004-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-172",
+                  "production_date": "2026-09-16 13:40",
+                  "age_days": 6.7,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 13
+                }
+              ]
+            },
+            {
+              "item_code": "MC005",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 8,
+              "lots": [
+                {
+                  "lot_id": "MC005-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-147",
+                  "production_date": "2026-09-17 16:29",
+                  "age_days": 5.6,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 17
+                },
+                {
+                  "lot_id": "MC005-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-157",
+                  "production_date": "2026-09-19 08:14",
+                  "age_days": 3.9,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 12
+                }
+              ]
+            },
+            {
+              "item_code": "MC006",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 25,
+              "lots": [
+                {
+                  "lot_id": "MC006-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-146",
+                  "production_date": "2026-09-21 01:24",
+                  "age_days": 2.2,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 28
+                },
+                {
+                  "lot_id": "MC006-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-037",
+                  "production_date": "2026-09-19 18:16",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 24
+                },
+                {
+                  "lot_id": "MC006-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-017",
+                  "production_date": "2026-09-22 12:02",
+                  "age_days": 0.7,
+                  "expiry_date": "2026-10-02",
+                  "quantity": 18
+                }
+              ]
+            },
+            {
+              "item_code": "MC007",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 12,
+              "lots": [
+                {
+                  "lot_id": "MC007-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-129",
+                  "production_date": "2026-09-18 13:02",
+                  "age_days": 4.7,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 13
+                },
+                {
+                  "lot_id": "MC007-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-170",
+                  "production_date": "2026-09-17 13:19",
+                  "age_days": 5.7,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 18
+                }
+              ]
+            },
+            {
+              "item_code": "MC008",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 12,
+              "lots": [
+                {
+                  "lot_id": "MC008-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-195",
+                  "production_date": "2026-09-16 22:54",
+                  "age_days": 6.3,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 19
+                },
+                {
+                  "lot_id": "MC008-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-125",
+                  "production_date": "2026-09-18 21:33",
+                  "age_days": 4.4,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 14
+                }
+              ]
+            },
+            {
+              "item_code": "MC009",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 6,
+              "lots": [
+                {
+                  "lot_id": "MC009-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-095",
+                  "production_date": "2026-09-19 14:18",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "MC009-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-062",
+                  "production_date": "2026-09-17 03:59",
+                  "age_days": 6.1,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "MC009-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-099",
+                  "production_date": "2026-09-22 08:33",
+                  "age_days": 0.9,
+                  "expiry_date": "2026-10-02",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "MC010",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 5,
+              "lots": [
+                {
+                  "lot_id": "MC010-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-073",
+                  "production_date": "2026-09-19 04:17",
+                  "age_days": 4.1,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "MC010-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-116",
+                  "production_date": "2026-09-22 18:59",
+                  "age_days": 0.5,
+                  "expiry_date": "2026-10-02",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "MC010-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-119",
+                  "production_date": "2026-09-21 04:30",
+                  "age_days": 2.1,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "MC011",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "MC011-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-176",
+                  "production_date": "2026-09-15 19:37",
+                  "age_days": 7.4,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 12
+                },
+                {
+                  "lot_id": "MC011-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-055",
+                  "production_date": "2026-09-20 11:55",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-30",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "MC012",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 10,
+              "lots": [
+                {
+                  "lot_id": "MC012-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-129",
+                  "production_date": "2026-09-16 13:37",
+                  "age_days": 6.7,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 11
+                },
+                {
+                  "lot_id": "MC012-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-124",
+                  "production_date": "2026-09-19 23:42",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 14
+                },
+                {
+                  "lot_id": "MC012-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-138",
+                  "production_date": "2026-09-18 22:18",
+                  "age_days": 4.3,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 17
+                }
+              ]
+            },
+            {
+              "item_code": "MC013",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "MC013-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-143",
+                  "production_date": "2026-09-14 20:31",
+                  "age_days": 8.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 11
+                },
+                {
+                  "lot_id": "MC013-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-154",
+                  "production_date": "2026-09-19 22:14",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "MC013-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-172",
+                  "production_date": "2026-09-19 15:53",
+                  "age_days": 3.6,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "MC014",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 5,
+              "lots": [
+                {
+                  "lot_id": "MC014-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-037",
+                  "production_date": "2026-09-16 06:33",
+                  "age_days": 7.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "MC014-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-022",
+                  "production_date": "2026-09-16 05:49",
+                  "age_days": 7.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 6
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Final Compound",
+          "source_name": "Final Compound",
+          "tyre_type": "Both",
+          "sub_section": "Final Compound",
+          "uom": "KG",
+          "shelf_life_days": 10,
+          "mapping_source": "Overage Material and CTP Organisaion chart.xlsx",
+          "gold_kpi_groups": ["inventory_master_compound_and_final_compound"],
+          "items": [
+            {
+              "item_code": "FC001",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "FC001-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-MX-024",
+                  "production_date": "2026-09-10 22:20",
+                  "age_days": 12.3,
+                  "expiry_date": "2026-09-20",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "FC002",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 27,
+              "lots": [
+                {
+                  "lot_id": "FC002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-029",
+                  "production_date": "2026-09-22 20:40",
+                  "age_days": 0.4,
+                  "expiry_date": "2026-10-02",
+                  "quantity": 19
+                },
+                {
+                  "lot_id": "FC002-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-176",
+                  "production_date": "2026-09-16 14:28",
+                  "age_days": 6.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 26
+                },
+                {
+                  "lot_id": "FC002-2609-03",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-056",
+                  "production_date": "2026-09-17 17:16",
+                  "age_days": 5.5,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 17
+                }
+              ]
+            },
+            {
+              "item_code": "FC003",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 31,
+              "lots": [
+                {
+                  "lot_id": "FC003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-039",
+                  "production_date": "2026-09-20 14:27",
+                  "age_days": 2.6,
+                  "expiry_date": "2026-09-30",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "FC003-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-101",
+                  "production_date": "2026-09-18 20:39",
+                  "age_days": 4.4,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "FC003-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-156",
+                  "production_date": "2026-09-21 02:31",
+                  "age_days": 2.1,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "FC004",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 34,
+              "lots": [
+                {
+                  "lot_id": "FC004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-172",
+                  "production_date": "2026-09-22 01:04",
+                  "age_days": 1.2,
+                  "expiry_date": "2026-10-02",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "FC004-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-139",
+                  "production_date": "2026-09-20 20:46",
+                  "age_days": 2.4,
+                  "expiry_date": "2026-09-30",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "FC005",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 18,
+              "lots": [
+                {
+                  "lot_id": "FC005-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-038",
+                  "production_date": "2026-09-18 22:23",
+                  "age_days": 4.3,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 12
+                },
+                {
+                  "lot_id": "FC005-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-124",
+                  "production_date": "2026-09-15 18:04",
+                  "age_days": 7.5,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 15
+                },
+                {
+                  "lot_id": "FC005-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-119",
+                  "production_date": "2026-09-16 18:13",
+                  "age_days": 6.5,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "FC006",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "FC006-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-174",
+                  "production_date": "2026-09-12 00:08",
+                  "age_days": 11.2,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "FC006-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-183",
+                  "production_date": "2026-09-17 02:19",
+                  "age_days": 6.2,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "FC007",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 36,
+              "lots": [
+                {
+                  "lot_id": "FC007-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-164",
+                  "production_date": "2026-09-18 05:30",
+                  "age_days": 5.0,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "FC007-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-179",
+                  "production_date": "2026-09-17 08:47",
+                  "age_days": 5.9,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "FC007-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-142",
+                  "production_date": "2026-09-18 09:46",
+                  "age_days": 4.8,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "FC008",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 27,
+              "lots": [
+                {
+                  "lot_id": "FC008-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-MX-095",
+                  "production_date": "2026-09-12 03:57",
+                  "age_days": 11.1,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 13
+                },
+                {
+                  "lot_id": "FC008-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-102",
+                  "production_date": "2026-09-19 23:24",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-29",
+                  "quantity": 12
+                }
+              ]
+            },
+            {
+              "item_code": "FC009",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 36,
+              "lots": [
+                {
+                  "lot_id": "FC009-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-148",
+                  "production_date": "2026-09-20 01:52",
+                  "age_days": 3.2,
+                  "expiry_date": "2026-09-30",
+                  "quantity": 22
+                }
+              ]
+            },
+            {
+              "item_code": "FC010",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 21,
+              "lots": [
+                {
+                  "lot_id": "FC010-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-138",
+                  "production_date": "2026-09-21 06:56",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "FC010-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-055",
+                  "production_date": "2026-09-22 16:21",
+                  "age_days": 0.6,
+                  "expiry_date": "2026-10-02",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "FC011",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 116,
+              "lots": [
+                {
+                  "lot_id": "FC011-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-124",
+                  "production_date": "2026-09-21 07:14",
+                  "age_days": 1.9,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 21
+                },
+                {
+                  "lot_id": "FC011-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-130",
+                  "production_date": "2026-09-20 11:34",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-30",
+                  "quantity": 20
+                },
+                {
+                  "lot_id": "FC011-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-086",
+                  "production_date": "2026-09-17 17:59",
+                  "age_days": 5.5,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 16
+                }
+              ]
+            },
+            {
+              "item_code": "FC012",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 26,
+              "lots": [
+                {
+                  "lot_id": "FC012-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-176",
+                  "production_date": "2026-09-21 06:16",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 13
+                }
+              ]
+            },
+            {
+              "item_code": "FC013",
+              "uom": "KG",
+              "tyre_type": "PCR",
+              "daily_consumption": 43,
+              "lots": [
+                {
+                  "lot_id": "FC013-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-023",
+                  "production_date": "2026-09-17 19:43",
+                  "age_days": 5.4,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "FC013-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-170",
+                  "production_date": "2026-09-21 20:25",
+                  "age_days": 1.4,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "FC013-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-179",
+                  "production_date": "2026-09-21 11:31",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-10-01",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "FC014",
+              "uom": "KG",
+              "tyre_type": "TBR",
+              "daily_consumption": 114,
+              "lots": [
+                {
+                  "lot_id": "FC014-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-MX-129",
+                  "production_date": "2026-09-17 00:43",
+                  "age_days": 6.2,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 24
+                },
+                {
+                  "lot_id": "FC014-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-MX-158",
+                  "production_date": "2026-09-18 05:31",
+                  "age_days": 5.0,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 21
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Stock",
+      "source_codes": ["Stock"],
+      "accent": "tl",
+      "product_types": [
+        {
+          "name": "PCR Bead",
+          "source_name": "PCR Bead",
+          "tyre_type": "PCR",
+          "sub_section": "BEAD",
+          "uom": "NOS",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_bead"],
+          "items": [
+            {
+              "item_code": "PB001",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 10,
+              "lots": [
+                {
+                  "lot_id": "PB001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-058",
+                  "production_date": "2026-09-19 23:22",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "PB002",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "PB002-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-064",
+                  "production_date": "2026-09-22 04:03",
+                  "age_days": 1.1,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "PB002-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-028",
+                  "production_date": "2026-09-19 16:42",
+                  "age_days": 3.6,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "PB003",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 42,
+              "lots": [
+                {
+                  "lot_id": "PB003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-077",
+                  "production_date": "2026-09-21 15:06",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 15
+                },
+                {
+                  "lot_id": "PB003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-068",
+                  "production_date": "2026-09-21 14:47",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "PB003-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-186",
+                  "production_date": "2026-09-21 22:26",
+                  "age_days": 1.3,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "PB004",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 22,
+              "lots": [
+                {
+                  "lot_id": "PB004-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-015",
+                  "production_date": "2026-09-19 22:07",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "PB004-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-175",
+                  "production_date": "2026-09-19 14:01",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "PB004-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-204",
+                  "production_date": "2026-09-22 22:02",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Beltedge Filler",
+          "source_name": "Beltedge Filler",
+          "tyre_type": "TBR",
+          "sub_section": "Calender",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_beltedge_filler"],
+          "items": [
+            {
+              "item_code": "BF001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 29,
+              "lots": [
+                {
+                  "lot_id": "BF001-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-063",
+                  "production_date": "2026-09-21 15:04",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "BF001-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-080",
+                  "production_date": "2026-09-20 22:03",
+                  "age_days": 2.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "BF001-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-193",
+                  "production_date": "2026-09-21 13:35",
+                  "age_days": 1.7,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "BF002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 10,
+              "lots": [
+                {
+                  "lot_id": "BF002-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-094",
+                  "production_date": "2026-09-17 08:33",
+                  "age_days": 5.9,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "BF002-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-132",
+                  "production_date": "2026-09-20 08:58",
+                  "age_days": 2.9,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "BF002-2609-03",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-030",
+                  "production_date": "2026-09-18 19:06",
+                  "age_days": 4.5,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "BF003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 24,
+              "lots": [
+                {
+                  "lot_id": "BF003-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-060",
+                  "production_date": "2026-09-18 19:13",
+                  "age_days": 4.4,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "BF003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-134",
+                  "production_date": "2026-09-21 18:20",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PCR Belt",
+          "source_name": "PCR Belt",
+          "tyre_type": "PCR",
+          "sub_section": "Cutter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_belt"],
+          "items": [
+            {
+              "item_code": "PBE001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 6,
+              "lots": [
+                {
+                  "lot_id": "PBE001-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-068",
+                  "production_date": "2026-09-17 13:23",
+                  "age_days": 5.7,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "PBE001-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-197",
+                  "production_date": "2026-09-18 15:20",
+                  "age_days": 4.6,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "PBE001-2609-03",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-035",
+                  "production_date": "2026-09-18 18:50",
+                  "age_days": 4.5,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "PBE002",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "PBE002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-009",
+                  "production_date": "2026-09-19 18:18",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "PBE002-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-128",
+                  "production_date": "2026-09-20 21:54",
+                  "age_days": 2.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "PBE003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 15,
+              "lots": [
+                {
+                  "lot_id": "PBE003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-090",
+                  "production_date": "2026-09-21 12:19",
+                  "age_days": 1.7,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "PBE003-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-018",
+                  "production_date": "2026-09-21 10:28",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "PBE003-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-067",
+                  "production_date": "2026-09-21 15:29",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 7
+                }
+              ]
+            },
+            {
+              "item_code": "PBE004",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "PBE004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-004",
+                  "production_date": "2026-09-20 16:24",
+                  "age_days": 2.6,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "PBE005",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "PBE005-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-003",
+                  "production_date": "2026-09-18 09:33",
+                  "age_days": 4.9,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "PBE006",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 12,
+              "lots": [
+                {
+                  "lot_id": "PBE006-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-155",
+                  "production_date": "2026-09-19 18:12",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 11
+                },
+                {
+                  "lot_id": "PBE006-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-043",
+                  "production_date": "2026-09-18 17:44",
+                  "age_days": 4.5,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "PBE006-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-181",
+                  "production_date": "2026-09-19 22:46",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 7
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR Belt",
+          "source_name": "TBR Belt",
+          "tyre_type": "TBR",
+          "sub_section": "Cutter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_belt"],
+          "items": [
+            {
+              "item_code": "TB001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "TB001-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-091",
+                  "production_date": "2026-09-22 14:15",
+                  "age_days": 0.7,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "TB001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-111",
+                  "production_date": "2026-09-21 10:57",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "TB002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "TB002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-115",
+                  "production_date": "2026-09-22 23:40",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "TB002-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-034",
+                  "production_date": "2026-09-20 16:56",
+                  "age_days": 2.5,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "TB003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "TB003-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-166",
+                  "production_date": "2026-09-15 13:16",
+                  "age_days": 7.7,
+                  "expiry_date": "2026-09-20",
+                  "quantity": 15
+                },
+                {
+                  "lot_id": "TB003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-114",
+                  "production_date": "2026-09-20 09:31",
+                  "age_days": 2.9,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 11
+                }
+              ]
+            },
+            {
+              "item_code": "TB004",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "TB004-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-196",
+                  "production_date": "2026-09-22 13:40",
+                  "age_days": 0.7,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "TB004-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-053",
+                  "production_date": "2026-09-21 16:21",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "TB004-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-097",
+                  "production_date": "2026-09-19 20:42",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 7
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PCR Apex",
+          "source_name": "PCR Apex",
+          "tyre_type": "PCR",
+          "sub_section": "Apexing",
+          "uom": "NOS",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_apex"],
+          "items": [
+            {
+              "item_code": "PA001",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 9,
+              "lots": [
+                {
+                  "lot_id": "PA001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-180",
+                  "production_date": "2026-09-21 02:04",
+                  "age_days": 2.2,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 15
+                },
+                {
+                  "lot_id": "PA001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-140",
+                  "production_date": "2026-09-21 19:45",
+                  "age_days": 1.4,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "PA002",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "PA002-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-071",
+                  "production_date": "2026-09-18 13:20",
+                  "age_days": 4.7,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "PA002-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-091",
+                  "production_date": "2026-09-20 18:39",
+                  "age_days": 2.5,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "PA003",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "PA003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-089",
+                  "production_date": "2026-09-23 02:13",
+                  "age_days": 0.2,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "PA003-2609-02",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-011",
+                  "production_date": "2026-09-15 08:07",
+                  "age_days": 7.9,
+                  "expiry_date": "2026-09-20",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "PA003-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-123",
+                  "production_date": "2026-09-22 14:21",
+                  "age_days": 0.7,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Chaffer, Flipper",
+          "source_name": "Chaffer, Flipper",
+          "tyre_type": "Both",
+          "sub_section": "Cutter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_chaffer_flipper"],
+          "items": [
+            {
+              "item_code": "CF001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "CF001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-046",
+                  "production_date": "2026-09-20 15:56",
+                  "age_days": 2.6,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "CF001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-050",
+                  "production_date": "2026-09-21 12:05",
+                  "age_days": 1.7,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "CF001-2609-03",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-155",
+                  "production_date": "2026-09-22 07:35",
+                  "age_days": 0.9,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "CF002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "CF002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-150",
+                  "production_date": "2026-09-21 06:07",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "CF003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "CF003-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-120",
+                  "production_date": "2026-09-17 23:23",
+                  "age_days": 5.3,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "CF003-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-085",
+                  "production_date": "2026-09-19 22:34",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "CF003-2609-03",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-094",
+                  "production_date": "2026-09-19 19:22",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PCR PLY",
+          "source_name": "PCR PLY",
+          "tyre_type": "PCR",
+          "sub_section": "Cutter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_ply"],
+          "items": [
+            {
+              "item_code": "PP001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "PP001-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-149",
+                  "production_date": "2026-09-18 21:49",
+                  "age_days": 4.3,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "PP002",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 15,
+              "lots": [
+                {
+                  "lot_id": "PP002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-104",
+                  "production_date": "2026-09-21 16:57",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "PP002-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-087",
+                  "production_date": "2026-09-18 23:35",
+                  "age_days": 4.3,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 12
+                }
+              ]
+            },
+            {
+              "item_code": "PP003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 6,
+              "lots": [
+                {
+                  "lot_id": "PP003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-001",
+                  "production_date": "2026-09-19 12:43",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 8
+                }
+              ]
+            },
+            {
+              "item_code": "PP004",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "PP004-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-031",
+                  "production_date": "2026-09-17 13:53",
+                  "age_days": 5.7,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PCR Chaffer",
+          "source_name": "PCR Chaffer",
+          "tyre_type": "PCR",
+          "sub_section": "Slitter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_chaffer"],
+          "items": [
+            {
+              "item_code": "PC001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 25,
+              "lots": [
+                {
+                  "lot_id": "PC001-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-042",
+                  "production_date": "2026-09-19 13:06",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "PC001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-144",
+                  "production_date": "2026-09-20 19:36",
+                  "age_days": 2.4,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "PC001-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-193",
+                  "production_date": "2026-09-19 12:44",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "PC002",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 11,
+              "lots": [
+                {
+                  "lot_id": "PC002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-136",
+                  "production_date": "2026-09-19 20:43",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "PC002-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-032",
+                  "production_date": "2026-09-18 23:54",
+                  "age_days": 4.3,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "PC003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "PC003-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-145",
+                  "production_date": "2026-09-17 22:39",
+                  "age_days": 5.3,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 8
+                }
+              ]
+            },
+            {
+              "item_code": "PC004",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 12,
+              "lots": [
+                {
+                  "lot_id": "PC004-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-035",
+                  "production_date": "2026-09-20 17:02",
+                  "age_days": 2.5,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "PC005",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 6,
+              "lots": [
+                {
+                  "lot_id": "PC005-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-109",
+                  "production_date": "2026-09-18 07:37",
+                  "age_days": 4.9,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "PC005-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-137",
+                  "production_date": "2026-09-20 10:14",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "PC006",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 32,
+              "lots": [
+                {
+                  "lot_id": "PC006-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-080",
+                  "production_date": "2026-09-20 00:35",
+                  "age_days": 3.2,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "PC006-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-178",
+                  "production_date": "2026-09-21 04:01",
+                  "age_days": 2.1,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 10
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR Chaffer",
+          "source_name": "TBR Chaffer",
+          "tyre_type": "TBR",
+          "sub_section": "Slitter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_chaffer"],
+          "items": [
+            {
+              "item_code": "TC001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "TC001-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-184",
+                  "production_date": "2026-09-21 16:40",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "TC001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-122",
+                  "production_date": "2026-09-19 20:00",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "TC001-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-041",
+                  "production_date": "2026-09-21 17:54",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "TC002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "TC002-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-198",
+                  "production_date": "2026-09-18 17:02",
+                  "age_days": 4.5,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "TC002-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-163",
+                  "production_date": "2026-09-22 07:46",
+                  "age_days": 0.9,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "TC003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "TC003-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-145",
+                  "production_date": "2026-09-20 11:46",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 11
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Doubled Flipper",
+          "source_name": "Doubled Flipper",
+          "tyre_type": "TBR",
+          "sub_section": "Slitter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_doubled_flipper"],
+          "items": [
+            {
+              "item_code": "DF001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "DF001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-012",
+                  "production_date": "2026-09-21 19:38",
+                  "age_days": 1.4,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "DF001-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-066",
+                  "production_date": "2026-09-22 20:53",
+                  "age_days": 0.4,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "DF002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "DF002-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-107",
+                  "production_date": "2026-09-16 06:07",
+                  "age_days": 7.0,
+                  "expiry_date": "2026-09-21",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "DF002-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-126",
+                  "production_date": "2026-09-22 08:02",
+                  "age_days": 0.9,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "DF003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "DF003-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-196",
+                  "production_date": "2026-09-15 00:05",
+                  "age_days": 8.2,
+                  "expiry_date": "2026-09-20",
+                  "quantity": 9
+                }
+              ]
+            },
+            {
+              "item_code": "DF004",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "DF004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-152",
+                  "production_date": "2026-09-22 08:37",
+                  "age_days": 0.9,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "DF005",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "DF005-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-006",
+                  "production_date": "2026-09-20 14:14",
+                  "age_days": 2.7,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 13
+                },
+                {
+                  "lot_id": "DF005-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-020",
+                  "production_date": "2026-09-19 17:24",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 11
+                }
+              ]
+            },
+            {
+              "item_code": "DF006",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "DF006-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-044",
+                  "production_date": "2026-09-19 17:43",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR Tread",
+          "source_name": "TBR Tread",
+          "tyre_type": "TBR",
+          "sub_section": "Extruder",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_tread"],
+          "items": [
+            {
+              "item_code": "TT001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "TT001-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-159",
+                  "production_date": "2026-09-13 21:26",
+                  "age_days": 9.4,
+                  "expiry_date": "2026-09-18",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "TT002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "TT002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-144",
+                  "production_date": "2026-09-22 05:24",
+                  "age_days": 1.0,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 8
+                }
+              ]
+            },
+            {
+              "item_code": "TT003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "TT003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-048",
+                  "production_date": "2026-09-22 06:41",
+                  "age_days": 1.0,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 15
+                },
+                {
+                  "lot_id": "TT003-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-096",
+                  "production_date": "2026-09-22 21:56",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "TT003-2609-03",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-021",
+                  "production_date": "2026-09-14 08:25",
+                  "age_days": 8.9,
+                  "expiry_date": "2026-09-19",
+                  "quantity": 14
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Edgegum",
+          "source_name": "Edgegum",
+          "tyre_type": "Both",
+          "sub_section": "Calender",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_edgegum"],
+          "items": [
+            {
+              "item_code": "E001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "E001-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-105",
+                  "production_date": "2026-09-21 15:20",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "E002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "E002-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-087",
+                  "production_date": "2026-09-16 04:22",
+                  "age_days": 7.1,
+                  "expiry_date": "2026-09-21",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "E002-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-026",
+                  "production_date": "2026-09-20 13:27",
+                  "age_days": 2.7,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "E003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 8,
+              "lots": [
+                {
+                  "lot_id": "E003-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-021",
+                  "production_date": "2026-09-22 14:52",
+                  "age_days": 0.6,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "E003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-028",
+                  "production_date": "2026-09-21 14:33",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 7
+                }
+              ]
+            },
+            {
+              "item_code": "E004",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 11,
+              "lots": [
+                {
+                  "lot_id": "E004-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-059",
+                  "production_date": "2026-09-19 12:14",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "E004-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-169",
+                  "production_date": "2026-09-18 18:42",
+                  "age_days": 4.5,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "E004-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-014",
+                  "production_date": "2026-09-20 11:41",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "E005",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "E005-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-111",
+                  "production_date": "2026-09-19 20:46",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 7
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Steel & Fabric Calender",
+          "source_name": "Steel & Fabric Calender",
+          "tyre_type": "Both",
+          "sub_section": "4RC",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_steel_fabric_calender"],
+          "items": [
+            {
+              "item_code": "SFC001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 23,
+              "lots": [
+                {
+                  "lot_id": "SFC001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-118",
+                  "production_date": "2026-09-20 04:09",
+                  "age_days": 3.1,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "SFC001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-203",
+                  "production_date": "2026-09-21 19:39",
+                  "age_days": 1.4,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "SFC002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 6,
+              "lots": [
+                {
+                  "lot_id": "SFC002-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-127",
+                  "production_date": "2026-09-19 03:58",
+                  "age_days": 4.1,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "SFC003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 14,
+              "lots": [
+                {
+                  "lot_id": "SFC003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-078",
+                  "production_date": "2026-09-22 22:09",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "SFC003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-074",
+                  "production_date": "2026-09-23 00:39",
+                  "age_days": 0.2,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "SFC003-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-064",
+                  "production_date": "2026-09-21 05:25",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "SFC004",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 20,
+              "lots": [
+                {
+                  "lot_id": "SFC004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-133",
+                  "production_date": "2026-09-19 20:42",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "SFC004-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-140",
+                  "production_date": "2026-09-21 22:47",
+                  "age_days": 1.3,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "SFC004-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-190",
+                  "production_date": "2026-09-19 17:35",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "SFC005",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 8,
+              "lots": [
+                {
+                  "lot_id": "SFC005-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-010",
+                  "production_date": "2026-09-19 15:47",
+                  "age_days": 3.6,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "SFC005-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-197",
+                  "production_date": "2026-09-22 01:57",
+                  "age_days": 1.2,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "SFC005-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-026",
+                  "production_date": "2026-09-21 23:25",
+                  "age_days": 1.3,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "SFC006",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 19,
+              "lots": [
+                {
+                  "lot_id": "SFC006-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-045",
+                  "production_date": "2026-09-21 13:38",
+                  "age_days": 1.7,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "SFC006-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-054",
+                  "production_date": "2026-09-20 19:40",
+                  "age_days": 2.4,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "SFC006-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-104",
+                  "production_date": "2026-09-20 21:58",
+                  "age_days": 2.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR Sidewall & TBR Shoulder Pad",
+          "source_name": "TBR Sidewall & TBR Shoulder Pad",
+          "tyre_type": "TBR",
+          "sub_section": "Extruder",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_sidewall_tbr_shoulder_pad"],
+          "items": [
+            {
+              "item_code": "TSTS001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "TSTS001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-189",
+                  "production_date": "2026-09-19 23:57",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "TSTS001-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-150",
+                  "production_date": "2026-09-17 09:27",
+                  "age_days": 5.9,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "TSTS001-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-161",
+                  "production_date": "2026-09-20 04:07",
+                  "age_days": 3.1,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "TSTS002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 5,
+              "lots": [
+                {
+                  "lot_id": "TSTS002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-066",
+                  "production_date": "2026-09-19 23:09",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "TSTS002-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-051",
+                  "production_date": "2026-09-20 17:08",
+                  "age_days": 2.5,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "TSTS002-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-077",
+                  "production_date": "2026-09-22 09:19",
+                  "age_days": 0.9,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "TSTS003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "TSTS003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-194",
+                  "production_date": "2026-09-21 06:18",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "TSTS003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-103",
+                  "production_date": "2026-09-22 18:21",
+                  "age_days": 0.5,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 7
+                }
+              ]
+            },
+            {
+              "item_code": "TSTS004",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "TSTS004-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-019",
+                  "production_date": "2026-09-18 15:13",
+                  "age_days": 4.6,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 6
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PCR Tread & PCR Side Wall",
+          "source_name": "PCR Tread & PCR Side Wall",
+          "tyre_type": "PCR",
+          "sub_section": "Extruder",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_tread_pcr_side_wall"],
+          "items": [
+            {
+              "item_code": "PTPS001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "PTPS001-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-003",
+                  "production_date": "2026-09-17 10:43",
+                  "age_days": 5.8,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "PTPS001-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-151",
+                  "production_date": "2026-09-22 16:30",
+                  "age_days": 0.6,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "PTPS002",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "PTPS002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-093",
+                  "production_date": "2026-09-21 05:15",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "PTPS002-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-110",
+                  "production_date": "2026-09-21 19:13",
+                  "age_days": 1.4,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "PTPS002-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-005",
+                  "production_date": "2026-09-23 02:33",
+                  "age_days": 0.1,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "PTPS003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "PTPS003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-025",
+                  "production_date": "2026-09-22 00:14",
+                  "age_days": 1.2,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "PTPS003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-090",
+                  "production_date": "2026-09-19 12:05",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "PTPS003-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-100",
+                  "production_date": "2026-09-19 18:14",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "PTPS004",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 11,
+              "lots": [
+                {
+                  "lot_id": "PTPS004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-064",
+                  "production_date": "2026-09-20 23:18",
+                  "age_days": 2.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 14
+                },
+                {
+                  "lot_id": "PTPS004-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-007",
+                  "production_date": "2026-09-21 19:02",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "PTPS004-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-032",
+                  "production_date": "2026-09-21 02:23",
+                  "age_days": 2.2,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 14
+                }
+              ]
+            },
+            {
+              "item_code": "PTPS005",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "PTPS005-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-082",
+                  "production_date": "2026-09-21 05:53",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "PTPS005-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-182",
+                  "production_date": "2026-09-22 20:19",
+                  "age_days": 0.4,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "PTPS005-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-040",
+                  "production_date": "2026-09-21 06:43",
+                  "age_days": 2.0,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 7
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR Assembled",
+          "source_name": "TBR Assembled",
+          "tyre_type": "TBR",
+          "sub_section": "Pre- Assembly",
+          "uom": "NOS",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_assembled"],
+          "items": [
+            {
+              "item_code": "TA001",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "TA001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-049",
+                  "production_date": "2026-09-21 23:50",
+                  "age_days": 1.3,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "TA001-2609-02",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-012",
+                  "production_date": "2026-09-16 22:17",
+                  "age_days": 6.3,
+                  "expiry_date": "2026-09-21",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "TA001-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-036",
+                  "production_date": "2026-09-19 18:26",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "TA002",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 9,
+              "lots": [
+                {
+                  "lot_id": "TA002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-048",
+                  "production_date": "2026-09-22 17:58",
+                  "age_days": 0.5,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 8
+                },
+                {
+                  "lot_id": "TA002-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-126",
+                  "production_date": "2026-09-22 19:44",
+                  "age_days": 0.4,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "TA003",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "TA003-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-145",
+                  "production_date": "2026-09-18 23:44",
+                  "age_days": 4.3,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR PLY",
+          "source_name": "TBR PLY",
+          "tyre_type": "TBR",
+          "sub_section": "Cutter",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_ply"],
+          "items": [
+            {
+              "item_code": "TP001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "TP001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-002",
+                  "production_date": "2026-09-20 16:01",
+                  "age_days": 2.6,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "TP001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-050",
+                  "production_date": "2026-09-20 23:04",
+                  "age_days": 2.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "TP001-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-136",
+                  "production_date": "2026-09-20 23:52",
+                  "age_days": 2.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "TP002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "TP002-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-173",
+                  "production_date": "2026-09-19 14:20",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "TP003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "TP003-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-088",
+                  "production_date": "2026-09-20 00:03",
+                  "age_days": 3.2,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "TP004",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "TP004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-018",
+                  "production_date": "2026-09-19 19:42",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "TP005",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 5,
+              "lots": [
+                {
+                  "lot_id": "TP005-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-118",
+                  "production_date": "2026-09-18 19:18",
+                  "age_days": 4.4,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "TP005-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-192",
+                  "production_date": "2026-09-22 22:01",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "TP006",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "TP006-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-065",
+                  "production_date": "2026-09-19 14:17",
+                  "age_days": 3.7,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "TP006-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-033",
+                  "production_date": "2026-09-22 22:56",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR Inner Liner",
+          "source_name": "TBR Inner Liner",
+          "tyre_type": "TBR",
+          "sub_section": "Calender",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_inner_liner"],
+          "items": [
+            {
+              "item_code": "TIL001",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 5,
+              "lots": [
+                {
+                  "lot_id": "TIL001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-198",
+                  "production_date": "2026-09-21 07:12",
+                  "age_days": 1.9,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "TIL001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-047",
+                  "production_date": "2026-09-21 00:29",
+                  "age_days": 2.2,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "TIL002",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 9,
+              "lots": [
+                {
+                  "lot_id": "TIL002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-168",
+                  "production_date": "2026-09-21 02:31",
+                  "age_days": 2.1,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 16
+                }
+              ]
+            },
+            {
+              "item_code": "TIL003",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 8,
+              "lots": [
+                {
+                  "lot_id": "TIL003-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-040",
+                  "production_date": "2026-09-22 06:15",
+                  "age_days": 1.0,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "TIL003-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-191",
+                  "production_date": "2026-09-20 17:40",
+                  "age_days": 2.5,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "TIL003-2609-03",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-072",
+                  "production_date": "2026-09-19 02:07",
+                  "age_days": 4.2,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "TIL004",
+              "uom": "MTR",
+              "tyre_type": "TBR",
+              "daily_consumption": 8,
+              "lots": [
+                {
+                  "lot_id": "TIL004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-006",
+                  "production_date": "2026-09-19 23:57",
+                  "age_days": 3.3,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "TIL004-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-106",
+                  "production_date": "2026-09-21 20:22",
+                  "age_days": 1.4,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "TBR BEAD",
+          "source_name": "TBR BEAD",
+          "tyre_type": "TBR",
+          "sub_section": "Apexing",
+          "uom": "NOS",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_tbr_bead", "inventory_tbr_tread"],
+          "items": [
+            {
+              "item_code": "TBE001",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "TBE001-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-ST-204",
+                  "production_date": "2026-09-17 05:47",
+                  "age_days": 6.0,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "TBE001-2609-02",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-008",
+                  "production_date": "2026-09-21 15:38",
+                  "age_days": 1.6,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "TBE001-2609-03",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-ST-117",
+                  "production_date": "2026-09-18 00:52",
+                  "age_days": 5.2,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 11
+                }
+              ]
+            },
+            {
+              "item_code": "TBE002",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "TBE002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-112",
+                  "production_date": "2026-09-21 09:57",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 11
+                }
+              ]
+            },
+            {
+              "item_code": "TBE003",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "TBE003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-092",
+                  "production_date": "2026-09-19 17:11",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "TBE003-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-084",
+                  "production_date": "2026-09-21 04:34",
+                  "age_days": 2.1,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 10
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PCR Sidewall & Tread",
+          "source_name": "PCR Sidewall & Tread",
+          "tyre_type": "PCR",
+          "sub_section": "Extruder",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_sidewall_tread"],
+          "items": [
+            {
+              "item_code": "PST001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "PST001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-081",
+                  "production_date": "2026-09-20 12:44",
+                  "age_days": 2.7,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "PST002",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 12,
+              "lots": [
+                {
+                  "lot_id": "PST002-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-165",
+                  "production_date": "2026-09-19 01:33",
+                  "age_days": 4.2,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "PST002-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-090",
+                  "production_date": "2026-09-18 20:08",
+                  "age_days": 4.4,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "PST003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 9,
+              "lots": [
+                {
+                  "lot_id": "PST003-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-ST-122",
+                  "production_date": "2026-09-19 04:24",
+                  "age_days": 4.1,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "PST004",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 21,
+              "lots": [
+                {
+                  "lot_id": "PST004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-131",
+                  "production_date": "2026-09-22 11:37",
+                  "age_days": 0.8,
+                  "expiry_date": "2026-09-27",
+                  "quantity": 11
+                },
+                {
+                  "lot_id": "PST004-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-075",
+                  "production_date": "2026-09-20 07:59",
+                  "age_days": 2.9,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PCR Inner Liner",
+          "source_name": "PCR Inner Liner",
+          "tyre_type": "PCR",
+          "sub_section": "Calender",
+          "uom": "MTR",
+          "shelf_life_days": 5,
+          "mapping_source": "Section and product mapping.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_inner_liner"],
+          "items": [
+            {
+              "item_code": "PIL001",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 8,
+              "lots": [
+                {
+                  "lot_id": "PIL001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-075",
+                  "production_date": "2026-09-19 21:05",
+                  "age_days": 3.4,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "PIL001-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-079",
+                  "production_date": "2026-09-21 18:29",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "PIL001-2609-03",
+                  "status": "PART",
+                  "mhe_code": "MHE-ST-171",
+                  "production_date": "2026-09-19 17:05",
+                  "age_days": 3.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "PIL002",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "PIL002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-020",
+                  "production_date": "2026-09-23 00:46",
+                  "age_days": 0.2,
+                  "expiry_date": "2026-09-28",
+                  "quantity": 12
+                }
+              ]
+            },
+            {
+              "item_code": "PIL003",
+              "uom": "MTR",
+              "tyre_type": "PCR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "PIL003-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-ST-084",
+                  "production_date": "2026-09-20 02:43",
+                  "age_days": 3.1,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tyre Building",
+      "source_codes": ["TBM"],
+      "accent": "bl",
+      "product_types": [
+        {
+          "name": "Carcass",
+          "source_name": "Carcuss",
+          "tyre_type": "Both",
+          "sub_section": "Carcass",
+          "uom": "NOS",
+          "shelf_life_days": 3,
+          "mapping_source": "Overage Material and CTP Organisaion chart.xlsx",
+          "gold_kpi_groups": ["inventory_pcr_carcus", "inventory_tbr_carcus"],
+          "items": [
+            {
+              "item_code": "C001",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 30,
+              "lots": [
+                {
+                  "lot_id": "C001-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-TB-162",
+                  "production_date": "2026-09-20 15:08",
+                  "age_days": 2.6,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 5
+                },
+                {
+                  "lot_id": "C001-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-TB-199",
+                  "production_date": "2026-09-20 17:38",
+                  "age_days": 2.5,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "C001-2609-03",
+                  "status": "ATE",
+                  "mhe_code": "MHE-TB-188",
+                  "production_date": "2026-09-20 07:53",
+                  "age_days": 2.9,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "C002",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 9,
+              "lots": [
+                {
+                  "lot_id": "C002-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-TB-135",
+                  "production_date": "2026-09-20 10:20",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "C003",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 7,
+              "lots": [
+                {
+                  "lot_id": "C003-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-TB-057",
+                  "production_date": "2026-09-20 09:04",
+                  "age_days": 2.9,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "C004",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "C004-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-TB-121",
+                  "production_date": "2026-09-21 10:27",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "C004-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-TB-188",
+                  "production_date": "2026-09-21 11:26",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "C005",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 9,
+              "lots": [
+                {
+                  "lot_id": "C005-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-TB-200",
+                  "production_date": "2026-09-21 10:05",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 5
+                }
+              ]
+            },
+            {
+              "item_code": "C006",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 24,
+              "lots": [
+                {
+                  "lot_id": "C006-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-162",
+                  "production_date": "2026-09-21 04:43",
+                  "age_days": 2.1,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 4
+                },
+                {
+                  "lot_id": "C006-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-070",
+                  "production_date": "2026-09-21 10:38",
+                  "age_days": 1.8,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "C007",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 22,
+              "lots": [
+                {
+                  "lot_id": "C007-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-TB-083",
+                  "production_date": "2026-09-22 12:18",
+                  "age_days": 0.7,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 12
+                }
+              ]
+            },
+            {
+              "item_code": "C008",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 23,
+              "lots": [
+                {
+                  "lot_id": "C008-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-TB-069",
+                  "production_date": "2026-09-22 21:53",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 9
+                },
+                {
+                  "lot_id": "C008-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-TB-013",
+                  "production_date": "2026-09-20 14:45",
+                  "age_days": 2.6,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 7
+                }
+              ]
+            },
+            {
+              "item_code": "C009",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "C009-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-TB-061",
+                  "production_date": "2026-09-20 13:07",
+                  "age_days": 2.7,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 6
+                },
+                {
+                  "lot_id": "C009-2609-02",
+                  "status": "EXP",
+                  "mhe_code": "MHE-TB-141",
+                  "production_date": "2026-09-18 01:09",
+                  "age_days": 5.2,
+                  "expiry_date": "2026-09-21",
+                  "quantity": 9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Green Tyre",
+          "source_name": "Green Tyre",
+          "tyre_type": "Both",
+          "sub_section": "Green Tyre",
+          "uom": "NOS",
+          "shelf_life_days": 3,
+          "mapping_source": "Overage Material and CTP Organisaion chart.xlsx",
+          "gold_kpi_groups": [
+            "inventory_pcr_green_tyre",
+            "inventory_tbr_greentyre"
+          ],
+          "items": [
+            {
+              "item_code": "GT001",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "GT001-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-108",
+                  "production_date": "2026-09-22 01:31",
+                  "age_days": 1.2,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "GT001-2609-02",
+                  "status": "EXP",
+                  "mhe_code": "MHE-TB-098",
+                  "production_date": "2026-09-19 01:14",
+                  "age_days": 4.2,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 7
+                }
+              ]
+            },
+            {
+              "item_code": "GT002",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "GT002-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-013",
+                  "production_date": "2026-09-22 14:53",
+                  "age_days": 0.6,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "GT002-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-TB-052",
+                  "production_date": "2026-09-21 18:07",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 12
+                }
+              ]
+            },
+            {
+              "item_code": "GT003",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "GT003-2609-01",
+                  "status": "ATE",
+                  "mhe_code": "MHE-TB-098",
+                  "production_date": "2026-09-20 11:52",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "GT003-2609-02",
+                  "status": "ATE",
+                  "mhe_code": "MHE-TB-185",
+                  "production_date": "2026-09-20 11:04",
+                  "age_days": 2.8,
+                  "expiry_date": "2026-09-23",
+                  "quantity": 2
+                },
+                {
+                  "lot_id": "GT003-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-153",
+                  "production_date": "2026-09-22 01:28",
+                  "age_days": 1.2,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 3
+                }
+              ]
+            },
+            {
+              "item_code": "GT004",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 4,
+              "lots": [
+                {
+                  "lot_id": "GT004-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-027",
+                  "production_date": "2026-09-22 18:59",
+                  "age_days": 0.5,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 10
+                }
+              ]
+            },
+            {
+              "item_code": "GT005",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 6,
+              "lots": [
+                {
+                  "lot_id": "GT005-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-TB-201",
+                  "production_date": "2026-09-22 14:38",
+                  "age_days": 0.6,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 12
+                },
+                {
+                  "lot_id": "GT005-2609-02",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-187",
+                  "production_date": "2026-09-22 07:11",
+                  "age_days": 1.0,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 7
+                }
+              ]
+            },
+            {
+              "item_code": "GT006",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 3,
+              "lots": [
+                {
+                  "lot_id": "GT006-2609-01",
+                  "status": "PART",
+                  "mhe_code": "MHE-TB-113",
+                  "production_date": "2026-09-23 04:30",
+                  "age_days": 0.1,
+                  "expiry_date": "2026-09-26",
+                  "quantity": 6
+                }
+              ]
+            },
+            {
+              "item_code": "GT007",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "GT007-2609-01",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-016",
+                  "production_date": "2026-09-21 17:11",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 3
+                },
+                {
+                  "lot_id": "GT007-2609-02",
+                  "status": "EXP",
+                  "mhe_code": "MHE-TB-061",
+                  "production_date": "2026-09-17 20:01",
+                  "age_days": 5.4,
+                  "expiry_date": "2026-09-20",
+                  "quantity": 4
+                }
+              ]
+            },
+            {
+              "item_code": "GT008",
+              "uom": "NOS",
+              "tyre_type": "TBR",
+              "daily_consumption": 2,
+              "lots": [
+                {
+                  "lot_id": "GT008-2609-01",
+                  "status": "EXP",
+                  "mhe_code": "MHE-TB-108",
+                  "production_date": "2026-09-18 09:55",
+                  "age_days": 4.8,
+                  "expiry_date": "2026-09-21",
+                  "quantity": 7
+                },
+                {
+                  "lot_id": "GT008-2609-02",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-TB-167",
+                  "production_date": "2026-09-19 14:49",
+                  "age_days": 3.6,
+                  "expiry_date": "2026-09-22",
+                  "quantity": 10
+                },
+                {
+                  "lot_id": "GT008-2609-03",
+                  "status": "READY",
+                  "mhe_code": "MHE-TB-202",
+                  "production_date": "2026-09-22 22:14",
+                  "age_days": 0.3,
+                  "expiry_date": "2026-09-25",
+                  "quantity": 7
+                }
+              ]
+            },
+            {
+              "item_code": "GT009",
+              "uom": "NOS",
+              "tyre_type": "PCR",
+              "daily_consumption": 1,
+              "lots": [
+                {
+                  "lot_id": "GT009-2609-01",
+                  "status": "HOLD",
+                  "mhe_code": "MHE-TB-076",
+                  "production_date": "2026-09-21 18:55",
+                  "age_days": 1.5,
+                  "expiry_date": "2026-09-24",
+                  "quantity": 7
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

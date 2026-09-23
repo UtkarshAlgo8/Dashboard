@@ -677,7 +677,11 @@ function BanmoreProduction() {
               }}
             >
               {dashboard.category === "i" ? (
-                <InventoryPage plantId={plantId} />
+                <InventoryPage
+                  plantId={plantId}
+                  tyreType={activeTyreType}
+                  shift={shiftKey}
+                />
               ) : (
                 <>
                   {/* Section subheader row — Title (left) + Type & UoM pills (right) */}

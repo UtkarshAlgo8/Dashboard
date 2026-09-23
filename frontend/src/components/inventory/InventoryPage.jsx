@@ -1,596 +1,390 @@
-import { useMemo, useRef, useState } from "react";
+import { useState } from "react";
+import { Box, ButtonBase, Stack, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import CloseIcon from "@mui/icons-material/Close";
+
+import { getCtpInventoryMaster } from "@/api/inventory.js";
+import CtpDrillCard from "@/components/inventory/CtpDrillCard.jsx";
+import CtpFilterChip from "@/components/inventory/CtpFilterChip.jsx";
+import CtpInsightCard from "@/components/inventory/CtpInsightCard.jsx";
+import CtpRowLabel from "@/components/inventory/CtpRowLabel.jsx";
+import CtpSectionPanel from "@/components/inventory/CtpSectionPanel.jsx";
+import CtpSummaryTile from "@/components/inventory/CtpSummaryTile.jsx";
+import InventoryPageSkeleton from "@/components/inventory/InventoryPageSkeleton.jsx";
+import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import {
-  Box,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from "@mui/material";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+  buildCtpInventoryModel,
+  computeInsightCard,
+  ctpTokenColor,
+  emptyCtpFilter,
+  qtyBy,
+  qtyByStatus,
+  selectCtpLots,
+  summarizeCtpLots,
+} from "@/lib/ctpInventory.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 
-const STATUS_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "usable", label: "Ready to Use" },
-  { id: "banned", label: "Banned to Use" },
-  { id: "hold", label: "Hold" },
-];
+const fmt = (v) => formatIndianNumber(v == null ? null : Math.round(v));
 
-const SUMMARY_CARDS = [
-  {
-    label: "Categories Under 1 Day Cover",
-    value: "2",
-    tone: "red",
-  },
-  {
-    label: "Item Codes With Blocked Stock",
-    value: "32",
-    tone: "amber",
-  },
-  {
-    label: "On Hold",
-    value: "12,158",
-    tone: "amber",
-  },
-  {
-    label: "Banned to Use",
-    value: "12,082",
-    tone: "red",
-  },
-  {
-    label: "Oldest Blocked Lot",
-    value: "5 days",
-    tone: "red",
-  },
-];
+const SHIFT_LABELS = { all: "All", a: "A", b: "B", c: "C" };
 
-const SECTIONS = [
-  {
-    id: "mixing",
-    title: "Mixing Inventory",
-    accent: "#F05A24",
-    unit: "kg",
-    rows: [
-      {
-        category: "Master Compound",
-        usable: 5414,
-        hold: 1724,
-        banned: 1872,
-        total: 9010,
-        daysCover: 0.8,
-        daysTone: "red",
-        oldestLot: 5,
-        alert: true,
-      },
-      {
-        category: "Final Compound",
-        usable: 5894,
-        hold: 2640,
-        banned: 2552,
-        total: 11086,
-        daysCover: 1.4,
-        daysTone: "amber",
-        oldestLot: 5,
-      },
-    ],
-  },
-  {
-    id: "stock",
-    title: "Stock Inventory",
-    accent: "#159947",
-    unit: "kg",
-    rows: [
-      {
-        category: "Precut Cap Strip",
-        usable: 2719,
-        hold: 822,
-        banned: 896,
-        total: 4437,
-        daysCover: 1.4,
-        daysTone: "amber",
-        oldestLot: 5,
-      },
-      {
-        category: "Inner Liner",
-        usable: 2747,
-        hold: 482,
-        banned: 268,
-        total: 3497,
-        daysCover: 1.9,
-        daysTone: "amber",
-        oldestLot: 5,
-      },
-      {
-        category: "Sidewall",
-        usable: 2687,
-        hold: 462,
-        banned: 258,
-        total: 3407,
-        daysCover: 1.9,
-        daysTone: "amber",
-        oldestLot: 5,
-      },
-      {
-        category: "Plies",
-        usable: 3187,
-        hold: 1142,
-        banned: 1216,
-        total: 5545,
-        daysCover: 2.0,
-        daysTone: "amber",
-        oldestLot: 5,
-      },
-      {
-        category: "Belt",
-        usable: 2649,
-        hold: 802,
-        banned: 876,
-        total: 4327,
-        daysCover: 2.1,
-        daysTone: "green",
-        oldestLot: 5,
-      },
-      {
-        category: "Tread",
-        usable: 5138,
-        hold: 1743,
-        banned: 1854,
-        total: 8735,
-        daysCover: 2.4,
-        daysTone: "green",
-        oldestLot: 5,
-      },
-      {
-        category: "Chaffer",
-        usable: 3247,
-        hold: 1162,
-        banned: 1236,
-        total: 5645,
-        daysCover: 2.5,
-        daysTone: "green",
-        oldestLot: 5,
-      },
-    ],
-  },
-  {
-    id: "tyre",
-    title: "Tyre Inventory",
-    accent: "#147EFB",
-    unit: "tyres",
-    rows: [
-      {
-        category: "Carcass",
-        usable: 1443,
-        hold: 483,
-        banned: 364,
-        total: 2290,
-        daysCover: 1.0,
-        daysTone: "red",
-        oldestLot: 5,
-        alert: true,
-      },
-      {
-        category: "Green Tire",
-        usable: 1288,
-        hold: 333,
-        banned: 420,
-        total: 2041,
-        daysCover: 1.7,
-        daysTone: "amber",
-        oldestLot: 5,
-      },
-      {
-        category: "Cured Tire",
-        usable: 1558,
-        hold: 363,
-        banned: 270,
-        total: 2191,
-        daysCover: 2.9,
-        daysTone: "green",
-        oldestLot: 5,
-      },
-    ],
-  },
-];
+/**
+ * Production · Inventory. Only CTP (Chennai) has an inventory master;
+ * every other plant shows "not configured".
+ *
+ * @param {object} props
+ * @param {string} props.plantId
+ * @param {string} [props.tyreType] - header PCR/TBR/All picker
+ * @param {string} [props.shift] - header shift key (all/a/b/c)
+ */
+function InventoryPage({ plantId, tyreType, shift }) {
+  const isCtp = plantId === "chennai";
+  const { data, error } = usePolledQuery(() => getCtpInventoryMaster(), {
+    interval: 0,
+    deps: [plantId],
+    enabled: isCtp,
+  });
 
-const COLUMN_DEFS = [
-  { id: "category", label: "Category", align: "left" },
-  { id: "usable", label: "Usable", align: "center" },
-  { id: "hold", label: "Hold", align: "center" },
-  { id: "banned", label: "Banned", align: "center" },
-  { id: "total", label: "Total", align: "center" },
-  { id: "daysCover", label: "Days Cover", align: "center", sortable: true },
-  { id: "oldestLot", label: "Oldest Lot", align: "right" },
-];
-
-function InventoryPage({ plantId }) {
-  const [status, setStatus] = useState("all");
-
-  if (plantId !== "chennai") {
+  if (!isCtp) return <InventoryMessage text="Inventory not configured." />;
+  if (error) {
     return (
-      <Box
-        sx={{
-          height: "100%",
-          display: "grid",
-          placeItems: "center",
-          color: "text.disabled",
-        }}
-      >
-        <Typography sx={{ fontSize: 13 }}>Inventory not configured.</Typography>
-      </Box>
+      <InventoryMessage text="Inventory master data is missing or invalid." />
     );
   }
+  if (!data) return <InventoryPageSkeleton />;
+  return (
+    <CtpInventoryBody
+      m={buildCtpInventoryModel(data)}
+      tyreType={tyreType}
+      shift={shift}
+    />
+  );
+}
+
+function InventoryMessage({ text }) {
+  return (
+    <Box
+      sx={{
+        height: "100%",
+        display: "grid",
+        placeItems: "center",
+        color: "text.disabled",
+      }}
+    >
+      <Typography sx={{ fontSize: 13 }}>{text}</Typography>
+    </Box>
+  );
+}
+
+function CtpInventoryBody({ m, tyreType, shift }) {
+  const theme = useTheme();
+  const [filter, setFilter] = useState(() => emptyCtpFilter());
+  const [drillId, setDrillId] = useState(null);
+  // Tyre type is owned by the header; merge it in rather than mirroring it.
+  const f = { ...filter, tt: tyreType || "All" };
+  const primary = theme.palette.primary.main;
+
+  const update = (o) => setFilter((p) => ({ ...p, ...o }));
+  const handleProductTypesChange = (s, v) =>
+    setFilter((p) => {
+      // Drop item codes that no longer belong to the selected product types.
+      const keep = (p.item[s] || []).filter(
+        (code) =>
+          !v.length ||
+          m.itemList.some((it) => it.item === code && v.includes(it.pt)),
+      );
+      return {
+        ...p,
+        pt: { ...p.pt, [s]: v },
+        item: { ...p.item, [s]: keep },
+      };
+    });
+  const handleItemsChange = (s, v) =>
+    setFilter((p) => ({ ...p, item: { ...p.item, [s]: v } }));
+  const handleStatusToggle = (k) =>
+    update({
+      st: f.st.includes(k) ? f.st.filter((x) => x !== k) : [...f.st, k],
+    });
+
+  // One filtered row set feeds summary + cards; option counts skip their own dimension.
+  const rows = selectCtpLots(m, f);
+  const sum = summarizeCtpLots(rows);
+  const stQty = qtyByStatus(m, selectCtpLots(m, f, { st: true }));
+  const secQty = qtyBy(selectCtpLots(m, f, { sec: true }), "sec");
+  const allSecQty = Object.values(secQty).reduce((a, b) => a + b, 0);
+  const mix = qtyByStatus(m, rows);
+  const cards = m.cards
+    .map((cfg) => ({ cfg, r: computeInsightCard(m, f, rows, cfg) }))
+    .filter((x) => x.r);
+  const openCard = drillId && cards.find((x) => x.cfg.id === drillId);
+  const cardColor = ({ cfg, r }) =>
+    r.isBad ? ctpTokenColor(theme, cfg.color) : theme.custom.brand.green;
+
+  const active = [];
+  if (f.st.length) {
+    active.push({
+      label: `Status: ${f.st.map((k) => m.stByKey[k].label).join(", ")}`,
+      onClear: () => update({ st: [] }),
+    });
+  }
+  if (f.sec !== "All") {
+    active.push({
+      label: `Section: ${f.sec}`,
+      onClear: () => update({ sec: "All" }),
+    });
+  }
+  m.sections.forEach((s) => {
+    if ((f.pt[s.name] || []).length) {
+      active.push({
+        label: `${s.name} product: ${f.pt[s.name].join(", ")}`,
+        onClear: () => handleProductTypesChange(s.name, []),
+      });
+    }
+    if ((f.item[s.name] || []).length) {
+      active.push({
+        label: `${s.name} items: ${f.item[s.name].join(", ")}`,
+        onClear: () => handleItemsChange(s.name, []),
+      });
+    }
+  });
+
+  const isDefault = !active.length && f.tt === "All";
+  const scope = isDefault
+    ? "All product types · all sections · all statuses"
+    : [
+        f.tt !== "All" ? f.tt : null,
+        f.sec !== "All" ? f.sec : "All sections",
+        f.st.length
+          ? f.st.map((k) => m.stByKey[k].label).join(" + ")
+          : "all statuses",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+  const shownSecs = m.sections.filter(
+    (s) => f.sec === "All" || f.sec === s.name,
+  );
 
   return (
     <Box
       sx={{
         height: "100%",
         overflowY: "auto",
-        backgroundColor: "#F3F5F9",
-        px: { xs: 1.5, md: 3 },
+        backgroundColor: "background.default",
+        px: { xs: 1.5, md: 2.5 },
         py: 2,
       }}
     >
-      <Stack spacing={2.25}>
+      <Stack spacing={1.75}>
         <Stack
-          direction={{ xs: "column", md: "row" }}
-          alignItems={{ xs: "stretch", md: "center" }}
-          justifyContent="space-between"
-          spacing={1.5}
+          direction="row"
+          alignItems="center"
+          sx={{ flexWrap: "wrap", gap: 1 }}
         >
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-            sx={{ flexWrap: "wrap", rowGap: 1 }}
+          <CtpRowLabel>Status</CtpRowLabel>
+          <CtpFilterChip
+            isOn={!f.st.length}
+            color={primary}
+            onClick={() => update({ st: [] })}
           >
-            <Typography
-              sx={{
-                color: "text.disabled",
-                fontSize: 12,
-                fontWeight: 800,
-                textTransform: "uppercase",
-              }}
+            All
+          </CtpFilterChip>
+          {m.statuses.map((s) => (
+            <CtpFilterChip
+              key={s.key}
+              isOn={f.st.includes(s.key)}
+              color={ctpTokenColor(theme, s.color)}
+              title={`Source: ${s.source_field} = '${s.source_value}' · click to add/remove`}
+              badge={fmt(stQty[s.key])}
+              onClick={() => handleStatusToggle(s.key)}
             >
-              Status
-            </Typography>
-            {STATUS_FILTERS.map((filter) => (
-              <Button
-                key={filter.id}
-                variant="outlined"
-                onClick={() => setStatus(filter.id)}
-                sx={{
-                  minHeight: 32,
-                  px: 1.8,
-                  py: 0.45,
-                  borderRadius: 1.25,
-                  borderColor:
-                    status === filter.id ? "#F05A24" : "rgba(126,138,160,.28)",
-                  backgroundColor:
-                    status === filter.id ? "#FFF0EA" : "background.paper",
-                  color: status === filter.id ? "#F05A24" : "text.primary",
-                  fontSize: 13,
-                  fontWeight: status === filter.id ? 700 : 600,
-                  "&:hover": {
-                    borderColor: "#F05A24",
-                    backgroundColor:
-                      status === filter.id ? "#FFF0EA" : "#FFF7F2",
-                  },
-                }}
-              >
-                {filter.label}
-              </Button>
-            ))}
-          </Stack>
-          <Typography
-            sx={{
-              color: "text.secondary",
-              fontSize: 13,
-              fontWeight: 600,
-              textAlign: { xs: "left", md: "right" },
-            }}
-          >
-            Shift: All · Today
+              {s.label}
+            </CtpFilterChip>
+          ))}
+          <Box sx={{ flex: 1 }} />
+          <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+            {`Chennai · Shift: ${SHIFT_LABELS[shift] || "All"} · Tyre: ${f.tt} · As of ${String(m.raw.as_of).slice(0, 10)}`}
           </Typography>
         </Stack>
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0, 1fr))",
-              lg: "repeat(5, minmax(0, 1fr))",
-            },
-            gap: 1.5,
-          }}
-        >
-          {SUMMARY_CARDS.map((card) => (
-            <SummaryCard key={card.label} card={card} />
-          ))}
-        </Box>
-
-        {SECTIONS.map((section) => (
-          <InventorySection key={section.id} section={section} status={status} />
-        ))}
-      </Stack>
-    </Box>
-  );
-}
-
-function SummaryCard({ card }) {
-  const color = toneColor(card.tone);
-  return (
-    <Box
-      sx={{
-        position: "relative",
-        minHeight: 68,
-        backgroundColor: "background.paper",
-        border: 1,
-        borderColor: "rgba(126,138,160,.24)",
-        borderRadius: 1.25,
-        px: 2,
-        py: 1.3,
-        boxShadow: "0 1px 4px rgba(21,30,45,.06)",
-        overflow: "hidden",
-        "&:before": {
-          content: '""',
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 3,
-          backgroundColor: color,
-        },
-      }}
-    >
-      <Typography
-        sx={{
-          color: "text.disabled",
-          fontSize: 11,
-          fontWeight: 800,
-          textTransform: "uppercase",
-        }}
-      >
-        {card.label}
-      </Typography>
-      <Typography
-        sx={{
-          mt: 0.35,
-          color,
-          fontSize: 22,
-          lineHeight: 1.05,
-          fontWeight: 800,
-        }}
-      >
-        {card.value}
-      </Typography>
-    </Box>
-  );
-}
-
-function InventorySection({ section, status }) {
-  const cardRef = useRef(null);
-  const rows = useMemo(() => section.rows, [section.rows]);
-  const excelRows = rows.map((row) => ({
-    Category: row.category,
-    Usable: row.usable,
-    Hold: row.hold,
-    Banned: row.banned,
-    Total: row.total,
-    "Days Cover": `${row.daysCover.toFixed(1)} d`,
-    "Oldest Lot": `${row.oldestLot} d`,
-  }));
-
-  return (
-    <Box
-      ref={cardRef}
-      sx={{
-        position: "relative",
-        backgroundColor: "background.paper",
-        border: 1,
-        borderColor: "rgba(126,138,160,.22)",
-        borderTop: `3px solid ${section.accent}`,
-        borderRadius: 1.25,
-        px: { xs: 1.25, md: 2 },
-        pt: 1.8,
-        pb: 1.35,
-        boxShadow: "0 2px 8px rgba(21,30,45,.09)",
-      }}
-    >
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        spacing={1}
-        sx={{ mb: 1.5 }}
-      >
-        <Typography
-          sx={{
-            color: "#556075",
-            fontSize: 15,
-            fontWeight: 800,
-            textTransform: "uppercase",
-          }}
-        >
-          {section.title}
-        </Typography>
-        <CardDownloadButton
-          cardRef={cardRef}
-          rows={excelRows}
-          headers={[
-            "Category",
-            "Usable",
-            "Hold",
-            "Banned",
-            "Total",
-            "Days Cover",
-            "Oldest Lot",
-          ]}
-          filename={`ctp-${section.id}-inventory`}
-          sheetName={section.title}
-          sx={{
-            width: 28,
-            height: 28,
-            color: "text.disabled",
-            boxShadow: "none",
-            borderColor: "rgba(126,138,160,.24)",
-          }}
-        />
-      </Stack>
-
-      <TableContainer sx={{ overflowX: "auto" }}>
-        <Table
-          size="small"
-          sx={{
-            minWidth: 900,
-            tableLayout: "fixed",
-            "& .MuiTableCell-root": {
-              borderRight: "none",
-              borderColor: "rgba(126,138,160,.23)",
-              px: 1.1,
-              py: 0.85,
-            },
-          }}
-        >
-          <TableHead>
-            <TableRow>
-              {COLUMN_DEFS.map((column) => (
-                <TableCell
-                  key={column.id}
-                  align={column.align}
-                  sx={{
-                    width: column.id === "category" ? "27%" : "12%",
-                    color: "#8D98AD",
-                    backgroundColor: "background.paper",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    justifyContent={
-                      column.align === "left"
-                        ? "flex-start"
-                        : column.align === "right"
-                          ? "flex-end"
-                          : "center"
-                    }
-                    spacing={0.25}
-                  >
-                    <span>{column.label}</span>
-                    {column.sortable && (
-                      <ArrowUpwardIcon
-                        sx={{ fontSize: 13, color: "#F05A24" }}
-                      />
-                    )}
-                  </Stack>
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow
-                key={row.category}
-                hover
+        <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1.5 }}>
+          <CtpSummaryTile
+            label="Total Inventory"
+            value={fmt(sum.qty)}
+            sub={`${scope} · ${sum.lots} lots`}
+            color={primary}
+          >
+            {sum.qty > 0 && (
+              <Stack
+                direction="row"
                 sx={{
-                  backgroundColor: row.alert
-                    ? "rgba(255,59,48,.045)"
-                    : "background.paper",
-                  "&:hover": {
-                    backgroundColor: "rgba(20,126,251,.05)",
-                  },
+                  height: 6,
+                  borderRadius: 0.5,
+                  overflow: "hidden",
+                  mt: 1,
+                  backgroundColor: "background.default",
                 }}
               >
-                <BodyCell align="left" strong>
-                  {row.category}
-                </BodyCell>
-                <BodyCell strong muted={status !== "all" && status !== "usable"}>
-                  {formatIndianNumber(row.usable)}
-                </BodyCell>
-                <BodyCell
-                  tone="amber"
-                  muted={status !== "all" && status !== "hold"}
-                >
-                  {formatIndianNumber(row.hold)}
-                </BodyCell>
-                <BodyCell
-                  tone="red"
-                  muted={status !== "all" && status !== "banned"}
-                >
-                  {formatIndianNumber(row.banned)}
-                </BodyCell>
-                <BodyCell tone="muted">{formatIndianNumber(row.total)}</BodyCell>
-                <BodyCell tone={row.daysTone} strong>
-                  {row.daysCover.toFixed(1)} d
-                </BodyCell>
-                <BodyCell align="right" tone="red">
-                  {row.oldestLot} d
-                </BodyCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                {m.statuses
+                  .filter((s) => mix[s.key])
+                  .map((s) => (
+                    <Box
+                      key={s.key}
+                      title={`${s.label}: ${fmt(mix[s.key])}`}
+                      sx={{
+                        width: `${(mix[s.key] / sum.qty) * 100}%`,
+                        backgroundColor: ctpTokenColor(theme, s.color),
+                      }}
+                    />
+                  ))}
+              </Stack>
+            )}
+          </CtpSummaryTile>
+          <CtpSummaryTile
+            label="MHE"
+            value={fmt(sum.mhe)}
+            sub="Distinct MHE carrying the filtered lots"
+            color={theme.custom.brand.teal}
+          />
+        </Stack>
 
-      <Typography
-        sx={{
-          color: "text.disabled",
-          fontSize: 12,
-          mt: 1,
-        }}
-      >
-        All quantities in {section.unit} · click a column head to sort · click a
-        row for item codes
-      </Typography>
+        {active.length > 0 && (
+          <Stack
+            direction="row"
+            alignItems="center"
+            sx={{ flexWrap: "wrap", gap: 0.75 }}
+          >
+            <CtpRowLabel>Filters</CtpRowLabel>
+            {active.map((a) => (
+              <Stack
+                key={a.label}
+                direction="row"
+                alignItems="center"
+                sx={{
+                  fontSize: 12,
+                  pl: 1.1,
+                  pr: 0.5,
+                  py: 0.35,
+                  borderRadius: 3,
+                  backgroundColor: "primary.light",
+                  border: 1,
+                  borderColor: "primary.dark",
+                  maxWidth: 420,
+                  gap: 0.5,
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {a.label}
+                </Box>
+                <ButtonBase
+                  onClick={a.onClear}
+                  title="Remove filter"
+                  sx={{ borderRadius: "50%", color: "text.disabled" }}
+                >
+                  <CloseIcon sx={{ fontSize: 14 }} />
+                </ButtonBase>
+              </Stack>
+            ))}
+            <ButtonBase
+              onClick={() => setFilter(emptyCtpFilter())}
+              sx={{
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: "inherit",
+                color: "primary.main",
+                px: 0.5,
+              }}
+            >
+              Clear all
+            </ButtonBase>
+          </Stack>
+        )}
+
+        <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1.25 }}>
+          {cards.map((c) => {
+            const isOpen = drillId === c.cfg.id;
+            const value =
+              c.cfg.type === "oldest_blocked"
+                ? c.r.value == null
+                  ? "—"
+                  : `${c.r.value.toFixed(1)} days`
+                : fmt(c.r.value);
+            return (
+              <CtpInsightCard
+                key={c.cfg.id}
+                title={c.cfg.title}
+                value={value}
+                sub={c.r.sub}
+                color={cardColor(c)}
+                isOpen={isOpen}
+                onToggle={() => setDrillId(isOpen ? null : c.cfg.id)}
+              />
+            );
+          })}
+        </Stack>
+
+        {openCard && (
+          <CtpDrillCard
+            cfg={openCard.cfg}
+            result={openCard.r}
+            color={ctpTokenColor(theme, openCard.cfg.color)}
+          />
+        )}
+
+        <Stack
+          direction="row"
+          alignItems="center"
+          sx={{ flexWrap: "wrap", gap: 1, pt: 0.25 }}
+        >
+          <CtpRowLabel>Section</CtpRowLabel>
+          <CtpFilterChip
+            isOn={f.sec === "All"}
+            color={primary}
+            badge={fmt(allSecQty)}
+            onClick={() => update({ sec: "All" })}
+          >
+            All Sections
+          </CtpFilterChip>
+          {m.sections.map((s) => (
+            <CtpFilterChip
+              key={s.name}
+              isOn={f.sec === s.name}
+              color={ctpTokenColor(theme, s.accent)}
+              badge={fmt(secQty[s.name] || 0)}
+              onClick={() => update({ sec: f.sec === s.name ? "All" : s.name })}
+            >
+              {s.name}
+            </CtpFilterChip>
+          ))}
+        </Stack>
+
+        {shownSecs.map((s) => (
+          <CtpSectionPanel
+            key={s.name}
+            m={m}
+            f={f}
+            sec={s}
+            onProductTypesChange={handleProductTypesChange}
+            onItemsChange={handleItemsChange}
+          />
+        ))}
+
+        <Typography sx={{ fontSize: 11.5, color: "text.disabled" }}>
+          Total Inventory = SUM(quantity) · MHE = COUNT(DISTINCT mhe_code) ·
+          same definitions as the Gold KPIs Total_Inventory / MHE_Count. Status,
+          section, product type, item code and the header PCR/TBR filter all
+          combine; Days cover ignores the status filter because Expired and On
+          Hold stock cannot be issued.
+        </Typography>
+      </Stack>
     </Box>
   );
-}
-
-function BodyCell({
-  children,
-  align = "center",
-  tone = "default",
-  strong = false,
-  muted = false,
-}) {
-  return (
-    <TableCell
-      align={align}
-      sx={{
-        color: muted ? "text.disabled" : toneColor(tone),
-        fontSize: 13.5,
-        fontWeight: strong ? 800 : 600,
-        transition: "color 120ms ease, opacity 120ms ease",
-      }}
-    >
-      {children}
-    </TableCell>
-  );
-}
-
-function toneColor(tone) {
-  switch (tone) {
-    case "red":
-      return "#FF3038";
-    case "amber":
-      return "#D98A00";
-    case "green":
-      return "#209A4B";
-    case "muted":
-      return "#8D98AD";
-    default:
-      return "#2B2F33";
-  }
 }
 
 export default InventoryPage;

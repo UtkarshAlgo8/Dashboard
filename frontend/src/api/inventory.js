@@ -1,6 +1,7 @@
 import client from "./client.js";
 import { mockDelay } from "@/lib/mockDelay.js";
 import { INVENTORY_BY_PLANT } from "@/lib/mockData.js";
+import CTP_INVENTORY_MASTER from "@/lib/ctpInventoryMaster.json";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
@@ -25,4 +26,16 @@ export function getInventory({ plantId, from = null, to = null }) {
   if (to) qs.set("to", to);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return client.get(`/plants/${plantId}/inventory${suffix}`);
+}
+
+/**
+ * Fetch the CTP (Chennai) Inventory master — sections → product types →
+ * items → lots, plus status master, insight-card and table config.
+ * No backend endpoint yet: always served from the bundled mock
+ * (synthetic lots, to be replaced by Gold-layer output).
+ *
+ * @returns {Promise<object>}
+ */
+export function getCtpInventoryMaster() {
+  return mockDelay(CTP_INVENTORY_MASTER);
 }
