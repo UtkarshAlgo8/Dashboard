@@ -1,9 +1,9 @@
-import { cached, buildCacheKey } from "../utils/cache.js";
+import { cached, buildCacheKey, CACHE_TTL } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
 import { goldSource } from "../queries/gold-source.js";
-import { toInventory } from "../utils/transformers.js";
+import { toInventory, toCtpInventoryMaster } from "../utils/transformers.js";
 import {
   plantDepartmentPredicate,
   normalizePlantId,
@@ -58,6 +58,48 @@ export async function getInventory(req, res, next) {
       const rows = await runQuery(sql);
       return toInventory(rows);
     });
+    res.json({ data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /plants/:plantId/inventory/master
+ *
+ * CTP inventory master payload consumed by `frontend/src/lib/ctpInventory
+ * .js#buildCtpInventoryModel`. Reads the same gold Inventory +
+ * Inventory_item rows but assembles the master sections/product_types/
+ * items/lots shape instead of the legacy groups/history one.
+ *
+ * The master is always the latest snapshot — no `from`/`to` clamp; the
+ * page filters in-memory. Cached for 5 min (CACHE_TTL.INVENTORY_MASTER);
+ * the dataset shape is stable across a window of that size and the page
+ * does no per-second reaction to it.
+ */
+export async function getCtpInventoryMaster(req, res, next) {
+  const plantId = normalizePlantId(req.params.plantId) ?? "chennai";
+  const key = buildCacheKey(`/plants/${plantId}/inventory/master`, {});
+  try {
+    const data = await cached(
+      key,
+      async () => {
+        const table = goldSource({ plantId });
+        const sql = `
+          SELECT CAST(date AS VARCHAR) AS date, section, sub_section, product_type,
+                 itemcode, tyre_type, unit_of_measurement, kpi_name, actual_value
+          FROM ${table}
+          WHERE ${plantDepartmentPredicate(plantId)}
+            AND ${excludeUnknownKpiPredicate()}
+            AND category = ${escapeLiteral("Inventory")}
+            AND kpi_name IN (${escapeLiteral("Inventory")}, ${escapeLiteral("Inventory_item")})
+          LIMIT 10000
+        `.trim();
+        const rows = await runQuery(sql);
+        return toCtpInventoryMaster(rows);
+      },
+      CACHE_TTL.INVENTORY_MASTER,
+    );
     res.json({ data });
   } catch (err) {
     next(err);

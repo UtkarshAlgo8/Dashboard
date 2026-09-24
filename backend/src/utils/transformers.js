@@ -214,6 +214,247 @@ export function toInventory(rows) {
   return { groups, history };
 }
 
+// CTP inventory master — see docs/ctp-stock-asset-mapping.md.
+//
+// Gold layer carries Inventory + Inventory_item rows at (section,
+// sub_section, product_type, itemcode, date, actual_value). Per-lot
+// facets (status, mhe_code, age_days, expiry_date) DO NOT exist in the
+// gold schema — see realdata.md §15. The master payload consumed by
+// `frontend/src/lib/ctpInventory.js#buildCtpInventoryModel` is shaped
+// around lots, so we synthesise one READY lot per Inventory_item row
+// (one lot = the item's full qty) and stamp `data_limits` so callers
+// can tell which facets are real vs synthesised.
+
+const CTP_SECTION_ACCENT = {
+  Mixing: "ac",
+  Stock: "tl",
+  "Tyre Building": "bl",
+};
+
+// status_master — verbatim copy of the five CTP statuses from
+// ctpInventoryMaster.json. Kept stable so the frontend status filter
+// chips render the same colours/labels regardless of mock vs live.
+const CTP_STATUS_MASTER = [
+  { key: "READY", label: "Ready to Use", column: "Ready to use", color: "gn", source_field: "status", source_value: "Ready to Use", gold_metric: "Ready_To_Use", usable: true, blocked: false },
+  { key: "PART", label: "Part Use", column: "Part use", color: "bl", source_field: "status", source_value: "Part Use", gold_metric: "Part_Use", usable: true, blocked: false },
+  { key: "ATE", label: "About_To_Expire", column: "About_To_Expire", color: "am", source_field: "status", source_value: "About_To_Expire", gold_metric: "About_To_Expire", usable: true, blocked: false },
+  { key: "EXP", label: "Expired", column: "Expired", color: "rd", source_field: "status", source_value: "Expired", gold_metric: "Expired", usable: false, blocked: true },
+  { key: "HOLD", label: "ON Hold", column: "Held", color: "pp", source_field: "status", source_value: "ON Hold", gold_metric: "Held", usable: false, blocked: true },
+];
+
+// insight_cards — config for the four insight tiles at the top of the
+// page. Same shape as the mock so the page renders identical tiles.
+const CTP_INSIGHT_CARDS = [
+  { id: "short_cover", title: "Categories Under 1 Day Cover", type: "cover_below", threshold_days: 1, color: "rd" },
+  { id: "on_hold", title: "On Hold Inventory", type: "status_qty", status: "HOLD", color: "pp" },
+  { id: "expired", title: "Expired Inventory", type: "status_qty", status: "EXP", color: "rd" },
+  { id: "oldest_blocked", title: "Oldest Blocked Lot", type: "oldest_blocked", warn_days: 3, color: "am" },
+];
+
+const CTP_TABLE = { default_sort: { key: "READY", dir: "desc" }, top_n: 10 };
+
+const CTP_UOM_DISPLAY = { MTR: "m", KG: "kg", NOS: "nos" };
+
+const CTP_METRICS = [
+  { kpi_name: "Total_Inventory", ui_expr: "SUM(lots.quantity)", grain: "lot" },
+  { kpi_name: "MHE_Count", ui_expr: "COUNT(DISTINCT lots.mhe_code)", grain: "lot" },
+  { kpi_name: "Days_Cover", ui_expr: "SUM(quantity WHERE status.usable) / SUM(items.daily_consumption)", grain: "item|product_type", gold: "(Ready_To_Use + Part_Use + About_To_Expire) / Daily_Consumption" },
+  { kpi_name: "Oldest_Blocked_Lot", ui_expr: "MAX(age_days WHERE status.blocked)", gold: "Oldest_Blocked_Lot_Days" },
+];
+
+const CTP_GOLD_METRIC_REFERENCE = [
+  { kpi_name: "Total_Inventory", gold_expr: "SUM(inventory_qty)" },
+  { kpi_name: "MHE_Count", gold_expr: "COUNT(DISTINCT mhe_code)" },
+  { kpi_name: "Ready_To_Use", gold_expr: "SUM(CASE WHEN status='Ready To Use' THEN inventory_qty ELSE 0 END)" },
+  { kpi_name: "Part_MHE", gold_expr: "SUM(CASE WHEN status='Part MHE' THEN inventory_qty ELSE 0 END)" },
+  { kpi_name: "About_To_Expire", gold_expr: "SUM(CASE WHEN expiry_status='About To Expire' THEN inventory_qty ELSE 0 END)" },
+  { kpi_name: "Expired", gold_expr: "SUM(CASE WHEN expiry_status='Expired' THEN inventory_qty ELSE 0 END)" },
+];
+
+const IST_OFFSET_MIN = 5 * 60 + 30;
+
+/**
+ * YYYYMMDD key for a row date — UTC-relative to the IST offset already
+ * applied in sql-date.js. We avoid the offset here (the column is already
+ * an ISO date) and just emit YYYYMMDD for sorting.
+ */
+function yyyymmdd(dateStr) {
+  const k = dateKey(dateStr);
+  return k || null;
+}
+
+/**
+ * Format `YYYYMMDD` as `YYYY-MM-DDTHH:mm:ss+05:30` (Asia/Kolkata), the
+ * shape `as_of` carries in the bundled mock.
+ */
+function asOfIst(yyyymmddStr) {
+  if (!yyyymmddStr || yyyymmddStr.length !== 8) return null;
+  return `${yyyymmddStr.slice(0, 4)}-${yyyymmddStr.slice(4, 6)}-${yyyymmddStr.slice(6, 8)}T06:00:00+05:30`;
+}
+
+/**
+ * Build the CTP inventory master payload from gold rows.
+ *
+ * Pure: no network, no clock. Group rows by (section, product_type,
+ * itemcode), keep the latest date per item, and emit one synthetic READY
+ * lot per item with the item's qty. Sections absent from the input
+ * (Mixing, Tyre Building at CTP today) are simply omitted.
+ *
+ * @param {Array<object>} rows - gold rows with category='Inventory' and
+ *   kpi_name in ('Inventory', 'Inventory_item'). Expected columns:
+ *   date, section, sub_section, product_type, itemcode, tyre_type,
+ *   unit_of_measurement, actual_value.
+ * @returns {object} master payload matching the contract in
+ *   `frontend/src/lib/ctpInventory.js#buildCtpInventoryModel`.
+ */
+export function toCtpInventoryMaster(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const itemRows = list.filter((r) => r.kpi_name === "Inventory_item");
+
+  // Key per (section|product_type|itemcode) → row, latest date wins.
+  const latest = new Map();
+  let maxDate = "";
+  for (const r of itemRows) {
+    const sec = denan(r.section);
+    const pt = productType(r.product_type);
+    const code = denan(r.itemcode);
+    const qty = numOrNull(r.actual_value) ?? 0;
+    if (!sec || !pt || !code) continue;
+    const k = dateKey(r.date);
+    if (!k) continue;
+    if (k > maxDate) maxDate = k;
+    const key = `${sec}|${pt}|${code}`;
+    const prev = latest.get(key);
+    if (!prev || dateKey(prev.date) < k) {
+      latest.set(key, {
+        section: sec,
+        sub_section: subSection(r.sub_section) || "",
+        product_type: pt,
+        itemcode: code,
+        tyre_type: denan(r.tyre_type) || "",
+        unit: unit(r.unit_of_measurement) || "",
+        date: r.date,
+        actual_value: qty,
+      });
+    }
+  }
+
+  // Nest: section → product_type → item.
+  const sectionMap = new Map();
+  for (const r of latest.values()) {
+    if (!sectionMap.has(r.section)) sectionMap.set(r.section, new Map());
+    const ptMap = sectionMap.get(r.section);
+    if (!ptMap.has(r.product_type)) {
+      ptMap.set(r.product_type, {
+        name: r.product_type,
+        sub_section: r.sub_section,
+        tyre_type: r.tyre_type,
+        uom: r.unit,
+        items: new Map(),
+      });
+    }
+    const ptEntry = ptMap.get(r.product_type);
+    // Prefer a non-empty uom on the product_type when the first row was empty.
+    if (!ptEntry.uom && r.unit) ptEntry.uom = r.unit;
+    ptEntry.items.set(r.itemcode, r);
+  }
+
+  // Emit sections in stable order: Mixing, Stock, Tyre Building (the only
+  // three the page knows about) — any other section appears at the end in
+  // case ETL ever adds one. Each section's accent comes from the same map
+  // the mock uses.
+  const SECTION_ORDER = ["Mixing", "Stock", "Tyre Building"];
+  const sectionNames = [
+    ...SECTION_ORDER.filter((s) => sectionMap.has(s)),
+    ...[...sectionMap.keys()].filter((s) => !SECTION_ORDER.includes(s)).sort(),
+  ];
+
+  let totalLots = 0;
+  let totalItems = 0;
+  let totalQty = 0;
+
+  const sections = sectionNames.map((secName) => {
+    const ptMap = sectionMap.get(secName);
+    const productTypeNames = [...ptMap.keys()].sort();
+    const productTypes = productTypeNames.map((ptName) => {
+      const pt = ptMap.get(ptName);
+      const items = [...pt.items.values()]
+        .sort((a, b) => a.itemcode.localeCompare(b.itemcode))
+        .map((r) => {
+          const lotId = `SYN-${r.itemcode}-${yyyymmdd(r.date) || "00000000"}`;
+          totalLots += 1;
+          totalItems += 1;
+          totalQty += r.actual_value;
+          return {
+            item_code: r.itemcode,
+            uom: r.unit,
+            tyre_type: r.tyre_type,
+            daily_consumption: 0,
+            lots: [
+              {
+                lot_id: lotId,
+                status: "READY",
+                mhe_code: null,
+                production_date: toIsoDate(r.date),
+                age_days: null,
+                expiry_date: null,
+                quantity: r.actual_value,
+              },
+            ],
+          };
+        });
+      return {
+        name: pt.name,
+        source_name: pt.name,
+        tyre_type: pt.tyre_type,
+        sub_section: pt.sub_section,
+        uom: pt.uom,
+        shelf_life_days: 0,
+        mapping_source: "gold.ctp_gold",
+        gold_kpi_groups: ["inventory_stock"],
+        items,
+      };
+    });
+    return {
+      name: secName,
+      source_codes: [secName],
+      accent: CTP_SECTION_ACCENT[secName] || "tl",
+      product_types: productTypes,
+    };
+  });
+
+  return {
+    schema_version: "1.0.0",
+    plant: "Chennai",
+    plant_id: "chennai",
+    function: "Production",
+    navigation: "Inventory",
+    as_of: asOfIst(maxDate),
+    data_origin: "gold.ctp_gold (Inventory + Inventory_item); lot-level facets absent — see data_limits",
+    data_limits: {
+      sections_populated: sections.map((s) => s.name),
+      sections_absent: SECTION_ORDER.filter((s) => !sectionMap.has(s)),
+      lot_synthesis: "READY",
+      mhe_count: null,
+      oldest_blocked_age: null,
+      daily_consumption: null,
+    },
+    status_master: CTP_STATUS_MASTER,
+    metrics: CTP_METRICS,
+    gold_metric_reference: CTP_GOLD_METRIC_REFERENCE,
+    insight_cards: CTP_INSIGHT_CARDS,
+    table: CTP_TABLE,
+    uom_display: CTP_UOM_DISPLAY,
+    validation: {
+      expected_total_inventory: totalQty,
+      expected_mhe_count: 0,
+      lots: totalLots,
+      items: totalItems,
+    },
+    sections,
+  };
+}
+
 /**
  * Parse the `drill_down_attribute` column into a real array of child KPI
  * names. The real data stores a Python-style SINGLE-quoted list
