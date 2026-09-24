@@ -31,11 +31,22 @@ export function getInventory({ plantId, from = null, to = null }) {
 /**
  * Fetch the CTP (Chennai) Inventory master — sections → product types →
  * items → lots, plus status master, insight-card and table config.
- * No backend endpoint yet: always served from the bundled mock
- * (synthetic lots, to be replaced by Gold-layer output).
  *
- * @returns {Promise<object>}
+ * `VITE_USE_MOCK_DATA` gates the TRANSPORT only:
+ *   - `true`  (default in dev): served from the bundled mock fixture
+ *     at `@/lib/ctpInventoryMaster.json` so the page works offline.
+ *   - `false`: hits the backend endpoint, which reads Inventory +
+ *     Inventory_item rows from `gold.ctp_gold` and assembles a partial
+ *     master (Stock section only today; see `data_limits` in the
+ *     response). Lot-level facets (MHE / age / status) are synthesised.
+ *
+ * @param {object} [params]
+ * @param {string} [params.plantId="chennai"]
+ * @returns {Promise<object>} master payload — see
+ *   `frontend/src/lib/ctpInventory.js#buildCtpInventoryModel` for the
+ *   shape.
  */
-export function getCtpInventoryMaster() {
-  return mockDelay(CTP_INVENTORY_MASTER);
+export function getCtpInventoryMaster({ plantId = "chennai" } = {}) {
+  if (USE_MOCK) return mockDelay(CTP_INVENTORY_MASTER);
+  return client.get(`/plants/${plantId}/inventory/master`);
 }

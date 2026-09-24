@@ -39,11 +39,14 @@ const SHIFT_LABELS = { all: "All", a: "A", b: "B", c: "C" };
  */
 function InventoryPage({ plantId, tyreType, shift }) {
   const isCtp = plantId === "chennai";
-  const { data, error } = usePolledQuery(() => getCtpInventoryMaster(), {
-    interval: 0,
-    deps: [plantId],
-    enabled: isCtp,
-  });
+  const { data, error } = usePolledQuery(
+    () => getCtpInventoryMaster({ plantId }),
+    {
+      interval: 0,
+      deps: [plantId],
+      enabled: isCtp,
+    },
+  );
 
   if (!isCtp) return <InventoryMessage text="Inventory not configured." />;
   if (error) {
