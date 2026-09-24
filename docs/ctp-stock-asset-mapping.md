@@ -141,3 +141,33 @@ Two ways to present this, and they are not equivalent:
    product_type filter inside `Cutter`, and `4 Roll` to render empty.
 
 Needs client confirmation before implementing.
+
+## Inventory master endpoint (added 2026-09-24)
+
+The CTP Production dashboard Inventory tab is now wired to live data
+via `GET /api/v1/plants/chennai/inventory/master` (see
+[backend/src/controllers/inventory.controller.js](../backend/src/controllers/inventory.controller.js)
++ [`toCtpInventoryMaster()`](../backend/src/utils/transformers.js)).
+
+**Coverage today** — Stock section only. Mixing and Tyre Building gain
+sections automatically once ETL writes Inventory_item rows for them; the
+transformer reads whatever the gold table carries.
+
+**Lot-level facets are synthesised** because the gold schema has no
+`lot_id`, `mhe_code`, `age_days`, `expiry_date` or per-row lot-status
+columns. Each Inventory_item row emits one synthetic READY lot carrying
+the item's full qty — so the page renders meaningful totals on the
+Stock section (real `actual_value`), while:
+
+- the MHE tile shows 0
+- the "Oldest Blocked Lot" card shows "—" (no age data)
+- status filter chips for HOLD / EXP / ATE / PART show 0 qty (only READY
+  is synthesised)
+- days-cover insight card stays blank (no daily-consumption data)
+
+The response carries `data_origin` and `data_limits` so callers can
+detect the synthetic-facet state without a hard-coded version check.
+
+`VITE_USE_MOCK_DATA=true` keeps the bundled fixture
+(`frontend/src/lib/ctpInventoryMaster.json`, 271 lots, 134 items)
+serving the same UX offline.
