@@ -41,6 +41,7 @@ import {
   unitPredicate,
   tyreTypePredicate,
   TYRE_TYPE_ALL,
+  normalizePlantId,
 } from "../utils/normalize.js";
 import { goldSource } from "./gold-source.js";
 import { DATE_YYYYMMDD, isoToYyyymmdd } from "./sql-date.js";
@@ -1426,7 +1427,16 @@ export function buildShiftComparisonQuery({
     plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
     `section = ${escapeLiteral(safeSection)}`,
-    `category = ${escapeLiteral(safeCategory)}`,
+    // CTP (gold.ctp_gold) stores Scrap-family rows under category='Scrap'
+    // while Banmore (gold.gold) stores them under category='Quality'. The
+    // frontend always sends 'Quality' for Scrap/Rework shift charts; on CTP
+    // we widen the predicate to also pick up the Scrap-category rows so
+    // the chart reflects the actual gold vocabulary instead of always
+    // returning empty. Rework rows still don't exist at CTP — that's a
+    // data-side gap, not a filter mismatch.
+    normalizePlantId(plantId) === "chennai" && safeCategory === "Quality"
+      ? `(category = ${escapeLiteral("Quality")} OR category = ${escapeLiteral("Scrap")})`
+      : `category = ${escapeLiteral(safeCategory)}`,
     "granularity IN ('SHIFT A', 'SHIFT B', 'SHIFT C')",
   ];
 
