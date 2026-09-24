@@ -14,6 +14,7 @@ import {
   buildDrillAggregateQuery,
   buildFetchQuery,
   buildLatestDateQuery,
+  buildShiftComparisonQuery,
   previousWindow,
   resolveDatePredicate,
   resolveGranularity,
@@ -502,4 +503,54 @@ test("the response projection drops the columns no consumer reads", () => {
   // scan must still carry them — narrowing the projection must not change
   // which duplicate row wins.
   assert.ok(sql.includes("PARTITION BY date, plant, department"));
+});
+
+test("buildShiftComparisonQuery: Banmore + Quality keeps a strict category='Quality' predicate", () => {
+  const sql = buildShiftComparisonQuery({
+    plantId: "banmore",
+    section: "Curing",
+    category: "Quality",
+    date: "2026-07-16",
+  });
+  assert.match(
+    sql,
+    /category = 'Quality'/,
+    "Banmore path must keep the strict Quality category filter",
+  );
+  assert.doesNotMatch(
+    sql,
+    /OR category = 'Scrap'/,
+    "Banmore path must not widen to Scrap",
+  );
+});
+
+test("buildShiftComparisonQuery: CTP + Quality widens to include Scrap (gold.ctp_gold vocabulary)", () => {
+  // CTP's gold layer stores Scrap-family rows under category='Scrap'
+  // while Banmore uses 'Quality'. The frontend always sends 'Quality'
+  // for the shift-comparison Scrap/Rework charts; on CTP we widen the
+  // predicate so the chart reflects the actual data instead of always
+  // returning empty. Rework rows still don't exist at CTP — that's a
+  // data-side gap, not a filter mismatch.
+  const sql = buildShiftComparisonQuery({
+    plantId: "chennai",
+    section: "TBM",
+    category: "Quality",
+    date: "2026-08-30",
+  });
+  assert.match(
+    sql,
+    /\(category = 'Quality' OR category = 'Scrap'\)/,
+    "CTP Quality must widen to Scrap",
+  );
+});
+
+test("buildShiftComparisonQuery: CTP + non-Quality category keeps a strict predicate", () => {
+  const sql = buildShiftComparisonQuery({
+    plantId: "chennai",
+    section: "Curing",
+    category: "Productivity",
+    date: "2026-07-16",
+  });
+  assert.match(sql, /category = 'Productivity'/);
+  assert.doesNotMatch(sql, /OR category = 'Scrap'/);
 });
