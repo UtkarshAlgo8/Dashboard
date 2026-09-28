@@ -172,6 +172,29 @@ export function spcDetailRowsQuery({ snapshot, granularity, machine, recipe, par
   );
 }
 
+/** Daily history for one capability metric of one machine/recipe/parameter. */
+export function spcCapabilityTrendQuery({
+  from,
+  to,
+  granularity,
+  machine,
+  recipe,
+  parameter,
+  metric,
+}) {
+  return (
+    `SELECT date, actual_value, status ` +
+    `FROM ${qualitySourceForRange(from, to, granularity)} ` +
+    `WHERE ${spcScope()} AND ${granularityPredicate(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+    `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))} ` +
+    `AND machine = ${escapeLiteral(machine)} ` +
+    `AND ${itemcodePredicate(recipe)} ` +
+    `AND kpi_name = ${escapeLiteral(`${parameter} ${metric}`)} ` +
+    `ORDER BY date`
+  );
+}
+
 /**
  * Control limits (Mapping sheet, Step 3).
  *

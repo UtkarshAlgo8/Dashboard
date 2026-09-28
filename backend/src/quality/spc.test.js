@@ -40,6 +40,7 @@ import {
   spcCapabilityRowsQuery,
   spcCapabilityRangeQuery,
   spcDetailRangeQuery,
+  spcCapabilityTrendQuery,
   spcLimitsQuery,
   GRAN_BASELINE,
 } from "./queries/spc.queries.js";
@@ -431,6 +432,25 @@ test("spcDetailRangeQuery: the empty recipe stays the null/empty sentinel, not a
     parameter: "PLY1 Splice",
   });
   assert.match(sql, /\(itemcode IS NULL OR itemcode = ''\)/);
+});
+
+test("spcCapabilityTrendQuery: scopes daily history to one capability metric", () => {
+  const sql = spcCapabilityTrendQuery({
+    from: "2026-09-01",
+    to: "2026-09-25",
+    granularity: "Day",
+    machine: "VMIEXXIUM03",
+    recipe: "215/60R17",
+    parameter: "PLY2 Splice",
+    metric: "Cpk",
+  });
+  assert.match(sql, /SELECT date, actual_value, status/);
+  assert.match(sql, /kpi_name\s*=\s*'PLY2 Splice Cpk'/);
+  assert.match(sql, /machine\s*=\s*'VMIEXXIUM03'/);
+  assert.match(sql, /itemcode\s*=\s*'215\/60R17'/);
+  assert.match(sql, />=\s*'20260901'/);
+  assert.match(sql, /<=\s*'20260925'/);
+  assert.match(sql, /ORDER BY date/);
 });
 
 test("statusForValue: grades an average in the bands gold uses per metric", () => {

@@ -194,3 +194,25 @@ export function getSpcDetail({
   }
   return cachedQualityGet(`/quality/spc/detail?${params.toString()}`);
 }
+
+export function getSpcTrend({
+  from,
+  to,
+  shift = "All",
+  machine,
+  recipe,
+  parameter,
+  metric,
+}) {
+  const params = new URLSearchParams({
+    plant: "BANMORE",
+    from,
+    to,
+    shift,
+    machine,
+    recipe,
+    parameter,
+    metric,
+  });
+  return cachedQualityGet(`/quality/spc/trend?${params.toString()}`);
+}

@@ -8,7 +8,13 @@
  * the shared asset.
  */
 import { useState, useRef, useEffect, Fragment } from "react";
-import { Box, Stack, Tooltip, Typography, IconButton } from "@mui/material";
+import {
+  Box,
+  Stack,
+  Tooltip,
+  Typography,
+  IconButton,
+} from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import jkLogo from "@/assets/jk-logo.png";
 import JKLoader from "@/components/JKLoader.jsx";
@@ -24,6 +30,7 @@ import {
   getProcessSummary,
   getSpcDetail,
   getSpcFilterOptions,
+  getSpcTrend,
   getSpcWidgets,
   PROCESS_KPI_NAME,
 } from "@/api/quality.js";
@@ -51,6 +58,12 @@ function todayInIST() {
   const m = parts.find((p) => p.type === "month").value;
   const d = parts.find((p) => p.type === "day").value;
   return `${y}-${m}-${d}`;
+}
+
+function offsetIsoDate(isoDate, days) {
+  const [year, month, day] = String(isoDate).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
 }
 
 function currentMonthKeyInIST() {
@@ -119,7 +132,11 @@ const SPC_STATUS = {
   Major: { col: C.ac, pill: "Marginal", label: "Marginal" },
   Warning: { col: C.am, pill: "Yellow", label: "Not capable" },
   Healthy: { col: C.gn, pill: "Green", label: "Capable" },
-  "Insufficient Data": { col: C.mu, pill: "Insufficient", label: "Insufficient" },
+  "Insufficient Data": {
+    col: C.mu,
+    pill: "Insufficient",
+    label: "Insufficient",
+  },
 };
 const spcStatus = (s) => SPC_STATUS[s] || SPC_STATUS["Insufficient Data"];
 const fmt = (n) => (typeof n === "number" ? n.toLocaleString("en-IN") : n);
@@ -627,7 +644,15 @@ function _genInsight(series, target, current, inv, name) {
     worstIdx: series.indexOf(worst),
   };
 }
-function TrendChart({ labels, series, target, color, bestIdx, worstIdx }) {
+function TrendChart({
+  labels,
+  axisLabels = labels,
+  series,
+  target,
+  color,
+  bestIdx,
+  worstIdx,
+}) {
   const w = 620,
     h = 200,
     padL = 44,
@@ -741,7 +766,7 @@ function TrendChart({ labels, series, target, color, bestIdx, worstIdx }) {
           </g>
         );
       })}
-      {labels.map((l, i) => (
+      {axisLabels.map((l, i) => (
         <text
           key={i}
           x={x(i)}
@@ -14762,192 +14787,194 @@ function LiveSpcChart({ title, chart, accent }) {
   const BOX_W = 224;
   const tx =
     hover != null
-      ? Math.min(
-          Math.max(X(hover) - BOX_W / 2, padL),
-          padL + pw - BOX_W,
-        )
+      ? Math.min(Math.max(X(hover) - BOX_W / 2, padL), padL + pw - BOX_W)
       : 0;
   const ty = hoverPoint ? Math.max(Y(hoverPoint.value) - 82, padT + 4) : 0;
   return (
     <Card title={title} accent={accent}>
       <div ref={scrollRef} style={{ overflowX: "auto" }}>
-      <svg
-        viewBox={"0 0 " + W + " " + H}
-        onMouseLeave={() => setHover(null)}
-        style={{
-          width: W,
-          minWidth: "100%",
-          height: "auto",
-          display: "block",
-          overflow: "visible",
-        }}
-      >
-        {chart.ucl != null && (
-          <line
-            x1={padL}
-            y1={Y(chart.ucl)}
-            x2={padL + pw}
-            y2={Y(chart.ucl)}
-            stroke={C.rd}
-            strokeWidth="1.3"
-            strokeDasharray="6 3"
+        <svg
+          viewBox={"0 0 " + W + " " + H}
+          onMouseLeave={() => setHover(null)}
+          style={{
+            width: W,
+            minWidth: "100%",
+            height: "auto",
+            display: "block",
+            overflow: "visible",
+          }}
+        >
+          {chart.ucl != null && (
+            <line
+              x1={padL}
+              y1={Y(chart.ucl)}
+              x2={padL + pw}
+              y2={Y(chart.ucl)}
+              stroke={C.rd}
+              strokeWidth="1.3"
+              strokeDasharray="6 3"
+            />
+          )}
+          {chart.cl != null && (
+            <line
+              x1={padL}
+              y1={Y(chart.cl)}
+              x2={padL + pw}
+              y2={Y(chart.cl)}
+              stroke={C.gn}
+              strokeWidth="1.3"
+            />
+          )}
+          {chart.lcl != null && (
+            <line
+              x1={padL}
+              y1={Y(chart.lcl)}
+              x2={padL + pw}
+              y2={Y(chart.lcl)}
+              stroke={C.rd}
+              strokeWidth="1.3"
+              strokeDasharray="6 3"
+            />
+          )}
+          <polyline
+            points={values.map((v, i) => X(i) + "," + Y(v)).join(" ")}
+            fill="none"
+            stroke={C.bl}
+            strokeWidth="2"
           />
-        )}
-        {chart.cl != null && (
-          <line
-            x1={padL}
-            y1={Y(chart.cl)}
-            x2={padL + pw}
-            y2={Y(chart.cl)}
-            stroke={C.gn}
-            strokeWidth="1.3"
-          />
-        )}
-        {chart.lcl != null && (
-          <line
-            x1={padL}
-            y1={Y(chart.lcl)}
-            x2={padL + pw}
-            y2={Y(chart.lcl)}
-            stroke={C.rd}
-            strokeWidth="1.3"
-            strokeDasharray="6 3"
-          />
-        )}
-        <polyline
-          points={values.map((v, i) => X(i) + "," + Y(v)).join(" ")}
-          fill="none"
-          stroke={C.bl}
-          strokeWidth="2"
-        />
-        {plotPoints.map((p, i) => {
-          const pc = spcPointClass(p.rules);
-          const flagged = Boolean(p.rules?.length);
-          return (
+          {plotPoints.map((p, i) => {
+            const pc = spcPointClass(p.rules);
+            const flagged = Boolean(p.rules?.length);
+            return (
+              <circle
+                key={p.index}
+                cx={X(i)}
+                cy={Y(p.value)}
+                r={flagged ? 4.6 : 3}
+                fill={flagged ? pc.color : C.bl}
+                stroke="#fff"
+                strokeWidth={flagged ? 1.3 : 0}
+              />
+            );
+          })}
+          {plotPoints.map((p, i) => (
             <circle
-              key={p.index}
+              key={"hit" + p.index}
               cx={X(i)}
               cy={Y(p.value)}
-              r={flagged ? 4.6 : 3}
-              fill={flagged ? pc.color : C.bl}
-              stroke="#fff"
-              strokeWidth={flagged ? 1.3 : 0}
+              r="9"
+              fill="transparent"
+              style={{ cursor: "crosshair" }}
+              onMouseEnter={() => setHover(i)}
             />
-          );
-        })}
-        {plotPoints.map((p, i) => (
-          <circle
-            key={"hit" + p.index}
-            cx={X(i)}
-            cy={Y(p.value)}
-            r="9"
-            fill="transparent"
-            style={{ cursor: "crosshair" }}
-            onMouseEnter={() => setHover(i)}
-          />
-        ))}
-        {plotPoints.map((p, i) => {
-          const minLabelPx = timeAxis ? 56 : 40;
-          const every = Math.max(1, Math.round(minLabelPx / POINT_GAP));
-          if (i % every !== 0 && i !== plotPoints.length - 1) return null;
-          const label = timeAxis ? p.time || p.index : p.index;
-          const ly = H - 18;
-          return (
-            <text
-              key={"t" + p.index}
-              x={X(i)}
-              y={ly}
-              fontSize="9.5"
-              fontWeight={timeAxis ? "600" : "400"}
-              fill={C.tx}
-              textAnchor={timeAxis ? "end" : "middle"}
-              transform={timeAxis ? `rotate(35 ${X(i)} ${ly})` : undefined}
-            >
-              {label}
-            </text>
-          );
-        })}
-        {chart.ucl != null && (
-          <text
-            x={padL + pw + 5}
-            y={Y(chart.ucl) + 3}
-            fontSize="10"
-            fill={C.rd}
-          >
-            {"UCL " + _spcFmt(chart.ucl)}
-          </text>
-        )}
-        {chart.cl != null && (
-          <text x={padL + pw + 5} y={Y(chart.cl) + 3} fontSize="10" fill={C.gn}>
-            {"CL " + _spcFmt(chart.cl)}
-          </text>
-        )}
-        {chart.lcl != null && (
-          <text
-            x={padL + pw + 5}
-            y={Y(chart.lcl) + 3}
-            fontSize="10"
-            fill={C.rd}
-          >
-            {"LCL " + _spcFmt(chart.lcl)}
-          </text>
-        )}
-        {hoverPoint && (
-          <g pointerEvents="none">
-            <line
-              x1={X(hover)}
-              y1={padT}
-              x2={X(hover)}
-              y2={padT + ph}
-              stroke={C.mu}
-              strokeWidth="0.8"
-              strokeDasharray="3 3"
-              opacity="0.55"
-            />
-            <rect
-              x={tx}
-              y={ty}
-              width={BOX_W}
-              height={hoverRules.length ? 76 : 58}
-              rx="6"
-              fill="#fff"
-              stroke={hoverClass.color}
-              strokeWidth="1.2"
-            />
-            <text x={tx + 9} y={ty + 15} fontSize="10" fill={C.mu}>
-              {"Point #" +
-                hoverPoint.index +
-                (hoverPoint.time ? " · " + hoverPoint.time : "")}
-            </text>
-            <text
-              x={tx + 9}
-              y={ty + 31}
-              fontSize="11"
-              fontWeight="800"
-              fill={C.tx}
-            >
-              {"Value: " + _spcFmt(hoverPoint.value)}
-            </text>
-            <text
-              x={tx + 9}
-              y={ty + 47}
-              fontSize="10.5"
-              fill={hoverClass.color}
-              fontWeight="700"
-            >
-              {hoverRules.length ? hoverClass.label : "No Nelson violation"}
-            </text>
-            {hoverRules.length > 0 && (
-              <text x={tx + 9} y={ty + 63} fontSize="9.5" fill={C.md}>
-                {"Rules: " +
-                  hoverRules.map((r) => "R" + r).join(", ") +
-                  " · z " +
-                  _spcFmt(hoverPoint.z)}
+          ))}
+          {plotPoints.map((p, i) => {
+            const minLabelPx = timeAxis ? 56 : 40;
+            const every = Math.max(1, Math.round(minLabelPx / POINT_GAP));
+            if (i % every !== 0 && i !== plotPoints.length - 1) return null;
+            const label = timeAxis ? p.time || p.index : p.index;
+            const ly = H - 18;
+            return (
+              <text
+                key={"t" + p.index}
+                x={X(i)}
+                y={ly}
+                fontSize="9.5"
+                fontWeight={timeAxis ? "600" : "400"}
+                fill={C.tx}
+                textAnchor={timeAxis ? "end" : "middle"}
+                transform={timeAxis ? `rotate(35 ${X(i)} ${ly})` : undefined}
+              >
+                {label}
               </text>
-            )}
-          </g>
-        )}
-      </svg>
+            );
+          })}
+          {chart.ucl != null && (
+            <text
+              x={padL + pw + 5}
+              y={Y(chart.ucl) + 3}
+              fontSize="10"
+              fill={C.rd}
+            >
+              {"UCL " + _spcFmt(chart.ucl)}
+            </text>
+          )}
+          {chart.cl != null && (
+            <text
+              x={padL + pw + 5}
+              y={Y(chart.cl) + 3}
+              fontSize="10"
+              fill={C.gn}
+            >
+              {"CL " + _spcFmt(chart.cl)}
+            </text>
+          )}
+          {chart.lcl != null && (
+            <text
+              x={padL + pw + 5}
+              y={Y(chart.lcl) + 3}
+              fontSize="10"
+              fill={C.rd}
+            >
+              {"LCL " + _spcFmt(chart.lcl)}
+            </text>
+          )}
+          {hoverPoint && (
+            <g pointerEvents="none">
+              <line
+                x1={X(hover)}
+                y1={padT}
+                x2={X(hover)}
+                y2={padT + ph}
+                stroke={C.mu}
+                strokeWidth="0.8"
+                strokeDasharray="3 3"
+                opacity="0.55"
+              />
+              <rect
+                x={tx}
+                y={ty}
+                width={BOX_W}
+                height={hoverRules.length ? 76 : 58}
+                rx="6"
+                fill="#fff"
+                stroke={hoverClass.color}
+                strokeWidth="1.2"
+              />
+              <text x={tx + 9} y={ty + 15} fontSize="10" fill={C.mu}>
+                {"Point #" +
+                  hoverPoint.index +
+                  (hoverPoint.time ? " · " + hoverPoint.time : "")}
+              </text>
+              <text
+                x={tx + 9}
+                y={ty + 31}
+                fontSize="11"
+                fontWeight="800"
+                fill={C.tx}
+              >
+                {"Value: " + _spcFmt(hoverPoint.value)}
+              </text>
+              <text
+                x={tx + 9}
+                y={ty + 47}
+                fontSize="10.5"
+                fill={hoverClass.color}
+                fontWeight="700"
+              >
+                {hoverRules.length ? hoverClass.label : "No Nelson violation"}
+              </text>
+              {hoverRules.length > 0 && (
+                <text x={tx + 9} y={ty + 63} fontSize="9.5" fill={C.md}>
+                  {"Rules: " +
+                    hoverRules.map((r) => "R" + r).join(", ") +
+                    " · z " +
+                    _spcFmt(hoverPoint.z)}
+                </text>
+              )}
+            </g>
+          )}
+        </svg>
       </div>
       <div
         style={{
@@ -15029,9 +15056,11 @@ function LiveHistogram({ histogram }) {
   // the bars into a sliver of the chart. Refs/guides only get to stretch the
   // domain a bounded amount; beyond that they're clamped to the edge when
   // rendered (see clampX below).
-  const dataXs = [...bins.map((b) => b.from), ...bins.map((b) => b.to), ...curveX].filter(
-    (v) => typeof v === "number" && Number.isFinite(v),
-  );
+  const dataXs = [
+    ...bins.map((b) => b.from),
+    ...bins.map((b) => b.to),
+    ...curveX,
+  ].filter((v) => typeof v === "number" && Number.isFinite(v));
   const dataLo = dataXs.length ? Math.min(...dataXs) : 0;
   const dataHi = dataXs.length ? Math.max(...dataXs) : 1;
   const dataPad = (dataHi - dataLo) * 0.06 || 1;
@@ -15323,7 +15352,15 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
     Promise.all([
       getSpcFilterOptions({ date: to || date, shift }),
       getSpcWidgets({ date, from, to, shift, machine, recipe }),
-      getSpcWidgets({ date, from, to, shift, machine, recipe, headlineStatus: headline }),
+      getSpcWidgets({
+        date,
+        from,
+        to,
+        shift,
+        machine,
+        recipe,
+        headlineStatus: headline,
+      }),
     ])
       .then(([opt, baseBoard, board]) => {
         if (cancelled) return;
@@ -15359,7 +15396,14 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
       else acc.insufficient += 1;
       return acc;
     },
-    { total: 0, critical: 0, major: 0, warning: 0, healthy: 0, insufficient: 0 },
+    {
+      total: 0,
+      critical: 0,
+      major: 0,
+      warning: 0,
+      healthy: 0,
+      insufficient: 0,
+    },
   );
   const tiles = [
     ["Processes", baseCounts.total, C.tx, "All"],
@@ -15503,8 +15547,8 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
         </div>
       ) : snapshotDate ? (
         <div style={{ fontSize: 11.5, color: C.mu }}>
-          Snapshot {snapshotDate}. SPC rows use the latest available snapshot
-          on or before the selected date.
+          Snapshot {snapshotDate}. SPC rows use the latest available snapshot on
+          or before the selected date.
         </div>
       ) : null}
       {!loading && widgets.length === 0 ? (
@@ -15590,9 +15634,7 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
                       {w.machine + " · " + w.recipe}
                     </div>
                   </div>
-                  <StatusPill
-                    status={spcStatus(w.headline_status).pill}
-                  />
+                  <StatusPill status={spcStatus(w.headline_status).pill} />
                 </div>
                 <div
                   style={{
@@ -15624,13 +15666,20 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
                   }}
                 >
                   <span style={{ color: C.mu }}>
-                    Cp <b style={{ color: col }}>{typeof w.cp === "number" ? w.cp.toFixed(2) : "—"}</b>
+                    Cp{" "}
+                    <b style={{ color: col }}>
+                      {typeof w.cp === "number" ? w.cp.toFixed(2) : "—"}
+                    </b>
                   </span>
                   <span style={{ color: C.mu }}>
-                    Cpk <b style={{ color: col }}>{typeof w.cpk === "number" ? w.cpk.toFixed(2) : "—"}</b>
+                    Cpk{" "}
+                    <b style={{ color: col }}>
+                      {typeof w.cpk === "number" ? w.cpk.toFixed(2) : "—"}
+                    </b>
                   </span>
                   <span style={{ color: C.mu, marginLeft: "auto" }}>
-                    {w.subgroups ?? "—"} subgroups · {w.sample_size ?? "—"} readings
+                    {w.subgroups ?? "—"} subgroups · {w.sample_size ?? "—"}{" "}
+                    readings
                   </span>
                 </div>
               </div>
@@ -15683,13 +15732,615 @@ function _SpcMeasurement({ m }) {
           {v}
         </span>
       ))}
-      {m.note && <span style={{ color: C.mu, fontStyle: "italic" }}>{m.note}</span>}
+      {m.note && (
+        <span style={{ color: C.mu, fontStyle: "italic" }}>{m.note}</span>
+      )}
+    </div>
+  );
+}
+
+function spcTrendWindow(view, to) {
+  if (view === "daily") {
+    return { from: offsetIsoDate(to, -29), to, label: "Daily · last 30 days" };
+  }
+  const end = new Date(`${to}T00:00:00Z`);
+  if (view === "monthly") {
+    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1));
+    return {
+      from: start.toISOString().slice(0, 10),
+      to,
+      label: "Monthly · last 12 months",
+    };
+  }
+  return {
+    from: `${end.getUTCFullYear() - 4}-01-01`,
+    to,
+    label: "Yearly · last 5 years",
+  };
+}
+
+function aggregateSpcTrend(points, view) {
+  if (view === "daily") return points;
+  const groups = new Map();
+  for (const point of points) {
+    const key = view === "monthly" ? point.date.slice(0, 7) : point.date.slice(0, 4);
+    const group = groups.get(key) || { date: key, total: 0, count: 0 };
+    group.total += Number(point.value);
+    group.count += 1;
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) => ({
+    date: group.date,
+    value: group.total / group.count,
+  }));
+}
+
+function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const width = 1420;
+  const height = 410;
+  const pad = { left: 70, right: 24, top: 38, bottom: 46 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const values = points.map((point) => Number(point.value));
+  const low = Math.min(...values, target, baseline);
+  const high = Math.max(...values, target, baseline);
+  const spread = high - low || Math.abs(high) * 0.2 || 1;
+  const min = low - spread * 0.14;
+  const max = high + spread * 0.14;
+  const x = (index) =>
+    points.length === 1
+      ? pad.left + plotWidth
+      : pad.left + (index * plotWidth) / (points.length - 1);
+  const y = (value) => pad.top + ((max - value) / (max - min)) * plotHeight;
+  const targetY = y(target);
+  const baselineY = y(baseline);
+  const axisEvery = Math.max(1, Math.ceil(points.length / 7));
+  const formatAxisLabel = (point) => {
+    if (view === "monthly") {
+      const [year, month] = point.date.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(
+        new Date(Date.UTC(year, month - 1, 1)),
+      );
+    }
+    if (view === "yearly") return point.date;
+    const days = Math.round(
+      (Date.parse(`${endDate}T00:00:00Z`) -
+        Date.parse(`${point.date}T00:00:00Z`)) /
+        86400000,
+    );
+    return days === 0 ? "Today" : `${days}d`;
+  };
+  const formatHoverLabel = (point) => {
+    if (view === "monthly") {
+      const [year, month] = point.date.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(Date.UTC(year, month - 1, 1)));
+    }
+    if (view === "yearly") return point.date;
+    return toDisplayDate(point.date) || point.date;
+  };
+  const fmt = (value) => Number(value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  const hoveredPoint = hoveredIndex == null ? null : points[hoveredIndex];
+  const tooltipWidth = 176;
+  const tooltipHeight = 58;
+  const hoveredX = hoveredPoint ? x(hoveredIndex) : 0;
+  const hoveredY = hoveredPoint ? y(hoveredPoint.value) : 0;
+  const tooltipX = Math.min(
+    Math.max(hoveredX - tooltipWidth / 2, pad.left + 4),
+    width - pad.right - tooltipWidth - 4,
+  );
+  const tooltipY =
+    hoveredY - tooltipHeight - 14 < pad.top
+      ? hoveredY + 14
+      : hoveredY - tooltipHeight - 14;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+      role="img"
+      aria-label="SPC capability trend"
+      onMouseLeave={() => setHoveredIndex(null)}
+      style={{ display: "block", minWidth: 680 }}
+    >
+      <rect
+        x={pad.left}
+        y={pad.top}
+        width={plotWidth}
+        height={Math.max(0, targetY - pad.top)}
+        fill="#EFF8F2"
+      />
+      <rect
+        x={pad.left}
+        y={targetY}
+        width={plotWidth}
+        height={pad.top + plotHeight - targetY}
+        fill="#FFF5F3"
+      />
+      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const value = max - ratio * (max - min);
+        const yy = pad.top + ratio * plotHeight;
+        return (
+          <g key={ratio}>
+            <line
+              x1={pad.left}
+              y1={yy}
+              x2={pad.left + plotWidth}
+              y2={yy}
+              stroke="#E3E8F0"
+              strokeDasharray="3 4"
+            />
+            <text x={pad.left - 12} y={yy + 4} textAnchor="end" fontSize="12" fill="#8A96AC">
+              {fmt(value)}
+            </text>
+          </g>
+        );
+      })}
+      <line
+        x1={pad.left}
+        y1={targetY}
+        x2={pad.left + plotWidth}
+        y2={targetY}
+        stroke="#D18A00"
+        strokeWidth="2.5"
+        strokeDasharray="9 5"
+      />
+      <text x={pad.left + 8} y={targetY - 9} fontSize="13" fontWeight="700" fill="#C98500">
+        Target {target.toFixed(2)}
+      </text>
+      <line
+        x1={pad.left}
+        y1={baselineY}
+        x2={pad.left + plotWidth}
+        y2={baselineY}
+        stroke="#98A3B7"
+        strokeWidth="1.6"
+        strokeDasharray="2 5"
+      />
+      <text
+        x={pad.left + plotWidth - 8}
+        y={baselineY - 7}
+        textAnchor="end"
+        fontSize="12"
+        fill="#8A96AC"
+      >
+        Baseline {baseline.toFixed(2)}
+      </text>
+      {points.length > 1 && (
+        <polyline
+          points={points.map((point, index) => `${x(index)},${y(point.value)}`).join(" ")}
+          fill="none"
+          stroke="#D18A00"
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+      {points.map((point, index) => {
+        const isLast = index === points.length - 1;
+        return (
+          <g key={`${point.date}-${index}`}>
+            <circle
+              cx={x(index)}
+              cy={y(point.value)}
+              r={hoveredIndex === index ? 6.5 : isLast ? 6 : 2.5}
+              fill="#D18A00"
+              stroke={hoveredIndex === index ? "#fff" : "none"}
+              strokeWidth={hoveredIndex === index ? 2 : 0}
+            />
+            <circle
+              cx={x(index)}
+              cy={y(point.value)}
+              r="12"
+              fill="transparent"
+              tabIndex="0"
+              aria-label={`${formatHoverLabel(point)}: ${Number(point.value).toFixed(3)}`}
+              style={{ cursor: "crosshair", outline: "none" }}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onFocus={() => setHoveredIndex(index)}
+              onBlur={() => setHoveredIndex(null)}
+            />
+            {(index % axisEvery === 0 || isLast) && (
+              <text
+                x={x(index)}
+                y={height - 15}
+                textAnchor={isLast ? "end" : index === 0 ? "start" : "middle"}
+                fontSize="12"
+                fill="#536079"
+              >
+                {formatAxisLabel(point)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+      {hoveredPoint && (
+        <g pointerEvents="none">
+          <line
+            x1={hoveredX}
+            y1={pad.top}
+            x2={hoveredX}
+            y2={pad.top + plotHeight}
+            stroke="#7C879B"
+            strokeWidth="1"
+            strokeDasharray="3 4"
+            opacity=".7"
+          />
+          <rect
+            x={tooltipX}
+            y={tooltipY}
+            width={tooltipWidth}
+            height={tooltipHeight}
+            rx="7"
+            fill="#1F2937"
+            opacity=".96"
+          />
+          <text
+            x={tooltipX + 12}
+            y={tooltipY + 21}
+            fontSize="12"
+            fontWeight="600"
+            fill="#CBD5E1"
+          >
+            {formatHoverLabel(hoveredPoint)}
+          </text>
+          <text
+            x={tooltipX + 12}
+            y={tooltipY + 43}
+            fontSize="15"
+            fontWeight="800"
+            fill="#FFFFFF"
+          >
+            {Number(hoveredPoint.value).toFixed(3)}
+          </text>
+        </g>
+      )}
+      <text
+        x={pad.left + plotWidth}
+        y={pad.top - 14}
+        textAnchor="middle"
+        fontSize="12"
+        fontWeight="700"
+        fill="#C98500"
+      >
+        Now
+      </text>
+    </svg>
+  );
+}
+
+function SPCCapabilityTrendModal({ selection, metric, date, shift, onClose }) {
+  const initialTo = date || todayInIST();
+  const [view, setView] = useState("daily");
+  const [points, setPoints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const trendWindow = spcTrendWindow(view, initialTo);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getSpcTrend({
+      from: trendWindow.from,
+      to: trendWindow.to,
+      shift,
+      ...selection,
+      metric,
+    })
+      .then((response) => {
+        if (!cancelled) setPoints(response?.points || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [metric, selection, shift, trendWindow.from, trendWindow.to]);
+
+  const chartPoints = aggregateSpcTrend(points, view);
+  const series = chartPoints.map((point) => Number(point.value));
+  const target = 1.33;
+  const current = series.at(-1) ?? null;
+  const baseline = series[0] ?? null;
+  const gap = current == null ? null : target - current;
+  const delta = current == null || baseline == null ? null : current - baseline;
+  const meetsTarget = current != null && current >= target;
+  const accent = meetsTarget ? C.gn : "#D18A00";
+
+  return (
+    <div
+      className="no-print"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        background: "rgba(15,23,42,.55)",
+      }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: "calc(100% - 40px)",
+          maxWidth: 1600,
+          maxHeight: "94vh",
+          overflow: "auto",
+          border: "1px solid " + C.bd,
+          borderRadius: 12,
+          background: C.cd,
+          boxShadow: "0 20px 60px rgba(0,0,0,.25)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 16,
+            padding: "20px 24px",
+            borderBottom: "1px solid " + C.bd,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                color: C.mu,
+                fontSize: 12,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: ".5px",
+              }}
+            >
+              Trend
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ color: C.tx, fontSize: 24, fontWeight: 750 }}>
+                {metric} — {selection.parameter}
+              </span>
+              {current != null && (
+                <>
+                  <span
+                    style={{
+                      padding: "3px 12px",
+                      borderRadius: 999,
+                      background: meetsTarget ? "#ECF8EF" : "#FFF6E8",
+                      color: accent,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {meetsTarget ? "On target" : "Watch"}
+                  </span>
+                  <span
+                    style={{
+                      padding: "3px 12px",
+                      borderRadius: 999,
+                      background: "#FFF8EC",
+                      color: "#C98500",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {gap > 0
+                      ? `gap ${gap.toFixed(2)} to target`
+                      : `${Math.abs(gap).toFixed(2)} above target`}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close trend"
+            title="Close"
+            style={{
+              width: 38,
+              height: 38,
+              flex: "0 0 38px",
+              border: "1px solid " + C.bd,
+              borderRadius: 7,
+              background: C.c2,
+              color: C.mu,
+              cursor: "pointer",
+              fontSize: 25,
+              lineHeight: 1,
+            }}
+          >
+            {"×"}
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+            padding: "14px 24px",
+            borderBottom: "1px solid " + C.bd,
+          }}
+        >
+          <span
+            style={{
+              color: C.mu,
+              fontSize: 12,
+              fontWeight: 700,
+              textTransform: "uppercase",
+            }}
+          >
+            View
+          </span>
+          {[
+            ["daily", "Daily"],
+            ["monthly", "Monthly"],
+            ["yearly", "Yearly"],
+          ].map(([id, label]) => {
+            const active = view === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setView(id)}
+                style={{
+                  minWidth: 82,
+                  padding: "6px 16px",
+                  border: "1px solid " + (active ? C.bl : C.bd),
+                  borderRadius: 999,
+                  background: active ? "#EEF5FF" : C.c2,
+                  color: active ? C.bl : C.tx,
+                  fontFamily: "inherit",
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+          <span style={{ marginLeft: "auto", color: C.mu, fontSize: 12.5 }}>
+            {trendWindow.label}
+          </span>
+        </div>
+
+        <div style={{ padding: "18px 24px 22px", overflowX: "auto" }}>
+          {loading ? (
+            <QualityLoader minHeight={420} />
+          ) : error ? (
+            <div style={{ padding: 60, textAlign: "center", color: C.rd }}>
+              Trend fetch failed: {error.message || "Request failed"}
+            </div>
+          ) : !series.length ? (
+            <div style={{ padding: 60, textAlign: "center", color: C.mu }}>
+              No {metric} trend data for this date range.
+            </div>
+          ) : (
+            <>
+              <SPCCapabilityTrendChart
+                points={chartPoints}
+                target={target}
+                baseline={baseline}
+                view={view}
+                endDate={initialTo}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 22,
+                  flexWrap: "wrap",
+                  margin: "4px 0 18px",
+                  color: C.mu,
+                  fontSize: 12,
+                }}
+              >
+                <TrendLegendItem color="#D18A00" label="Actual" />
+                <TrendLegendItem color="#D18A00" label="Target" dashed />
+                <TrendLegendItem color="#98A3B7" label="Baseline" dotted />
+                <TrendLegendItem color="#A9DAB5" label="Good zone" block />
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+                  gap: 10,
+                }}
+              >
+                <TrendSummary label="Current" value={current.toFixed(2)} color={accent} />
+                <TrendSummary
+                  label="Target"
+                  value={target.toFixed(2)}
+                  note="higher is better"
+                  color="#D18A00"
+                />
+                <TrendSummary
+                  label="Vs baseline"
+                  value={`${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(3)}`}
+                  note={`from ${baseline.toFixed(3)}`}
+                  color={delta >= 0 ? C.gn : C.rd}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrendLegendItem({ color, label, dashed, dotted, block }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span
+        style={
+          block
+            ? { width: 14, height: 14, borderRadius: 2, background: color }
+            : {
+                width: 20,
+                height: 0,
+                borderTop: `2px ${dashed ? "dashed" : dotted ? "dotted" : "solid"} ${color}`,
+              }
+        }
+      />
+      {label}
+    </span>
+  );
+}
+
+function TrendSummary({ label, value, note, color }) {
+  return (
+    <div
+      style={{
+        minHeight: 74,
+        padding: "12px 16px",
+        border: "1px solid " + C.bd,
+        borderRadius: 8,
+        background: "#FAFBFD",
+      }}
+    >
+      <div
+        style={{
+          color: C.mu,
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: ".5px",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ color, fontSize: 23, fontWeight: 800, lineHeight: 1.2 }}>
+        {value}
+      </div>
+      {note && <div style={{ color: C.mu, fontSize: 12 }}>{note}</div>}
     </div>
   );
 }
 
 function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
   const [detail, setDetail] = useState(null);
+  const [trendMetric, setTrendMetric] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -15782,9 +16433,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
               Loading
             </span>
           ) : (
-            <StatusPill
-              status={spcStatus(cap.headline_status).pill}
-            />
+            <StatusPill status={spcStatus(cap.headline_status).pill} />
           )}
         </span>
       </div>
@@ -15808,6 +16457,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
                   }
                   sub={cell.status || ""}
                   col={capCol(cell.value)}
+                  onTrend={() => setTrendMetric(k[0].toUpperCase() + k.slice(1))}
                 />
               );
             })}
@@ -15848,6 +16498,15 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
             />
           )}
           {detail?.histogram && <LiveHistogram histogram={detail.histogram} />}
+          {trendMetric && (
+            <SPCCapabilityTrendModal
+              selection={selection}
+              metric={trendMetric}
+              date={snapshotDate || date}
+              shift={shift}
+              onClose={() => setTrendMetric(null)}
+            />
+          )}
         </>
       )}
     </div>
@@ -15856,11 +16515,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
 
 function LiveSpcAlerts({ alerts }) {
   const col = (severity) =>
-    severity === "Out of Control"
-      ? C.rd
-      : severity === "Warning"
-        ? C.am
-        : C.bl;
+    severity === "Out of Control" ? C.rd : severity === "Warning" ? C.am : C.bl;
   return (
     <Card title="Nelson Rule Alert Feed" accent={C.pp}>
       <div style={{ display: "grid", gap: 8 }}>
@@ -15972,11 +16627,10 @@ export default function QualityDashboard({ plant, onBack }) {
   const processGranularity =
     tf === "month" ? "MONTH" : tf === "year" ? "YEAR" : null;
   const processDate = tf === "month" || tf === "year" ? tfFrom : tfTo;
-  // SPC month/year view aggregates the whole range (tfFrom..tfTo) instead of
-  // pinning to a single as-of day; day view keeps passing a single date.
-  const spcRangeMode = tf === "month" || tf === "year";
-  const spcFrom = spcRangeMode ? tfFrom : null;
-  const spcTo = spcRangeMode ? tfTo : null;
+  // SPC is a single-day view only. Month and date-range controls are hidden
+  // while this tab is active, and all SPC API calls receive only `date`.
+  const spcFrom = null;
+  const spcTo = null;
 
   useEffect(() => {
     if (tab !== "process") return;
@@ -16065,7 +16719,9 @@ export default function QualityDashboard({ plant, onBack }) {
       // day-count — every month has a stable number of days regardless of TZ.
       const mk = currentMonthKeyInIST();
       const [yStr, mStr] = mk.split("-");
-      const lastDay = new Date(Date.UTC(Number(yStr), Number(mStr), 0)).getUTCDate();
+      const lastDay = new Date(
+        Date.UTC(Number(yStr), Number(mStr), 0),
+      ).getUTCDate();
       const from = `${yStr}-${mStr}-01`;
       const to = `${yStr}-${mStr}-${String(lastDay).padStart(2, "0")}`;
       setTfFrom(from);
@@ -16092,6 +16748,11 @@ export default function QualityDashboard({ plant, onBack }) {
     setTf(null);
     setTfTo(value);
     setShift("All");
+  };
+  const onHeaderDayChange = (value) => {
+    setTf("day");
+    setTfFrom(value);
+    setTfTo(value);
   };
   const onHeaderShiftChange = (value) =>
     setShift(value === "all" ? "All" : String(value).toUpperCase());
@@ -16130,13 +16791,20 @@ export default function QualityDashboard({ plant, onBack }) {
   const subTabItems = [
     { id: "process", label: "Process", accent: C.bl },
     { id: "product", label: "Product", accent: C.tl, enabled: false },
-    { id: "complaint", label: "Customer Complaint", accent: C.rd, enabled: false },
+    {
+      id: "complaint",
+      label: "Customer Complaint",
+      accent: C.rd,
+      enabled: false,
+    },
     { id: "spc", label: "SPC", accent: C.pp },
   ];
   const onSubTabChange = (id) => {
-    // SPC has no month view, so the header's "This Month" pill is disabled
-    // there; a month range carried in from another tab falls back to Today.
-    if (id === "spc" && tf === "month") onHeaderPresetChange("today");
+    // SPC is a one-day view; any range carried in from Process falls back to
+    // Today when the user enters the tab.
+    if (id === "spc" && tf !== "today" && tf !== "day") {
+      onHeaderPresetChange("today");
+    }
     setTab(id);
     setOpenKpi(null);
     setSub("");
@@ -16201,7 +16869,9 @@ export default function QualityDashboard({ plant, onBack }) {
         tyreTypes={[]}
         tyreType={tyreType}
         onTyreTypeChange={setTyreType}
-        disabledPresets={tab === "spc" ? ["month"] : []}
+        hiddenPresets={tab === "spc" ? ["month", "range"] : []}
+        singleDay={tab === "spc" ? processDate : null}
+        onSingleDayChange={tab === "spc" ? onHeaderDayChange : undefined}
       />
 
       {/* Main content */}
@@ -16220,14 +16890,16 @@ export default function QualityDashboard({ plant, onBack }) {
           <>
             <TyreTypeBanner tt={tyreType} plant={plant} />
             {tab === "spc" ? (
-              <SPCTab
-                spcSel={spcSel}
-                setSpcSel={setSpcSel}
-                date={processDate}
-                from={spcFrom}
-                to={spcTo}
-                shift={shift}
-              />
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <SPCTab
+                  spcSel={spcSel}
+                  setSpcSel={setSpcSel}
+                  date={processDate}
+                  from={spcFrom}
+                  to={spcTo}
+                  shift={shift}
+                />
+              </Box>
             ) : (
               <Box
                 sx={{

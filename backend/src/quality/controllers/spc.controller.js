@@ -18,10 +18,12 @@ import {
   spcRecipesQuery,
   spcProductTypesQuery,
   spcDetailRowsQuery,
+  spcCapabilityTrendQuery,
   spcCapabilityRangeQuery,
   spcDetailRangeQuery,
   spcLimitsQuery,
   spcGranularity,
+  METRICS,
 } from "../queries/spc.queries.js";
 import {
   silverPointsQuery,
@@ -419,6 +421,68 @@ export async function getSpcDetail(req, res, next) {
         shift_supported: true,
       },
       ...body.detail,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /quality/spc/trend ?from=&to=&machine=&recipe=&parameter=&metric= */
+export async function getSpcTrend(req, res, next) {
+  try {
+    const { from, to, machine, recipe, parameter, metric, shift, plant } =
+      req.query;
+    if (
+      !from ||
+      !to ||
+      !hasQueryValue(req.query, "machine") ||
+      !hasQueryValue(req.query, "recipe") ||
+      !hasQueryValue(req.query, "parameter") ||
+      !METRICS.includes(metric)
+    ) {
+      return badRequest(
+        res,
+        "`from`, `to`, `machine`, `recipe`, `parameter`, and a valid `metric` are required.",
+      );
+    }
+    if (from > to) return badRequest(res, "`from` must not be after `to`.");
+
+    const granularity = spcGranularity(shift);
+    const key = buildCacheKey("/quality/spc/trend", req.query);
+    const rows = await cached(key, () =>
+      runQuery(
+        spcCapabilityTrendQuery({
+          from,
+          to,
+          granularity,
+          machine,
+          recipe,
+          parameter,
+          metric,
+        }),
+      ),
+    );
+    const points = rows
+      .map((row) => ({
+        date: String(row.date ?? "").slice(0, 10),
+        value: toNumber(row.actual_value),
+        status: row.status ?? null,
+      }))
+      .filter((point) => point.date && point.value != null);
+
+    res.json({
+      context: {
+        plant,
+        from,
+        to,
+        granularity,
+        shift: shift ?? "All",
+        machine,
+        recipe,
+        parameter,
+        metric,
+      },
+      points,
     });
   } catch (err) {
     next(err);
