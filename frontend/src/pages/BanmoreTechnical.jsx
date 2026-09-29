@@ -26,9 +26,19 @@ import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import KpiCard from "@/components/production/KpiCard.jsx";
 import { getAsOf, getPlant } from "@/api/plants.js";
+import { getVocab } from "@/api/dashboard.js";
+import client from "@/api/client.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
-import { presetToDateRange } from "@/lib/timeRange.js";
+import { buildDatePayload, presetToDateRange } from "@/lib/timeRange.js";
+import { withNumericValues } from "@/lib/technicalDrills.js";
+import {
+  TECHNICAL_KPI_SOURCES,
+  resolveTechnicalKpi,
+  toDowntimeReasonKpis,
+  toMachineProductionKpi,
+} from "@/lib/technicalKpiSources.js";
+import TechnicalDrillPanel from "@/components/technical/TechnicalDrillPanel.jsx";
 
 const TECHNICAL_TABS = [
   { id: "overall", label: "Overall", icon: DonutLargeOutlinedIcon },
@@ -86,17 +96,10 @@ const STOCK_AREAS = [
   { id: "slitter", label: "Slitter", section: "stk", subSection: "Slitter" },
 ];
 
-const BUILDING_MACHINES = [
-  { id: "all", label: "All" },
-  { id: "vmi-maxx1", label: "VMI Maxx1" },
-  { id: "vmi-maxx2", label: "VMI Maxx2" },
-  { id: "vmi-exxium", label: "VMI Exxium" },
-  { id: "tbm-2", label: "TBM-2" },
-  { id: "tbm-4", label: "TBM-4" },
-  { id: "tbm-6", label: "TBM-6" },
-];
+const ALL_MACHINES = "all";
 
-const SHARED_KPI_IDS = new Set(["prod"]);
+// Rows a single Building machine's Production card and drill read.
+const MACHINE_PRODUCTION_KPIS = ["Production_m", "Production_m_sku"];
 
 const STOCK_KPIS = [
   { id: "prod", name: "Production" },
@@ -228,6 +231,13 @@ const TECHNICAL_KPI_CATALOG = {
   ],
 };
 
+const SECTION_NAMES = {
+  mix: "Mixing",
+  stk: "Stock",
+  tbm: "TBM",
+  cur: "Curing",
+};
+
 const SHIFT_GRANULARITY = {
   a: "SHIFT A",
   b: "SHIFT B",
@@ -238,7 +248,7 @@ function BanmoreTechnical() {
   const theme = useTheme();
   const [tab, setTab] = useState("overall");
   const [stockArea, setStockArea] = useState("mixing");
-  const [buildingMachine, setBuildingMachine] = useState("all");
+  const [buildingMachine, setBuildingMachine] = useState(ALL_MACHINES);
   const [shift, setShift] = useState("all");
   const [timeRange, setTimeRange] = useState({
     preset: "month",
@@ -258,8 +268,79 @@ function BanmoreTechnical() {
     staleTime: 15 * 60 * 1000,
   });
 
-  const { kpis, isLoading, error, lastUpdatedAt, setFilter, resetDrill } =
-    useDashboardFetch({ plantId: "banmore" });
+  // Production-tab KPIs (Production) and Quality-tab KPIs (Scrap, NCM Hold)
+  // come from separate category fetches — see technicalKpiSources.js.
+  const productivity = useDashboardFetch({ plantId: "banmore" });
+  const quality = useDashboardFetch({ plantId: "banmore" });
+  const {
+    setFilter: setProductivityFilter,
+    resetDrill: resetProductivityDrill,
+  } = productivity;
+  const { setFilter: setQualityFilter, resetDrill: resetQualityDrill } =
+    quality;
+
+  // Building machines come from the DB (production machines per section),
+  // never a frozen list — see buildSectionMachinesQuery.
+  const { data: vocab } = usePolledQuery(() => getVocab("banmore"), {
+    interval: 0,
+    cacheKey: "technical:banmore:vocab",
+    staleTime: 30 * 60 * 1000,
+  });
+  const buildingMachines = vocab?.machines?.TBM ?? [];
+  const selectedMachine =
+    tab === "building" && buildingMachines.includes(buildingMachine)
+      ? buildingMachine
+      : null;
+
+  // One machine's production rows, in the same window / granularity as the
+  // section cards. Scrap, NCR and downtime are not recorded against these
+  // machine names, so a single machine only has Production.
+  const machineState = productivity.state;
+  const machinePayload = selectedMachine
+    ? {
+        plantId: "banmore",
+        context: {
+          section: "TBM",
+          category: "Productivity",
+          tyre_type: "PCR",
+          granularity: machineState.granularity ?? "DAY",
+        },
+        ...buildDatePayload(machineState),
+        drillKpis: MACHINE_PRODUCTION_KPIS,
+        drillOnly: true,
+        parentFilters: { machine: selectedMachine },
+        limit: 10000,
+      }
+    : null;
+  const hasDateWindow = Boolean(
+    (machineState.from && machineState.to) || machineState.date,
+  );
+  const {
+    data: machineData,
+    isLoading: machineLoading,
+    error: machineError,
+  } = usePolledQuery(
+    () =>
+      machinePayload
+        ? client.post("/dashboard/kpi-data", machinePayload)
+        : Promise.resolve(null),
+    {
+      enabled: Boolean(machinePayload) && hasDateWindow,
+      interval: 0,
+      deps: [JSON.stringify(machinePayload)],
+    },
+  );
+  const machineRows = useMemo(
+    () => withNumericValues(machineData),
+    [machineData],
+  );
+
+  const isLoading = selectedMachine
+    ? !hasDateWindow || machineLoading
+    : productivity.isLoading || quality.isLoading;
+  const error = selectedMachine
+    ? machineError || null
+    : productivity.error || quality.error || null;
 
   const activeStockArea =
     STOCK_AREAS.find((area) => area.id === stockArea) ?? STOCK_AREAS[0];
@@ -282,47 +363,174 @@ function BanmoreTechnical() {
 
   useEffect(() => {
     if (!isLiveTab) return;
-    setFilter(
-      {
-        section,
-        subSection,
-        productType: null,
-        unitOfMeasurement: null,
-        tyreType: "PCR",
-        category: "p",
-      },
-      true,
-    );
-  }, [isLiveTab, section, subSection, setFilter]);
+    const scope = {
+      section,
+      subSection,
+      productType: null,
+      unitOfMeasurement: null,
+      tyreType: "PCR",
+    };
+    setProductivityFilter({ ...scope, category: "p" }, true);
+    setQualityFilter({ ...scope, category: "q" }, true);
+  }, [isLiveTab, section, subSection, setProductivityFilter, setQualityFilter]);
 
   useEffect(() => {
     if (!isLiveTab || (!dateWindow.from && !dateWindow.to)) return;
-    setFilter({
+    const dateFilter = {
       date: null,
       from: dateWindow.from,
       to: dateWindow.to,
       granularity: SHIFT_GRANULARITY[shift] ?? dateWindow.granularity,
       mode: dateWindow.mode,
       userWindow: Boolean(timeRange.from && timeRange.to),
-    });
-  }, [dateWindow, isLiveTab, setFilter, shift, timeRange.from, timeRange.to]);
+    };
+    setProductivityFilter(dateFilter);
+    setQualityFilter(dateFilter);
+  }, [
+    dateWindow,
+    isLiveTab,
+    setProductivityFilter,
+    setQualityFilter,
+    shift,
+    timeRange.from,
+    timeRange.to,
+  ]);
 
   useEffect(() => {
-    resetDrill();
-  }, [tab, stockArea, buildingMachine, resetDrill]);
+    resetProductivityDrill();
+    resetQualityDrill();
+  }, [
+    tab,
+    stockArea,
+    buildingMachine,
+    resetProductivityDrill,
+    resetQualityDrill,
+  ]);
 
-  const sharedKpis = (Array.isArray(kpis) ? kpis : []).filter((kpi) =>
-    SHARED_KPI_IDS.has(String(kpi.id ?? "").toLowerCase()),
+  const downtimeKpis = useMemo(
+    () =>
+      toDowntimeReasonKpis(productivity.downtimeRows, {
+        section: SECTION_NAMES[productivity.state.section],
+        granularity: productivity.state.granularity ?? "DAY",
+        mode: productivity.state.mode ?? "snapshot",
+        plantId: "banmore",
+      }),
+    [
+      productivity.downtimeRows,
+      productivity.state.section,
+      productivity.state.granularity,
+      productivity.state.mode,
+    ],
   );
-  const liveKpisById = new Map(
-    sharedKpis.map((kpi) => [String(kpi.id ?? "").toLowerCase(), kpi]),
+  const machineKpi = useMemo(
+    () =>
+      toMachineProductionKpi(machineRows, {
+        granularity: machineState.granularity ?? "DAY",
+        mode: machineState.mode ?? "snapshot",
+        plantId: "banmore",
+      }),
+    [machineRows, machineState.granularity, machineState.mode],
   );
+  const kpisByCategory = selectedMachine
+    ? { p: machineKpi ? [machineKpi] : [], q: [], downtime: [] }
+    : {
+        p: productivity.kpis,
+        q: quality.kpis,
+        downtime: downtimeKpis,
+      };
   const mapDisplayKpis = (definitions) =>
     definitions.map((definition) => ({
       definition,
-      live: liveKpisById.get(definition.id) ?? null,
+      live: resolveTechnicalKpi(definition, kpisByCategory),
     }));
   const displayKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
+
+  // One drill open at a time, tied to the scope it was opened in so a tab /
+  // area / machine switch closes it (the effect above resets the fetch side).
+  const drillScope = `${tab}|${stockArea}|${buildingMachine}`;
+  const [openDrill, setOpenDrill] = useState(null);
+  const openDrillKpiId =
+    openDrill?.scope === drillScope ? openDrill.kpiId : null;
+  const openDrillSource = openDrillKpiId
+    ? TECHNICAL_KPI_SOURCES[openDrillKpiId]
+    : null;
+  const openDrillKpi = openDrillKpiId
+    ? (displayKpis.find(({ definition }) => definition.id === openDrillKpiId)
+        ?.live ?? null)
+    : null;
+  const drillFetch = openDrillSource?.category === "q" ? quality : productivity;
+
+  const handleCloseDrill = () => {
+    setOpenDrill(null);
+    resetProductivityDrill();
+    resetQualityDrill();
+  };
+
+  const handleDrillKpi = (kpi) => {
+    const source = TECHNICAL_KPI_SOURCES[kpi.id];
+    if (!kpi.drillable || !source) return;
+    if (openDrillKpiId === kpi.id) {
+      handleCloseDrill();
+      return;
+    }
+    resetProductivityDrill();
+    resetQualityDrill();
+    setOpenDrill({ kpiId: kpi.id, scope: drillScope });
+    // The downtime drills read the reason rows already fetched for the card;
+    // a single machine's drill reads the machine rows already fetched.
+    if (!source.drillKpis || selectedMachine) return;
+    const fetcher = source.category === "q" ? quality : productivity;
+    fetcher.drillInto(
+      source.drillKpis,
+      source.productionId,
+      {},
+      kpi.resolvedDate ?? null,
+    );
+  };
+
+  const drillPanel = openDrillKpi
+    ? (() => {
+        const drillState = drillFetch.state;
+        const definition = TECHNICAL_KPI_CATALOG[tab].find(
+          (item) => item.id === openDrillKpiId,
+        );
+        const areaLabel =
+          tab === "stock" ? activeStockArea.label : activeTab?.label;
+        // Today / Shift cards read one day out of a trailing week; the Month
+        // and custom-range cards cover the whole window.
+        const wholeWindow =
+          drillState.granularity === "MONTH" || drillState.mode === "aggregate";
+        return (
+          <Box sx={{ mt: 2 }}>
+            <TechnicalDrillPanel
+              key={`${drillScope}|${openDrillKpiId}`}
+              kpiId={openDrillKpiId}
+              title={`${definition.name} — ${areaLabel}`}
+              breadcrumb={
+                tab === "stock"
+                  ? ["Stock", activeStockArea.label, definition.name]
+                  : [activeTab?.label, definition.name]
+              }
+              sectionName={SECTION_NAMES[drillState.section]}
+              rawRows={selectedMachine ? machineRows : drillFetch.rawRows}
+              card={openDrillKpi}
+              planCard={
+                productivity.kpis.find((item) => item.id === "comp") ?? null
+              }
+              downtimeRows={productivity.downtimeRows}
+              downtimeGranularity={productivity.downtimeGranularity}
+              eventDate={
+                wholeWindow ? null : (openDrillKpi.resolvedDate ?? null)
+              }
+              isLoading={
+                selectedMachine ? machineLoading : drillFetch.isDrillLoading
+              }
+              onClose={handleCloseDrill}
+            />
+          </Box>
+        );
+      })()
+    : null;
 
   const handleTimeRangeChange = (updater) => {
     setTimeRange((previous) => {
@@ -344,7 +552,7 @@ function BanmoreTechnical() {
         onShiftChange={setShift}
         onExport={() => window.print()}
         asOf={asOfData?.asOf ?? null}
-        lastUpdatedAt={lastUpdatedAt}
+        lastUpdatedAt={productivity.lastUpdatedAt}
         categoryTabs={[]}
         tyreTypes={tab === "srt" ? [] : ["PCR"]}
         tyreType="PCR"
@@ -420,10 +628,9 @@ function BanmoreTechnical() {
           />
         )}
         {tab === "building" && (
-          <ScopeSelector
-            label="Machine"
-            items={BUILDING_MACHINES}
-            value={buildingMachine}
+          <MachineSelect
+            machines={buildingMachines}
+            value={selectedMachine ?? ALL_MACHINES}
             onChange={setBuildingMachine}
           />
         )}
@@ -433,15 +640,56 @@ function BanmoreTechnical() {
         ) : tab === "analysis" ? (
           <TechnicalAnalysis />
         ) : (
-          <TechnicalKpiSection
-            title={tab === "stock" ? activeStockArea.label : activeTab?.label}
-            kpis={displayKpis}
-            isLoading={isLiveTab && isLoading}
-            error={isLiveTab ? error : null}
-          />
+          <>
+            <TechnicalKpiSection
+              title={tab === "stock" ? activeStockArea.label : activeTab?.label}
+              kpis={displayKpis}
+              isLoading={isLiveTab && isLoading}
+              error={isLiveTab ? error : null}
+              openDrillKpiId={openDrillKpiId}
+              onDrillKpi={handleDrillKpi}
+              onCloseDrill={handleCloseDrill}
+            />
+            {drillPanel}
+          </>
         )}
       </Box>
     </Box>
+  );
+}
+
+function MachineSelect({ machines, value, onChange }) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 2 }}>
+      <Typography
+        component="label"
+        htmlFor="technical-building-machine"
+        sx={{
+          minWidth: 68,
+          fontSize: 11,
+          fontWeight: 700,
+          color: "text.secondary",
+          textTransform: "uppercase",
+        }}
+      >
+        Machine
+      </Typography>
+      <FormControl size="small" sx={{ minWidth: 220 }}>
+        <Select
+          id="technical-building-machine"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          MenuProps={{ PaperProps: { sx: { maxHeight: 360 } } }}
+        >
+          <MenuItem value={ALL_MACHINES}>All machines</MenuItem>
+          {machines.map((machine) => (
+            <MenuItem key={machine} value={machine}>
+              {machine}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Stack>
   );
 }
 
@@ -514,7 +762,15 @@ function TechnicalOverallGroups({ mapKpis }) {
   );
 }
 
-function TechnicalKpiSection({ title, kpis, isLoading, error }) {
+function TechnicalKpiSection({
+  title,
+  kpis,
+  isLoading,
+  error,
+  openDrillKpiId,
+  onDrillKpi,
+  onCloseDrill,
+}) {
   return (
     <Box component="section" aria-labelledby="technical-kpis-heading">
       <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 1.5 }}>
@@ -546,14 +802,25 @@ function TechnicalKpiSection({ title, kpis, isLoading, error }) {
               Live values unavailable: {error.message}
             </Typography>
           )}
-          <KpiGrid kpis={kpis} />
+          <KpiGrid
+            kpis={kpis}
+            openDrillKpiId={openDrillKpiId}
+            onDrillKpi={onDrillKpi}
+            onCloseDrill={onCloseDrill}
+          />
         </>
       )}
     </Box>
   );
 }
 
-function KpiGrid({ kpis, minWidth = 220 }) {
+function KpiGrid({
+  kpis,
+  minWidth = 220,
+  openDrillKpiId = null,
+  onDrillKpi,
+  onCloseDrill,
+}) {
   return (
     <Box
       sx={{
@@ -564,7 +831,13 @@ function KpiGrid({ kpis, minWidth = 220 }) {
     >
       {kpis.map(({ definition, live }) =>
         live && hasKpiValue(live.value) ? (
-          <KpiCard key={definition.id} kpi={{ ...live, drillable: false }} />
+          <KpiCard
+            key={definition.id}
+            kpi={onDrillKpi ? live : { ...live, drillable: false }}
+            isDrilling={openDrillKpiId === definition.id}
+            onClick={onDrillKpi}
+            onCloseDrill={onCloseDrill}
+          />
         ) : (
           <UnavailableKpiCard key={definition.id} name={definition.name} />
         ),

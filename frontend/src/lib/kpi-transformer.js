@@ -1278,12 +1278,19 @@ function selectSeries(
     // average denominator, or the "top machine" figure below. The
     // drill-down reads the full 6-reason set directly from `downtimeRows`,
     // independently of this synthesis (see DowntimeDrillPanel.jsx).
+    // A kpiDef may narrow the SUM to its own `reasons` (the Technical
+    // dashboard's single-reason Breakdown / Setup & Change cards). The
+    // machine fleet still spans all card reasons, so a reason card is
+    // averaged over the same machines as Total Downtime and the reasons
+    // add up to the total. The Production tile carries no `reasons`.
     for (const reason of CARD_DOWNTIME_REASONS) {
       const g = downtimeByReason.get(reason);
       if (!g) continue;
+      const counted = !kpiDef.reasons || kpiDef.reasons.includes(reason);
       for (const r of g) {
-        const v = numberOrNull(r.actual_value);
-        if (v == null || r.date == null) continue;
+        const raw = numberOrNull(r.actual_value);
+        if (raw == null || r.date == null) continue;
+        const v = counted ? raw : 0;
         const d = r.date;
         const prev = perDate.get(d);
         if (prev) prev.actual_value += v;
@@ -1306,10 +1313,12 @@ function selectSeries(
         const bucket = prev ?? perDate.get(d);
         if (!isEmptyToken(r.machine)) {
           bucket.machines.add(r.machine);
-          bucket.machineTotals.set(
-            r.machine,
-            (bucket.machineTotals.get(r.machine) ?? 0) + v,
-          );
+          if (counted) {
+            bucket.machineTotals.set(
+              r.machine,
+              (bucket.machineTotals.get(r.machine) ?? 0) + v,
+            );
+          }
         }
         if (r.granularity) {
           granularityCount.set(
@@ -1702,6 +1711,10 @@ export function toKpiGrid(
     // tile summed both copies (2x). This is the ONLY feed for the
     // TotalDowntime tile — see selectSeries.
     downtimeRows = null,
+    // The cards to build, in order. Defaults to the Production allow-list
+    // for (section, category); the Technical dashboard passes its own
+    // single-reason downtime cards here.
+    kpiDefs = null,
   } = {},
 ) {
   // CR-11: an empty landing band is not an empty grid when the dedicated
@@ -1726,7 +1739,7 @@ export function toKpiGrid(
   const isSnapshot = mode === "snapshot";
 
   // Get allowed KPI names for this (section, category) combo only.
-  const allowedKpis = ALLOWED_KPIS[section]?.[category] ?? [];
+  const allowedKpis = kpiDefs ?? ALLOWED_KPIS[section]?.[category] ?? [];
   const allowedNames = new Set(allowedKpis.map((k) => k.name));
   // CR-11 / Q-DT-01: the 6 reason leaves are deliberately NOT allow-listed
   // here. They arrive via `downtimeRows`, not `rows` — and any copy of them
