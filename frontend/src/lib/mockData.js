@@ -182,7 +182,7 @@ export const FUNCTIONS = [
   { id: "ph", name: "Plant Head", icon: "⌂", active: false },
   { id: "prod", name: "Production", icon: "⚡", active: true },
   { id: "qual", name: "Quality", icon: "◆", active: true },
-  { id: "tech", name: "Technical", icon: "⚙", active: false },
+  { id: "tech", name: "Technical", icon: "⚙", active: true },
   { id: "eng", name: "Engineering", icon: "⚒", active: true },
 ];
 

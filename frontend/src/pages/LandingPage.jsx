@@ -121,6 +121,8 @@ function LandingPage() {
       navigate(`/${modalPlant.id}/production`);
     } else if (fn.id === "qual" && modalPlant.id === "banmore") {
       navigate("/banmore/quality");
+    } else if (fn.id === "tech" && modalPlant.id === "banmore") {
+      navigate("/banmore/technical");
     } else if (fn.id === "eng" && modalPlant.id === "banmore") {
       navigate("/banmore/engineering");
     }
