@@ -14,6 +14,7 @@ import {
   buildDrillAggregateQuery,
   buildFetchQuery,
   buildLatestDateQuery,
+  buildSectionMachinesQuery,
   buildShiftComparisonQuery,
   previousWindow,
   resolveDatePredicate,
@@ -553,4 +554,34 @@ test("buildShiftComparisonQuery: CTP + non-Quality category keeps a strict predi
   });
   assert.match(sql, /category = 'Productivity'/);
   assert.doesNotMatch(sql, /OR category = 'Scrap'/);
+});
+
+test("section machines: production machine names since the lookback date", () => {
+  const sql = buildSectionMachinesQuery({ sinceIso: "2026-07-01" });
+  assert.match(sql, /^SELECT DISTINCT section, machine FROM /);
+  assert.ok(sql.includes("kpi_name = 'Production_m'"));
+  assert.ok(sql.includes("machine IS NOT NULL"));
+  assert.ok(sql.includes("machine NOT IN ('', 'nan', 'null')"));
+  assert.ok(sql.includes(">= '20260701'"));
+  assert.match(sql, /ORDER BY section, machine$/);
+});
+
+test("section machines: scoped to the requested plant", () => {
+  const banmore = buildSectionMachinesQuery({
+    plantId: "banmore",
+    sinceIso: "2026-07-01",
+  });
+  const other = buildSectionMachinesQuery({
+    plantId: "chennai",
+    sinceIso: "2026-07-01",
+  });
+  assert.notEqual(banmore, other);
+});
+
+test("section machines: rejects a missing or malformed lookback date", () => {
+  assert.throws(() => buildSectionMachinesQuery(), QueryValidationError);
+  assert.throws(
+    () => buildSectionMachinesQuery({ sinceIso: "July" }),
+    QueryValidationError,
+  );
 });

@@ -16,6 +16,7 @@ import {
   buildFetchQuery,
   buildLatestDateQuery,
   buildProductOptionsQuery,
+  buildSectionMachinesQuery,
   buildShiftComparisonQuery,
   buildShiftCoverageQuery,
   previousWindow,
@@ -23,6 +24,15 @@ import {
   resolveGranularity,
   QueryValidationError,
 } from "../queries/dashboard-query.js";
+
+// The machine picker lists machines with production in this many days.
+const MACHINE_LOOKBACK_DAYS = 90;
+
+function isoDaysAgo(days) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * POST /api/v1/dashboard/kpi-data — universal dashboard KPI + drill fetch.
@@ -446,7 +456,9 @@ export async function getAnchors(req, res, next) {
 export async function getVocab(req, res, next) {
   try {
     const plantId = normalizePlantId(req.query.plantId) ?? "banmore";
-    const vocab = await cached(`dashboard:vocab:${plantId}`, async () => {
+    // v2: `machines` added — a new key so a cached v1 payload (no machines)
+    // is never served to a client that expects them.
+    const vocab = await cached(`dashboard:vocab:v2:${plantId}`, async () => {
       const grab = (sql) =>
         runQuery(sql).then((rows) => rows.map((r) => Object.values(r)[0]));
       const table = goldSource({ plantId, fromKey: null, toKey: null });
@@ -454,14 +466,26 @@ export async function getVocab(req, res, next) {
       const present = (col) =>
         `${col} IS NOT NULL AND ${col} != 'nan' AND ${col} != 'null' AND ${col} != ''`;
 
-      const [sections, categories, granularities, tyreTypes, subSectionRows] =
-        await Promise.all([
+      const [
+        sections,
+        categories,
+        granularities,
+        tyreTypes,
+        subSectionRows,
+        machineRows,
+      ] = await Promise.all([
           grab(`SELECT DISTINCT section FROM ${table} WHERE ${scope} AND ${present("section")} ORDER BY section`),
           grab(`SELECT DISTINCT category FROM ${table} WHERE ${scope} AND ${present("category")} ORDER BY category`),
           grab(`SELECT DISTINCT granularity FROM ${table} WHERE ${scope} AND ${present("granularity")} ORDER BY granularity`),
           grab(`SELECT DISTINCT tyre_type FROM ${table} WHERE ${scope} AND ${present("tyre_type")} ORDER BY tyre_type`),
           runQuery(
             `SELECT DISTINCT section, sub_section FROM ${table} WHERE ${scope} AND ${present("section")} AND ${present("sub_section")} ORDER BY section, sub_section`,
+          ),
+          runQuery(
+            buildSectionMachinesQuery({
+              plantId,
+              sinceIso: isoDaysAgo(MACHINE_LOOKBACK_DAYS),
+            }),
           ),
         ]);
 
@@ -472,7 +496,20 @@ export async function getVocab(req, res, next) {
         if (!list.includes(sub)) list.push(sub);
       }
 
-      return { sections, categories, granularities, tyreTypes, subSections };
+      // { [section]: machine[] } — production machines per section.
+      const machines = {};
+      for (const row of machineRows) {
+        (machines[row.section] ??= []).push(row.machine);
+      }
+
+      return {
+        sections,
+        categories,
+        granularities,
+        tyreTypes,
+        subSections,
+        machines,
+      };
     }, CACHE_TTL.STATIC_LOOKUPS);
     res.json({ data: vocab });
   } catch (err) {

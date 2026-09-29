@@ -605,6 +605,42 @@ export function buildLatestDateQuery({ plantId = "banmore" } = {}) {
 }
 
 /**
+ * The machines each section records production on — the Technical
+ * dashboard's machine picker. Read from `Production_m`, whose machine column
+ * carries the production machine names (VMI1MAXX, GTIC1, …). OEE and
+ * downtime rows key TBM machines by a different, numeric id with no mapping
+ * to these names, so they are deliberately not mixed in.
+ *
+ * `sinceIso` bounds the scan to recently active machines: an unbounded
+ * DISTINCT over the whole gold table takes ~18 s cold, long enough to trip
+ * the 30 s upstream timeout when it runs alongside the startup warm-up.
+ */
+export function buildSectionMachinesQuery({
+  plantId = "banmore",
+  sinceIso,
+} = {}) {
+  if (typeof sinceIso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(sinceIso)) {
+    throw new QueryValidationError("sinceIso must be a yyyy-mm-dd date");
+  }
+  const fromKey = isoToYyyymmdd(sinceIso);
+  const table = goldSource({ plantId, fromKey, toKey: null });
+  const where = [
+    plantDepartmentPredicate(plantId),
+    `${DATE_YYYYMMDD} >= '${fromKey}'`,
+    inScopeSectionPredicate(),
+    "kpi_name = 'Production_m'",
+    "machine IS NOT NULL",
+    "machine NOT IN ('', 'nan', 'null')",
+  ].join(" AND ");
+  return (
+    `SELECT DISTINCT section, machine FROM ${table} WHERE ${where} ` +
+    `ORDER BY section, machine`
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * new_change.md C14 / C15-Q3 — which days are still in progress.
  *
  * A day is PARTIAL when its three shift rows are not all present yet. On
