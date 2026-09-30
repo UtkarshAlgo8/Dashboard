@@ -681,6 +681,9 @@ function BanmoreProduction() {
                   plantId={plantId}
                   tyreType={activeTyreType}
                   shift={shiftKey}
+                  granularity={dashboard.granularity}
+                  from={dashboard.from}
+                  to={dashboard.to}
                 />
               ) : (
                 <>

@@ -36,30 +36,38 @@ const SHIFT_LABELS = { all: "All", a: "A", b: "B", c: "C" };
  * @param {string} props.plantId
  * @param {string} [props.tyreType] - header PCR/TBR/All picker
  * @param {string} [props.shift] - header shift key (all/a/b/c)
+ * @param {string|null} [props.granularity] - header grain (DAY / MONTH / SHIFT A-C)
+ * @param {string|null} [props.from] - header window start (ISO)
+ * @param {string|null} [props.to] - header window end (ISO)
  */
-function InventoryPage({ plantId, tyreType, shift }) {
+function InventoryPage({ plantId, tyreType, shift, granularity, from, to }) {
   const isCtp = plantId === "chennai";
-  const { data, error } = usePolledQuery(
-    () => getCtpInventoryMaster({ plantId }),
+  // Held here, not in the body, so the page's filters survive the
+  // skeleton shown while a period change refetches.
+  const [filter, setFilter] = useState(() => emptyCtpFilter());
+  const { data, error, isLoading } = usePolledQuery(
+    () => getCtpInventoryMaster({ plantId, granularity, from, to }),
     {
       interval: 0,
-      deps: [plantId],
+      deps: [plantId, granularity, from, to],
       enabled: isCtp,
     },
   );
 
   if (!isCtp) return <InventoryMessage text="Inventory not configured." />;
-  if (error) {
+  if (error && !isLoading) {
     return (
       <InventoryMessage text="Inventory master data is missing or invalid." />
     );
   }
-  if (!data) return <InventoryPageSkeleton />;
+  if (isLoading || !data) return <InventoryPageSkeleton />;
   return (
     <CtpInventoryBody
       m={buildCtpInventoryModel(data)}
       tyreType={tyreType}
       shift={shift}
+      filter={filter}
+      setFilter={setFilter}
     />
   );
 }
@@ -79,9 +87,8 @@ function InventoryMessage({ text }) {
   );
 }
 
-function CtpInventoryBody({ m, tyreType, shift }) {
+function CtpInventoryBody({ m, tyreType, shift, filter, setFilter }) {
   const theme = useTheme();
-  const [filter, setFilter] = useState(() => emptyCtpFilter());
   const [drillId, setDrillId] = useState(null);
   // Tyre type is owned by the header; merge it in rather than mirroring it.
   const f = { ...filter, tt: tyreType || "All" };
