@@ -24,7 +24,9 @@ import {
   daysCover,
   passesCtpFilter,
   qtyBy,
+  sectionHasNoStock,
   selectCtpLots,
+  zeroStockItemRows,
 } from "@/lib/ctpInventory.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 
@@ -73,7 +75,13 @@ function CtpSectionPanel({ m, f, sec, onProductTypesChange, onItemsChange }) {
     .filter((it) => passesCtpFilter(fs, it, { st: true, item: true }))
     .map((it) => it.item);
   const cv = daysCover(m, fs, "item");
-  let rows = aggregateByItem(m, selectCtpLots(m, fs)).map((a) => ({
+  // No stock in gold for the whole section: list its items at 0 rather
+  // than an empty table that reads like a filter problem.
+  const noStock = sectionHasNoStock(m, sec.name);
+  const itemRows = noStock
+    ? zeroStockItemRows(m, fs)
+    : aggregateByItem(m, selectCtpLots(m, fs));
+  let rows = itemRows.map((a) => ({
     ...a,
     cover: cv[a.item] ? cv[a.item].days : null,
   }));
@@ -219,9 +227,11 @@ function CtpSectionPanel({ m, f, sec, onProductTypesChange, onItemsChange }) {
         />
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-          {total
-            ? `Showing ${vis.length} of ${total} item codes`
-            : "No stock for the current filters"}
+          {noStock
+            ? "No stock recorded in gold for this section"
+            : total
+              ? `Showing ${vis.length} of ${total} item codes`
+              : "No stock for the current filters"}
         </Typography>
         {total > topN && (
           <CtpFilterChip

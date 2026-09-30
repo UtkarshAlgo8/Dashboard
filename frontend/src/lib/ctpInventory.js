@@ -253,6 +253,54 @@ export function aggregateByItem(m, rows) {
   return Object.values(o).map((a) => ({ ...a, mhe: a.mheSet.size }));
 }
 
+/**
+ * True when gold holds no stock at all for a section: its items exist
+ * but none carries a positive status quantity (e.g. CTP Tyre Building,
+ * where every Carcass KPI is 0). Distinct from "filtered to nothing".
+ *
+ * @param {object} m
+ * @param {string} sec - section name
+ * @returns {boolean}
+ */
+export function sectionHasNoStock(m, sec) {
+  return (
+    m.itemList.some((it) => it.sec === sec) &&
+    !m.facts.some((r) => r.sec === sec)
+  );
+}
+
+/**
+ * All-zero item rows (aggregateByItem shape) for the items that pass the
+ * filter, ignoring status — so a section with no stock in gold still
+ * lists its item codes at 0 instead of an empty table.
+ *
+ * @param {object} m
+ * @param {object} f
+ * @returns {object[]}
+ */
+export function zeroStockItemRows(m, f) {
+  const o = {};
+  m.itemList.forEach((it) => {
+    if (o[it.item] || !passesCtpFilter(f, it, { st: true })) return;
+    const st = {};
+    m.statuses.forEach((s) => {
+      st[s.key] = 0;
+    });
+    o[it.item] = {
+      item: it.item,
+      sec: it.sec,
+      pt: it.pt,
+      uom: it.uom,
+      qty: 0,
+      st,
+      mhe: 0,
+      maxAge: 0,
+      lots: 0,
+    };
+  });
+  return Object.values(o);
+}
+
 function coverBelowCard(m, f, cfg) {
   const cv = daysCover(m, f, "pt");
   const short = Object.keys(cv)
