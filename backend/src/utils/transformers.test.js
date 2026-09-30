@@ -1,6 +1,6 @@
 /**
  * Unit tests for `toCtpInventoryMaster()` — see transformers.js and the
- * plan at .claude/plans/vast-enchanting-dijkstra.md.
+ * KPI → FE mapping in docs/Inventory_Mapping_Final.xlsx.
  *
  * Pure: no network, no clock. Fixture rows + `assert.deepEqual` over the
  * master payload. Mirrors the offline pattern from quality/spc.test.js.
@@ -8,7 +8,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toCtpInventoryMaster } from "./transformers.js";
+import {
+  toCtpInventoryMaster,
+  CTP_INVENTORY_KPIS,
+  CTP_CARD_KPIS,
+} from "./transformers.js";
 
 /** Build one gold row. Tests pass these as the "rows" argument. */
 function row(overrides) {
@@ -20,11 +24,29 @@ function row(overrides) {
     itemcode: "IL-001",
     tyre_type: "PCR",
     unit_of_measurement: "KG",
-    kpi_name: "Inventory_item",
+    kpi_name: "Ready_To_Use",
     actual_value: 100,
     ...overrides,
   };
 }
+
+function firstItem(m) {
+  return m.sections[0].product_types[0].items[0];
+}
+
+test("CTP_INVENTORY_KPIS lists every live gold inventory KPI", () => {
+  assert.deepEqual([...CTP_INVENTORY_KPIS].sort(), [
+    "About_To_Expire",
+    "Daily_Consumption",
+    "Expired",
+    "Held",
+    "MHE_Count",
+    "Oldest_Blocked_Lot_Days",
+    "Part_Use",
+    "Ready_To_Use",
+    "Total_Inventory",
+  ]);
+});
 
 test("toCtpInventoryMaster: empty input returns empty sections, data_limits flag absent sections", () => {
   const m = toCtpInventoryMaster([]);
@@ -42,125 +64,117 @@ test("toCtpInventoryMaster: empty input returns empty sections, data_limits flag
   assert.equal(m.validation.items, 0);
 });
 
-test("toCtpInventoryMaster: latest-date-wins per itemcode keeps the newest row", () => {
+test("toCtpInventoryMaster: non-array input is treated as empty", () => {
+  const m = toCtpInventoryMaster(null);
+  assert.equal(m.sections.length, 0);
+  assert.equal(m.validation.items, 0);
+});
+
+test("toCtpInventoryMaster: one lot per status KPI, mapped to its status key", () => {
+  const m = toCtpInventoryMaster([
+    row({ kpi_name: "Ready_To_Use", actual_value: 50 }),
+    row({ kpi_name: "Part_Use", actual_value: 10 }),
+    row({ kpi_name: "About_To_Expire", actual_value: 5 }),
+    row({ kpi_name: "Expired", actual_value: 3 }),
+    row({ kpi_name: "Held", actual_value: 2 }),
+  ]);
+  const item = firstItem(m);
+  assert.deepEqual(
+    item.lots.map((l) => [l.status, l.quantity]),
+    [["READY", 50], ["PART", 10], ["ATE", 5], ["EXP", 3], ["HOLD", 2]],
+  );
+  assert.equal(item.lots[0].lot_id, "SYN-IL-001-READY-20260716");
+  assert.equal(m.validation.lots, 5);
+  assert.equal(m.validation.items, 1);
+});
+
+test("toCtpInventoryMaster: zero-quantity statuses emit no lot", () => {
+  const m = toCtpInventoryMaster([
+    row({ kpi_name: "Ready_To_Use", actual_value: 40 }),
+    row({ kpi_name: "Held", actual_value: 0 }),
+    row({ kpi_name: "Expired", actual_value: "nan" }),
+  ]);
+  assert.deepEqual(firstItem(m).lots.map((l) => l.status), ["READY"]);
+});
+
+test("toCtpInventoryMaster: Daily_Consumption and Oldest_Blocked_Lot_Days feed cover and blocked age", () => {
+  const m = toCtpInventoryMaster([
+    row({ kpi_name: "Ready_To_Use", actual_value: 40 }),
+    row({ kpi_name: "Held", actual_value: 8 }),
+    row({ kpi_name: "Expired", actual_value: 4 }),
+    row({ kpi_name: "Daily_Consumption", actual_value: 20 }),
+    row({ kpi_name: "Oldest_Blocked_Lot_Days", actual_value: 6 }),
+  ]);
+  const item = firstItem(m);
+  assert.equal(item.daily_consumption, 20);
+  const age = Object.fromEntries(item.lots.map((l) => [l.status, l.age_days]));
+  // Only blocked statuses (Expired / ON Hold) carry the oldest-lot age.
+  assert.deepEqual(age, { READY: null, EXP: 6, HOLD: 6 });
+});
+
+test("toCtpInventoryMaster: Total_Inventory and MHE_Count feed validation, not lots", () => {
+  const m = toCtpInventoryMaster([
+    row({ kpi_name: "Total_Inventory", actual_value: 60 }),
+    row({ kpi_name: "Ready_To_Use", actual_value: 60 }),
+    row({ kpi_name: "MHE_Count", actual_value: 7 }),
+    row({ itemcode: "IL-002", kpi_name: "Total_Inventory", actual_value: 30 }),
+    row({ itemcode: "IL-002", kpi_name: "Ready_To_Use", actual_value: 25 }),
+    row({ itemcode: "IL-002", kpi_name: "MHE_Count", actual_value: 3 }),
+  ]);
+  assert.equal(m.validation.expected_total_inventory, 90);
+  assert.equal(m.validation.expected_mhe_count, 10);
+  assert.equal(m.validation.lots, 2);
+  // IL-002: Total 30 vs statuses 25 → flagged.
+  assert.equal(m.data_limits.items_total_mismatch, 1);
+});
+
+test("toCtpInventoryMaster: latest date wins for a repeated (item, kpi)", () => {
   const m = toCtpInventoryMaster([
     row({ date: "2026-07-10", actual_value: 50 }),
     row({ date: "2026-07-16", actual_value: 100 }),
     row({ date: "2026-07-12", actual_value: 75 }),
   ]);
-  const item = m.sections[0].product_types[0].items[0];
-  assert.equal(item.item_code, "IL-001");
-  assert.equal(item.lots.length, 1);
-  assert.equal(item.lots[0].quantity, 100);
-  assert.equal(item.lots[0].production_date, "2026-07-16");
-  assert.equal(m.validation.lots, 1);
-  assert.equal(m.validation.expected_total_inventory, 100);
+  assert.equal(firstItem(m).lots[0].quantity, 100);
 });
 
-test("toCtpInventoryMaster: synthesises one READY lot per item with null mhe/age/expiry", () => {
-  const m = toCtpInventoryMaster([row()]);
-  const lot = m.sections[0].product_types[0].items[0].lots[0];
-  assert.equal(lot.status, "READY");
-  assert.equal(lot.mhe_code, null);
-  assert.equal(lot.age_days, null);
-  assert.equal(lot.expiry_date, null);
-  assert.equal(lot.lot_id, "SYN-IL-001-20260716");
-});
-
-test("toCtpInventoryMaster: groups by section → product_type → item, sorted within each level", () => {
+test("toCtpInventoryMaster: kpi_names outside the inventory set are ignored", () => {
   const m = toCtpInventoryMaster([
-    row({ section: "Stock", product_type: "Ply", itemcode: "P-2", date: "2026-07-16" }),
-    row({ section: "Stock", product_type: "Ply", itemcode: "P-1", date: "2026-07-16" }),
-    row({ section: "Stock", product_type: "Inner Liner", itemcode: "IL-A", date: "2026-07-16" }),
-    row({ section: "Tyre Building", product_type: "Green Tyre", itemcode: "GT-1", date: "2026-07-16" }),
+    row({ kpi_name: "Inventory_item", actual_value: 999 }),
+    row({ kpi_name: "Production", actual_value: 999 }),
   ]);
-  // Sections appear in canonical order (Mixing, Stock, Tyre Building).
-  assert.deepEqual(m.sections.map((s) => s.name), ["Stock", "Tyre Building"]);
-  // Stock accent is "tl" (teal) — matches the mock master.
-  assert.equal(m.sections[0].accent, "tl");
-  assert.equal(m.sections[1].accent, "bl");
-  // product_types within Stock sorted alphabetically.
-  assert.deepEqual(
-    m.sections[0].product_types.map((p) => p.name),
-    ["Inner Liner", "Ply"],
-  );
-  // items within Ply sorted by itemcode.
-  assert.deepEqual(
-    m.sections[0].product_types[1].items.map((i) => i.item_code),
-    ["P-1", "P-2"],
-  );
+  assert.equal(m.sections.length, 0);
 });
 
-test("toCtpInventoryMaster: data_origin and data_limits reflect gold-only origin", () => {
-  const m = toCtpInventoryMaster([row()]);
-  assert.match(m.data_origin, /gold\.ctp_gold/);
-  assert.match(m.data_origin, /lot-level facets absent/);
-  assert.equal(m.data_limits.lot_synthesis, "READY");
-  assert.equal(m.data_limits.mhe_count, null);
-  assert.equal(m.data_limits.oldest_blocked_age, null);
-  assert.equal(m.data_limits.daily_consumption, null);
-});
-
-test("toCtpInventoryMaster: as_of is max-date in IST +05:30 with 06:00:00 timestamp", () => {
-  const m = toCtpInventoryMaster([
-    row({ date: "2026-07-16", actual_value: 1 }),
-    row({ itemcode: "IL-2", date: "2026-08-05", actual_value: 1 }),
-  ]);
-  assert.equal(m.as_of, "2026-08-05T06:00:00+05:30");
-});
-
-test("toCtpInventoryMaster: static config blocks are preserved (status_master, insight_cards, table, uom_display)", () => {
-  const m = toCtpInventoryMaster([]);
-  assert.equal(m.status_master.length, 5);
-  assert.equal(m.status_master[0].key, "READY");
-  assert.equal(m.status_master[3].key, "EXP");
-  assert.equal(m.status_master[4].key, "HOLD");
-  assert.equal(m.insight_cards.length, 4);
-  assert.equal(m.insight_cards[0].id, "short_cover");
-  assert.equal(m.insight_cards[3].type, "oldest_blocked");
-  assert.deepEqual(m.table, {
-    default_sort: { key: "READY", dir: "desc" },
-    top_n: 10,
-  });
-  assert.deepEqual(m.uom_display, { MTR: "m", KG: "kg", NOS: "nos" });
-});
-
-test("toCtpInventoryMaster: validation.expected_total_inventory sums all lot quantities", () => {
-  const m = toCtpInventoryMaster([
-    row({ itemcode: "A", actual_value: 10 }),
-    row({ itemcode: "B", actual_value: 20 }),
-    row({ product_type: "Sidewall", itemcode: "C", actual_value: 5 }),
-    row({ section: "Tyre Building", product_type: "Green Tyre", itemcode: "D", actual_value: 100 }),
-  ]);
-  assert.equal(m.validation.expected_total_inventory, 135);
-  assert.equal(m.validation.expected_mhe_count, 0);
-  assert.equal(m.validation.lots, 4);
-  assert.equal(m.validation.items, 4);
-});
-
-test("toCtpInventoryMaster: missing or empty itemcode / product_type / section rows are dropped", () => {
+test("toCtpInventoryMaster: missing or empty itemcode / product_type / section / date rows are dropped", () => {
   const m = toCtpInventoryMaster([
     row({ itemcode: "" }),
     row({ itemcode: "null" }),
     row({ product_type: "" }),
     row({ section: "" }),
-    row(), // valid baseline row
+    row({ date: "garbage" }),
+    row({ itemcode: "OK" }), // valid baseline row
   ]);
-  assert.equal(m.validation.lots, 1);
+  assert.equal(m.validation.items, 1);
+  assert.equal(firstItem(m).item_code, "OK");
 });
 
-test("toCtpInventoryMaster: bar rows (kpi_name='Inventory') do not emit lots", () => {
-  // The SQL fetches BOTH Inventory and Inventory_item rows. Only
-  // Inventory_item rows should appear as lots — the bar series is a
-  // kpi_name='Inventory' row that carries product_type + qty but no
-  // itemcode, and must be filtered out by the transformer.
+test("toCtpInventoryMaster: groups by section → product_type → item, sorted within each level", () => {
   const m = toCtpInventoryMaster([
-    row({ kpi_name: "Inventory", itemcode: "", actual_value: 999 }),
-    row({ kpi_name: "Inventory_item", itemcode: "IL-1", actual_value: 10 }),
+    row({ product_type: "Ply", itemcode: "P-2" }),
+    row({ product_type: "Ply", itemcode: "P-1" }),
+    row({ product_type: "Inner Liner", itemcode: "IL-A" }),
+    row({ section: "Tyre Building", product_type: "Green Tyre", itemcode: "GT-1" }),
   ]);
-  assert.equal(m.validation.lots, 1);
-  assert.equal(m.sections[0].product_types[0].items[0].item_code, "IL-1");
-  assert.equal(m.validation.expected_total_inventory, 10);
+  assert.deepEqual(m.sections.map((s) => s.name), ["Stock", "Tyre Building"]);
+  assert.equal(m.sections[0].accent, "tl");
+  assert.deepEqual(
+    m.sections[0].product_types.map((p) => p.name),
+    ["Inner Liner", "Ply"],
+  );
+  assert.deepEqual(
+    m.sections[0].product_types[1].items.map((i) => i.item_code),
+    ["P-1", "P-2"],
+  );
 });
 
 test("toCtpInventoryMaster: section_order is Mixing → Stock → Tyre Building; extra sections sort to end", () => {
@@ -176,29 +190,91 @@ test("toCtpInventoryMaster: section_order is Mixing → Stock → Tyre Building;
   );
 });
 
-test("toCtpInventoryMaster: uom on the product_type is non-empty when any item carries a unit", () => {
+test("toCtpInventoryMaster: same itemcode on two tyre types stays two items", () => {
   const m = toCtpInventoryMaster([
-    row({ unit_of_measurement: "", actual_value: 1 }),
-    row({ itemcode: "B", unit_of_measurement: "M", actual_value: 1 }),
+    row({ tyre_type: "PCR", actual_value: 10 }),
+    row({ tyre_type: "TBR", actual_value: 20 }),
   ]);
-  const pt = m.sections[0].product_types[0];
-  assert.equal(pt.uom, "M");
+  const items = m.sections[0].product_types[0].items;
+  assert.deepEqual(items.map((i) => [i.tyre_type, i.lots[0].quantity]), [
+    ["PCR", 10],
+    ["TBR", 20],
+  ]);
 });
 
-test("toCtpInventoryMaster: per-item tyre_type is preserved (filter key); product_type tyre_type is the first-seen value", () => {
-  // The page filters lot facts on r.tt === f.tt, where r.tt is the
-  // per-item `tyre_type`. The product_type-level `tyre_type` is
-  // metadata for display only and uses the first row that created
-  // the entry — a deliberate simplification (we don't roll up across
-  // tyre_type when a product_type is mixed, which doesn't happen at
-  // CTP today).
+test("toCtpInventoryMaster: uom on the product_type is non-empty when any item carries a unit", () => {
   const m = toCtpInventoryMaster([
-    row({ itemcode: "A", tyre_type: "PCR", date: "2026-07-10" }),
-    row({ itemcode: "B", tyre_type: "TBR", date: "2026-07-16" }),
+    row({ unit_of_measurement: "" }),
+    row({ itemcode: "B", unit_of_measurement: "M" }),
   ]);
-  const pt = m.sections[0].product_types[0];
-  assert.equal(pt.items[0].tyre_type, "PCR");
-  assert.equal(pt.items[1].tyre_type, "TBR");
-  // Filter integrity: PCR selection keeps A only, TBR keeps B only.
-  assert.equal(m.validation.lots, 2);
+  assert.equal(m.sections[0].product_types[0].uom, "M");
+});
+
+test("toCtpInventoryMaster: as_of is max-date in IST +05:30 with 06:00:00 timestamp", () => {
+  const m = toCtpInventoryMaster([
+    row({ date: "2026-07-16" }),
+    row({ itemcode: "IL-2", date: "2026-08-05" }),
+  ]);
+  assert.equal(m.as_of, "2026-08-05T06:00:00+05:30");
+});
+
+test("toCtpInventoryMaster: static config blocks are preserved (status_master, insight_cards, table, uom_display)", () => {
+  const m = toCtpInventoryMaster([]);
+  assert.deepEqual(
+    m.status_master.map((s) => s.key),
+    ["READY", "PART", "ATE", "EXP", "HOLD"],
+  );
+  assert.equal(m.insight_cards.length, 4);
+  assert.equal(m.insight_cards[0].id, "short_cover");
+  assert.equal(m.insight_cards[3].type, "oldest_blocked");
+  assert.deepEqual(m.table, {
+    default_sort: { key: "READY", dir: "desc" },
+    top_n: 10,
+  });
+  assert.deepEqual(m.uom_display, { MTR: "m", KG: "kg", NOS: "nos" });
+});
+
+test("CTP_CARD_KPIS are the drill_down_level 1 KPIs", () => {
+  assert.deepEqual(CTP_CARD_KPIS, ["Total_Inventory", "MHE_Count"]);
+});
+
+test("toCtpInventoryMaster: status chips and grid columns use the final mapping labels", () => {
+  const m = toCtpInventoryMaster([]);
+  const by = Object.fromEntries(m.status_master.map((s) => [s.key, s]));
+  assert.deepEqual(
+    [by.READY.label, by.READY.column, by.READY.gold_metric],
+    ["Ready to Use", "Usable", "Ready_To_Use"],
+  );
+  assert.deepEqual(
+    [by.HOLD.label, by.HOLD.column, by.HOLD.gold_metric],
+    ["Hold", "Hold", "Held"],
+  );
+  assert.deepEqual(
+    [by.EXP.label, by.EXP.column, by.EXP.gold_metric],
+    ["Banned to Use", "Banned", "Expired"],
+  );
+  const tiles = Object.fromEntries(m.insight_cards.map((c) => [c.id, c.title]));
+  assert.equal(tiles.on_hold, "On Hold");
+  assert.equal(tiles.expired, "Banned to Use");
+});
+
+test("toCtpInventoryMaster: Days cover counts Ready_To_Use only; Expired and Held are blocked", () => {
+  const m = toCtpInventoryMaster([]);
+  const usable = m.status_master.filter((s) => s.usable).map((s) => s.key);
+  const blocked = m.status_master.filter((s) => s.blocked).map((s) => s.key);
+  assert.deepEqual(usable, ["READY"]);
+  assert.deepEqual(blocked, ["EXP", "HOLD"]);
+});
+
+test("toCtpInventoryMaster: sheet row PCR Belt reconciles — statuses sum to Total_Inventory", () => {
+  // Values from docs/Inventory_Mapping_Final.xlsx, "Grid rows" sheet.
+  const pcrBelt = { section: "Stock", product_type: "PCR Belt", sub_section: "Cutter", itemcode: "PB-1" };
+  const m = toCtpInventoryMaster([
+    row({ ...pcrBelt, kpi_name: "Total_Inventory", actual_value: 141523.6 }),
+    row({ ...pcrBelt, kpi_name: "Ready_To_Use", actual_value: 30976 }),
+    row({ ...pcrBelt, kpi_name: "Part_Use", actual_value: 109895.064 }),
+    row({ ...pcrBelt, kpi_name: "Held", actual_value: 652.536 }),
+  ]);
+  assert.equal(m.data_limits.items_total_mismatch, 0);
+  assert.equal(firstItem(m).lots.length, 3);
 });

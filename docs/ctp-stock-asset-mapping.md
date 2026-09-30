@@ -171,3 +171,30 @@ detect the synthetic-facet state without a hard-coded version check.
 `VITE_USE_MOCK_DATA=true` keeps the bundled fixture
 (`frontend/src/lib/ctpInventoryMaster.json`, 271 lots, 134 items)
 serving the same UX offline.
+
+## Update 2026-09-30 — Inventory KPIs replaced
+
+`gold.ctp_gold` no longer carries `Inventory` / `Inventory_item`. Inventory
+is now split per status (category `Inventory`, 2026-01-01 onward). The
+validated mapping is `docs/Inventory_Mapping_Final.xlsx`;
+`GET /plants/chennai/inventory/master` implements it:
+
+| kpi_name | drill_down_level | Page element |
+| --- | --- | --- |
+| `Total_Inventory` | 1 | Grid "Total" (= sum of the five statuses) |
+| `MHE_Count` | 1 | Validation total only — no tile yet |
+| `Ready_To_Use` | 2 | "Usable" column, "Ready to Use" chip |
+| `Held` | 2 | "Hold" column / chip, "On Hold" tile |
+| `Expired` | 2 | "Banned" column, "Banned to Use" chip / tile |
+| `Part_Use` | 2 | "Part use" column (no column in the mapping yet) |
+| `About_To_Expire` | 2 | "About to expire" column (no column in the mapping yet) |
+| `Daily_Consumption` | 2 | Days cover = Ready_To_Use / Daily_Consumption |
+| `Oldest_Blocked_Lot_Days` | 2 | "Oldest blocked lot" tile (MAX) |
+
+Query: plant + `category = 'Inventory'` (not department), `granularity =
+'DAY'` only, and each (section, product_type, tyre_type, kpi_name) series
+at its own latest date — `Steel & Fabric Calender` last refreshed
+2026-08-21. Gaps per the sheet: Green Tyre, Tread and Sidewall have no gold
+rows; Carcass is all zero; Cured Tire and Precut Cap Strip have no data.
+The sections above that cite `Inventory` / `Inventory_item` describe the
+2026-08-11 layout.
