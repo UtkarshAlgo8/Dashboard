@@ -22,6 +22,8 @@ import {
   toKpiGrid,
   toDrillRows,
   landingKpiNames,
+  readsCuringPcrSkuTotal,
+  CURING_PCR_TOTAL_KPI,
 } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
@@ -66,6 +68,9 @@ const initialState = {
   // Per-KPI anchoring applies to the DEFAULT view only — an explicit window
   // always wins, and a KPI with no rows inside it shows an empty state.
   userWindow: false,
+  // The single day the KPI headlines must be dated (Today preset). null =
+  // headlines read the newest row in the window.
+  headlineDate: null,
   drillKpis: null, // string[] — drill target kpi_names
   drillSourceKpiId: null, // string — the KPI that was originally clicked
   // new_change.md C3/C6: the CARD's already-resolved date. The drill reuses
@@ -283,6 +288,12 @@ async function fetchDashboard(payload) {
   });
   // Tolerate a bare array (older/unwrapped shape) so nothing hard-fails.
   const envelope = Array.isArray(body) ? { data: body } : (body ?? {});
+  console.log("[kpi-data]", {
+    sent: payload,
+    receivedRows: (envelope.data ?? []).length,
+    receivedBaseline: (envelope.baseline ?? []).length,
+    baselineWindow: envelope.baselineWindow,
+  });
   return {
     rows: coerceMeasures(envelope.data ?? []),
     truncated: Boolean(envelope.truncated),
@@ -337,7 +348,13 @@ async function fetchPagedDashboard(payload) {
  */
 function needsBaseline(state) {
   if (state.mode === "aggregate") return true;
-  return String(state.granularity ?? "").toUpperCase() === "MONTH";
+  const gran = String(state.granularity ?? "").toUpperCase();
+  if (gran === "MONTH") return true;
+  // Single-day (Today) and single-shift windows can't read D-1 from the
+  // trailing-window rows: the headline is pinned to TODAY, the trailing
+  // window is today-only when headlineDate is set. Ask the backend for it.
+  if (state.headlineDate) return true;
+  return false;
 }
 
 // ---------- hook ----------
@@ -382,7 +399,16 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     // children.
     drillKpis:
       state.section === "tbm" || state.section === "cur"
-        ? ["Production_product"]
+        ? [
+            "Production_product",
+            // Curing PCR: the card's total comes from the SKU leaf.
+            ...(readsCuringPcrSkuTotal(
+              sectionIdToName(state.section),
+              state.tyreType,
+            )
+              ? [CURING_PCR_TOTAL_KPI]
+              : []),
+          ]
         : null,
     // Fetch ONLY the KPIs this grid draws. The landing band otherwise returns
     // every top-level kpi_name in the (section, category) — 6 names in Mixing
@@ -643,6 +669,8 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
             // exemption); the transformer uses this to prefer the selected
             // product's row when it exists and fall back to the line value.
             productType: state.productType ?? null,
+            // Curing PCR reads its Production total from the SKU leaf.
+            tyreType: state.tyreType ?? null,
             // new_change.md C8/C9: never combine two units of the same series.
             unitOfMeasurement: state.unitOfMeasurement ?? null,
             // The card whose drill is open — lets the transformer switch a
@@ -652,8 +680,14 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
             // new_change.md C6: per-KPI anchors, applied to the DEFAULT view
             // only — an explicit user date/range always wins (C1).
             anchors,
+            // Off when the headline is pinned to one day: a stale anchor
+            // would hide that day's rows.
             useAnchors:
-              !state.userWindow && (state.mode ?? "snapshot") !== "aggregate",
+              !state.userWindow &&
+              !state.headlineDate &&
+              (state.mode ?? "snapshot") !== "aggregate",
+            // Today preset: no fallback to an earlier day — "—" instead.
+            headlineDate: state.headlineDate ?? null,
             // new_change.md C14/S-3: suppress the spike on an in-progress day.
             partialDays,
             // new_change.md C15/C16/C17: the real preceding window.
@@ -673,9 +707,11 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
       state.granularity,
       state.mode,
       state.productType,
+      state.tyreType,
       state.unitOfMeasurement,
       state.drillSourceKpiId,
       state.userWindow,
+      state.headlineDate,
       plantId,
       anchors,
       partialDays,

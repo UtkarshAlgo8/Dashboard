@@ -138,6 +138,11 @@ export function monthKeyToRange(monthKey) {
   return { from: toIso(startOfMonth(anchor)), to: toIso(endOfMonth(anchor)) };
 }
 
+/** The system clock's local calendar date, ISO yyyy-mm-dd. */
+export function todayIso() {
+  return toIso(new Date());
+}
+
 export function presetToDateRange(timeRange, asOf = null) {
   if (!timeRange) {
     return { granularity: null, from: null, to: null, mode: "snapshot" };
