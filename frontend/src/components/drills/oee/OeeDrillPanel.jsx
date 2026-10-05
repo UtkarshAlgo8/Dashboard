@@ -417,7 +417,7 @@ function OeeDrillPanel({
       }
     : null;
 
-  const { data: dayLeafData } = usePolledQuery(
+  const { data: dayLeafData, isLoading: dayLeafLoading } = usePolledQuery(
     () =>
       dayLeafPayload
         ? client
@@ -678,6 +678,8 @@ function OeeDrillPanel({
                     onSelectSubCategory={setSubCategory}
                     rows={subRows}
                     rowsByDate={subRowsByDate}
+                    rowsLoading={isLoading}
+                    rowsByDateLoading={needsDayLeafRows && dayLeafLoading}
                     accentTier={selectedTier}
                   />
                 )}

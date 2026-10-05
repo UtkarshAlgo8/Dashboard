@@ -165,14 +165,19 @@ export function resolveProductionKpi(section, selectedProduct) {
  * Curing PCR Production card source. The gold Production / Production_product
  * rows for CTP Curing PCR carry only the "Others" trench (2026-09-28: 11,738),
  * while the Databricks total includes Trench1 + Trench2 (13,326). The SKU
- * leaf still carries every trench and sums to the gold total at DAY, SHIFT
- * and MONTH alike, so the card reads the per-period sum of Production_sku.
+ * leaf still carries every trench and sums to the gold total at DAY/SHIFT.
+ * MONTH snapshots keep using Production_product: the monthly SKU feed can
+ * contain shift-total rows, which inflates a full-month card.
  */
 export const CURING_PCR_TOTAL_KPI = "Production_sku";
 
 /** True only for the Curing section on the PCR tyre line. */
-export function readsCuringPcrSkuTotal(section, tyreType) {
-  return section === "Curing" && String(tyreType ?? "").toUpperCase() === "PCR";
+export function readsCuringPcrSkuTotal(section, tyreType, granularity = null) {
+  return (
+    section === "Curing" &&
+    String(tyreType ?? "").toUpperCase() === "PCR" &&
+    normGran(granularity) !== "MONTH"
+  );
 }
 
 // realdata.md §13: the real data only ships Production_m_sku; the dummy's
@@ -1264,6 +1269,7 @@ function selectSeries(
     drilledKpiId,
     strictFilters,
     tyreType = null,
+    granularity = null,
     downtimeByReason = null,
   },
 ) {
@@ -1554,7 +1560,7 @@ function selectSeries(
         ),
       );
     }
-    if (readsCuringPcrSkuTotal(section, tyreType)) {
+    if (readsCuringPcrSkuTotal(section, tyreType, granularity)) {
       const skuRows = (groups.get(CURING_PCR_TOTAL_KPI) ?? []).filter(
         (r) =>
           canonicalizeProductType(r.product_type) ===
@@ -1779,6 +1785,7 @@ export function toKpiGrid(
     // IDENTICAL pins (C16) — only the date window moved.
     baselineRows = null,
     baselineWindow = null,
+    baselineGranularity = null,
     // new_change.md C10: the row cap was hit, so any total is INCOMPLETE.
     truncated = false,
     // Which plant's rows these are. Decides whether a filter pin is
@@ -1835,7 +1842,10 @@ export function toKpiGrid(
   if (section === "TBM" || section === "Curing") {
     allowedNames.add("Production_product");
   }
-  if (readsCuringPcrSkuTotal(section, tyreType)) {
+  if (
+    readsCuringPcrSkuTotal(section, tyreType, granularity) ||
+    readsCuringPcrSkuTotal(section, tyreType, baselineGranularity)
+  ) {
     allowedNames.add(CURING_PCR_TOTAL_KPI);
   }
   const cat = String(category || "").toUpperCase();
@@ -1898,6 +1908,7 @@ export function toKpiGrid(
     drilledKpiId,
     downtimeByReason,
     tyreType,
+    granularity,
     strictFilters: STRICT_FILTER_PLANTS.has(
       String(plantId ?? "")
         .trim()
@@ -2093,13 +2104,22 @@ export function toKpiGrid(
       // month, which only the backend baseline window carries.
       const latest = preRows[0];
       let trend;
+      let trendValueRaw = null;
       let trendBaseline = null;
       if (normGran(granularity) === "MONTH") {
+        const comparisonGranularity = baselineGranularity ?? granularity;
+        const baselineValue = baselineAggregate(
+          baselineGroups,
+          kpiDef,
+          { ...narrowOpts, granularity: comparisonGranularity },
+          comparisonGranularity,
+        );
         trend = spikePct(
           value,
-          baselineAggregate(baselineGroups, kpiDef, narrowOpts, granularity),
+          baselineValue,
         );
         if (trend != null) {
+          trendValueRaw = value - baselineValue;
           trendBaseline = formatBaselineWindow(baselineWindow, granularity);
         }
       } else {
@@ -2150,9 +2170,11 @@ export function toKpiGrid(
                 );
           if (baselineVal != null) {
             trend = spikePct(value, baselineVal);
+            trendValueRaw = value - baselineVal;
             trendBaseline = `vs ${fmtDayLabel(prevDayIso(currentIso))}`;
           } else {
             trend = null;
+            trendValueRaw = null;
             trendBaseline = null;
           }
         } else {
@@ -2160,8 +2182,10 @@ export function toKpiGrid(
           // day must be divided by the same fleet before the two are compared
           // — otherwise the spike reads as a ~N-fold jump every single day.
           const prevVal = numberOrNull(prevRow.actual_value);
-          trend = spikePct(value, prevVal == null ? null : prevVal / sparkDivisor);
+          const previousValue = prevVal == null ? null : prevVal / sparkDivisor;
+          trend = spikePct(value, previousValue);
           if (trend != null) {
+            trendValueRaw = value - previousValue;
             trendBaseline = `vs ${fmtDayLabel(isoDate(prevRow.date))}`;
           }
         }
@@ -2172,6 +2196,10 @@ export function toKpiGrid(
       // (%, M, NOS, Batch) pass through untouched. See lib/units.js.
       const rawUnit = kpi.unit ?? denan(latest.unit_of_measurement) ?? null;
       const disp = toDisplayQuantity(value, rawUnit);
+      const trendValue =
+        trendValueRaw == null
+          ? null
+          : round2(toDisplayQuantity(trendValueRaw, rawUnit).value);
       result.push({
         id: kpi.id,
         name: DISPLAY_NAME[kpiDef.name] ?? kpiDef.name,
@@ -2180,6 +2208,7 @@ export function toKpiGrid(
         unit: disp.unit,
         spark: isKg(rawUnit) ? sparkVals.map(kgToTonnes) : sparkVals,
         trend,
+        trendValue,
         trendBaseline,
         trendFavourable: trendFavourable(kpiDef.name, trend),
         drillable: kpi.drillType != null,
@@ -2324,17 +2353,25 @@ export function toKpiGrid(
     // here with the SAME C5 class as the current window. A within-window
     // day-over-day fallback would be a different, wrong comparison (defect
     // S-2), so a missing/zero baseline still renders BLANK.
-    const trend = spikePct(
-      value,
-      baselineAggregate(baselineGroups, kpiDef, narrowOpts, granularity),
+    const baselineValue = baselineAggregate(
+      baselineGroups,
+      kpiDef,
+      narrowOpts,
+      granularity,
     );
+    const trend = spikePct(value, baselineValue);
     const trendBaseline =
       trend != null ? formatBaselineWindow(baselineWindow, granularity) : null;
+    const trendValueRaw = trend != null ? value - baselineValue : null;
 
     const latest = dailyRows[0];
     // KG → MT display conversion (see snapshot path above / lib/units.js).
     const rawUnit = kpi.unit ?? denan(latest.unit_of_measurement) ?? null;
     const disp = toDisplayQuantity(value, rawUnit);
+    const trendValue =
+      trendValueRaw == null
+        ? null
+        : round2(toDisplayQuantity(trendValueRaw, rawUnit).value);
     result.push({
       id: kpi.id,
       name: DISPLAY_NAME[kpiDef.name] ?? kpiDef.name,
@@ -2343,6 +2380,7 @@ export function toKpiGrid(
       unit: disp.unit,
       spark: isKg(rawUnit) ? sparkVals.map(kgToTonnes) : sparkVals,
       trend,
+      trendValue,
       trendBaseline,
       trendFavourable: trendFavourable(kpiDef.name, trend),
       drillable: kpi.drillType != null,

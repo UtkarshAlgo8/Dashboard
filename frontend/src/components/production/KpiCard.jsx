@@ -136,8 +136,12 @@ function KpiCard({
     if (Number.isFinite(trendValue)) {
       trendVal = `${trendValue > 0 ? "+" : ""}${formatIndianNumber(trendValue)} ${unitLabel}`;
     } else if (Number.isFinite(trendPct) && Number.isFinite(numVal)) {
-      const absoluteDifference = Math.round(numVal * (trendPct / 100));
-      trendVal = `${absoluteDifference > 0 ? "+" : ""}${formatIndianNumber(absoluteDifference)} ${unitLabel}`;
+      const denominator = 1 + trendPct / 100;
+      if (denominator !== 0) {
+        const baselineValue = numVal / denominator;
+        const absoluteDifference = Math.round(numVal - baselineValue);
+        trendVal = `${absoluteDifference > 0 ? "+" : ""}${formatIndianNumber(absoluteDifference)} ${unitLabel}`;
+      }
     }
   } else if (Number.isFinite(trendPct)) {
     trendVal = `${trendPct > 0 ? "+" : ""}${trendPct.toFixed(1)}%`;

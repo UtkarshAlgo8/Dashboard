@@ -699,6 +699,26 @@ function previousCalendarMonth(anchorIso) {
   return { from, to: end.toISOString().slice(0, 10) };
 }
 
+function daysInUtcMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function shiftIsoMonthsClamped(iso, months) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const firstOfMonth = new Date(Date.UTC(year, month - 1 + months, 1));
+  const targetYear = firstOfMonth.getUTCFullYear();
+  const targetMonth = firstOfMonth.getUTCMonth() + 1;
+  const targetDay = Math.min(day, daysInUtcMonth(targetYear, targetMonth));
+  return new Date(Date.UTC(targetYear, targetMonth - 1, targetDay)).toISOString().slice(0, 10);
+}
+
+function previousMonthSameSpan(from, to) {
+  return {
+    from: shiftIsoMonthsClamped(from, -1),
+    to: shiftIsoMonthsClamped(to, -1),
+  };
+}
+
 /** True when [from,to] is exactly the 1st → last day of one calendar month. */
 function isFullCalendarMonth(from, to) {
   if (!from || !to) return false;
@@ -731,6 +751,12 @@ export function previousWindow(timeScope, granularity) {
   // MONTH/YEAR rows are point-dated snapshots: step the anchor back one whole
   // period rather than subtracting days.
   if (granularity === "MONTH") {
+    if (timeScope.mode === "RANGE" && timeScope.from && timeScope.to) {
+      if (isFullCalendarMonth(timeScope.from, timeScope.to)) {
+        return previousCalendarMonth(timeScope.from);
+      }
+      return previousMonthSameSpan(timeScope.from, timeScope.to);
+    }
     const anchor = timeScope.date ?? timeScope.from;
     if (!anchor) return null;
     // Snapshot rows are dated the 1st, so a whole-month window is safe for
@@ -761,6 +787,19 @@ export function previousWindow(timeScope, granularity) {
     from: shiftIsoDays(timeScope.from, -n),
     to: shiftIsoDays(timeScope.from, -1),
   };
+}
+
+export function previousWindowGranularity(timeScope, granularity) {
+  if (
+    granularity === "MONTH" &&
+    timeScope.mode === "RANGE" &&
+    timeScope.from &&
+    timeScope.to &&
+    !isFullCalendarMonth(timeScope.from, timeScope.to)
+  ) {
+    return "DAY";
+  }
+  return granularity;
 }
 
 /* ---------- Public builder ---------- */

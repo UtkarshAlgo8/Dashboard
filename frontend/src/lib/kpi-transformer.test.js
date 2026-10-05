@@ -65,6 +65,7 @@ test("sparkline and day-on-day trend use the daily SKU totals", () => {
   assert.equal(card.value, 13326);
   assert.deepEqual(card.spark, [13113, 13326]);
   assert.ok(card.trend > 1 && card.trend < 2); // (13326 - 13113) / 13113
+  assert.equal(card.trendValue, 213);
 });
 
 test("an open drill's duplicate SKU rows are not counted twice", () => {
@@ -116,6 +117,69 @@ test("Curing monthly Production_product sums trench-split rows for line filters"
     }).value,
     453799,
   );
+});
+
+test("Curing monthly PCR Production uses the product monthly row, not SKU shift totals", () => {
+  const septemberRows = [
+    row("Production_product", "2026-09-01", "Others", "", 354634, {
+      granularity: "MONTH",
+    }),
+    row("Production_sku", "2026-09-01", "Others", "SKU-A", 245000, {
+      granularity: "MONTH",
+    }),
+    row("Production_sku", "2026-09-01", "Trench1", "SKU-B", 244000, {
+      granularity: "MONTH",
+    }),
+    row("Production_sku", "2026-09-01", "Trench2", "SKU-C", 242554, {
+      granularity: "MONTH",
+    }),
+  ];
+
+  assert.equal(
+    productionCard(septemberRows, {
+      ...ctpOpts,
+      granularity: "MONTH",
+      tyreType: "PCR",
+    }).value,
+    354634,
+  );
+});
+
+test("Curing month-to-date PCR trend compares against prior daily SKU total", () => {
+  const currentRows = [
+    row("Production_product", "2026-10-01", "Others", "", 83580, {
+      granularity: "MONTH",
+    }),
+    row("Production_sku", "2026-10-01", "Others", "SKU-A", 39000, {
+      granularity: "MONTH",
+    }),
+    row("Production_sku", "2026-10-01", "Trench1", "SKU-B", 30100, {
+      granularity: "MONTH",
+    }),
+    row("Production_sku", "2026-10-01", "Trench2", "SKU-C", 31300, {
+      granularity: "MONTH",
+    }),
+  ];
+  const baselineRows = [
+    row("Production_product", "2026-09-01", "Others", "", 88000),
+    row("Production_sku", "2026-09-01", "Others", "SKU-A", 70000),
+    row("Production_sku", "2026-09-02", "Trench1", "SKU-B", 25000),
+    row("Production_sku", "2026-09-03", "Trench2", "SKU-C", 15000),
+  ];
+
+  const card = productionCard(currentRows, {
+    ...ctpOpts,
+    granularity: "MONTH",
+    tyreType: "PCR",
+    baselineRows,
+    baselineGranularity: "DAY",
+    baselineWindow: { from: "2026-09-01", to: "2026-09-05" },
+  });
+
+  assert.equal(card.value, 83580);
+  assert.equal(card.trendBaseline, "vs 1–5 Sep");
+  assert.equal(card.trend, -24);
+  assert.equal(card.trendValue, -26420);
 });
 
 test("CTP TBM Green Tyre all-line view keeps PCR and TBR rows distinct", () => {

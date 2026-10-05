@@ -16,6 +16,7 @@ import {
   buildLatestDateQuery,
   buildSectionMachinesQuery,
   buildShiftComparisonQuery,
+  previousWindowGranularity,
   previousWindow,
   resolveDatePredicate,
   resolveGranularity,
@@ -223,6 +224,30 @@ test("C15: each time filter gets its defined previous period", () => {
     from: "2026-06-01",
     to: "2026-06-30",
   });
+  // Month-to-date ranges are aggregated as MONTH rows for the card, but the
+  // comparison must use the same day span in the previous month.
+  assert.deepEqual(
+    previousWindow(at({ from: "2026-10-01", to: "2026-10-05" }), "MONTH"),
+    { from: "2026-09-01", to: "2026-09-05" },
+  );
+  assert.equal(
+    previousWindowGranularity(
+      at({ from: "2026-10-01", to: "2026-10-05" }),
+      "MONTH",
+    ),
+    "DAY",
+  );
+  assert.deepEqual(
+    previousWindow(at({ from: "2026-09-01", to: "2026-09-30" }), "MONTH"),
+    { from: "2026-08-01", to: "2026-08-31" },
+  );
+  assert.equal(
+    previousWindowGranularity(
+      at({ from: "2026-09-01", to: "2026-09-30" }),
+      "MONTH",
+    ),
+    "MONTH",
+  );
   // Month picker -> a full calendar month arrives as a DAY range (1st -> last
   // day). Its baseline is the previous WHOLE month so the label reads "vs Jun",
   // not the equal-length day-shifted "31 May - 30 Jun".

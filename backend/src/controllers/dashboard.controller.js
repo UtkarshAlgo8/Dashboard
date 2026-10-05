@@ -19,6 +19,7 @@ import {
   buildSectionMachinesQuery,
   buildShiftComparisonQuery,
   buildShiftCoverageQuery,
+  previousWindowGranularity,
   previousWindow,
   resolveDatePredicate,
   resolveGranularity,
@@ -181,9 +182,17 @@ export async function postFetch(req, res, next) {
           : null;
 
       if (window) {
+        const baselineGranularity = previousWindowGranularity(
+          timeScope,
+          granularity,
+        );
+        const baselineContext = {
+          ...context,
+          granularity: baselineGranularity,
+        };
         const baselineSql = buildFetchQuery({
           plantId,
-          context,
+          context: baselineContext,
           ...window,
           drillKpis,
           landingKpis,
@@ -193,15 +202,17 @@ export async function postFetch(req, res, next) {
           drillOnly,
         });
         const baselineRows = await cached(
-          buildCacheKey("/dashboard/kpi-data:baseline", { context, plantId, window, drillKpis, landingKpis, parentFilters, limit: effectiveLimit, offset, drillOnly }),
+          buildCacheKey("/dashboard/kpi-data:baseline", { context: baselineContext, plantId, window, drillKpis, landingKpis, parentFilters, limit: effectiveLimit, offset, drillOnly }),
           () => runQuery(baselineSql),
           CACHE_TTL.KPI_ROWS,
         );
         payload.baseline = baselineRows.slice(0, effectiveLimit);
         payload.baselineWindow = window;
+        payload.baselineGranularity = baselineGranularity;
       } else {
         payload.baseline = null;
         payload.baselineWindow = null;
+        payload.baselineGranularity = null;
       }
     }
 

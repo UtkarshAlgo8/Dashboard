@@ -272,7 +272,7 @@ async function fetchCachedDashboard(payload) {
 
 /**
  * One kpi-data call, returning the WHOLE response envelope:
- *   { rows, truncated, baseline, baselineWindow }
+ *   { rows, truncated, baseline, baselineWindow, baselineGranularity }
  *
  * new_change.md C10: `truncated` says the row cap was hit and the total is
  * INCOMPLETE — the UI must never present it as final.
@@ -293,6 +293,7 @@ async function fetchDashboard(payload) {
     receivedRows: (envelope.data ?? []).length,
     receivedBaseline: (envelope.baseline ?? []).length,
     baselineWindow: envelope.baselineWindow,
+    baselineGranularity: envelope.baselineGranularity,
   });
   return {
     rows: coerceMeasures(envelope.data ?? []),
@@ -301,6 +302,7 @@ async function fetchDashboard(payload) {
       ? coerceMeasures(envelope.baseline)
       : null,
     baselineWindow: envelope.baselineWindow ?? null,
+    baselineGranularity: envelope.baselineGranularity ?? null,
     // The moment this response actually arrived from the backend. Stamped on
     // the envelope (not in the component) so it flows through the cache and a
     // cache hit correctly reports the ORIGINAL fetch time, not "now".
@@ -693,6 +695,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
             // new_change.md C15/C16/C17: the real preceding window.
             baselineRows: landingData?.baseline ?? null,
             baselineWindow: landingData?.baselineWindow ?? null,
+            baselineGranularity: landingData?.baselineGranularity ?? null,
             // new_change.md C10.
             truncated,
             // CR-11 / Q-DT-01: the ONLY feed for the Total Downtime tile.
