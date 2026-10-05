@@ -76,6 +76,95 @@ test("falls back to Production_product when no SKU rows arrived", () => {
   assert.equal(productionCard([productRow("2026-09-28", 11738)]).value, 11738);
 });
 
+test("Curing monthly Production_product sums trench-split rows for line filters", () => {
+  const septemberRows = [
+    row("Production_product", "2026-09-01", "Others", "", 354634, {
+      granularity: "MONTH",
+    }),
+    row("Production_product", "2026-09-01", "Trench1", "", 31369, {
+      granularity: "MONTH",
+    }),
+    row("Production_product", "2026-09-01", "Trench3", "", 32398, {
+      granularity: "MONTH",
+    }),
+    row("Production_product", "2026-09-01", "Trench2", "", 35398, {
+      granularity: "MONTH",
+    }),
+  ];
+
+  assert.equal(
+    productionCard(septemberRows.slice(0, 1), {
+      ...ctpOpts,
+      granularity: "MONTH",
+      tyreType: "PCR",
+    }).value,
+    354634,
+  );
+  assert.equal(
+    productionCard(septemberRows.slice(1), {
+      ...ctpOpts,
+      granularity: "MONTH",
+      tyreType: "TBR",
+    }).value,
+    99165,
+  );
+  assert.equal(
+    productionCard(septemberRows, {
+      ...ctpOpts,
+      granularity: "MONTH",
+      tyreType: null,
+    }).value,
+    453799,
+  );
+});
+
+test("CTP TBM Green Tyre all-line view keeps PCR and TBR rows distinct", () => {
+  const tbmRow = (tyre_type, actual_value) => ({
+    date: "2026-07-16",
+    section: "TBM",
+    sub_section: "",
+    tyre_type,
+    machine: "",
+    product_type: "Green Tyre",
+    itemcode: "",
+    granularity: "DAY",
+    category: "Productivity",
+    kpi_name: "Production_product",
+    unit_of_measurement: "NOS",
+    actual_value,
+  });
+  const rows = [tbmRow("PCR", 11906), tbmRow("TBR", 3405)];
+
+  const allCard = toKpiGrid(rows, {
+    section: "TBM",
+    category: "P",
+    granularity: "DAY",
+    mode: "snapshot",
+    plantId: "chennai",
+    tyreType: null,
+  }).find((k) => k.id === "prod");
+  const pcrCard = toKpiGrid(rows.filter((r) => r.tyre_type === "PCR"), {
+    section: "TBM",
+    category: "P",
+    granularity: "DAY",
+    mode: "snapshot",
+    plantId: "chennai",
+    tyreType: "PCR",
+  }).find((k) => k.id === "prod");
+  const tbrCard = toKpiGrid(rows.filter((r) => r.tyre_type === "TBR"), {
+    section: "TBM",
+    category: "P",
+    granularity: "DAY",
+    mode: "snapshot",
+    plantId: "chennai",
+    tyreType: "TBR",
+  }).find((k) => k.id === "prod");
+
+  assert.equal(allCard.value, 15311);
+  assert.equal(pcrCard.value, 11906);
+  assert.equal(tbrCard.value, 3405);
+});
+
 test("other lines and sections keep reading Production_product", () => {
   assert.equal(
     productionCard(day28, { ...ctpOpts, tyreType: "TBR" }).value,

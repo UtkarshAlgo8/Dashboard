@@ -1544,10 +1544,14 @@ function selectSeries(
     if (productRows.length > 0) {
       name = kpiName;
       strictProductPin = productPin;
-      groupDesc = productRows.filter(
-        (r) =>
-          canonicalizeProductType(r.product_type) ===
-          canonicalizeProductType(productPin),
+      groupDesc = sumRowsPerPeriod(
+        uniqueLeafRows(
+          productRows.filter(
+            (r) =>
+              canonicalizeProductType(r.product_type) ===
+              canonicalizeProductType(productPin),
+          ),
+        ),
       );
     }
     if (readsCuringPcrSkuTotal(section, tyreType)) {
@@ -1666,6 +1670,7 @@ function uniqueLeafRows(rows) {
     const key = [
       isoDate(r.date),
       normGran(r.granularity),
+      r.tyre_type ?? "",
       r.unit_of_measurement ?? "",
       r.sub_section ?? "",
       r.machine ?? "",
