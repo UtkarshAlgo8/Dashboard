@@ -192,6 +192,14 @@ export const config = {
     enabled: optional("CACHE_MATERIALIZE_ENABLED", "true") !== "false",
     intervalMs: asInt("CACHE_MATERIALIZE_INTERVAL_MS", 30 * 60 * 1000),
     bootDelayMs: asInt("CACHE_MATERIALIZE_BOOT_DELAY_MS", 5_000),
+    // The materializer is an optimization layer, not the source of truth.
+    // Keep it on the stable Banmore dashboard by default; CTP data is still
+    // changing frequently and should use the live query/cache path so corrected
+    // gold rows are visible immediately after the short KPI cache expires.
+    plants: optional("CACHE_MATERIALIZE_PLANTS", "banmore")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     windowDays: asInt("CACHE_MATERIALIZE_WINDOW_DAYS", 60),
     levels: optional("CACHE_MATERIALIZE_LEVELS", "1,2")
       .split(",")

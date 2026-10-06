@@ -343,6 +343,7 @@ describe("materializer.stats", () => {
   test("reports zero plants when nothing is materialized", () => {
     const s = materializerStats();
     assert.equal(s.enabled, true);
+    assert.deepEqual(s.configuredPlants, ["banmore"]);
     assert.deepEqual(s.plants, []);
   });
 
