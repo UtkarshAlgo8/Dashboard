@@ -9,6 +9,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  CTP_OEE_KPIS,
+  emptyColumnPredicate,
+  plantPredicate,
   plantTyreTypes,
   tyreTypePredicate,
   TYRE_TYPE_ALL,
@@ -26,15 +29,24 @@ test("CTP offers All / PCR / TBR, Banmore only its single line", () => {
   assert.ok(!plantTyreTypes("chennai").includes("Both"));
 });
 
-test("a line selection also keeps the shared-compound rows", () => {
+test("a line selection also keeps the shared-compound and untagged rows", () => {
+  const untagged = emptyColumnPredicate("tyre_type");
   assert.equal(
     tyreTypePredicate("PCR"),
-    "UPPER(tyre_type) IN ('PCR', 'BOTH')",
+    `(UPPER(tyre_type) IN ('PCR', 'BOTH') OR ${untagged})`,
   );
   assert.equal(
     tyreTypePredicate("TBR"),
-    "UPPER(tyre_type) IN ('TBR', 'BOTH')",
+    `(UPPER(tyre_type) IN ('TBR', 'BOTH') OR ${untagged})`,
   );
+});
+
+test("a line selection on CTP keeps the untagged OEE rows", () => {
+  const sql = buildFetchQuery({
+    plantId: "chennai",
+    context: { section: "Curing", granularity: "DAY", tyre_type: "PCR" },
+  });
+  assert.ok(sql.includes(emptyColumnPredicate("tyre_type")));
 });
 
 test("All / empty places no tyre_type restriction", () => {
@@ -71,4 +83,22 @@ test("an unsupported tyre type is rejected", () => {
       }),
     QueryValidationError,
   );
+});
+
+test("Chennai reads the OEE family from plant CTP and the rest from CHENNAI", () => {
+  const p = plantPredicate("plant", "chennai");
+  assert.match(p, /UPPER\(plant\) = 'CHENNAI' AND kpi_name NOT IN \(/);
+  assert.match(p, /UPPER\(plant\) = 'CTP' AND kpi_name IN \(/);
+  for (const k of ["OEE_o", "OEE_s", "Breakdown", "Setup & Change"]) {
+    assert.ok(CTP_OEE_KPIS.includes(k), k);
+  }
+  assert.equal(plantPredicate("plant", "ctp"), p);
+});
+
+test("Banmore still matches only BANMORE", () => {
+  assert.equal(plantPredicate("plant", "banmore"), "UPPER(plant) = 'BANMORE'");
+});
+
+test("an unknown plant is rejected by the plant predicate", () => {
+  assert.throws(() => plantPredicate("plant", "nowhere"), /Unknown plant/);
 });
