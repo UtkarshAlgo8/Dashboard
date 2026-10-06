@@ -22,6 +22,7 @@ import {
   toDisplayQuantity,
 } from "./units.js";
 import { toDisplayDate } from "./dateFormat.js";
+import { isProductAgnosticKpi } from "./dashboardRowScopes.js";
 import {
   DOWNTIME_REASONS,
   CARD_DOWNTIME_REASONS,
@@ -1601,7 +1602,14 @@ function selectSeries(
   // new_change.md C7/C4: a strictly pinned series is already narrowed to
   // exactly one product_type, so the match below would re-admit the
   // aggregate row alongside its children — skip it there.
-  if (productType && !strictProductPin) {
+  //
+  // CTP records the OEE family per section/machine with NO product_type
+  // and a "%" unit, so it is never a product or unit series: the strict
+  // pins below would only ever empty it ("—" on the card while the sidebar
+  // shows the value). Skip both pins for those KPIs on strict plants; the
+  // card then shows exactly the rows in the selected window, nothing else.
+  const pinsApply = !(strictFilters && isProductAgnosticKpi(name));
+  if (pinsApply && productType && !strictProductPin) {
     // changes.md §6: compare canonically so "Sidewall" rows match a
     // "SideWall" selection (and vice-versa) instead of splitting.
     const wantPt = canonicalizeProductType(productType);
@@ -1617,7 +1625,7 @@ function selectSeries(
   // leaves the group alone EXCEPT for the series the unit pills actually
   // describe (UNIT_PINNED_SERIES) — the option list spans all history, and
   // falling back there showed one unit's total under another unit's pill.
-  if (unitOfMeasurement) {
+  if (pinsApply && unitOfMeasurement) {
     const unitRows = groupDesc.filter(
       (r) =>
         canonicalUnit(r.unit_of_measurement) ===

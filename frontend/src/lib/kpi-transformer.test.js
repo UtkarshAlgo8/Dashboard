@@ -257,3 +257,49 @@ test("ignores non-numeric SKU values instead of blanking the total", () => {
   ];
   assert.equal(productionCard(rows).value, 11738);
 });
+
+// CTP records OEE per section/machine with an empty product_type. The strict
+// product pin must not apply to it, or picking "Cured Tyre" blanks the card.
+const oeeRow = (date, actual_value, extra = {}) => ({
+  date,
+  section: "Curing",
+  sub_section: "",
+  machine: "",
+  product_type: "",
+  itemcode: "",
+  tyre_type: "",
+  granularity: "DAY",
+  kpi_name: "OEE_o",
+  unit_of_measurement: "%",
+  drill_down_level: "1",
+  actual_value: String(actual_value),
+  ...extra,
+});
+const oeeCard = (rows, opts) =>
+  toKpiGrid(rows, opts).find((k) => k.id === "oee");
+
+test("CTP OEE card shows the section value while a product type is picked", () => {
+  const card = oeeCard([oeeRow("2026-10-06", 53.46)], {
+    ...ctpOpts,
+    tyreType: null,
+    productType: "Cured Tyre",
+  });
+  assert.equal(card.value, 53.46);
+});
+
+test("CTP OEE card ignores a picked unit of measurement", () => {
+  const card = oeeCard([oeeRow("2026-10-06", 53.46)], {
+    ...ctpOpts,
+    productType: "Cured Tyre",
+    unitOfMeasurement: "NOS",
+  });
+  assert.equal(card.value, 53.46);
+});
+
+test("CTP OEE card stays empty when the window has no OEE rows", () => {
+  const card = oeeCard([productRow("2026-10-06", 9341)], {
+    ...ctpOpts,
+    productType: "Cured Tyre",
+  });
+  assert.equal(card.value, "—");
+});
