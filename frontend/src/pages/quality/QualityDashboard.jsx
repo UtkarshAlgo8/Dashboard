@@ -12551,13 +12551,14 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
         <div style={{ fontSize: 11.5, color: C.mu }}>
           Cp / Cpk / Pp / Ppk are averaged over {from} to {to} — gold publishes
           SPC capability per day only, so a range has no snapshot of its own.
-          Chart points show every available silver reading, not just this range.
+          Charts show each combination's latest 300 subgroups (1,500
+          readings), whatever their date.
         </div>
       ) : snapshotDate ? (
         <div style={{ fontSize: 11.5, color: C.mu }}>
           Snapshot {snapshotDate}. SPC rows use the latest available snapshot on
-          or before the selected date. Chart points show every available silver
-          reading, not just the selected date.
+          or before the selected date. Charts show each combination's latest 300
+          subgroups (1,500 readings), whatever their date.
         </div>
       ) : null}
       {!loading && widgets.length === 0 ? (

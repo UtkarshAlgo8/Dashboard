@@ -7,12 +7,13 @@
  * apart is the point: limits derived from the same points they judge make
  * every window look in control.
  *
- * No date window: the chart dots are the combo's WHOLE silver history, not
- * the dashboard's selected date. Gold keeps a capability row for every combo
- * produced in the last ~90 days, while a one-day silver window only covered
- * the recipes that ran that day — on 2026-10-07 that left 1,756 of 2,018
- * cards with Cp/Cpk and no chart. The shift selector still applies, as the
- * shift's clock hours on every date (see shiftHours).
+ * Window: the LATEST `readings` readings of each combo, whatever their date —
+ * not the dashboard's selected date. Gold keeps a capability row for every
+ * combo produced in the last ~90 days, while a one-day silver window only
+ * covered the recipes that ran that day (2026-10-07: 1,756 of 2,018 cards had
+ * Cp/Cpk and no chart). The whole history was too much the other way (24k
+ * points, 20 MB, a frozen page), so charts show a fixed recent run. The shift
+ * selector still applies, as the shift's clock hours (see shiftHours).
  */
 import { escapeLiteral } from "../normalize.js";
 import { shiftHours } from "../spc/mapping.js";
@@ -46,31 +47,8 @@ function shiftClause(timeColumn, shift) {
 }
 
 /**
- * The (year, month) partitions holding one combo's readings, oldest first.
- *
- * A combo's whole history is too big for one upstream response (a 120k-row
- * combo comes back as a bare "Internal Server Error"), so the detail reads it
- * one month at a time; this is the list of months to read. Partition columns
- * only, so it is cheap.
- *
- * @param {object} src   resolveSilver() result
- * @param {{machine:string, recipe?:string, shift?:string}} scope
- */
-export function silverMonthsQuery(src, { machine, recipe, shift }) {
-  return (
-    `SELECT DISTINCT year, month ` +
-    `FROM ${src.table} ` +
-    `WHERE ${machinePredicate(src.machineColumn, machine)}` +
-    `${recipeClause(src.itemColumn, recipe)}` +
-    `${shiftClause(src.timeColumn, shift)} ` +
-    `AND ${src.valueColumn} IS NOT NULL ` +
-    `ORDER BY year, month`
-  );
-}
-
-/**
- * Step 4 — the individual readings behind ONE chart, for ONE month
- * partition (see silverMonthsQuery for why it is split).
+ * Step 4 — the latest `readings` individual readings behind ONE chart,
+ * returned oldest first.
  *
  * Returns event_time, the measured value, and (where the parameter has one)
  * the setpoint, which Step 6 turns into the target and the spec window.
@@ -79,23 +57,25 @@ export function silverMonthsQuery(src, { machine, recipe, shift }) {
  * distribution against a single-recipe Cp.
  *
  * @param {object} src   resolveSilver() result
- * @param {{machine:string, recipe?:string, shift?:string, year:number, month:number}} scope
+ * @param {{machine:string, recipe?:string, shift?:string, readings:number}} scope
  */
-export function silverPointsQuery(src, { machine, recipe, shift, year, month }) {
+export function silverPointsQuery(src, { machine, recipe, shift, readings }) {
   const cols = [
     `${src.timeColumn} AS event_time`,
     `${src.valueColumn} AS value`,
   ];
   if (src.setpointColumn) cols.push(`${src.setpointColumn} AS setpoint`);
   return (
+    `SELECT * FROM (` +
     `SELECT ${cols.join(", ")} ` +
     `FROM ${src.table} ` +
-    `WHERE year = ${Number(year)} AND month = ${Number(month)} ` +
-    `AND ${machinePredicate(src.machineColumn, machine)}` +
+    `WHERE ${machinePredicate(src.machineColumn, machine)}` +
     `${recipeClause(src.itemColumn, recipe)}` +
     `${shiftClause(src.timeColumn, shift)} ` +
     `AND ${src.valueColumn} IS NOT NULL ` +
-    `ORDER BY ${src.timeColumn}`
+    `ORDER BY ${src.timeColumn} DESC ` +
+    `LIMIT ${Math.max(1, Math.trunc(Number(readings)) || 1)}` +
+    `) ORDER BY event_time`
   );
 }
 
@@ -104,29 +84,27 @@ export function silverPointsQuery(src, { machine, recipe, shift, year, month }) 
  *
  * Every parameter of a machine is a column of the SAME measurement row (one
  * tyre = one row), so "5 consecutive rows" is the natural subgroup for all of
- * them at once. This returns each subgroup's mean per parameter, letting the
- * widget board draw a real subgroup-mean sparkline for ~100 combos from a
- * single scan.
+ * them at once. Per (machine, recipe) this keeps the latest `readings` rows,
+ * groups them into subgroups of `size` oldest-first — the same subgroups the
+ * detail chart draws — and returns the last `points` subgroup means, so a
+ * card's sparkline is the right-hand end of its detail chart.
  *
  * Partial subgroups are dropped (HAVING count = size), matching Step 5.
  *
- * Thinning happens HERE, not in Node. A month of subgroups for one silver
- * table is ~10 MB of JSON, over the upstream Lambda's response ceiling, and
- * the whole board came back as one swallowed "Internal Server Error" — every
- * card reading "no silver measurements in the selected window" while the
- * detail chart (one combo, one query) drew fine. `points` subgroups per
- * (machine, recipe) is all a sparkline can show, so only those cross the
- * wire; the untouched totals ride along as `n_subgroups` and a per-parameter
- * `n_<value column>` so the card can still report what it is a picture of.
+ * Only `points` subgroups per combo cross the wire: the upstream Lambda has a
+ * response ceiling, and a too-big board comes back as one swallowed "Internal
+ * Server Error" that blanks every card. The totals behind the chart ride along
+ * as `n_subgroups` and a per-parameter `n_<value column>`, so the card can
+ * still report what it is a picture of.
  *
  * @param {object} src            one of SILVER_SOURCES
  * @param {object} params         paramsForSource(src)
- * @param {{machine?:string, recipe?:string, shift?:string, size:number, points:number}} scope
+ * @param {{machine?:string, recipe?:string, shift?:string, readings:number, size:number, points:number}} scope
  */
 export function silverBoardQuery(
   src,
   params,
-  { machine, recipe, shift, size = 5, points = 60 },
+  { machine, recipe, shift, readings = 1500, size = 5, points = 60 },
 ) {
   const entries = Object.entries(params);
   const valueCols = entries
@@ -136,7 +114,7 @@ export function silverBoardQuery(
     .map(([, p]) => `AVG(v_${p.valueColumn}) AS ${p.valueColumn}`)
     .join(", ");
   const meanCols = entries.map(([, p]) => p.valueColumn).join(", ");
-  // Per-parameter subgroup counts over the WHOLE window. A parameter that is
+  // Per-parameter subgroup counts over the chart window. A parameter that is
   // null for a subgroup is not part of that parameter's series, so it cannot
   // share one count with the others.
   const countCols = entries
@@ -155,30 +133,34 @@ export function silverBoardQuery(
     `SELECT UPPER(${src.machineColumn}) AS machine, ${src.itemColumn} AS recipe, ` +
     `${src.timeColumn} AS event_time, ${valueCols}, ` +
     `ROW_NUMBER() OVER (PARTITION BY UPPER(${src.machineColumn}), ${src.itemColumn} ` +
-    `ORDER BY ${src.timeColumn}) AS rn ` +
+    `ORDER BY ${src.timeColumn} DESC) AS rd ` +
     `FROM ${src.table} ` +
     `WHERE TRUE${machineFilter}${recipeClause(src.itemColumn, recipe)}` +
     `${shiftClause(src.timeColumn, shift)}` +
     `), ` +
+    // Latest `readings` rows, renumbered oldest-first so subgroups match the
+    // detail chart's.
+    `w AS (` +
+    `SELECT *, ROW_NUMBER() OVER (PARTITION BY machine, recipe ORDER BY event_time) AS rn ` +
+    `FROM r WHERE rd <= ${readings}` +
+    `), ` +
     `g AS (` +
     `SELECT machine, recipe, ${grp} AS subgroup, ` +
     `MAX(event_time) AS event_time, ${aggCols} ` +
-    `FROM r GROUP BY machine, recipe, ${grp} ` +
+    `FROM w GROUP BY machine, recipe, ${grp} ` +
     `HAVING COUNT(*) = ${size}` +
     `), ` +
     `t AS (` +
     `SELECT machine, recipe, subgroup, event_time, ${meanCols}, ` +
-    `ROW_NUMBER() OVER (PARTITION BY machine, recipe ORDER BY subgroup) AS rn2, ` +
+    `ROW_NUMBER() OVER (PARTITION BY machine, recipe ORDER BY subgroup DESC) AS rk, ` +
     `COUNT(*) OVER (PARTITION BY machine, recipe) AS n_subgroups, ${countCols} ` +
     `FROM g` +
     `) ` +
     `SELECT machine, recipe, subgroup, event_time, ${meanCols}, ` +
     `n_subgroups, ${nCols} ` +
     `FROM t ` +
-    // Even stride, and the last subgroup always kept, so the sparkline still
-    // ends where the window does.
-    `WHERE (rn2 - 1) % GREATEST(CAST(CEIL(n_subgroups / ${points}.0) AS BIGINT), 1) = 0 ` +
-    `OR rn2 = n_subgroups ` +
+    // The newest `points` subgroups: the sparkline ends at the latest reading.
+    `WHERE rk <= ${points} ` +
     `ORDER BY machine, recipe, subgroup`
   );
 }

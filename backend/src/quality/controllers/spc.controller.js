@@ -27,7 +27,6 @@ import {
   METRICS,
 } from "../queries/spc.queries.js";
 import {
-  silverMonthsQuery,
   silverPointsQuery,
   silverBoardQuery,
 } from "../queries/silver.queries.js";
@@ -133,9 +132,9 @@ function splitLimitName(kpiName) {
  * of them simultaneously — the board query groups once and averages each
  * parameter column within that grouping.
  *
- * The query returns an already-thinned series (a month of untouched
- * subgroups for one table exceeds the upstream response ceiling and the
- * whole board comes back empty), plus the true per-parameter totals.
+ * Each combo's series is the last BOARD_SPARK_POINTS of the same
+ * CHART_SUBGROUPS subgroups the detail chart draws, plus the per-parameter
+ * totals behind that chart.
  *
  * @returns {Map<string, {means:number[], times:string[], readings:number,
  *          subgroups_total:number}>} keyed `MACHINE|||recipe|||Parameter`
@@ -157,6 +156,7 @@ async function loadBoardSeries({ machine, recipe, shift }) {
           machine: machine ?? "All",
           recipe: recipe ?? "All",
           shift: shift ?? "All",
+          readings: CHART_READINGS,
         });
         const rows = await cached(
           key,
@@ -166,6 +166,7 @@ async function loadBoardSeries({ machine, recipe, shift }) {
                 machine,
                 recipe,
                 shift,
+                readings: CHART_READINGS,
                 size: SUBGROUP_SIZE,
                 points: BOARD_SPARK_POINTS,
               }),
@@ -210,34 +211,34 @@ async function loadBoardSeries({ machine, recipe, shift }) {
   return index;
 }
 
-/** Points kept in a widget sparkline. The detail chart is never thinned. */
+/**
+ * Subgroups on a control chart: the latest 300, whatever their date (1,500
+ * readings at n = 5). Enough for every Nelson rule (the longest looks at 15
+ * points) and well past the 25-subgroup SPC minimum; at 34 px a point it
+ * still scrolls in ~10,000 px. Whole history was up to 24k points and froze
+ * the page.
+ */
+const CHART_SUBGROUPS = 300;
+const CHART_READINGS = CHART_SUBGROUPS * SUBGROUP_SIZE;
+
+/** Points kept in a widget sparkline: the newest end of the detail chart. */
 const BOARD_SPARK_POINTS = 60;
 
 /**
- * TTL for whole-history silver reads. They take 10–30 s cold, and a few
- * minutes of staleness only delays the newest points; the default
- * CACHE_TTL_MS (30 s) re-ran the board scan on nearly every page open.
+ * TTL for silver chart reads. A recent-window scan still reads the whole
+ * table (combos are not tied to a date), and a few minutes of staleness only
+ * delays the newest points; the default CACHE_TTL_MS (30 s) re-ran the board
+ * scan on nearly every page open.
  */
 const SILVER_CACHE_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Month partitions read at once for one combo's history. Keeps the upstream
- * from being hit with a dozen parallel scans per chart open.
- */
-const SILVER_MONTH_CONCURRENCY = 4;
-
-/**
- * Every silver reading for one chart (machine × recipe × parameter, shift
- * hours applied), oldest first.
+ * The latest CHART_READINGS silver readings for one chart (machine × recipe
+ * × parameter, shift hours applied), oldest first.
  *
- * Read one month partition per upstream call: the largest combos hold
- * ~120k readings, over the data API's response ceiling as one call, while
- * the largest single month (~40k readings) fits. Cached, so the detail chart
- * and its point / histogram drill-downs see the same readings in the same
- * order — subgroup N on the chart is subgroup N in the drill-down.
- *
- * A failed month fails the whole read (→ []): a history with a silent hole
- * would shift every later subgroup index.
+ * Cached, so the detail chart and its point / histogram drill-downs see the
+ * same readings in the same order — subgroup N on the chart is subgroup N in
+ * the drill-down.
  *
  * @returns {Promise<Array<{event_time:*, value:*, setpoint?:*}>>}
  */
@@ -247,33 +248,16 @@ async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
     recipe,
     parameter,
     shift: shift ?? "All",
+    readings: CHART_READINGS,
   });
   try {
     // A failure throws out of cached() unstored, so the next open retries.
     return await cached(
       key,
-      async () => {
-        const scope = { machine, recipe, shift };
-        const months = await runQuery(silverMonthsQuery(src, scope));
-        const chunks = [];
-        for (let i = 0; i < months.length; i += SILVER_MONTH_CONCURRENCY) {
-          const batch = months.slice(i, i + SILVER_MONTH_CONCURRENCY);
-          chunks.push(
-            ...(await Promise.all(
-              batch.map((m) =>
-                runQuery(
-                  silverPointsQuery(src, {
-                    ...scope,
-                    year: Number(m.year),
-                    month: Number(m.month),
-                  }),
-                ),
-              ),
-            )),
-          );
-        }
-        return chunks.flat();
-      },
+      () =>
+        runQuery(
+          silverPointsQuery(src, { machine, recipe, shift, readings: CHART_READINGS }),
+        ),
       SILVER_CACHE_TTL_MS,
     );
   } catch (err) {
@@ -284,7 +268,7 @@ async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
 
 /** What the silver dots cover, echoed in place of the old date window. */
 function silverScope(shift) {
-  return { dates: "all", shift: shift ?? "All" };
+  return { latest_subgroups: CHART_SUBGROUPS, latest_readings: CHART_READINGS, shift: shift ?? "All" };
 }
 
 /** GET /quality/spc/summary  ?date= [&shift= &machine=] */

@@ -52,7 +52,6 @@ import {
 } from "./spc/mapping.js";
 import {
   silverBoardQuery,
-  silverMonthsQuery,
   silverPointsQuery,
 } from "./queries/silver.queries.js";
 
@@ -447,7 +446,7 @@ test("spcLimitsQuery: baseline granularity, keyed on machine+parameter only", ()
 
 /* ------------------------- detail assembly ---------------------- */
 
-const DETAIL_SCOPE = { dates: "all", shift: "All" };
+const DETAIL_SCOPE = { latest_subgroups: 300, latest_readings: 1500, shift: "All" };
 const SELECTION = {
   machine: "VMI_MAXX_01",
   recipe: "205/65R15 UX TOURING 94V TL-VMIMAXX",
@@ -575,22 +574,27 @@ test("toSpcDetail: an unmapped machine says so rather than charting nothing", ()
 
 const BOARD_SRC = sourceForMachine("VMIEXXIUM02");
 const BOARD_PARAMS = paramsForSource(BOARD_SRC);
-const BOARD_SCOPE = { size: 5, points: 60 };
+const BOARD_SCOPE = { readings: 1500, size: 5, points: 60 };
 
-test("silverBoardQuery: thins to `points` per machine+recipe, in SQL", () => {
-  // A month of untouched subgroups is ~10 MB per table — past the upstream
-  // response ceiling, which came back as one error and blanked every card
-  // on the board. The stride has to be applied before the wire, not after.
+test("silverBoardQuery: latest `readings` rows, subgrouped oldest-first like the detail", () => {
   const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, BOARD_SCOPE);
-  assert.match(
-    sql,
-    /WHERE \(rn2 - 1\) % GREATEST\(CAST\(CEIL\(n_subgroups \/ 60\.0\) AS BIGINT\), 1\) = 0 OR rn2 = n_subgroups/,
-  );
+  // Newest rows are picked by a DESC rank, then renumbered ascending so
+  // subgroup boundaries match the detail chart's.
+  assert.match(sql, /ORDER BY event_time DESC\) AS rd /);
+  assert.match(sql, /ROW_NUMBER\(\) OVER \(PARTITION BY machine, recipe ORDER BY event_time\) AS rn FROM r WHERE rd <= 1500/);
   // Whole subgroups only.
   assert.match(sql, /HAVING COUNT\(\*\) = 5/);
 });
 
-test("silverBoardQuery: whole history — no date, partition or time window", () => {
+test("silverBoardQuery: sends only the newest `points` subgroups per combo", () => {
+  // The upstream response ceiling: a too-big board came back as one error
+  // and blanked every card. The cut has to happen before the wire.
+  const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, BOARD_SCOPE);
+  assert.match(sql, /ORDER BY subgroup DESC\) AS rk/);
+  assert.match(sql, /WHERE rk <= 60 ORDER BY machine, recipe, subgroup$/);
+});
+
+test("silverBoardQuery: no date, partition or time window", () => {
   // Gold keeps ~90 days of combos; a one-day silver window left 1,756 of
   // 2,018 cards (2026-10-07) with Cp/Cpk and no chart.
   const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, BOARD_SCOPE);
@@ -605,10 +609,10 @@ test("silverBoardQuery: shift narrows to its clock hours on every date", () => {
   assert.match(c, /\(HOUR\(event_time\) >= 23 OR HOUR\(event_time\) < 7\)/);
 });
 
-test("silverBoardQuery: the untouched totals ride along, per parameter", () => {
-  // Thinned rows cannot be counted for the card's "N subgroups · M
-  // readings" — a parameter that is null in some subgroups has its own
-  // total, so one shared count would overstate it.
+test("silverBoardQuery: the chart's totals ride along, per parameter", () => {
+  // The sent rows are only the sparkline, so they cannot be counted for the
+  // card's "N subgroups · M readings" — and a parameter that is null in some
+  // subgroups has its own total, so one shared count would overstate it.
   const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, BOARD_SCOPE);
   assert.match(
     sql,
@@ -623,19 +627,6 @@ test("silverBoardQuery: the untouched totals ride along, per parameter", () => {
       `missing window count for ${p.valueColumn}`,
     );
   }
-});
-
-test("silverBoardQuery: a single-subgroup group is kept, not divided by zero", () => {
-  // CEIL(1 / 60.0) is 1, but GREATEST(..., 1) is what stops a stride of 0
-  // throwing for any `points` a caller passes.
-  const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, {
-    ...BOARD_SCOPE,
-    points: 0,
-  });
-  assert.match(sql, /GREATEST\(CAST\(CEIL\(n_subgroups \/ 0\.0\) AS BIGINT\), 1\)/);
-  // The last subgroup is kept whatever the stride, so the sparkline ends
-  // at the newest reading.
-  assert.match(sql, /OR rn2 = n_subgroups/);
 });
 
 test('silverBoardQuery: "All" is the absence of a recipe filter, not a value', () => {
@@ -657,42 +648,35 @@ const POINTS_SRC = resolveSilver("VMI_MAXX_02", "Tread Length");
 const POINTS_SCOPE = {
   machine: "VMI_MAXX_02",
   recipe: "165/70R14-TAXIMAX-81S-TL-VMIMAXX",
+  readings: 1500,
 };
 
-test("silverMonthsQuery: lists the combo's month partitions, oldest first", () => {
-  const sql = silverMonthsQuery(POINTS_SRC, POINTS_SCOPE);
-  assert.match(sql, /^SELECT DISTINCT year, month FROM silver\.fct_production_data_vmi_maxx /);
+test("silverPointsQuery: latest N readings, any date, returned oldest first", () => {
+  const sql = silverPointsQuery(POINTS_SRC, POINTS_SCOPE);
   assert.match(sql, /UPPER\(machine_no\) = 'VMI_MAXX_02'/);
   assert.match(sql, /item_code = '165\/70R14-TAXIMAX-81S-TL-VMIMAXX'/);
   assert.match(sql, /tread_length IS NOT NULL/);
-  assert.match(sql, /ORDER BY year, month$/);
-});
-
-test("silverPointsQuery: one month partition, ordered, no day or time window", () => {
-  // Whole history in one call is past the upstream response ceiling for the
-  // largest combos (~120k readings); one month (≤ ~40k) fits.
-  const sql = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, year: 2026, month: 9 });
-  assert.match(sql, /WHERE year = 2026 AND month = 9 AND /);
-  assert.equal(/\bday\s*=|TIMESTAMP '/.test(sql), false);
-  assert.match(sql, /ORDER BY event_time$/);
+  assert.match(sql, /ORDER BY event_time DESC LIMIT 1500\) ORDER BY event_time$/);
+  assert.equal(/\byear\s*=|\bday\s*=|TIMESTAMP '/.test(sql), false);
 });
 
 test("silverPointsQuery: shift C wraps midnight; All adds no hour filter", () => {
-  const c = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, shift: "C", year: 2026, month: 9 });
+  const c = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, shift: "C" });
   assert.match(c, /\(HOUR\(event_time\) >= 23 OR HOUR\(event_time\) < 7\)/);
-  const all = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, shift: "All", year: 2026, month: 9 });
+  const all = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, shift: "All" });
   assert.equal(all.includes("HOUR("), false);
 });
 
-test("silverPointsQuery: partition values are coerced to numbers, not injected", () => {
-  const sql = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, year: "2026", month: "9; DROP" });
-  assert.match(sql, /WHERE year = 2026 AND month = NaN AND /);
-  assert.equal(sql.includes("DROP"), false);
+test("silverPointsQuery: a bad limit is coerced to a positive integer, not injected", () => {
+  const bad = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, readings: "15; DROP" });
+  assert.match(bad, /LIMIT 1\)/);
+  assert.equal(bad.includes("DROP"), false);
+  assert.match(silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, readings: 0 }), /LIMIT 1\)/);
 });
 
 test("buildDistribution: a whole-history combo (150k readings) does not overflow the stack", () => {
   // Math.min(...values) threw "Maximum call stack size exceeded" on the
-  // largest combo (~120k readings) once silver stopped being windowed.
+  // largest combo (~120k readings).
   const values = Array.from({ length: 150_000 }, (_, i) => 10 + (i % 100) / 100);
   const dist = buildDistribution(values, {});
   assert.equal(dist.bins.reduce((s, b) => s + b.count, 0), values.length);
