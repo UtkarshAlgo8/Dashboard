@@ -130,7 +130,7 @@ export function toSpcWidgets(rows, { limitsIndex, seriesIndex } = {}) {
       subgroups: series?.subgroups_total ?? (series?.means?.length ?? 0),
     };
     if (values.length === 0) {
-      // No measurements in the window: say so rather than drawing an empty
+      // No silver history for this combo: say so rather than drawing an empty
       // axis. `insufficient` keeps the existing widget contract.
       return {
         ...base,
@@ -139,7 +139,7 @@ export function toSpcWidgets(rows, { limitsIndex, seriesIndex } = {}) {
           reason:
             c.headline_status === "Insufficient Data"
               ? "gold reports insufficient data for this combination"
-              : "no silver measurements in the selected window",
+              : "no silver measurements for this combination",
         },
       };
     }
@@ -228,10 +228,10 @@ function buildChartDataset({ values, times, limits, chartTag, ctx, limitsSource 
  * @param {Array}  deps.points   silver rows [{event_time, value, setpoint?}]
  * @param {object} deps.limits   limitsFor() result
  * @param {string} deps.snapshot capability snapshot date
- * @param {object} deps.window   {from,to} silver time window
+ * @param {object} deps.scope    {dates:"all", shift} what the silver dots cover
  * @param {object} deps.selection {machine, recipe, parameter}
  */
-export function toSpcDetail(rows, { points = [], limits, snapshot, window, selection }) {
+export function toSpcDetail(rows, { points = [], limits, snapshot, scope, selection }) {
   const combo = [...groupCombos(rows).values()][0] ?? {
     machine: selection.machine,
     recipe: selection.recipe,
@@ -249,7 +249,7 @@ export function toSpcDetail(rows, { points = [], limits, snapshot, window, selec
     source: src ? src.table : null,
     value_column: src ? src.valueColumn : null,
     readings: clean.length,
-    window,
+    scope,
     // Silver is authoritative for the dots; gold for the indices. Saying so
     // in the payload stops the two being confused when they disagree.
     note: src
@@ -264,7 +264,7 @@ export function toSpcDetail(rows, { points = [], limits, snapshot, window, selec
       insufficient: {
         sample_size: 0,
         reason: src
-          ? "no silver measurements in the selected window"
+          ? "no silver measurements for this combination"
           : "machine or parameter is not mapped to a silver source",
       },
     };

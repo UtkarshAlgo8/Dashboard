@@ -7,33 +7,15 @@
  * apart is the point: limits derived from the same points they judge make
  * every window look in control.
  *
- * Cost: silver is partitioned on (year, month, day). Every builder emits an
- * explicit partition predicate so a one-day chart scans one day, not the
- * whole table.
+ * No date window: the chart dots are the combo's WHOLE silver history, not
+ * the dashboard's selected date. Gold keeps a capability row for every combo
+ * produced in the last ~90 days, while a one-day silver window only covered
+ * the recipes that ran that day — on 2026-10-07 that left 1,756 of 2,018
+ * cards with Cp/Cpk and no chart. The shift selector still applies, as the
+ * shift's clock hours on every date (see shiftHours).
  */
 import { escapeLiteral } from "../normalize.js";
-import { partitionDays } from "../spc/mapping.js";
-
-/** `(year=2026 AND month=9 AND day=1) OR (...)` — Athena partition pruning. */
-function partitionPredicate(from, to) {
-  const parts = partitionDays(from, to);
-  if (parts.length === 0) return "TRUE";
-  return (
-    "(" +
-    parts
-      .map((p) => `(year = ${p.year} AND month = ${p.month} AND day = ${p.day})`)
-      .join(" OR ") +
-    ")"
-  );
-}
-
-/** Half-open event_time window. Timestamps are typed in silver. */
-function timeWindowPredicate(timeColumn, from, to) {
-  return (
-    `${timeColumn} >= TIMESTAMP ${escapeLiteral(from)} ` +
-    `AND ${timeColumn} < TIMESTAMP ${escapeLiteral(to)}`
-  );
-}
+import { shiftHours } from "../spc/mapping.js";
 
 /**
  * Machine match. Gold ids are upper snake; silver stores them lower or mixed
@@ -43,8 +25,52 @@ function machinePredicate(column, machine) {
   return `UPPER(${column}) = ${escapeLiteral(String(machine).toUpperCase())}`;
 }
 
+/** ` AND item = '<recipe>'`, or "" when no recipe (or "All") is selected. */
+function recipeClause(column, recipe) {
+  return recipe != null && recipe !== "" && recipe !== "All"
+    ? ` AND ${column} = ${escapeLiteral(recipe)}`
+    : "";
+}
+
 /**
- * Step 4 — the individual readings behind ONE chart.
+ * ` AND <hour of day inside the shift>`, or "" for All. Shift C wraps
+ * midnight (23 → 07), so it is an OR of the two ends of the day.
+ */
+function shiftClause(timeColumn, shift) {
+  const h = shiftHours(shift);
+  if (!h) return "";
+  const hour = `HOUR(${timeColumn})`;
+  return h.from < h.to
+    ? ` AND ${hour} >= ${h.from} AND ${hour} < ${h.to}`
+    : ` AND (${hour} >= ${h.from} OR ${hour} < ${h.to})`;
+}
+
+/**
+ * The (year, month) partitions holding one combo's readings, oldest first.
+ *
+ * A combo's whole history is too big for one upstream response (a 120k-row
+ * combo comes back as a bare "Internal Server Error"), so the detail reads it
+ * one month at a time; this is the list of months to read. Partition columns
+ * only, so it is cheap.
+ *
+ * @param {object} src   resolveSilver() result
+ * @param {{machine:string, recipe?:string, shift?:string}} scope
+ */
+export function silverMonthsQuery(src, { machine, recipe, shift }) {
+  return (
+    `SELECT DISTINCT year, month ` +
+    `FROM ${src.table} ` +
+    `WHERE ${machinePredicate(src.machineColumn, machine)}` +
+    `${recipeClause(src.itemColumn, recipe)}` +
+    `${shiftClause(src.timeColumn, shift)} ` +
+    `AND ${src.valueColumn} IS NOT NULL ` +
+    `ORDER BY year, month`
+  );
+}
+
+/**
+ * Step 4 — the individual readings behind ONE chart, for ONE month
+ * partition (see silverMonthsQuery for why it is split).
  *
  * Returns event_time, the measured value, and (where the parameter has one)
  * the setpoint, which Step 6 turns into the target and the spec window.
@@ -53,25 +79,22 @@ function machinePredicate(column, machine) {
  * distribution against a single-recipe Cp.
  *
  * @param {object} src   resolveSilver() result
- * @param {{machine:string, recipe?:string, from:string, to:string}} scope
+ * @param {{machine:string, recipe?:string, shift?:string, year:number, month:number}} scope
  */
-export function silverPointsQuery(src, { machine, recipe, from, to }) {
+export function silverPointsQuery(src, { machine, recipe, shift, year, month }) {
   const cols = [
     `${src.timeColumn} AS event_time`,
     `${src.valueColumn} AS value`,
   ];
   if (src.setpointColumn) cols.push(`${src.setpointColumn} AS setpoint`);
-  const recipeFilter =
-    recipe != null && recipe !== "" && recipe !== "All"
-      ? ` AND ${src.itemColumn} = ${escapeLiteral(recipe)}`
-      : "";
   return (
     `SELECT ${cols.join(", ")} ` +
     `FROM ${src.table} ` +
-    `WHERE ${partitionPredicate(from, to)} ` +
-    `AND ${machinePredicate(src.machineColumn, machine)}${recipeFilter} ` +
+    `WHERE year = ${Number(year)} AND month = ${Number(month)} ` +
+    `AND ${machinePredicate(src.machineColumn, machine)}` +
+    `${recipeClause(src.itemColumn, recipe)}` +
+    `${shiftClause(src.timeColumn, shift)} ` +
     `AND ${src.valueColumn} IS NOT NULL ` +
-    `AND ${timeWindowPredicate(src.timeColumn, from, to)} ` +
     `ORDER BY ${src.timeColumn}`
   );
 }
@@ -98,12 +121,12 @@ export function silverPointsQuery(src, { machine, recipe, from, to }) {
  *
  * @param {object} src            one of SILVER_SOURCES
  * @param {object} params         paramsForSource(src)
- * @param {{machine?:string, recipe?:string, from:string, to:string, size:number, points:number}} scope
+ * @param {{machine?:string, recipe?:string, shift?:string, size:number, points:number}} scope
  */
 export function silverBoardQuery(
   src,
   params,
-  { machine, recipe, from, to, size = 5, points = 60 },
+  { machine, recipe, shift, size = 5, points = 60 },
 ) {
   const entries = Object.entries(params);
   const valueCols = entries
@@ -126,10 +149,6 @@ export function silverBoardQuery(
   const machineFilter = machine
     ? ` AND ${machinePredicate(src.machineColumn, machine)}`
     : "";
-  const recipeFilter =
-    recipe != null && recipe !== "" && recipe !== "All"
-      ? ` AND ${src.itemColumn} = ${escapeLiteral(recipe)}`
-      : "";
   const grp = `CAST((rn - 1) / ${size} AS INTEGER)`;
   return (
     `WITH r AS (` +
@@ -138,8 +157,8 @@ export function silverBoardQuery(
     `ROW_NUMBER() OVER (PARTITION BY UPPER(${src.machineColumn}), ${src.itemColumn} ` +
     `ORDER BY ${src.timeColumn}) AS rn ` +
     `FROM ${src.table} ` +
-    `WHERE ${partitionPredicate(from, to)}${machineFilter}${recipeFilter} ` +
-    `AND ${timeWindowPredicate(src.timeColumn, from, to)}` +
+    `WHERE TRUE${machineFilter}${recipeClause(src.itemColumn, recipe)}` +
+    `${shiftClause(src.timeColumn, shift)}` +
     `), ` +
     `g AS (` +
     `SELECT machine, recipe, ${grp} AS subgroup, ` +
@@ -165,25 +184,21 @@ export function silverBoardQuery(
 }
 
 /**
- * Sample size per (machine, recipe, parameter) for one window — cheap enough
+ * Sample size per (machine, recipe, parameter) over the whole history — cheap enough
  * to answer "how many readings back this widget?" without pulling points.
  */
-export function silverSampleSizeQuery(src, params, { machine, recipe, from, to }) {
+export function silverSampleSizeQuery(src, params, { machine, recipe, shift }) {
   const counts = Object.values(params)
     .map((p) => `COUNT(${p.valueColumn}) AS ${p.valueColumn}`)
     .join(", ");
   const machineFilter = machine
     ? ` AND ${machinePredicate(src.machineColumn, machine)}`
     : "";
-  const recipeFilter =
-    recipe != null && recipe !== "" && recipe !== "All"
-      ? ` AND ${src.itemColumn} = ${escapeLiteral(recipe)}`
-      : "";
   return (
     `SELECT UPPER(${src.machineColumn}) AS machine, ${src.itemColumn} AS recipe, ${counts} ` +
     `FROM ${src.table} ` +
-    `WHERE ${partitionPredicate(from, to)}${machineFilter}${recipeFilter} ` +
-    `AND ${timeWindowPredicate(src.timeColumn, from, to)} ` +
+    `WHERE TRUE${machineFilter}${recipeClause(src.itemColumn, recipe)}` +
+    `${shiftClause(src.timeColumn, shift)} ` +
     `GROUP BY UPPER(${src.machineColumn}), ${src.itemColumn}`
   );
 }

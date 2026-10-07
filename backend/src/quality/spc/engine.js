@@ -527,11 +527,13 @@ export function buildDistribution(values, { target = null, usl = null, lsl = nul
       out_of_spec: { count: 0, bin_indexes: [], observations_available: false },
     };
   }
-  const lo = Math.min(...values);
-  const hi = Math.max(...values);
+  // Sort once and read the ends: Math.min(...values) spreads every reading
+  // onto the call stack and overflows it on a whole-history combo (~120k).
+  const sorted = [...values].sort((a, b) => a - b);
+  const lo = sorted[0];
+  const hi = sorted[n - 1];
   // A window of zero width (every reading identical) still needs one bin.
   const span = hi - lo || Math.abs(hi) * 1e-6 || 1;
-  const sorted = [...values].sort((a, b) => a - b);
   const iqr = percentile(sorted, 0.75) - percentile(sorted, 0.25);
   const sturgesCount = Math.ceil(Math.log2(n) + 1);
   const fdCount = iqr > 0 ? Math.ceil(span / (2 * iqr * Math.pow(n, -1 / 3))) : sturgesCount;

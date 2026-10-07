@@ -2,12 +2,13 @@
  * Quality SPC controllers.
  *
  * Each request resolves a gold capability snapshot, pulls the gold baseline
- * limits, pulls the silver readings for the same window, and hands all three
+ * limits, pulls the combo's silver readings, and hands all three
  * to the transformer. Everything is TTL-cached and echoes its context (§0.9).
  *
- * The shift selector now drives BOTH layers: gold capability granularity
- * (Day | Shift A/B/C) and the silver time window (A 07–15, B 15–23,
- * C 23–07 next day), so `shift_supported` is finally true.
+ * The date filter drives GOLD only (which capability snapshot). Silver is
+ * the combo's whole history — see silver.queries.js for why. The shift
+ * selector drives both: gold granularity (Day | Shift A/B/C) and the silver
+ * clock hours (A 07–15, B 15–23, C 23–07) on every date.
  */
 import { cached, buildCacheKey } from "../../utils/cache.js";
 import { runQuery } from "../datasource/index.js";
@@ -26,6 +27,7 @@ import {
   METRICS,
 } from "../queries/spc.queries.js";
 import {
+  silverMonthsQuery,
   silverPointsQuery,
   silverBoardQuery,
 } from "../queries/silver.queries.js";
@@ -40,8 +42,6 @@ import {
   sourceForMachine,
   SILVER_SOURCES,
   paramsForSource,
-  dayWindow,
-  addDays,
 } from "../spc/mapping.js";
 import {
   pickBaseline,
@@ -80,15 +80,6 @@ function gradeRangeRows(rows) {
     ...r,
     status: statusForValue(parseKpiName(r.kpi_name).metric, r.actual_value),
   }));
-}
-
-/**
- * Whole-range window (e.g. a calendar month), inclusive of both `from` and
- * `to` dates — as opposed to `shiftWindow`, which windows a single day/shift.
- * Used when the caller passes an explicit `from`/`to` instead of one `date`.
- */
-function rangeWindow(from, to) {
-  return { from: `${from} 00:00:00`, to: `${addDays(to, 1)} 00:00:00` };
 }
 
 /**
@@ -149,7 +140,7 @@ function splitLimitName(kpiName) {
  * @returns {Map<string, {means:number[], times:string[], readings:number,
  *          subgroups_total:number}>} keyed `MACHINE|||recipe|||Parameter`
  */
-async function loadBoardSeries({ machine, recipe, from, to }) {
+async function loadBoardSeries({ machine, recipe, shift }) {
   const sources = machine
     ? [sourceForMachine(machine)].filter(Boolean)
     : SILVER_SOURCES;
@@ -162,8 +153,7 @@ async function loadBoardSeries({ machine, recipe, from, to }) {
           silverBoardQuery(src, params, {
             machine,
             recipe,
-            from,
-            to,
+            shift,
             size: SUBGROUP_SIZE,
             points: BOARD_SPARK_POINTS,
           }),
@@ -171,9 +161,9 @@ async function loadBoardSeries({ machine, recipe, from, to }) {
         return { src, params, rows };
       } catch (err) {
         // One unavailable silver table must not blank the whole board; the
-        // affected widgets fall back to "no measurements in window". Log it:
+        // affected widgets fall back to "no silver measurements". Log it:
         // silently swallowed, an upstream failure is indistinguishable from
-        // a genuinely empty window, and the board just looks like no data.
+        // a combo with no history, and the board just looks like no data.
         console.warn(`[spc] board series ${src.table}: ${err.message}`);
         return { src, params, rows: [] };
       }
@@ -187,7 +177,7 @@ async function loadBoardSeries({ machine, recipe, from, to }) {
         const key = `${String(row.machine).toUpperCase()}|||${row.recipe}|||${parameter}`;
         let series = index.get(key);
         if (!series) {
-          // Counts are window-wide and identical on every row of the group,
+          // Counts are history-wide and identical on every row of the group,
           // so they are read once, from the first row that creates it.
           const total = toNumber(row[`n_${p.valueColumn}`]) ?? 0;
           series = {
@@ -208,6 +198,68 @@ async function loadBoardSeries({ machine, recipe, from, to }) {
 
 /** Points kept in a widget sparkline. The detail chart is never thinned. */
 const BOARD_SPARK_POINTS = 60;
+
+/**
+ * Month partitions read at once for one combo's history. Keeps the upstream
+ * from being hit with a dozen parallel scans per chart open.
+ */
+const SILVER_MONTH_CONCURRENCY = 4;
+
+/**
+ * Every silver reading for one chart (machine × recipe × parameter, shift
+ * hours applied), oldest first.
+ *
+ * Read one month partition per upstream call: the largest combos hold
+ * ~120k readings, over the data API's response ceiling as one call, while
+ * the largest single month (~40k readings) fits. Cached, so the detail chart
+ * and its point / histogram drill-downs see the same readings in the same
+ * order — subgroup N on the chart is subgroup N in the drill-down.
+ *
+ * A failed month fails the whole read (→ []): a history with a silent hole
+ * would shift every later subgroup index.
+ *
+ * @returns {Promise<Array<{event_time:*, value:*, setpoint?:*}>>}
+ */
+async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
+  const key = buildCacheKey("/quality/spc/silver-readings", {
+    machine,
+    recipe,
+    parameter,
+    shift: shift ?? "All",
+  });
+  return cached(key, async () => {
+    try {
+      const scope = { machine, recipe, shift };
+      const months = await runQuery(silverMonthsQuery(src, scope));
+      const chunks = [];
+      for (let i = 0; i < months.length; i += SILVER_MONTH_CONCURRENCY) {
+        const batch = months.slice(i, i + SILVER_MONTH_CONCURRENCY);
+        chunks.push(
+          ...(await Promise.all(
+            batch.map((m) =>
+              runQuery(
+                silverPointsQuery(src, {
+                  ...scope,
+                  year: Number(m.year),
+                  month: Number(m.month),
+                }),
+              ),
+            ),
+          )),
+        );
+      }
+      return chunks.flat();
+    } catch (err) {
+      console.warn(`[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.message}`);
+      return [];
+    }
+  });
+}
+
+/** What the silver dots cover, echoed in place of the old date window. */
+function silverScope(shift) {
+  return { dates: "all", shift: shift ?? "All" };
+}
 
 /** GET /quality/spc/summary  ?date= [&shift= &machine=] */
 export async function getSpcSummary(req, res, next) {
@@ -277,9 +329,9 @@ export async function getSpcFilterOptions(req, res, next) {
 /**
  * GET /quality/spc/widgets  ?date= [&shift= &machine= &recipe= &headline_status=]
  * Or, for a whole-range view (month/year): ?from= &to= instead of &date=.
- * `from`/`to` widen the chart-point window to the whole range instead of a
- * single day/shift; the headline capability snapshot still resolves to the
- * latest one on or before `to` (capability rows are daily, not summable).
+ * `from`/`to` average gold capability over the range; the snapshot still
+ * resolves to the latest one on or before `to`. Neither moves the chart
+ * points: those are the combo's whole silver history (shift hours applied).
  */
 export async function getSpcWidgets(req, res, next) {
   try {
@@ -289,7 +341,6 @@ export async function getSpcWidgets(req, res, next) {
     const body = await cached(key, async () => {
       const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const window = from && to ? rangeWindow(from, to) : dayWindow(date, snapshot, shift);
       // Month / date-range views average the days in the range; a single-day
       // view reads that day's published rows.
       const capabilityRows =
@@ -301,14 +352,14 @@ export async function getSpcWidgets(req, res, next) {
       const [rows, limitsIndex, seriesIndex] = await Promise.all([
         capabilityRows,
         loadLimitsIndex({ machine, isoDate: snapshot }),
-        loadBoardSeries({ machine, recipe, from: window.from, to: window.to }),
+        loadBoardSeries({ machine, recipe, shift }),
       ]);
       let { count, widgets } = toSpcWidgets(rows, { limitsIndex, seriesIndex });
       if (headline) {
         widgets = widgets.filter((w) => w.headline_status === headline);
         count = widgets.length;
       }
-      return { snapshot, window, count, widgets };
+      return { snapshot, count, widgets };
     });
     if (!body.snapshot) {
       return res.json({
@@ -325,7 +376,7 @@ export async function getSpcWidgets(req, res, next) {
         recipe,
         granularity,
         shift: shift ?? "All",
-        window: body.window,
+        silver_scope: silverScope(shift),
         ...(headline ? { headline_status: headline } : {}),
       },
       count: body.count,
@@ -356,7 +407,6 @@ export async function getSpcDetail(req, res, next) {
     const body = await cached(key, async () => {
       const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const window = from && to ? rangeWindow(from, to) : dayWindow(date, snapshot, shift);
       const src = resolveSilver(machine, parameter);
       const capabilityRows =
         from && to
@@ -370,14 +420,7 @@ export async function getSpcDetail(req, res, next) {
         capabilityRows,
         loadLimitsIndex({ machine, parameter, isoDate: snapshot }),
         src
-          ? runQuery(
-              silverPointsQuery(src, {
-                machine,
-                recipe,
-                from: window.from,
-                to: window.to,
-              }),
-            ).catch(() => [])
+          ? loadSilverReadings({ src, machine, recipe, parameter, shift })
           : Promise.resolve([]),
       ]);
       const limitsEntry = limitsIndex.get(`${String(machine).toUpperCase()}|||${parameter}`);
@@ -389,10 +432,10 @@ export async function getSpcDetail(req, res, next) {
           baseline_on_or_before: limitsEntry?.on_or_before ?? null,
         },
         snapshot,
-        window,
+        scope: silverScope(shift),
         selection: { machine, recipe, parameter },
       });
-      return { snapshot, window, detail };
+      return { snapshot, detail };
     });
     if (!body.snapshot) {
       return res.json({
@@ -416,8 +459,8 @@ export async function getSpcDetail(req, res, next) {
         shift: shift ?? "All",
         granularity,
         snapshot_date: body.snapshot,
-        window: body.window,
-        // Shift now narrows both the gold granularity and the silver window.
+        silver_scope: silverScope(shift),
+        // Shift narrows both the gold granularity and the silver clock hours.
         shift_supported: true,
       },
       ...body.detail,
@@ -512,10 +555,7 @@ export async function getHistogramObservations(req, res, next) {
     if (!snapshot || !src) {
       return res.json({ observations_available: false, bin: null });
     }
-    const window = dayWindow(date, snapshot, shift);
-    const points = await runQuery(
-      silverPointsQuery(src, { machine, recipe, from: window.from, to: window.to }),
-    ).catch(() => []);
+    const points = await loadSilverReadings({ src, machine, recipe, parameter, shift });
     const values = points.map((p) => toNumber(p.value)).filter((v) => v != null);
     if (values.length === 0) {
       return res.json({ observations_available: false, bin: null });
@@ -565,10 +605,7 @@ export async function getPointObservations(req, res, next) {
     if (!snapshot || !src) {
       return res.json({ observations_available: false, point: null });
     }
-    const window = dayWindow(date, snapshot, shift);
-    const rows = await runQuery(
-      silverPointsQuery(src, { machine, recipe, from: window.from, to: window.to }),
-    ).catch(() => []);
+    const rows = await loadSilverReadings({ src, machine, recipe, parameter, shift });
     const clean = rows
       .map((p) => ({ event_time: p.event_time, value: toNumber(p.value) }))
       .filter((p) => p.value != null);

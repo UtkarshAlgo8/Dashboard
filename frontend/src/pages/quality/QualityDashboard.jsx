@@ -14773,8 +14773,10 @@ function LiveSpcChart({ title, chart, accent }) {
   const W = Math.max(VIEW_W, padL + padR + (values.length - 1) * POINT_GAP);
   const pw = W - padL - padR,
     ph = H - padT - padB;
-  const lo0 = Math.min(chart.lcl ?? Infinity, ...values),
-    hi0 = Math.max(chart.ucl ?? -Infinity, ...values),
+  // reduce, not Math.min(...values): a whole-history chart can carry tens of
+  // thousands of points, and spreading them as arguments can overflow.
+  const lo0 = values.reduce((m, v) => (v < m ? v : m), chart.lcl ?? Infinity),
+    hi0 = values.reduce((m, v) => (v > m ? v : m), chart.ucl ?? -Infinity),
     pad = (hi0 - lo0) * 0.14 || 1,
     lo = lo0 - pad,
     hi = hi0 + pad;
@@ -15544,11 +15546,13 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
         <div style={{ fontSize: 11.5, color: C.mu }}>
           Cp / Cpk / Pp / Ppk are averaged over {from} to {to} — gold publishes
           SPC capability per day only, so a range has no snapshot of its own.
+          Chart points show every available silver reading, not just this range.
         </div>
       ) : snapshotDate ? (
         <div style={{ fontSize: 11.5, color: C.mu }}>
           Snapshot {snapshotDate}. SPC rows use the latest available snapshot on
-          or before the selected date.
+          or before the selected date. Chart points show every available silver
+          reading, not just the selected date.
         </div>
       ) : null}
       {!loading && widgets.length === 0 ? (
@@ -15686,54 +15690,6 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
             );
           })}
         </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Where the numbers on this page came from. The capability tiles are gold and
- * the chart dots are silver readings, so the page names the silver table,
- * column and window it actually read — the two layers are only comparable if
- * you can see which window produced the dots.
- */
-function _SpcMeasurement({ m }) {
-  const items = [
-    ["Source", m.source ? `${m.source}.${m.value_column}` : "not mapped"],
-    ["Readings", m.readings ?? "—"],
-    [
-      "Subgroups",
-      m.subgroups != null
-        ? `${m.subgroups} × n=${m.subgroup_size}` +
-          (m.readings_used != null && m.readings_used !== m.readings
-            ? ` (${m.readings - m.readings_used} readings dropped as a partial subgroup)`
-            : "")
-        : "—",
-    ],
-    ["Window", m.window ? `${m.window.from} → ${m.window.to}` : "—"],
-  ];
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 18,
-        flexWrap: "wrap",
-        padding: "8px 12px",
-        background: C.c2,
-        border: "1px solid " + C.bd,
-        borderRadius: 6,
-        fontSize: 11.5,
-        color: C.md,
-      }}
-    >
-      {items.map(([k, v]) => (
-        <span key={k}>
-          <span style={{ color: C.mu, fontWeight: 600 }}>{k}: </span>
-          {v}
-        </span>
-      ))}
-      {m.note && (
-        <span style={{ color: C.mu, fontStyle: "italic" }}>{m.note}</span>
       )}
     </div>
   );
@@ -16461,14 +16417,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
                 />
               );
             })}
-            <_SpcTile
-              label="Sample"
-              val={loading ? "..." : (cap.sample_size ?? "—")}
-              sub="observations"
-              col={C.tx}
-            />
           </div>
-          {detail?.measurement && <_SpcMeasurement m={detail.measurement} />}
           {detail?.insufficient ? (
             <Card title="Insufficient Data" accent={C.am}>
               <div style={{ fontSize: 13, color: C.md }}>

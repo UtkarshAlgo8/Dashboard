@@ -159,61 +159,24 @@ export function sourceForMachine(machine) {
 }
 
 /* ----------------------------------------------------------------- *
- * Shift windows (Mapping sheet, Step 4)                              *
+ * Shift hours (Mapping sheet, Step 4)                                *
  * ----------------------------------------------------------------- */
 
 /**
- * Resolve a UI shift to the silver time window for a chart date.
- * Shift C runs 23:00 → 07:00 and therefore spans midnight into the next day.
+ * Clock hours a UI shift covers, applied to silver on EVERY date. Silver is
+ * not bound to the date filter (chart dots are the combo's whole history),
+ * but the shift selector still narrows them to that shift's readings.
+ * Shift C runs 23:00 → 07:00, so its `from` is after its `to`: it wraps
+ * midnight.
  *
- * @param {string} isoDate  yyyy-mm-dd
  * @param {"All"|"A"|"B"|"C"} shift
- * @returns {{ from: string, to: string }} inclusive-from / exclusive-to
+ * @returns {null | { from: number, to: number }} inclusive-from / exclusive-to
+ *          hour of day; null for All (no shift narrowing)
  */
-export function shiftWindow(isoDate, shift) {
+export function shiftHours(shift) {
   const s = String(shift ?? "All").trim().toUpperCase();
-  const next = addDays(isoDate, 1);
-  if (s === "A") return { from: `${isoDate} 07:00:00`, to: `${isoDate} 15:00:00` };
-  if (s === "B") return { from: `${isoDate} 15:00:00`, to: `${isoDate} 23:00:00` };
-  if (s === "C") return { from: `${isoDate} 23:00:00`, to: `${next} 07:00:00` };
-  return { from: `${isoDate} 00:00:00`, to: `${next} 00:00:00` };
-}
-
-/**
- * Silver window for a single-day request. The chart shows the date the USER
- * asked for; `snapshot` only backs the gold capability figures (Cp/Cpk/Pp/
- * Ppk), which lag silver — SPC gold publishes T-1, so on 2026-09-22 the
- * latest capability row was 2026-09-21. Windowing silver on the snapshot hid
- * today's readings entirely and the page looked a day stale. `snapshot` is
- * still the fallback for callers that pass no date.
- */
-export function dayWindow(date, snapshot, shift) {
-  return shiftWindow(date || snapshot, shift);
-}
-
-/** yyyy-mm-dd + n days, UTC-safe. */
-export function addDays(isoDate, n) {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Partition tuples (year, month, day) covered by a window — Athena pruning. */
-export function partitionDays(from, to) {
-  const start = from.slice(0, 10);
-  const endExclusive = to.slice(0, 10);
-  const days = [start];
-  // A window never spans more than two calendar days (max 24h + shift offset).
-  if (endExclusive !== start && to.slice(11) !== "00:00:00") days.push(endExclusive);
-  else if (endExclusive !== start && to.slice(11) === "00:00:00" && addDays(start, 1) !== endExclusive) {
-    let cur = addDays(start, 1);
-    while (cur !== endExclusive) {
-      days.push(cur);
-      cur = addDays(cur, 1);
-    }
-  }
-  return days.map((d) => {
-    const [y, m, dd] = d.split("-");
-    return { year: Number(y), month: Number(m), day: Number(dd) };
-  });
+  if (s === "A") return { from: 7, to: 15 };
+  if (s === "B") return { from: 15, to: 23 };
+  if (s === "C") return { from: 23, to: 7 };
+  return null;
 }

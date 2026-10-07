@@ -45,14 +45,16 @@ import {
   GRAN_BASELINE,
 } from "./queries/spc.queries.js";
 import {
-  shiftWindow,
-  dayWindow,
-  partitionDays,
+  shiftHours,
   resolveSilver,
   sourceForMachine,
   paramsForSource,
 } from "./spc/mapping.js";
-import { silverBoardQuery } from "./queries/silver.queries.js";
+import {
+  silverBoardQuery,
+  silverMonthsQuery,
+  silverPointsQuery,
+} from "./queries/silver.queries.js";
 
 /* ---------------------------- engine ---------------------------- */
 
@@ -305,62 +307,19 @@ test("toNumber / normalizeTime: Athena's string numerics and timestamp suffix", 
   assert.equal(normalizeTime(null), null);
 });
 
-/* ----------------------- window + mapping ----------------------- */
+/* ------------------------ shift + mapping ------------------------ */
 
-test("shiftWindow: A/B/C boundaries, C crosses midnight", () => {
-  assert.deepEqual(shiftWindow("2026-09-01", "A"), {
-    from: "2026-09-01 07:00:00",
-    to: "2026-09-01 15:00:00",
-  });
-  assert.deepEqual(shiftWindow("2026-09-01", "B"), {
-    from: "2026-09-01 15:00:00",
-    to: "2026-09-01 23:00:00",
-  });
-  assert.deepEqual(shiftWindow("2026-09-01", "C"), {
-    from: "2026-09-01 23:00:00",
-    to: "2026-09-02 07:00:00",
-  });
-  assert.deepEqual(shiftWindow("2026-09-01", "All"), {
-    from: "2026-09-01 00:00:00",
-    to: "2026-09-02 00:00:00",
-  });
+test("shiftHours: A/B/C clock hours, C wraps midnight", () => {
+  assert.deepEqual(shiftHours("A"), { from: 7, to: 15 });
+  assert.deepEqual(shiftHours("B"), { from: 15, to: 23 });
+  assert.deepEqual(shiftHours("C"), { from: 23, to: 7 });
+  assert.deepEqual(shiftHours(" b "), { from: 15, to: 23 });
 });
 
-test("dayWindow: silver follows the requested date, not the lagging snapshot", () => {
-  // SPC gold publishes T-1: on 22 Sep the latest capability row is 21 Sep.
-  // The chart must still show 22 Sep readings.
-  assert.deepEqual(dayWindow("2026-09-22", "2026-09-21", "All"), {
-    from: "2026-09-22 00:00:00",
-    to: "2026-09-23 00:00:00",
-  });
-  // Shift narrowing still applies to the requested date.
-  assert.deepEqual(dayWindow("2026-09-22", "2026-09-21", "B"), {
-    from: "2026-09-22 15:00:00",
-    to: "2026-09-22 23:00:00",
-  });
-});
-
-test("dayWindow: falls back to the snapshot when no date was requested", () => {
-  assert.deepEqual(dayWindow(null, "2026-09-21", "All"), {
-    from: "2026-09-21 00:00:00",
-    to: "2026-09-22 00:00:00",
-  });
-  assert.deepEqual(dayWindow("", "2026-09-21", "All"), {
-    from: "2026-09-21 00:00:00",
-    to: "2026-09-22 00:00:00",
-  });
-});
-
-test("dayWindow: with neither date nor snapshot it throws rather than inventing a window", () => {
-  assert.throws(() => dayWindow(null, null, "All"));
-});
-
-test("partitionDays: shift C spans two partitions so both are pruned in", () => {
-  const w = shiftWindow("2026-09-01", "C");
-  assert.deepEqual(partitionDays(w.from, w.to), [
-    { year: 2026, month: 9, day: 1 },
-    { year: 2026, month: 9, day: 2 },
-  ]);
+test("shiftHours: All, missing or unknown shift narrows nothing", () => {
+  assert.equal(shiftHours("All"), null);
+  assert.equal(shiftHours(undefined), null);
+  assert.equal(shiftHours("Z"), null);
 });
 
 test("resolveSilver: maps a machine+parameter to its table and column", () => {
@@ -488,7 +447,7 @@ test("spcLimitsQuery: baseline granularity, keyed on machine+parameter only", ()
 
 /* ------------------------- detail assembly ---------------------- */
 
-const DETAIL_WINDOW = { from: "2026-09-01 00:00:00", to: "2026-09-02 00:00:00" };
+const DETAIL_SCOPE = { dates: "all", shift: "All" };
 const SELECTION = {
   machine: "VMI_MAXX_01",
   recipe: "205/65R15 UX TOURING 94V TL-VMIMAXX",
@@ -515,7 +474,7 @@ test("toSpcDetail: gold capability verbatim, silver dots, derived R limits", () 
     points: silverPoints(),
     limits: { valid: true, ucl: 1852, cl: 1850, lcl: 1848, reason: null, baseline_date: "2026-09-09", baseline_on_or_before: false },
     snapshot: "2026-09-01",
-    window: DETAIL_WINDOW,
+    scope: DETAIL_SCOPE,
     selection: SELECTION,
   });
   // Gold is served as stored: Pp does not reproduce from these points and is
@@ -528,7 +487,7 @@ test("toSpcDetail: gold capability verbatim, silver dots, derived R limits", () 
   assert.equal(detail.measurement.readings, 30);
   assert.equal(detail.measurement.subgroups, 6);
   assert.equal(detail.measurement.subgroup_size, 5);
-  assert.deepEqual(detail.measurement.window, DETAIL_WINDOW);
+  assert.deepEqual(detail.measurement.scope, DETAIL_SCOPE);
 
   assert.equal(detail.x_chart.points.length, 6);
   assert.equal(detail.x_chart.cl, 1850);
@@ -556,7 +515,7 @@ test("toSpcDetail: invalid gold limit pair → points plot, Nelson skipped", () 
     points: silverPoints(),
     limits: validateLimits(1857.218, 2278.178),
     snapshot: "2026-09-01",
-    window: DETAIL_WINDOW,
+    scope: DETAIL_SCOPE,
     selection: SELECTION,
   });
   assert.equal(detail.x_chart.limits_valid, false);
@@ -576,7 +535,7 @@ test("toSpcDetail: a parameter with no tolerance draws no spec window", () => {
     points: silverPoints(),
     limits: validateLimits(12, 8),
     snapshot: "2026-09-01",
-    window: DETAIL_WINDOW,
+    scope: DETAIL_SCOPE,
     selection: sel,
   });
   assert.equal(detail.histogram.spec_limits_available, false);
@@ -584,13 +543,13 @@ test("toSpcDetail: a parameter with no tolerance draws no spec window", () => {
   assert.match(detail.histogram.spec_note, /spec limits not drawn/);
 });
 
-test("toSpcDetail: no silver readings in the window → insufficient, no charts", () => {
+test("toSpcDetail: no silver readings for the combo → insufficient, no charts", () => {
   const rows = mkRow(SELECTION.machine, SELECTION.recipe, SELECTION.parameter, ["Healthy", "Healthy", "Healthy", "Healthy"], [2, 2, 2, 2]);
   const detail = toSpcDetail(rows, {
     points: [],
     limits: validateLimits(12, 8),
     snapshot: "2026-09-01",
-    window: DETAIL_WINDOW,
+    scope: DETAIL_SCOPE,
     selection: SELECTION,
   });
   assert.equal(detail.x_chart, undefined);
@@ -604,7 +563,7 @@ test("toSpcDetail: an unmapped machine says so rather than charting nothing", ()
     points: [],
     limits: validateLimits(12, 8),
     snapshot: "2026-09-01",
-    window: DETAIL_WINDOW,
+    scope: DETAIL_SCOPE,
     selection: sel,
   });
   assert.equal(detail.measurement.source, null);
@@ -616,12 +575,7 @@ test("toSpcDetail: an unmapped machine says so rather than charting nothing", ()
 
 const BOARD_SRC = sourceForMachine("VMIEXXIUM02");
 const BOARD_PARAMS = paramsForSource(BOARD_SRC);
-const BOARD_SCOPE = {
-  from: "2026-09-01 00:00:00",
-  to: "2026-10-01 00:00:00",
-  size: 5,
-  points: 60,
-};
+const BOARD_SCOPE = { size: 5, points: 60 };
 
 test("silverBoardQuery: thins to `points` per machine+recipe, in SQL", () => {
   // A month of untouched subgroups is ~10 MB per table — past the upstream
@@ -632,9 +586,23 @@ test("silverBoardQuery: thins to `points` per machine+recipe, in SQL", () => {
     sql,
     /WHERE \(rn2 - 1\) % GREATEST\(CAST\(CEIL\(n_subgroups \/ 60\.0\) AS BIGINT\), 1\) = 0 OR rn2 = n_subgroups/,
   );
-  // Whole subgroups only, and the window still prunes to its partitions.
+  // Whole subgroups only.
   assert.match(sql, /HAVING COUNT\(\*\) = 5/);
-  assert.match(sql, /year = 2026 AND month = 9 AND day = 1/);
+});
+
+test("silverBoardQuery: whole history — no date, partition or time window", () => {
+  // Gold keeps ~90 days of combos; a one-day silver window left 1,756 of
+  // 2,018 cards (2026-10-07) with Cp/Cpk and no chart.
+  const sql = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, BOARD_SCOPE);
+  assert.equal(/\byear\s*=|\bday\s*=|TIMESTAMP '/.test(sql), false);
+  assert.equal(sql.includes("HOUR("), false);
+});
+
+test("silverBoardQuery: shift narrows to its clock hours on every date", () => {
+  const a = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, { ...BOARD_SCOPE, shift: "A" });
+  assert.match(a, /HOUR\(event_time\) >= 7 AND HOUR\(event_time\) < 15/);
+  const c = silverBoardQuery(BOARD_SRC, BOARD_PARAMS, { ...BOARD_SCOPE, shift: "C" });
+  assert.match(c, /\(HOUR\(event_time\) >= 23 OR HOUR\(event_time\) < 7\)/);
 });
 
 test("silverBoardQuery: the untouched totals ride along, per parameter", () => {
@@ -666,7 +634,7 @@ test("silverBoardQuery: a single-subgroup group is kept, not divided by zero", (
   });
   assert.match(sql, /GREATEST\(CAST\(CEIL\(n_subgroups \/ 0\.0\) AS BIGINT\), 1\)/);
   // The last subgroup is kept whatever the stride, so the sparkline ends
-  // where the window does.
+  // at the newest reading.
   assert.match(sql, /OR rn2 = n_subgroups/);
 });
 
@@ -681,4 +649,52 @@ test('silverBoardQuery: "All" is the absence of a recipe filter, not a value', (
     recipe: "185/65R15-TAXIMAX-88H-TL-VMIMAXX",
   });
   assert.match(one, /item_code = '185\/65R15-TAXIMAX-88H-TL-VMIMAXX'/);
+});
+
+/* --------------------- silver detail readings -------------------- */
+
+const POINTS_SRC = resolveSilver("VMI_MAXX_02", "Tread Length");
+const POINTS_SCOPE = {
+  machine: "VMI_MAXX_02",
+  recipe: "165/70R14-TAXIMAX-81S-TL-VMIMAXX",
+};
+
+test("silverMonthsQuery: lists the combo's month partitions, oldest first", () => {
+  const sql = silverMonthsQuery(POINTS_SRC, POINTS_SCOPE);
+  assert.match(sql, /^SELECT DISTINCT year, month FROM silver\.fct_production_data_vmi_maxx /);
+  assert.match(sql, /UPPER\(machine_no\) = 'VMI_MAXX_02'/);
+  assert.match(sql, /item_code = '165\/70R14-TAXIMAX-81S-TL-VMIMAXX'/);
+  assert.match(sql, /tread_length IS NOT NULL/);
+  assert.match(sql, /ORDER BY year, month$/);
+});
+
+test("silverPointsQuery: one month partition, ordered, no day or time window", () => {
+  // Whole history in one call is past the upstream response ceiling for the
+  // largest combos (~120k readings); one month (≤ ~40k) fits.
+  const sql = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, year: 2026, month: 9 });
+  assert.match(sql, /WHERE year = 2026 AND month = 9 AND /);
+  assert.equal(/\bday\s*=|TIMESTAMP '/.test(sql), false);
+  assert.match(sql, /ORDER BY event_time$/);
+});
+
+test("silverPointsQuery: shift C wraps midnight; All adds no hour filter", () => {
+  const c = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, shift: "C", year: 2026, month: 9 });
+  assert.match(c, /\(HOUR\(event_time\) >= 23 OR HOUR\(event_time\) < 7\)/);
+  const all = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, shift: "All", year: 2026, month: 9 });
+  assert.equal(all.includes("HOUR("), false);
+});
+
+test("silverPointsQuery: partition values are coerced to numbers, not injected", () => {
+  const sql = silverPointsQuery(POINTS_SRC, { ...POINTS_SCOPE, year: "2026", month: "9; DROP" });
+  assert.match(sql, /WHERE year = 2026 AND month = NaN AND /);
+  assert.equal(sql.includes("DROP"), false);
+});
+
+test("buildDistribution: a whole-history combo (150k readings) does not overflow the stack", () => {
+  // Math.min(...values) threw "Maximum call stack size exceeded" on the
+  // largest combo (~120k readings) once silver stopped being windowed.
+  const values = Array.from({ length: 150_000 }, (_, i) => 10 + (i % 100) / 100);
+  const dist = buildDistribution(values, {});
+  assert.equal(dist.bins.reduce((s, b) => s + b.count, 0), values.length);
+  assert.equal(dist.bins[0].from, 10);
 });
