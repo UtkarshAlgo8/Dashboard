@@ -14661,8 +14661,8 @@ function LiveSpcMini({ chart }) {
     padB = 6;
   const pw = W - padL - padR,
     ph = H - padT - padB;
-  const lo = Math.min(chart.lcl ?? Infinity, ...values),
-    hi = Math.max(chart.ucl ?? -Infinity, ...values),
+  const lo = values.reduce((m, v) => (v < m ? v : m), chart.lcl ?? Infinity),
+    hi = values.reduce((m, v) => (v > m ? v : m), chart.ucl ?? -Infinity),
     pad = (hi - lo) * 0.15 || 1;
   const X = (i) =>
     padL + (values.length <= 1 ? pw / 2 : i * (pw / (values.length - 1)));
@@ -14714,11 +14714,6 @@ function LiveSpcMini({ chart }) {
         stroke={C.bl}
         strokeWidth="1.4"
       />
-      {values.map((v, i) => (
-        <circle key={i} cx={X(i)} cy={Y(v)} r="1.8" fill={C.bl}>
-          <title>{`${chart.time?.[i] || "Point " + (i + 1)}: ${_spcFmt(v)}`}</title>
-        </circle>
-      ))}
     </svg>
   );
 }
@@ -14736,6 +14731,9 @@ function spcPointClass(rules = []) {
     return { label: "No Nelson violation", color: C.bl, rank: 9 };
   return rules.map(spcRuleClass).sort((a, b) => a.rank - b.rank)[0];
 }
+
+/** Above this many points the detail chart draws markers for flagged points only. */
+const SPC_DENSE_POINTS = 1500;
 
 function LiveSpcChart({ title, chart, accent }) {
   const points = Array.isArray(chart?.points) ? chart.points : [];
@@ -14847,6 +14845,10 @@ function LiveSpcChart({ title, chart, accent }) {
           {plotPoints.map((p, i) => {
             const pc = spcPointClass(p.rules);
             const flagged = Boolean(p.rules?.length);
+            // A whole-history chart can hold ~24k points; one circle each
+            // froze the page. The line already passes through every point,
+            // so past SPC_DENSE_POINTS only rule-flagged points get a marker.
+            if (!flagged && plotPoints.length > SPC_DENSE_POINTS) return null;
             return (
               <circle
                 key={p.index}
@@ -14859,17 +14861,23 @@ function LiveSpcChart({ title, chart, accent }) {
               />
             );
           })}
-          {plotPoints.map((p, i) => (
-            <circle
-              key={"hit" + p.index}
-              cx={X(i)}
-              cy={Y(p.value)}
-              r="9"
-              fill="transparent"
-              style={{ cursor: "crosshair" }}
-              onMouseEnter={() => setHover(i)}
-            />
-          ))}
+          {/* One hover target for the whole plot (not one per point): the
+              nearest point to the cursor's x is the hovered one. */}
+          <rect
+            x={padL}
+            y={padT}
+            width={pw}
+            height={ph}
+            fill="transparent"
+            style={{ cursor: "crosshair" }}
+            onMouseMove={(e) => {
+              const box = e.currentTarget.ownerSVGElement.getBoundingClientRect();
+              const svgX = ((e.clientX - box.left) / box.width) * W;
+              const step = values.length <= 1 ? 1 : pw / (values.length - 1);
+              const i = Math.round((svgX - padL) / step);
+              setHover(Math.min(Math.max(i, 0), values.length - 1));
+            }}
+          />
           {plotPoints.map((p, i) => {
             const minLabelPx = timeAxis ? 56 : 40;
             const every = Math.max(1, Math.round(minLabelPx / POINT_GAP));
@@ -15337,6 +15345,8 @@ function LiveHistogram({ histogram }) {
   );
 }
 
+const SPC_CARDS_PER_PAGE = 60;
+
 function LiveSPCOverview({ date, from, to, shift, onSelect }) {
   const [machine, setMachine] = useState("All");
   const [recipe, setRecipe] = useState("All");
@@ -15347,10 +15357,14 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
   const [snapshotDate, setSnapshotDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Cards rendered so far. Every card draws a sparkline now that chart points
+  // are whole-history; ~2,000 at once froze the page.
+  const [shown, setShown] = useState(SPC_CARDS_PER_PAGE);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setShown(SPC_CARDS_PER_PAGE);
     Promise.all([
       getSpcFilterOptions({ date: to || date, shift }),
       getSpcWidgets({ date, from, to, shift, machine, recipe }),
@@ -15580,7 +15594,7 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
             gap: 10,
           }}
         >
-          {widgets.map((w, i) => {
+          {widgets.slice(0, shown).map((w, i) => {
             const col = spcStatus(w.headline_status).col;
             return (
               <div
@@ -15691,6 +15705,14 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
           })}
         </div>
       )}
+      {!loading && shown < widgets.length ? (
+        <button
+          onClick={() => setShown((n) => n + SPC_CARDS_PER_PAGE)}
+          style={{ ...sel, alignSelf: "center", color: C.pp, fontWeight: 700 }}
+        >
+          Show more ({widgets.length - shown} remaining)
+        </button>
+      ) : null}
     </div>
   );
 }

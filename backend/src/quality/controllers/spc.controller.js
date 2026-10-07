@@ -149,14 +149,28 @@ async function loadBoardSeries({ machine, recipe, shift }) {
     sources.map(async (src) => {
       const params = paramsForSource(src);
       try {
-        const rows = await runQuery(
-          silverBoardQuery(src, params, {
-            machine,
-            recipe,
-            shift,
-            size: SUBGROUP_SIZE,
-            points: BOARD_SPARK_POINTS,
-          }),
+        // Cached per table (raw rows, so the redis driver can serialise
+        // them) and shared by every headline filter of the same scope: the
+        // whole-history scan takes 10–30 s per table.
+        const key = buildCacheKey("/quality/spc/silver-board", {
+          table: src.table,
+          machine: machine ?? "All",
+          recipe: recipe ?? "All",
+          shift: shift ?? "All",
+        });
+        const rows = await cached(
+          key,
+          () =>
+            runQuery(
+              silverBoardQuery(src, params, {
+                machine,
+                recipe,
+                shift,
+                size: SUBGROUP_SIZE,
+                points: BOARD_SPARK_POINTS,
+              }),
+            ),
+          SILVER_CACHE_TTL_MS,
         );
         return { src, params, rows };
       } catch (err) {
@@ -200,6 +214,13 @@ async function loadBoardSeries({ machine, recipe, shift }) {
 const BOARD_SPARK_POINTS = 60;
 
 /**
+ * TTL for whole-history silver reads. They take 10–30 s cold, and a few
+ * minutes of staleness only delays the newest points; the default
+ * CACHE_TTL_MS (30 s) re-ran the board scan on nearly every page open.
+ */
+const SILVER_CACHE_TTL_MS = 15 * 60 * 1000;
+
+/**
  * Month partitions read at once for one combo's history. Keeps the upstream
  * from being hit with a dozen parallel scans per chart open.
  */
@@ -227,33 +248,38 @@ async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
     parameter,
     shift: shift ?? "All",
   });
-  return cached(key, async () => {
-    try {
-      const scope = { machine, recipe, shift };
-      const months = await runQuery(silverMonthsQuery(src, scope));
-      const chunks = [];
-      for (let i = 0; i < months.length; i += SILVER_MONTH_CONCURRENCY) {
-        const batch = months.slice(i, i + SILVER_MONTH_CONCURRENCY);
-        chunks.push(
-          ...(await Promise.all(
-            batch.map((m) =>
-              runQuery(
-                silverPointsQuery(src, {
-                  ...scope,
-                  year: Number(m.year),
-                  month: Number(m.month),
-                }),
+  try {
+    // A failure throws out of cached() unstored, so the next open retries.
+    return await cached(
+      key,
+      async () => {
+        const scope = { machine, recipe, shift };
+        const months = await runQuery(silverMonthsQuery(src, scope));
+        const chunks = [];
+        for (let i = 0; i < months.length; i += SILVER_MONTH_CONCURRENCY) {
+          const batch = months.slice(i, i + SILVER_MONTH_CONCURRENCY);
+          chunks.push(
+            ...(await Promise.all(
+              batch.map((m) =>
+                runQuery(
+                  silverPointsQuery(src, {
+                    ...scope,
+                    year: Number(m.year),
+                    month: Number(m.month),
+                  }),
+                ),
               ),
-            ),
-          )),
-        );
-      }
-      return chunks.flat();
-    } catch (err) {
-      console.warn(`[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.message}`);
-      return [];
-    }
-  });
+            )),
+          );
+        }
+        return chunks.flat();
+      },
+      SILVER_CACHE_TTL_MS,
+    );
+  } catch (err) {
+    console.warn(`[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.message}`);
+    return [];
+  }
 }
 
 /** What the silver dots cover, echoed in place of the old date window. */
