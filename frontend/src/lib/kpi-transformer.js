@@ -1227,6 +1227,23 @@ const UNIT_PINNED_SERIES = new Set([
  */
 const STRICT_FILTER_PLANTS = new Set(["chennai", "ctp"]);
 
+/** CTP quality counts summed per day across their level-1 rows. */
+const SUMMED_QUALITY_KPIS = new Set(["Scrap", "Rework", "NCM_Hold"]);
+
+/**
+ * CTP cards that read their own newest day when the pinned headline day has
+ * no row yet. Their feeds land behind Production (2026-10-07: OEE_o and
+ * NCM_Hold end 10-06, the downtime reasons 10-05), so under the Today preset
+ * they showed "—" all day. The card says which day it is via `asOfDate`.
+ */
+const LATEST_DAY_FALLBACK_KPIS = new Set([
+  "OEE_o",
+  "TotalDowntime",
+  "Scrap",
+  "Rework",
+  "NCM_Hold",
+]);
+
 /**
  * CR-11 follow-up: the single machine with the most downtime across a set
  * of synthesised TotalDowntime rows (each carrying a per-date `machineTotals`
@@ -1547,30 +1564,38 @@ function selectSeries(
     (section === "TBM" || section === "Curing")
   ) {
     const { kpiName, productPin } = resolveProductionKpi(section, productType);
-    const productRows = groups.get(kpiName) ?? [];
-    if (productRows.length > 0) {
-      name = kpiName;
-      strictProductPin = productPin;
-      groupDesc = sumRowsPerPeriod(
-        uniqueLeafRows(
-          productRows.filter(
-            (r) =>
-              canonicalizeProductType(r.product_type) ===
-              canonicalizeProductType(productPin),
-          ),
-        ),
-      );
-    }
-    if (readsCuringPcrSkuTotal(section, tyreType, granularity)) {
-      const skuRows = (groups.get(CURING_PCR_TOTAL_KPI) ?? []).filter(
+    const pinnedToProduct = (rows) =>
+      rows.filter(
         (r) =>
           canonicalizeProductType(r.product_type) ===
           canonicalizeProductType(productPin),
       );
-      if (skuRows.length > 0) {
+    // CTP reads the plain Production rows — the figure the gold validation
+    // checks — pinned to the product and summed per period across trenches
+    // and tyre lines. Production_product is missing for Carcass and drifts
+    // from Production for Green Tyre (Sep–Oct 2026: 22 of 37 days, up to 81
+    // tyres); Production_sku overstates Carcass. The levels below remain
+    // the fallback when a window carries no plain Production row.
+    const plainRows = strictFilters ? pinnedToProduct(groupDesc) : [];
+    if (plainRows.length > 0) {
+      strictProductPin = productPin;
+      groupDesc = sumRowsPerPeriod(uniqueLeafRows(plainRows));
+    } else {
+      const productRows = groups.get(kpiName) ?? [];
+      if (productRows.length > 0) {
         name = kpiName;
         strictProductPin = productPin;
-        groupDesc = sumRowsPerPeriod(uniqueLeafRows(skuRows));
+        groupDesc = sumRowsPerPeriod(
+          uniqueLeafRows(pinnedToProduct(productRows)),
+        );
+      }
+      if (readsCuringPcrSkuTotal(section, tyreType, granularity)) {
+        const skuRows = pinnedToProduct(groups.get(CURING_PCR_TOTAL_KPI) ?? []);
+        if (skuRows.length > 0) {
+          name = kpiName;
+          strictProductPin = productPin;
+          groupDesc = sumRowsPerPeriod(uniqueLeafRows(skuRows));
+        }
       }
     }
   }
@@ -1669,6 +1694,14 @@ function selectSeries(
     }
   }
 
+  // CTP stores the quality counts as several level-1 rows per day — one per
+  // tyre line, and TBR Curing Scrap once per responsible department (status).
+  // Each set re-sums to the line's Scrap_s total (Curing 2026-10-07: PCR 38 +
+  // TBR 2 + 2 + 3 + 6 = 51), but the card read the first row only (6).
+  if (strictFilters && SUMMED_QUALITY_KPIS.has(name)) {
+    groupDesc = sumRowsPerPeriod(uniqueLeafRows(groupDesc));
+  }
+
   return { name, rows: groupDesc };
 }
 
@@ -1689,6 +1722,8 @@ function uniqueLeafRows(rows) {
       r.sub_section ?? "",
       r.machine ?? "",
       r.itemcode ?? "",
+      // CTP Scrap splits one day by responsible department in `status`.
+      r.status ?? "",
     ].join("|");
     if (!seen.has(key)) seen.set(key, r);
   }
@@ -2019,7 +2054,17 @@ export function toKpiGrid(
         continue;
       }
 
-      const headlineMiss = Boolean(headlineDate && resolvedDate !== headlineDate);
+      // A lagging CTP card shows its newest earlier day instead of "—".
+      const latestDayFallback = Boolean(
+        headlineDate &&
+        narrowOpts.strictFilters &&
+        LATEST_DAY_FALLBACK_KPIS.has(kpiDef.name) &&
+        resolvedDate &&
+        resolvedDate < headlineDate,
+      );
+      const headlineMiss =
+        Boolean(headlineDate && resolvedDate !== headlineDate) &&
+        !latestDayFallback;
 
       // CR-11 / Q-DT-01: TotalDowntime's synthesised rows are per-date sums,
       // so the headline sums them ONLY when the fetched window IS the period
@@ -2230,11 +2275,13 @@ export function toKpiGrid(
         // C3/C6: the drill inherits THIS date — it never resolves its own.
         resolvedDate,
         // C6: only labelled when this KPI actually lags the section's
-        // newest anchor; the up-to-date cards stay unadorned.
-        asOfDate:
-          sectionNewestAnchor &&
-          resolvedDate &&
-          resolvedDate < sectionNewestAnchor
+        // newest anchor (or the pinned headline day); the up-to-date cards
+        // stay unadorned.
+        asOfDate: latestDayFallback
+          ? resolvedDate
+          : sectionNewestAnchor &&
+              resolvedDate &&
+              resolvedDate < sectionNewestAnchor
             ? resolvedDate
             : null,
         partialDay,

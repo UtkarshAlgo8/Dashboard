@@ -505,7 +505,6 @@ test("the response projection drops the columns no consumer reads", () => {
     "record_id",
     "plant",
     "department",
-    "tyre_type",
     "production_ids",
     "previous_values",
     "plot_data",
@@ -515,6 +514,7 @@ test("the response projection drops the columns no consumer reads", () => {
   for (const col of [
     "date",
     "section",
+    "tyre_type",
     "machine",
     "kpi_name",
     "actual_value",

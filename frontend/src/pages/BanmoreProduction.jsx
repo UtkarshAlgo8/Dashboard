@@ -199,7 +199,12 @@ function BanmoreProduction() {
   const oeeGran = dashboard.granularity ?? "MONTH";
   // Today: the rings and plant card read that one day only, so a day with
   // no data shows "—" instead of the newest day in the trailing window.
-  const headlineFrom = dashboard.headlineDate ?? dashboard.from;
+  // CTP's OEE feed lands a day behind, so there they read the newest day in
+  // the trailing window instead, matching the CTP OEE card.
+  const headlineFrom =
+    plantId === "chennai"
+      ? dashboard.from
+      : (dashboard.headlineDate ?? dashboard.from);
   const { data: sectionOeeData, isLoading: sectionOeeLoading } = usePolledQuery(
     () => getSectionOee(plantId, oeeGran, headlineFrom, dashboard.to),
     {
@@ -274,6 +279,12 @@ function BanmoreProduction() {
   const activeTyreType = tyreTypes.includes(dashboard.tyreType)
     ? dashboard.tyreType
     : tyreTypes[0];
+  // The tyre line the cards are scoped to (null = both lines) — the same
+  // value buildContext sends, so the shift box and drills match the cards.
+  const lineTyreType =
+    dashboard.tyreType && dashboard.tyreType !== "All"
+      ? dashboard.tyreType
+      : null;
 
   const BANMORE_STOCK_SUBSECTIONS = [
     "4 Roll",
@@ -928,6 +939,7 @@ function BanmoreProduction() {
                             plantId={plantId}
                             section={sectionName}
                             subSection={pinnedSubSection}
+                            tyreType={lineTyreType}
                             productType={activeProductType}
                             unit={activeUnit}
                             mode={shiftComparisonSingleDay ? "day" : "range"}
@@ -975,6 +987,7 @@ function BanmoreProduction() {
                               section={dashboard.section}
                               sectionName={sectionName}
                               subSection={pinnedSubSection}
+                              tyreType={lineTyreType}
                               cardDate={cardDate}
                               from={useMonthRange ? from : (cardDate ?? from)}
                               to={useMonthRange ? to : (cardDate ?? to)}
@@ -1047,6 +1060,8 @@ function BanmoreProduction() {
         // Production Trend must discover all products in the active scope.
         subSection={isStock ? pinnedSubSection : null}
         productType={null}
+        tyreType={lineTyreType}
+        cardProductType={activeProductType}
         unit={activeUnit}
         asOf={effectiveAsOf}
         dashPreset={timeRange.preset}
@@ -1063,6 +1078,7 @@ function DrillPanelRouter({
   section,
   sectionName,
   subSection,
+  tyreType = null,
   cardDate = null,
   from,
   to,
@@ -1102,6 +1118,7 @@ function DrillPanelRouter({
           // Stock records OEE per sub_section; without the active tab the
           // panel lists every sub-section's machines.
           subSection={subSection}
+          tyreType={tyreType}
           rawRows={rawRows}
           mode={mode}
           granularity={productivityDrillGranularity}
@@ -1123,6 +1140,7 @@ function DrillPanelRouter({
           plantId={plantId}
           section={section}
           subSection={section === "stk" ? subSection : null}
+          tyreType={tyreType}
           prodSub={prodSub}
           unitPin={unitPin}
           rawRows={rawRows}
@@ -1158,6 +1176,7 @@ function DrillPanelRouter({
           isLoading={isLoading}
           plantId={plantId}
           subSection={subSection}
+          tyreType={tyreType}
           productType={prodSub}
           from={windowFrom ?? from}
           to={windowTo ?? to}

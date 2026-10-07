@@ -76,6 +76,8 @@ function OeeDrillPanel({
   // and Curing leave it blank), so without this the Stock drill lists every
   // sub-section's machines regardless of which tab is active.
   subSection = null,
+  // The header's tyre line (null = both) for the date-wise leaf fetch.
+  tyreType = null,
   rawRows,
   mode = "snapshot",
   granularity = "DAY",
@@ -407,6 +409,7 @@ function OeeDrillPanel({
           section: sectionName,
           category: "Productivity",
           granularity: "DAY",
+          ...(tyreType ? { tyre_type: tyreType } : {}),
         },
         from,
         to,

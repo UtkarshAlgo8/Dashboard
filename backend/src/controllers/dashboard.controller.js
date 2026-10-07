@@ -350,6 +350,7 @@ export async function postShiftComparison(req, res, next) {
     const {
       section,
       subSection = null,
+      tyreType = null,
       category,
       date,
       from,
@@ -363,6 +364,7 @@ export async function postShiftComparison(req, res, next) {
       plantId,
       section,
       subSection,
+      tyreType,
       category,
       date,
       from,
@@ -375,6 +377,7 @@ export async function postShiftComparison(req, res, next) {
         plantId,
         section,
         subSection,
+        tyreType,
         category,
         date,
         from,

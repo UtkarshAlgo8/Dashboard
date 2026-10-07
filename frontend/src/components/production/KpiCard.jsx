@@ -17,6 +17,7 @@ import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import AccessTimeFilledIcon from "@mui/icons-material/AccessTimeFilled";
 import Sparkline from "./Sparkline.jsx";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import { evaluateKpiTier, getKpiCardTheme } from "@/lib/thresholds.js";
 
 /**
@@ -262,13 +263,31 @@ function KpiCard({
           {/* Badges / Annotations row (placed neatly below the metric value) */}
           {(Boolean(kpi.topMachine) ||
             Boolean(kpi.partialDay) ||
-            Boolean(kpi.truncated)) && (
+            Boolean(kpi.truncated) ||
+            Boolean(kpi.asOfDate)) && (
             <Stack
               direction="row"
               alignItems="center"
               spacing={0.75}
               sx={{ mt: 0.25, flexWrap: "wrap", rowGap: 0.25 }}
             >
+              {kpi.asOfDate && (
+                <Tooltip
+                  title="No data for the selected day yet, so this card shows the latest day available."
+                  arrow
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: "text.secondary",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    as of {toDisplayDate(kpi.asOfDate)}
+                  </Typography>
+                </Tooltip>
+              )}
               {kpi.topMachine && (
                 <Tooltip
                   title={`Machine with the most downtime in this window (Breakdown, Power Failure, Preventive Maintenance, Setup & Change, Operations/Material/Manpower — excludes No Schedule): ${Math.round(kpi.topMachine.minutes).toLocaleString()} min.`}

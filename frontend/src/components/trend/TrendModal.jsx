@@ -74,6 +74,13 @@ function TrendModal({
   // recorded in BOTH a count unit and a mass unit, so the trend pins one to
   // avoid blending two series into a zig-zag.
   unit = null,
+  // The header's tyre line (null = both), so the trend plots the same
+  // slice as the card it was opened from.
+  tyreType = null,
+  // The product pill the card is pinned to (e.g. "Carcass"). The Production
+  // trend's Overall line follows it on CTP; `productType` stays null so the
+  // Product Type lens still lists every product.
+  cardProductType = null,
   asOf = null,
 }) {
   const theme = useTheme();
@@ -108,6 +115,7 @@ function TrendModal({
         section={section}
         subSection={subSection}
         productType={productType}
+        tyreType={tyreType}
         asOf={asOf}
         range={range}
         from={from}
@@ -129,6 +137,8 @@ function TrendModal({
         section={section}
         subSection={subSection}
         productType={productType}
+        tyreType={tyreType}
+        cardProductType={cardProductType}
         asOf={asOf}
         range={range}
         from={from}
@@ -150,6 +160,7 @@ function TrendModal({
         section={section}
         subSection={subSection}
         productType={productType}
+        tyreType={tyreType}
         asOf={asOf}
         range={range}
         from={from}
@@ -176,6 +187,7 @@ function TrendModal({
         section={section}
         subSection={subSection}
         productType={productType}
+        tyreType={tyreType}
         asOf={asOf}
         range={range}
         from={from}
@@ -197,6 +209,7 @@ function TrendModal({
       compound={compound}
       subSection={subSection}
       productType={productType}
+      tyreType={tyreType}
       unit={unit}
       asOf={asOf}
       range={range}
@@ -227,6 +240,7 @@ function LegacyTrendModal({
   compound,
   subSection,
   productType,
+  tyreType = null,
   unit,
   asOf,
   range,
@@ -275,6 +289,7 @@ function LegacyTrendModal({
           granularity: v2Granularity,
           ...(subSection ? { sub_section: subSection } : {}),
           ...(shouldSendProductType ? { product_type: productType } : {}),
+          ...(tyreType ? { tyre_type: tyreType } : {}),
         },
         date: null,
         from: isDailyTrend
@@ -369,7 +384,30 @@ function LegacyTrendModal({
       return only.length > 0 ? only : productPinned;
     })();
 
-    if (isMonthly) {
+    if (plantId === "chennai" && CTP_SUMMED_TREND_KPIS.has(kpi.rawName)) {
+      // CTP stores one day (or month) of these counts as several rows — per
+      // tyre line, and per responsible department in `status` — so each
+      // period is their sum, the same figure the card shows.
+      const gran = isMonthly || range === "year" ? "MONTH" : "DAY";
+      const periodOf = (r) =>
+        range === "year"
+          ? dateKey(r.date).slice(0, 4)
+          : isMonthly
+            ? monthKey(r.date)
+            : dateKey(r.date);
+      const byPeriod = new Map();
+      for (const r of pinned) {
+        if (r.granularity !== gran) continue;
+        const key = periodOf(r);
+        const v = rowVal(r);
+        if (!key || v == null) continue;
+        byPeriod.set(key, (byPeriod.get(key) ?? 0) + v);
+      }
+      const periods = [...byPeriod.keys()].sort();
+      labels =
+        gran === "DAY" ? periods.map((d) => toDisplayDate(d) ?? "") : periods;
+      values = periods.map((k) => Math.round(byPeriod.get(k) * 100) / 100);
+    } else if (isMonthly) {
       const byMonth = new Map();
       for (const r of pinned) {
         if (r.granularity !== "MONTH") continue;
@@ -516,6 +554,9 @@ const PRODUCTION_VIEW_BY_LABEL = Object.fromEntries(
 // suffix aligned with the active VIEW BY so a Machine comparison overlays
 // the per-machine Availability, etc. Production is section-conditional
 // (TBM/Curing read Production_product; Mixing/Stock read Production).
+// CTP quality counts stored as several rows per period (see the legacy modal).
+const CTP_SUMMED_TREND_KPIS = new Set(["Scrap", "Rework", "NCM_Hold"]);
+
 const OVERLAY_BASE_KPI = {
   Breakdown: "Breakdown",
   Production: "Production",
@@ -608,11 +649,46 @@ const OEE_SERIES_CONFIG = {
   viewByLabel: (viewBy) => VIEW_BY_LABEL[viewBy] ?? "Overall",
 };
 
-function buildProductionSeriesConfig(sectionName, kpi) {
+function buildProductionSeriesConfig(
+  sectionName,
+  kpi,
+  plantId,
+  cardProductType,
+) {
+  // CTP TBM/Curing read the plain Production rows, as the card does — the
+  // figure the gold validation checks. Production_product is missing for
+  // Carcass (the Overall line plotted Green Tyre under a Carcass card: PCR
+  // 06-10 13,679 vs 13,648) and drifts from Production for Green Tyre. It
+  // stays the fallback when a window carries no plain Production row.
+  // Overall follows the card's product; Product Type shows every product.
+  const readsPlainProduction = (viewBy) =>
+    plantId === "chennai" &&
+    (viewBy === "overall" || viewBy === "product_type") &&
+    Boolean(AGGREGATE_PRODUCT_BY_SECTION[sectionName]);
   return {
     viewByOptions: PRODUCTION_VIEW_BY_OPTIONS,
     defaultViewBy: "overall",
-    mainKpiName: (viewBy) => productionKpiName(viewBy, sectionName),
+    mainKpiName: (viewBy) =>
+      readsPlainProduction(viewBy)
+        ? ["Production", "Production_product"]
+        : productionKpiName(viewBy, sectionName),
+    pickMainRows: (rows, viewBy) => {
+      if (!readsPlainProduction(viewBy)) return rows;
+      const pin =
+        viewBy === "overall"
+          ? canonicalizeProductType(
+              cardProductType ?? AGGREGATE_PRODUCT_BY_SECTION[sectionName],
+            )
+          : null;
+      const ofKpi = (name) =>
+        rows.filter(
+          (r) =>
+            r.kpi_name === name &&
+            (pin == null || canonicalizeProductType(r.product_type) === pin),
+        );
+      const plainRows = ofKpi("Production");
+      return plainRows.length > 0 ? plainRows : ofKpi("Production_product");
+    },
     // Production rows DO carry product_type (NOT in
     // PRODUCT_AGNOSTIC_KPIS), so the "Product Type" pill groups by
     // the real product_type column. SKU lives in `itemcode` on the
@@ -630,6 +706,10 @@ function buildProductionSeriesConfig(sectionName, kpi) {
     showCompare: (viewBy) => viewBy === "product_type",
     showOverlay: false,
     mainMonthlyAggregation: () => "sum",
+    // CTP stores each day once per trench and tyre line (Curing 2026-10-06:
+    // 3 PCR + 3 TBR rows = 16,898), so a day is their sum. Banmore keeps
+    // plotting its one row per day.
+    mainDailyAggregation: () => (plantId === "chennai" ? "sum" : null),
     mainUnit: kpi?.unit ?? "",
     mainTitleSuffix: kpi?.name ?? "Production",
     viewByLabel: (viewBy) => PRODUCTION_VIEW_BY_LABEL[viewBy] ?? "Overall",
@@ -676,6 +756,7 @@ function MultiSeriesTrendModal({
   // pill ("Belt Mother Roll") both narrow the chart.
   subSection = null,
   productType = null,
+  tyreType = null,
   asOf,
   range,
   from,
@@ -774,6 +855,7 @@ function MultiSeriesTrendModal({
       // KPIs (OEE / Downtime overlays) alive through these filters.
       ...(subSection ? { sub_section: subSection } : {}),
       ...(productType ? { product_type: productType } : {}),
+      ...(tyreType ? { tyre_type: tyreType } : {}),
     },
     from: rangeFrom,
     to: rangeTo,
@@ -874,13 +956,10 @@ function MultiSeriesTrendModal({
   // mainKpis may be an array (Downtime fetches 6 reasons in one call);
   // filter via Set membership.
   const rawMainRows = useMemo(() => {
-    if (mainKpis.length === 1) {
-      const k = mainKpis[0];
-      return scopedRows.filter((r) => r.kpi_name === k);
-    }
     const allowed = new Set(mainKpis);
-    return scopedRows.filter((r) => allowed.has(r.kpi_name));
-  }, [scopedRows, mainKpis]);
+    const rows = scopedRows.filter((r) => allowed.has(r.kpi_name));
+    return config.pickMainRows ? config.pickMainRows(rows, viewBy) : rows;
+  }, [scopedRows, mainKpis, config, viewBy]);
 
   // Production stores the same quantity under two units (e.g. nos + kg)
   // as separate rows. Without a pin they collide on (group, date) and
@@ -964,6 +1043,7 @@ function MultiSeriesTrendModal({
         activeCompare,
         isMonthly,
         monthlyAggregation: config.mainMonthlyAggregation?.(viewBy),
+        dailyAggregation: config.mainDailyAggregation?.(viewBy) ?? null,
       }),
     [filteredMainRows, config, viewBy, activeCompare, isMonthly],
   );
@@ -1229,9 +1309,18 @@ function OeeTrendModal(props) {
   return <MultiSeriesTrendModal {...props} config={OEE_SERIES_CONFIG} />;
 }
 
-function ProductionTrendModal(props) {
+function ProductionTrendModal({ cardProductType = null, ...props }) {
   const sectionName = sectionIdToName(props.section);
-  const config = buildProductionSeriesConfig(sectionName, props.kpi);
+  const config = useMemo(
+    () =>
+      buildProductionSeriesConfig(
+        sectionName,
+        props.kpi,
+        props.plantId,
+        cardProductType,
+      ),
+    [sectionName, props.kpi, props.plantId, cardProductType],
+  );
   return <MultiSeriesTrendModal {...props} config={config} />;
 }
 
@@ -1279,6 +1368,8 @@ function buildMainChart({
   activeCompare,
   isMonthly = false,
   monthlyAggregation = "average",
+  // "sum" adds a day's rows together; null keeps one row per day.
+  dailyAggregation = null,
 }) {
   if (groupField) {
     return buildGroupedSeries({
@@ -1287,6 +1378,7 @@ function buildMainChart({
       activeCompare,
       isMonthly,
       monthlyAggregation,
+      dailyAggregation,
     });
   }
 
@@ -1343,9 +1435,10 @@ function buildMainChart({
   for (const r of mainRows) if (r.date) dateSet.add(r.date);
   const dates = [...dateSet].sort();
   const labels = dates.map((d) => toDisplayDate(d) ?? "");
-  const byDate = new Map(
-    mainRows.map((r) => [r.date, numOrNull(r.actual_value)]),
-  );
+  const byDate =
+    dailyAggregation === "sum"
+      ? sumByDate(mainRows)
+      : new Map(mainRows.map((r) => [r.date, numOrNull(r.actual_value)]));
   const values = dates.map((d) => byDate.get(d) ?? null);
   return {
     labels,
@@ -1359,6 +1452,7 @@ function buildGroupedSeries({
   activeCompare,
   isMonthly = false,
   monthlyAggregation = "average",
+  dailyAggregation = null,
 }) {
   if (isMonthly) {
     const monthSet = new Set();
@@ -1411,7 +1505,13 @@ function buildGroupedSeries({
     const k = r[groupField];
     if (!k) continue;
     if (!byKey.has(k)) byKey.set(k, new Map());
-    byKey.get(k).set(r.date, numOrNull(r.actual_value));
+    const byDate = byKey.get(k);
+    const v = numOrNull(r.actual_value);
+    if (dailyAggregation === "sum" && byDate.has(r.date)) {
+      if (v != null) byDate.set(r.date, (byDate.get(r.date) ?? 0) + v);
+    } else {
+      byDate.set(r.date, v);
+    }
   }
 
   // Sort the active list by the natural order of the underlying distinct
@@ -1470,6 +1570,17 @@ function preferProductionOverlayRows(rows, sectionName, productType) {
     if (unitRows.length > 0) rows = unitRows;
   }
   return rows;
+}
+
+/** Each date's rows added together; a date with no numeric row maps to null. */
+function sumByDate(rows) {
+  const out = new Map();
+  for (const r of rows) {
+    const v = numOrNull(r.actual_value);
+    const prev = out.get(r.date) ?? null;
+    out.set(r.date, v == null ? prev : (prev ?? 0) + v);
+  }
+  return out;
 }
 
 function aggregateValues(valuesOrEntry, aggregation) {

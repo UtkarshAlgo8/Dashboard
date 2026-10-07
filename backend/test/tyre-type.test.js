@@ -18,6 +18,7 @@ import {
 } from "../src/utils/normalize.js";
 import {
   buildFetchQuery,
+  buildShiftComparisonQuery,
   QueryValidationError,
 } from "../src/queries/dashboard-query.js";
 
@@ -80,6 +81,47 @@ test("an unsupported tyre type is rejected", () => {
       buildFetchQuery({
         plantId: "chennai",
         context: { granularity: "MONTH", tyre_type: "LTR" },
+      }),
+    QueryValidationError,
+  );
+});
+
+test("kpi-data rows carry tyre_type so All can tell the two lines apart", () => {
+  // Without it the client merged PCR Trench1 with TBR Trench1 (Curing
+  // 2026-10-06 read 14,251 under All against a true 16,898).
+  const sql = buildFetchQuery({
+    plantId: "chennai",
+    context: { section: "Curing", granularity: "DAY" },
+  });
+  const outer = sql.slice(0, sql.indexOf(" FROM "));
+  assert.match(outer, /\btyre_type\b/);
+});
+
+test("the shift comparison filters on the selected line, and not on All", () => {
+  const base = {
+    plantId: "chennai",
+    section: "Curing",
+    category: "Productivity",
+    date: "2026-10-06",
+  };
+  const pcr = buildShiftComparisonQuery({ ...base, tyreType: "PCR" });
+  assert.match(pcr, /UPPER\(tyre_type\) IN \('PCR', 'BOTH'\)/);
+
+  const all = buildShiftComparisonQuery({ ...base, tyreType: "All" });
+  assert.ok(!/UPPER\(tyre_type\) IN/.test(all));
+  const none = buildShiftComparisonQuery(base);
+  assert.ok(!/UPPER\(tyre_type\) IN/.test(none));
+});
+
+test("the shift comparison rejects an unsupported tyre type", () => {
+  assert.throws(
+    () =>
+      buildShiftComparisonQuery({
+        plantId: "chennai",
+        section: "Curing",
+        category: "Productivity",
+        date: "2026-10-06",
+        tyreType: "LTR",
       }),
     QueryValidationError,
   );

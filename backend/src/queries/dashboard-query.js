@@ -284,12 +284,17 @@ const GOLD_COLUMNS = [
  * The subset of GOLD_COLUMNS a kpi-data row actually needs to reach the UI.
  *
  * The dashboard reads raw rows, so every column in the projection is shipped
- * once per row over the wire. Seven of them are never read by any frontend
- * consumer — `record_id`, `plant`, `department` and `tyre_type` are pins the
- * client already knows (it sent them), and `production_ids` / `previous_values`
- * / `plot_data` are the heavy blob columns (plot_data alone backs the SPC
+ * once per row over the wire. Six of them are never read by any frontend
+ * consumer — `record_id`, `plant` and `department` are pins the client
+ * already knows (it sent them), and `production_ids` / `previous_values` /
+ * `plot_data` are the heavy blob columns (plot_data alone backs the SPC
  * widget board, which queries the table directly via spc.queries.js and never
  * goes through this endpoint).
+ *
+ * `tyre_type` must stay: under "All" no tyre pin is sent, and CTP stores the
+ * same trench once per line (PCR Trench1 + TBR Trench1). The client's leaf
+ * dedupe keys on tyre_type, so without it the TBR copy of each trench was
+ * dropped — Curing 2026-10-06 showed 14,251 against a true 16,898.
  *
  * Dropping them from the OUTER select only. The inner de-duplication sub-query
  * still scans the full GOLD_COLUMNS list because DEDUPE_PARTITION partitions on
@@ -300,6 +305,7 @@ const OUTPUT_COLUMNS = [
   "date",
   "section",
   "sub_section",
+  "tyre_type",
   "machine",
   "product_type",
   "itemcode",
@@ -1473,6 +1479,7 @@ export function buildShiftComparisonQuery({
   plantId = "banmore",
   section,
   subSection = null,
+  tyreType = null,
   category,
   date,
   from,
@@ -1533,6 +1540,19 @@ export function buildShiftComparisonQuery({
       safeStringValue(subSection, "subSection"),
     );
     where.push(canonicalDimensionPredicate("sub_section", safeSubSection));
+  }
+
+  // Same tyre-line scope as the cards, so the shift box under a PCR/TBR pick
+  // no longer shows both lines' production.
+  if (tyreType != null) {
+    const safeTyreType = safeStringValue(tyreType, "tyreType");
+    if (!ALLOWED_TYRE_TYPES.has(safeTyreType)) {
+      throw new QueryValidationError(
+        `Invalid tyreType: ${safeTyreType}. Allowed: ${[...ALLOWED_TYRE_TYPES].join(", ")}`,
+      );
+    }
+    const predicate = tyreTypePredicate(safeTyreType);
+    if (predicate) where.push(predicate);
   }
 
   const { parts: dateParts, timeScope } = dateWhereParts({ date, from, to });
