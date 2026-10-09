@@ -156,7 +156,8 @@ function ScrapReworkDrillPanel({
   const cardRef = useRef(null);
 
   if (subsections.length === 0) {
-    if (isLoading) return <DrillSkeleton title rows={5} cols={4} />;
+    if (isLoading)
+      return <DrillSkeleton title={`${kind} drill-down`} rows={5} cols={4} />;
     return (
       <Box sx={{ p: 3, textAlign: "center", color: "text.disabled" }}>
         <Typography sx={{ fontSize: 13 }}>

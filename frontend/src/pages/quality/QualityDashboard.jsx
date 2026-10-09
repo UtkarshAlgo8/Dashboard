@@ -21,6 +21,8 @@ import JKLoader from "@/components/JKLoader.jsx";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import NavTabs from "@/components/production/NavTabs.jsx";
+import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
+import { toDrillRows, toKpiGrid } from "@/lib/kpi-transformer.js";
 import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
@@ -28,6 +30,9 @@ import {
   getProcessKpiChildren,
   getProcessKpiHistory,
   getProcessSummary,
+  getProductChildren,
+  getProductSummary,
+  getCuringScrapRows,
   getSpcDetail,
   getSpcFilterOptions,
   getSpcTrend,
@@ -4138,7 +4143,7 @@ function Card({ title, children, accent, style: s, hideExport }) {
   );
 }
 
-function DTable({ cols, rows }) {
+function DTable({ cols, rows, onRowClick, isRowClickable }) {
   const [sc, setSc] = useState(null),
     [sd, setSd] = useState("desc");
   const ck = cols.join("|");
@@ -4235,12 +4240,26 @@ function DTable({ cols, rows }) {
           </tr>
         </thead>
         <tbody>
-          {disp.map((row, ri) => (
+          {disp.map((row, ri) => {
+            const clickable =
+              typeof onRowClick === "function" &&
+              (typeof isRowClickable !== "function" || isRowClickable(row));
+            return (
             <tr
               key={ri}
+              onClick={clickable ? () => onRowClick(row) : undefined}
               style={{
                 background: ri % 2 === 0 ? C.cd : C.rowAlt,
                 transition: "background .15s ease",
+                cursor: clickable ? "pointer" : "default",
+              }}
+              onMouseEnter={(event) => {
+                if (clickable) event.currentTarget.style.background = C.aL;
+              }}
+              onMouseLeave={(event) => {
+                if (clickable)
+                  event.currentTarget.style.background =
+                    ri % 2 === 0 ? C.cd : C.rowAlt;
               }}
             >
               {row.map((cell, ci) => {
@@ -4314,7 +4333,8 @@ function DTable({ cols, rows }) {
                 );
               })}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -4677,6 +4697,11 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
           )}
           {kpi.status && <StatusPill status={kpi.status} />}
         </div>
+        {kpi.emptyReason && (
+          <div style={{ marginTop: 8, fontSize: 12, color: C.mu }}>
+            {kpi.emptyReason}
+          </div>
+        )}
         <div
           style={{
             marginTop: 10,
@@ -7528,3089 +7553,27 @@ function ProcessDrillPanel({
   return null;
 }
 
+// Canonical Quality › Product inventory. Only the Uniformity & Balancing
+// rows exist in gold today; the remaining canonical cards intentionally render
+// an explicit empty state rather than legacy mock numbers.
 const PRODUCT_KPIS = [
-  {
-    id: "dy",
-    n: "Dispatch Yield",
-    v: "92.8",
-    u: "%",
-    target: "95%",
-    status: "Yellow",
-    sp: [94, 93.5, 93, 92.8, 92.8],
-    drill: "dy",
-  },
-  {
-    id: "oe",
-    n: "OE Yield",
-    v: "88.5",
-    u: "%",
-    target: "92%",
-    status: "Red",
-    sp: [91, 90, 89, 88.5, 88.5],
-    drill: "oe",
-  },
-  {
-    id: "uy",
-    n: "Uniformity Yield",
-    v: "90.0",
-    u: "%",
-    target: "95%",
-    status: "Red",
-    sp: [93, 92, 91, 90, 90],
-    drill: "uy",
-  },
-  {
-    id: "dvm",
-    n: "DBM Yield",
-    v: "94.5",
-    u: "%",
-    target: "96%",
-    status: "Yellow",
-    sp: [95.5, 95, 94.8, 94.5, 94.5],
-    drill: "dvm",
-  },
-  {
-    id: "sl",
-    n: "2nd Line Inspection Yield",
-    v: "96.2",
-    u: "%",
-    target: "98%",
-    status: "Yellow",
-    sp: [97, 96.8, 96.5, 96.2, 96.2],
-    drill: "sl",
-  },
-  {
-    id: "bay",
-    n: "Bay Area Inspection",
-    v: "99.1",
-    u: "%",
-    target: "99.5%",
-    status: "Yellow",
-    drill: "bay",
-  },
-  {
-    id: "insp",
-    n: "Inspector Rating",
-    v: "88",
-    u: "/100",
-    target: "≥95",
-    status: "Yellow",
-    sp: [92, 91, 90, 89, 88],
-    drill: "insp",
-  },
-  {
-    id: "gtw",
-    n: "GT Weight Variation",
-    v: "87.5",
-    u: "%",
-    target: "95%",
-    status: "Red",
-    sp: [92, 90, 89, 88, 87.5],
-    drill: "gtw",
-  },
-  {
-    id: "eg",
-    n: "E-Grade Count",
-    v: "42",
-    u: "nos",
-    target: "<20",
-    status: "Red",
-    sp: [25, 28, 35, 40, 42],
-    drill: "eg",
-  },
-  {
-    id: "sc",
-    n: "Scrap %",
-    v: "2.0",
-    u: "%",
-    target: "<1%",
-    status: "Red",
-    sp: [1.2, 1.5, 1.8, 2, 2],
-    drill: "sc",
-  },
-  {
-    id: "cta",
-    n: "CTA Compliance",
-    v: "46.5",
-    u: "%",
-    target: "100%",
-    status: "Red",
-    drill: "cta",
-  },
+  { id: "overallYield", n: "Overall Production Yield", sourceKpi: "Overall_Production_Yield" },
+  { id: "tyresTested", n: "Uniformity Tyres Tested", sourceKpi: "Overall_Uniformity_Production" },
+  { id: "mtmsYield", n: "MTMS Uniformity Yield", sourceKpi: "Mtms_Uniformity_Yield" },
+  { id: "tuoYield", n: "TUO Uniformity Yield", sourceKpi: "Tuo_Uniformity_Yield" },
+  { id: "zfYield", n: "ZF Uniformity Yield", sourceKpi: "Zf_Uniformity_Yield" },
+  { id: "zfBalancing", n: "ZF Balancing Yield", sourceKpi: "Zf_Balancing_Yield_o" },
+  { id: "dbmBalancing", n: "DBM Balancing Yield", sourceKpi: "Dbm_Balancing_Yield" },
+  { id: "insp", n: "Inspector Rating" },
+  { id: "gtw", n: "GT Weight Variation" },
+  { id: "eg", n: "E-Grade Count" },
+  // Deliberately mirrors the Curing → Quality → Scrap KPI in Production;
+  // this is a gold-backed quantity, not a newly-derived percentage.
+  { id: "sc", n: "Scrap", productionSource: "curingScrap" },
+  { id: "cta", n: "CTA Compliance" },
 ];
 
-/* ── CSV DOWNLOAD ── */
-function _csvDl(filename, cols, rows) {
-  const esc = (v) => {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const csv = [
-    cols.map(esc).join(","),
-    ...rows.map((r) => r.map(esc).join(",")),
-  ].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-function _DlBtn({ label, onClick, col }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "6px 13px",
-        borderRadius: 6,
-        border: "1px solid " + (col || C.gn),
-        background: (col || C.gn) + "12",
-        color: col || C.gn,
-        fontSize: 12.5,
-        fontWeight: 700,
-        cursor: "pointer",
-      }}
-    >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="7 10 12 15 17 10" />
-        <line x1="12" y1="15" x2="12" y2="3" />
-      </svg>
-      {label}
-    </button>
-  );
-}
-
-/* ── BARCODE TRACEABILITY ── */
-const TR_MC = {
-  mix: ["Banbury-1", "Banbury-2"],
-  stock: ["Calender-1", "Extruder-2", "Quintoplex"],
-  bldPCR: ["VMI Maxx1", "VMI Maxx2", "VMI Exxium"],
-  bldTBR: ["TBM-1", "TBM-2", "TBM-3"],
-  curePCR: ["Press-08", "Press-12", "Press-15", "Press-19"],
-  cureTBR: ["Press-21", "Press-22", "Press-24"],
-};
-const TR_REASON = [
-  "Under-cure",
-  "Blow",
-  "Bare",
-  "Sidewall mark",
-  "Mould residue",
-  "Cosmetic",
-];
-function _trSeed(s) {
-  let h = 7;
-  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return h || 1;
-}
-function _traceRows(sku, size, seg, total, rej, stageName) {
-  let s = _trSeed(sku + size + stageName);
-  const rnd = () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
-  const bld = seg === "TBR" ? TR_MC.bldTBR : TR_MC.bldPCR;
-  const cure = seg === "TBR" ? TR_MC.cureTBR : TR_MC.curePCR;
-  const tag = size.replace(/[^0-9A-Za-z]/g, "");
-  const shifts = ["A", "B", "C"];
-  const fail = new Set();
-  while (fail.size < Math.min(rej, total)) {
-    fail.add(Math.floor(rnd() * total));
-  }
-  const rows = [];
-  for (let i = 0; i < total; i++) {
-    const bad = fail.has(i);
-    const scrap = bad && rnd() < 0.65;
-    const mm = Math.floor(rnd() * 1e6) % 1e6;
-    rows.push({
-      bc: "BTP-" + tag + "-" + String(10001 + i),
-      sku,
-      size,
-      seg,
-      date: String(1 + (i % 28)).padStart(2, "0") + "-Jun",
-      shift: shifts[i % 3],
-      mix: TR_MC.mix[i % TR_MC.mix.length],
-      batch: "CMP-" + (seg === "TBR" ? "T" : "P") + String(4100 + (i % 40)),
-      stock: TR_MC.stock[i % TR_MC.stock.length],
-      bld: bld[i % bld.length],
-      gtw: (seg === "TBR"
-        ? 38 + (mm % 140) / 100
-        : 8.3 + (mm % 40) / 100
-      ).toFixed(2),
-      cure: cure[i % cure.length],
-      cureTime: (seg === "TBR"
-        ? 38 + (mm % 14) / 10
-        : 13.6 + (mm % 12) / 10
-      ).toFixed(1),
-      stage: stageName,
-      result: bad ? (scrap ? "Scrap" : "Rework") : "Pass",
-      reason: bad ? TR_REASON[mm % TR_REASON.length] : "",
-      disp: bad ? (scrap ? "Scrapped" : "Sent for rework") : "Passed",
-    });
-  }
-  return rows;
-}
-function _inspBc(items) {
-  const out = [];
-  let k = 0;
-  items.forEach((it) => {
-    for (let i = 0; i < it.n; i++) {
-      k++;
-      out.push({
-        bc:
-          "BTP-" +
-          it.size.replace(/[^0-9A-Za-z]/g, "") +
-          "-" +
-          String(30001 + k),
-        sku: it.sku,
-        size: it.size,
-        defect: it.defect,
-        sev: k % 3 === 0 ? "Major" : "Minor",
-        shift: ["A", "B", "C"][k % 3],
-        ins: "Ins-0" + (1 + (k % 4)),
-        date: String(1 + (k % 28)).padStart(2, "0") + "-Jun",
-        disp: k % 3 === 0 ? "Scrapped" : "Sent for rework",
-      });
-    }
-  });
-  return out;
-}
-function _BcCard({ title, rows, file }) {
-  const dl = () =>
-    _csvDl(
-      file,
-      [
-        "Barcode",
-        "SKU",
-        "Size",
-        "Defect",
-        "Severity",
-        "Inspection Date",
-        "Shift",
-        "Inspector",
-        "Disposition",
-      ],
-      rows.map((t) => [
-        t.bc,
-        t.sku,
-        t.size,
-        t.defect,
-        t.sev,
-        t.date,
-        t.shift,
-        t.ins,
-        t.disp,
-      ]),
-    );
-  return (
-    <Card title={title} accent={C.mu}>
-      <div style={{ marginBottom: 8 }}>
-        {_DlBtn({ label: "Download barcode details", onClick: dl, col: C.gn })}
-      </div>
-      <DTable
-        cols={[
-          "Barcode",
-          "Tyre",
-          "Defect",
-          "Severity",
-          "Shift",
-          "Inspector",
-          "Disposition",
-        ]}
-        rows={rows
-          .slice(0, 10)
-          .map((t) => [
-            t.bc,
-            t.sku + " " + t.size,
-            t.defect,
-            t.sev,
-            t.shift,
-            t.ins,
-            t.disp,
-          ])}
-      />
-      {rows.length > 10 && (
-        <div style={{ fontSize: 11.5, color: C.mu, marginTop: 6 }}>
-          {"10 of " + rows.length}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function ProductDrillPanel({ kpi, sub, setSub, tyreType, plant }) {
-  if (!kpi) return null;
-
-  if (kpi.drill === "uy") {
-    const machines = [
-      { mc: "UF-01", ex: 3000, ac: 2500, gap: 500, rsn: "Breakdown" },
-      { mc: "UF-02", ex: 3000, ac: 2800, gap: 200, rsn: "Cycle time high" },
-      { mc: "UF-03", ex: 3000, ac: 2900, gap: 100, rsn: "Availability loss" },
-      { mc: "UF-04", ex: 3000, ac: 2950, gap: 50, rsn: "Minor stoppage" },
-      { mc: "UF-05", ex: 3000, ac: 2890, gap: 110, rsn: "Calibration delay" },
-      { mc: "UF-06", ex: 3000, ac: 2960, gap: 40, rsn: "Operator break" },
-    ];
-    const oeeDetail = {
-      "UF-01": {
-        oee: 78.5,
-        a: 82,
-        p: 96,
-        q: 99.5,
-        dt: [
-          {
-            tp: "Breakdown",
-            sub: "Hydraulic seal leak",
-            dur: "95 min",
-            sh: "B",
-          },
-          { tp: "Breakdown", sub: "Sensor failure", dur: "45 min", sh: "B" },
-          {
-            tp: "Setup",
-            sub: "Size change 145/13 to 165/14",
-            dur: "38 min",
-            sh: "A",
-          },
-          {
-            tp: "Minor Stop",
-            sub: "Bead handling jam",
-            dur: "22 min",
-            sh: "C",
-          },
-        ],
-      },
-      "UF-02": {
-        oee: 88.5,
-        a: 92,
-        p: 96,
-        q: 99.5,
-        dt: [
-          {
-            tp: "Cycle Time",
-            sub: "Reduced speed - bearing noise",
-            dur: "60 min",
-            sh: "A",
-          },
-          { tp: "Setup", sub: "Tool change", dur: "25 min", sh: "B" },
-        ],
-      },
-      "UF-05": {
-        oee: 90.2,
-        a: 94,
-        p: 96.5,
-        q: 99.6,
-        dt: [
-          {
-            tp: "Calibration",
-            sub: "RFV calibration cycle",
-            dur: "40 min",
-            sh: "A",
-          },
-          {
-            tp: "Minor Stop",
-            sub: "Operator break delay",
-            dur: "15 min",
-            sh: "C",
-          },
-        ],
-      },
-    };
-    const selMc = sub;
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card
-          title="Uniformity Yield — Curing vs Uniformity Output"
-          accent={C.rd}
-        >
-          <Breadcrumb path={["Product", "Uniformity Yield"]} />
-          <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
-            <div
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                background: C.c2,
-                borderRadius: 6,
-                border: "1px solid " + C.bd,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: C.mu,
-                  textTransform: "uppercase",
-                }}
-              >
-                First Line Inspection
-              </div>
-              <div style={{ fontSize: 23, fontWeight: 700, color: C.bl }}>
-                20,000
-              </div>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                background: C.c2,
-                borderRadius: 6,
-                border: "1px solid " + C.bd,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: C.mu,
-                  textTransform: "uppercase",
-                }}
-              >
-                Uniformity Output
-              </div>
-              <div style={{ fontSize: 23, fontWeight: 700, color: C.tl }}>
-                18,000
-              </div>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                background: C.rd + "12",
-                borderRadius: 6,
-                border: "1px solid " + C.rd + "33",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: C.rd,
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                }}
-              >
-                Gap
-              </div>
-              <div style={{ fontSize: 23, fontWeight: 700, color: C.rd }}>
-                2,000
-              </div>
-            </div>
-          </div>
-          <DTable
-            cols={["Machine", "Expected", "Actual", "Gap", "Reason"]}
-            rows={machines.map((r) => {
-              const canDrill = oeeDetail[r.mc];
-              return [
-                canDrill ? (
-                  <span
-                    onClick={() => setSub(selMc === r.mc ? "" : r.mc)}
-                    style={{
-                      cursor: "pointer",
-                      fontWeight: selMc === r.mc ? 700 : 600,
-                      color: selMc === r.mc ? C.ac : C.bl,
-                    }}
-                  >
-                    {r.mc}
-                    <span style={{ fontSize: 12, color: C.am, marginLeft: 6 }}>
-                      {"▸"}
-                    </span>
-                  </span>
-                ) : (
-                  r.mc
-                ),
-                r.ex,
-                r.ac,
-                <span
-                  style={{
-                    fontWeight: 700,
-                    color: r.gap > 200 ? C.rd : r.gap > 100 ? C.am : C.gn,
-                  }}
-                >
-                  {r.gap}
-                </span>,
-                r.rsn,
-              ];
-            })}
-          />
-          <div style={{ fontSize: 12, color: C.am, marginTop: 6 }}>
-            {"▸"} Click a machine name to view OEE breakdown and downtime
-            detail. Click any column header to sort.
-          </div>
-        </Card>
-        {selMc && oeeDetail[selMc] && (
-          <Card title={"OEE & Downtime Detail — " + selMc} accent={C.am}>
-            <Breadcrumb
-              path={["Product", "Uniformity", selMc, "OEE / Downtime"]}
-            />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4,1fr)",
-                gap: 8,
-                marginBottom: 10,
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.c2,
-                  borderRadius: 6,
-                  border: "1px solid " + C.bd,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.mu,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  OEE
-                </div>
-                <div
-                  style={{
-                    fontSize: 21,
-                    fontWeight: 700,
-                    color: rc(oeeDetail[selMc].oee),
-                  }}
-                >
-                  {oeeDetail[selMc].oee}%
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.c2,
-                  borderRadius: 6,
-                  border: "1px solid " + C.bd,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.mu,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Availability
-                </div>
-                <div
-                  style={{
-                    fontSize: 21,
-                    fontWeight: 700,
-                    color: rc(oeeDetail[selMc].a),
-                  }}
-                >
-                  {oeeDetail[selMc].a}%
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.c2,
-                  borderRadius: 6,
-                  border: "1px solid " + C.bd,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.mu,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Performance
-                </div>
-                <div
-                  style={{
-                    fontSize: 21,
-                    fontWeight: 700,
-                    color: rc(oeeDetail[selMc].p),
-                  }}
-                >
-                  {oeeDetail[selMc].p}%
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.c2,
-                  borderRadius: 6,
-                  border: "1px solid " + C.bd,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.mu,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Quality
-                </div>
-                <div
-                  style={{
-                    fontSize: 21,
-                    fontWeight: 700,
-                    color: rc(oeeDetail[selMc].q),
-                  }}
-                >
-                  {oeeDetail[selMc].q}%
-                </div>
-              </div>
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: C.md,
-                marginBottom: 6,
-              }}
-            >
-              Downtime Log
-            </div>
-            <DTable
-              cols={["Type", "Sub-cause", "Duration", "Shift"]}
-              rows={oeeDetail[selMc].dt.map((d) => [d.tp, d.sub, d.dur, d.sh])}
-            />
-          </Card>
-        )}
-        <Card
-          title="Uniformity Yield — SKU / Size-wise (quality yield, not machine efficiency)"
-          accent={C.tl}
-        >
-          <div style={{ fontSize: 12, color: C.mu, marginBottom: 8 }}>
-            {
-              "Yield = tyres passing uniformity ÷ tyres checked, per SKU/size. Separate from the machine OEE/efficiency view above — this is the quality-pass rate the customer sees."
-            }
-          </div>
-          <DTable
-            cols={[
-              "SKU",
-              "Size",
-              "Segment",
-              "Checked",
-              "Passed",
-              "Yield %",
-              "Top Reject Param",
-            ]}
-            rows={[
-              ["ULTIMA NEO", "145/13", "PCR", 1180, 1064, "90.2%", "RFV"],
-              ["ULTIMA", "165/14", "PCR", 940, 858, "91.3%", "Conicity"],
-              ["ULTIMA SPORT", "175/15", "PCR", 1120, 1035, "92.4%", "LFV"],
-              ["ULTIMA SPORT", "185/15", "PCR", 760, 681, "89.6%", "RFV"],
-              ["XM2", "10.00R20", "TBR", 560, 505, "90.2%", "Run-out"],
-              ["JUC", "11.00R20", "TBR", 430, 382, "88.8%", "Conicity"],
-            ]}
-          />
-          <div style={{ fontSize: 12, color: C.mu, marginTop: 6 }}>
-            {
-              "RFV/LFV/Conicity/Run-out is the dominant reject parameter for that SKU."
-            }
-          </div>
-        </Card>
-        {_BcCard({
-          title: "Uniformity rejections — barcode details",
-          rows: _inspBc([
-            { sku: "ULTIMA NEO", size: "145/13", defect: "RFV high", n: 116 },
-            { sku: "ULTIMA", size: "165/14", defect: "Conicity out", n: 82 },
-            { sku: "ULTIMA SPORT", size: "175/15", defect: "LFV high", n: 85 },
-            { sku: "XM2", size: "10.00R20", defect: "Run-out", n: 55 },
-          ]),
-          file: "uniformity_barcodes.csv",
-        })}
-      </div>
-    );
-  }
-
-  if (kpi.drill === "dvm") {
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title="DBM Yield — Machine & Size-wise" accent={C.bl}>
-          <Breadcrumb path={["Product", "DBM Yield"]} />
-          <DTable
-            cols={[
-              "Machine",
-              "Size",
-              "Tested",
-              "Pass",
-              "Fail",
-              "Yield %",
-              "Top Fail Param",
-              "Disposition",
-            ]}
-            rows={[
-              [
-                "DVM-01",
-                "145/13",
-                450,
-                432,
-                18,
-                "96.0%",
-                "Imbalance",
-                <StatusPill status="Released" />,
-              ],
-              [
-                "DVM-01",
-                "165/14",
-                420,
-                395,
-                25,
-                "94.0%",
-                "Run-out",
-                <StatusPill status="Hold" />,
-              ],
-              [
-                "DVM-02",
-                "175/15",
-                380,
-                368,
-                12,
-                "96.8%",
-                "Imbalance",
-                <StatusPill status="Released" />,
-              ],
-              [
-                "DVM-02",
-                "185/15",
-                350,
-                322,
-                28,
-                "92.0%",
-                "Conicity",
-                <StatusPill status="Pending" />,
-              ],
-              [
-                "DVM-03",
-                "195/15",
-                300,
-                290,
-                10,
-                "96.7%",
-                "Imbalance",
-                <StatusPill status="Released" />,
-              ],
-            ]}
-          />
-        </Card>
-        {_BcCard({
-          title: "DBM rejections — barcode details",
-          rows: _inspBc([
-            { sku: "ULTIMA NEO", size: "145/13", defect: "Balance out", n: 28 },
-            {
-              sku: "ULTIMA",
-              size: "165/14",
-              defect: "Weight variation",
-              n: 22,
-            },
-            {
-              sku: "ULTIMA SPORT",
-              size: "175/15",
-              defect: "Balance out",
-              n: 25,
-            },
-          ]),
-          file: "dbm_barcodes.csv",
-        })}
-      </div>
-    );
-  }
-
-  if (kpi.drill === "dy") {
-    const PCR_STAGES = [
-      "Curing – 1st Line Visual Inspection",
-      "Uniformity",
-      "Balancing",
-      "2nd Line Visual Inspection",
-      "PDI (Pre-Dispatch Inspection)",
-    ];
-    const TBR_STAGES = [
-      "Curing – 1st Line Visual Inspection",
-      "X-Ray",
-      "Balancing & Run Out",
-      "Uniformity",
-      "Shearography",
-      "2nd Line Inspection",
-      "PDI (Pre-Dispatch Inspection)",
-    ];
-    const DY_PCR = [
-      {
-        sku: "ULTIMA NEO",
-        size: "145/13",
-        qty: 2100,
-        oe: true,
-        y: [98.1, 97.1, 99.0, 98.5, 99.2],
-      },
-      {
-        sku: "ULTIMA",
-        size: "165/14",
-        qty: 1600,
-        oe: false,
-        y: [97.5, 96.2, 98.0, 98.6, 100],
-      },
-      {
-        sku: "ULTIMA SPORT",
-        size: "175/15",
-        qty: 1900,
-        oe: true,
-        y: [98.4, 97.3, 98.9, 99.2, 99.2],
-      },
-      {
-        sku: "ULTIMA SPORT",
-        size: "185/15",
-        qty: 1300,
-        oe: false,
-        y: [97.3, 96.4, 98.4, 98.8, 100],
-      },
-    ];
-    const DY_TBR = [
-      {
-        sku: "XM2",
-        size: "10.00R20",
-        qty: 980,
-        oe: true,
-        y: [98.0, 99.0, 98.5, 96.9, 99.2, 98.8, 99.3],
-      },
-      {
-        sku: "JUC",
-        size: "11.00R20",
-        qty: 760,
-        oe: false,
-        y: [97.6, 98.7, 98.2, 96.1, 98.9, 98.5, 100],
-      },
-      {
-        sku: "JUH",
-        size: "12.00R20",
-        qty: 640,
-        oe: true,
-        y: [97.9, 98.9, 98.4, 96.6, 99.1, 98.7, 99.2],
-      },
-    ];
-    const view = !isBanmorePlant(plant) && tyreType === "TBR" ? "TBR" : "PCR";
-    const stages = view === "TBR" ? TBR_STAGES : PCR_STAGES;
-    const rows = view === "TBR" ? DY_TBR : DY_PCR;
-    const flow = (r) => {
-      let inp = r.qty;
-      const st = r.y.map((y, i) => {
-        const passed = Math.round((inp * y) / 100);
-        const o = { stage: stages[i], inp, passed, rej: inp - passed, y };
-        inp = passed;
-        return o;
-      });
-      return { st, final: inp, fy: +((inp / r.qty) * 100).toFixed(1) };
-    };
-    const yc = (v) => (v >= 98 ? C.gn : v >= 96.5 ? C.am : C.rd);
-    const tc = view === "TBR" ? C.tl : C.bl;
-    const parts = sub ? sub.split("|") : [];
-    const cur =
-      parts.length === 3
-        ? rows.find((r) => r.sku === parts[0] && r.size === parts[1])
-        : null;
-    const sIdx = cur ? Math.min(Number(parts[2]) || 0, stages.length - 1) : 0;
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title={"Dispatch Yield — SKU-wise (" + view + ")"} accent={tc}>
-          <Breadcrumb path={["Product", "Dispatch Yield"]} />
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 13,
-              }}
-            >
-              <thead>
-                <tr>
-                  {[
-                    "SKU",
-                    "Size",
-                    "Production Quantity",
-                    ...stages,
-                    "Dispatch Yield",
-                  ].map((h, i) => (
-                    <th
-                      key={i}
-                      style={{
-                        textAlign: i < 2 ? "left" : "right",
-                        padding: "6px 7px",
-                        color: i >= 3 && i < 3 + stages.length ? C.md : C.mu,
-                        fontWeight: 600,
-                        borderBottom: "1px solid " + C.bd,
-                        fontSize: 11.5,
-                        whiteSpace: "nowrap",
-                        background:
-                          i >= 3 && i < 3 + stages.length
-                            ? tc + "0A"
-                            : "transparent",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => {
-                  const f = flow(r);
-                  return (
-                    <tr
-                      key={i}
-                      style={{ background: i % 2 === 0 ? C.cd : C.rowAlt }}
-                    >
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          borderBottom: "1px solid " + C.bd,
-                          fontWeight: 600,
-                          color: C.tx,
-                        }}
-                      >
-                        {r.sku}
-                        {r.oe && (
-                          <span
-                            style={{
-                              marginLeft: 5,
-                              padding: "1px 5px",
-                              borderRadius: 3,
-                              background: C.am + "20",
-                              color: C.am,
-                              fontSize: 9.5,
-                              fontWeight: 800,
-                            }}
-                          >
-                            {"OE"}
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          borderBottom: "1px solid " + C.bd,
-                          color: C.mu,
-                        }}
-                      >
-                        {r.size}
-                      </td>
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          borderBottom: "1px solid " + C.bd,
-                          textAlign: "right",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {r.qty.toLocaleString("en-IN")}
-                      </td>
-                      {f.st.map((s, j) => {
-                        const key = r.sku + "|" + r.size + "|" + j;
-                        const a = sub === key;
-                        const pdiNA = j === stages.length - 1 && !r.oe;
-                        if (pdiNA)
-                          return (
-                            <td
-                              key={j}
-                              style={{
-                                padding: "7px 7px",
-                                borderBottom: "1px solid " + C.bd,
-                                textAlign: "right",
-                                color: C.mu,
-                              }}
-                              title="PDI applies to OE tyres only"
-                            >
-                              {"—"}
-                            </td>
-                          );
-                        return (
-                          <td
-                            key={j}
-                            onClick={() => setSub(a ? "" : key)}
-                            title="Click for traceability"
-                            style={{
-                              padding: "7px 7px",
-                              borderBottom: "1px solid " + C.bd,
-                              textAlign: "right",
-                              cursor: "pointer",
-                              background: a ? C.aL : "transparent",
-                              outline: a ? "1px solid " + C.ac : "none",
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontWeight: 600,
-                                color: a ? C.ac : C.bl,
-                                textDecoration: "underline",
-                                textDecorationStyle: "dotted",
-                                textUnderlineOffset: 2,
-                              }}
-                            >
-                              {s.passed.toLocaleString("en-IN")}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 10.5,
-                                color: yc(s.y),
-                                fontWeight: 600,
-                              }}
-                            >
-                              {s.y.toFixed(1) + "%"}
-                            </div>
-                          </td>
-                        );
-                      })}
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          borderBottom: "1px solid " + C.bd,
-                          textAlign: "right",
-                          fontWeight: 800,
-                          color: yc(f.fy),
-                        }}
-                      >
-                        {f.fy.toFixed(1) + "%"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ fontSize: 12, color: C.am, marginTop: 6 }}>
-            {
-              "Click any stage quantity for traceability. PDI applies to OE tyres only."
-            }
-          </div>
-        </Card>
-        {cur &&
-          (() => {
-            const f = flow(cur);
-            const st = f.st[sIdx];
-            const stName = stages[sIdx];
-            const scrap = Math.round(st.rej * 0.65),
-              rework = st.rej - scrap;
-            const tr = _traceRows(
-              cur.sku,
-              cur.size,
-              view,
-              cur.qty,
-              st.rej,
-              stName,
-            );
-            const bad = tr.filter((t) => t.result !== "Pass");
-            const roll = (k) => {
-              const m = {};
-              tr.forEach((t) => {
-                if (!m[t[k]]) m[t[k]] = { qty: 0, scr: 0, rw: 0 };
-                m[t[k]].qty++;
-                if (t.result === "Scrap") m[t[k]].scr++;
-                if (t.result === "Rework") m[t[k]].rw++;
-              });
-              return m;
-            };
-            const bldM = roll("bld"),
-              cureM = roll("cure"),
-              mixM = roll("mix");
-            const tile = (l, v, s, col) => (
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 118,
-                  background: C.cd,
-                  border: "1px solid " + C.bd,
-                  borderRadius: 8,
-                  padding: "9px 11px",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 10.5,
-                    color: C.mu,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: ".3px",
-                  }}
-                >
-                  {l}
-                </div>
-                <div
-                  style={{
-                    fontSize: 19,
-                    fontWeight: 700,
-                    color: col || C.tx,
-                    marginTop: 2,
-                  }}
-                >
-                  {v}
-                </div>
-                {s && (
-                  <div style={{ fontSize: 10.5, color: C.mu, marginTop: 1 }}>
-                    {s}
-                  </div>
-                )}
-              </div>
-            );
-            const dl = () =>
-              _csvDl(
-                "traceability_" +
-                  cur.sku.replace(/\s+/g, "_") +
-                  "_" +
-                  cur.size.replace(/[^0-9A-Za-z]/g, "") +
-                  ".csv",
-                [
-                  "Barcode",
-                  "SKU",
-                  "Size",
-                  "Segment",
-                  "Prod Date",
-                  "Shift",
-                  "Mixing Machine",
-                  "Compound Batch",
-                  "Stock Machine",
-                  view === "TBR"
-                    ? "TBM / Building Machine"
-                    : "Building Machine",
-                  "Green Tyre Wt (kg)",
-                  "Curing Machine",
-                  "Cure Time (min)",
-                  "Stage",
-                  "Stage Result",
-                  "Defect Reason",
-                  "Disposition",
-                ],
-                tr.map((t) => [
-                  t.bc,
-                  t.sku,
-                  t.size,
-                  t.seg,
-                  t.date,
-                  t.shift,
-                  t.mix,
-                  t.batch,
-                  t.stock,
-                  t.bld,
-                  t.gtw,
-                  t.cure,
-                  t.cureTime,
-                  t.stage,
-                  t.result,
-                  t.reason,
-                  t.disp,
-                ]),
-              );
-            return (
-              <Card
-                title={
-                  "Traceability — " +
-                  cur.sku +
-                  " (" +
-                  cur.size +
-                  ") · " +
-                  stName
-                }
-                accent={C.pp}
-              >
-                <Breadcrumb
-                  path={[
-                    "Product",
-                    "Dispatch Yield",
-                    cur.sku + " " + cur.size,
-                    stName,
-                  ]}
-                />
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    flexWrap: "wrap",
-                    marginBottom: 10,
-                  }}
-                >
-                  {tile("Input Qty", st.inp.toLocaleString("en-IN"), "", C.tx)}
-                  {tile(
-                    "Passed",
-                    st.passed.toLocaleString("en-IN"),
-                    st.y.toFixed(1) + "%",
-                    C.gn,
-                  )}
-                  {tile("Scrap", scrap.toLocaleString("en-IN"), "", C.rd)}
-                  {tile("Rework", rework.toLocaleString("en-IN"), "", C.am)}
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  {_DlBtn({
-                    label: "Download Traceability",
-                    onClick: dl,
-                    col: C.gn,
-                  })}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    color: C.tx,
-                    marginBottom: 6,
-                  }}
-                >
-                  {"Machine journey"}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    flexWrap: "wrap",
-                    marginBottom: 12,
-                    fontSize: 12,
-                  }}
-                >
-                  {[
-                    ["Mixing", Object.keys(mixM).join(", ")],
-                    ["Stock", Object.keys(roll("stock")).join(", ")],
-                    [
-                      view === "TBR" ? "TBM / Building" : "Building",
-                      Object.keys(bldM).join(", "),
-                    ],
-                    ["Curing", Object.keys(cureM).join(", ")],
-                  ].map((s, i, arr) => (
-                    <span
-                      key={i}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      <span
-                        style={{
-                          padding: "5px 10px",
-                          borderRadius: 6,
-                          background: C.c2,
-                          border: "1px solid " + C.bd,
-                        }}
-                      >
-                        <b style={{ color: C.tx }}>{s[0]}</b>
-                        <span style={{ color: C.mu }}>{": " + s[1]}</span>
-                      </span>
-                      {i < arr.length - 1 && (
-                        <span style={{ color: C.mu }}>{"→"}</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    color: C.tx,
-                    marginBottom: 6,
-                  }}
-                >
-                  {(view === "TBR" ? "TBM / Building" : "Building") +
-                    " machine-wise"}
-                </div>
-                <DTable
-                  cols={[
-                    view === "TBR"
-                      ? "TBM / Building Machine"
-                      : "Building Machine",
-                    "Tyres Built",
-                    "Scrap",
-                    "Rework",
-                  ]}
-                  rows={Object.keys(bldM).map((k) => {
-                    const b = bldM[k];
-                    return [
-                      k,
-                      b.qty.toLocaleString("en-IN"),
-                      <span
-                        style={{
-                          color: b.scr ? C.rd : C.mu,
-                          fontWeight: b.scr ? 700 : 400,
-                        }}
-                      >
-                        {b.scr}
-                      </span>,
-                      <span
-                        style={{
-                          color: b.rw ? C.am : C.mu,
-                          fontWeight: b.rw ? 700 : 400,
-                        }}
-                      >
-                        {b.rw}
-                      </span>,
-                    ];
-                  })}
-                />
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    color: C.tx,
-                    margin: "12px 0 6px",
-                  }}
-                >
-                  {"Curing machine-wise"}
-                </div>
-                <DTable
-                  cols={["Curing Machine", "Tyres Cured", "Scrap", "Rework"]}
-                  rows={Object.keys(cureM).map((k) => {
-                    const b = cureM[k];
-                    return [
-                      k,
-                      b.qty.toLocaleString("en-IN"),
-                      <span
-                        style={{
-                          color: b.scr ? C.rd : C.mu,
-                          fontWeight: b.scr ? 700 : 400,
-                        }}
-                      >
-                        {b.scr}
-                      </span>,
-                      <span
-                        style={{
-                          color: b.rw ? C.am : C.mu,
-                          fontWeight: b.rw ? 700 : 400,
-                        }}
-                      >
-                        {b.rw}
-                      </span>,
-                    ];
-                  })}
-                />
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    color: C.tx,
-                    margin: "12px 0 6px",
-                  }}
-                >
-                  {"Affected barcodes "}
-                  <span
-                    style={{ fontWeight: 400, color: C.mu, fontSize: 11.5 }}
-                  >
-                    {"(10 of " + bad.length + ")"}
-                  </span>
-                </div>
-                <DTable
-                  cols={[
-                    "Barcode",
-                    "Shift",
-                    view === "TBR" ? "TBM" : "Building",
-                    "Curing",
-                    "Compound Batch",
-                    "Result",
-                    "Reason",
-                    "Disposition",
-                  ]}
-                  rows={bad.slice(0, 10).map((t) => [
-                    t.bc,
-                    t.shift,
-                    t.bld,
-                    t.cure,
-                    t.batch,
-                    <span
-                      style={{
-                        fontWeight: 700,
-                        color: t.result === "Scrap" ? C.rd : C.am,
-                      }}
-                    >
-                      {t.result}
-                    </span>,
-                    t.reason,
-                    t.disp,
-                  ])}
-                />
-              </Card>
-            );
-          })()}
-      </div>
-    );
-  }
-
-  if (kpi.drill === "oe") {
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title="OE Yield — SKU & Size-wise" accent={C.am}>
-          <Breadcrumb path={["Product", "OE Yield"]} />
-          <div
-            style={{
-              padding: "8px 12px",
-              background: C.bl + "0E",
-              border: "1px solid " + C.bl + "33",
-              borderRadius: 6,
-              fontSize: 12.5,
-              color: C.md,
-              marginBottom: 10,
-            }}
-          >
-            {
-              "Tracked SKU & size-wise (not customer-wise) — one SKU/size is often supplied to multiple OE customers, so yield belongs to the SKU/size, not a single customer."
-            }
-          </div>
-          <DTable
-            cols={[
-              "SKU",
-              "Size",
-              "Segment",
-              "Produced",
-              "OE Passed",
-              "OE Yield %",
-            ]}
-            rows={[
-              ["ULTIMA NEO", "145/13", "PCR", 2000, 1840, "92.0%"],
-              ["ULTIMA", "165/14", "PCR", 1500, 1335, "89.0%"],
-              ["ULTIMA SPORT", "175/15", "PCR", 1800, 1620, "90.0%"],
-              ["ULTIMA SPORT", "185/15", "PCR", 1200, 1068, "89.0%"],
-              ["ULTIMA", "195/15", "PCR", 1000, 910, "91.0%"],
-              ["XM2", "10.00R20", "TBR", 900, 810, "90.0%"],
-              ["JUC", "11.00R20", "TBR", 700, 616, "88.0%"],
-              ["JUH", "12.00R20", "TBR", 600, 534, "89.0%"],
-            ]}
-          />
-          <div style={{ fontSize: 12, color: C.mu, marginTop: 6 }}>
-            {
-              "OE Yield = tyres meeting OE spec ÷ produced, per SKU/size. Sortable by any column."
-            }
-          </div>
-        </Card>
-        <Card
-          title="OE SKU Yield — PCR (all OE SKUs vs 92% target)"
-          accent={C.bl}
-        >
-          <HBarChart
-            items={[
-              { l: "ULTIMA NEO 145/13", v: 92 },
-              { l: "ULTIMA 165/14", v: 89 },
-              { l: "ULTIMA SPORT 175/15", v: 90 },
-              { l: "ULTIMA SPORT 185/15", v: 89 },
-              { l: "ULTIMA 195/15", v: 91 },
-            ]}
-            unit="%"
-            target={92}
-          />
-        </Card>
-        <Card
-          title="OE SKU Yield — TBR (all OE SKUs vs 92% target)"
-          accent={C.tl}
-        >
-          <HBarChart
-            items={[
-              { l: "XM2 10.00R20", v: 90 },
-              { l: "JUC 11.00R20", v: 88 },
-              { l: "JUH 12.00R20", v: 89 },
-            ]}
-            unit="%"
-            target={92}
-          />
-        </Card>
-      </div>
-    );
-  }
-
-  if (kpi.drill === "eg") {
-    return (
-      <Card
-        title="E-Grade Tyres — Machine, Size & Failed Parameter"
-        accent={C.rd}
-      >
-        <Breadcrumb path={["Product", "E-Grade"]} />
-        <DTable
-          cols={[
-            "Machine",
-            "Size",
-            "Count",
-            "Failed Param",
-            "Actual Value",
-            "Limit",
-            "Disposition",
-          ]}
-          rows={[
-            [
-              "UF-01",
-              "145/13",
-              12,
-              "RFV",
-              "14.2",
-              "≤12.0",
-              <StatusPill status="Pending" />,
-            ],
-            [
-              "UF-03",
-              "165/14",
-              8,
-              "LFV",
-              "11.8",
-              "≤10.0",
-              <StatusPill status="Released" />,
-            ],
-            [
-              "UF-02",
-              "175/15",
-              7,
-              "Conicity",
-              "8.5",
-              "≤7.0",
-              <StatusPill status="Hold" />,
-            ],
-            [
-              "UF-04",
-              "185/15",
-              6,
-              "RFV",
-              "13.1",
-              "≤12.0",
-              <StatusPill status="Pending" />,
-            ],
-            [
-              "UF-05",
-              "195/15",
-              5,
-              "Run-out",
-              "1.8",
-              "≤1.5",
-              <StatusPill status="Hold" />,
-            ],
-            [
-              "UF-01",
-              "165/14",
-              4,
-              "LFV",
-              "11.5",
-              "≤10.0",
-              <StatusPill status="Released" />,
-            ],
-          ]}
-        />
-      </Card>
-    );
-  }
-
-  if (kpi.drill === "sl") {
-    const SL_DEFECTS = [
-      "Sidewall mark",
-      "Tread cosmetic",
-      "Bead area damage",
-      "Visual defect",
-      "Run-out mark",
-    ];
-    const SL_DATA = [
-      {
-        sku: "ULTIMA NEO",
-        size: "145/13",
-        seg: "PCR",
-        insp: 1950,
-        d: {
-          "Sidewall mark": 9,
-          "Tread cosmetic": 0,
-          "Bead area damage": 6,
-          "Visual defect": 0,
-          "Run-out mark": 0,
-        },
-      },
-      {
-        sku: "ULTIMA",
-        size: "165/14",
-        seg: "PCR",
-        insp: 1471,
-        d: {
-          "Sidewall mark": 5,
-          "Tread cosmetic": 4,
-          "Bead area damage": 0,
-          "Visual defect": 0,
-          "Run-out mark": 0,
-        },
-      },
-      {
-        sku: "ULTIMA SPORT",
-        size: "175/15",
-        seg: "PCR",
-        insp: 1800,
-        d: {
-          "Sidewall mark": 6,
-          "Tread cosmetic": 5,
-          "Bead area damage": 0,
-          "Visual defect": 4,
-          "Run-out mark": 0,
-        },
-      },
-      {
-        sku: "ULTIMA SPORT",
-        size: "185/15",
-        seg: "PCR",
-        insp: 1199,
-        d: {
-          "Sidewall mark": 4,
-          "Tread cosmetic": 0,
-          "Bead area damage": 4,
-          "Visual defect": 3,
-          "Run-out mark": 0,
-        },
-      },
-      {
-        sku: "XM2",
-        size: "10.00R20",
-        seg: "TBR",
-        insp: 900,
-        d: {
-          "Sidewall mark": 0,
-          "Tread cosmetic": 3,
-          "Bead area damage": 0,
-          "Visual defect": 0,
-          "Run-out mark": 3,
-        },
-      },
-      {
-        sku: "JUC",
-        size: "11.00R20",
-        seg: "TBR",
-        insp: 683,
-        d: {
-          "Sidewall mark": 0,
-          "Tread cosmetic": 0,
-          "Bead area damage": 0,
-          "Visual defect": 0,
-          "Run-out mark": 2,
-        },
-      },
-    ];
-    const slView = sub === "defect" ? "defect" : "size";
-    const tot = (r) => SL_DEFECTS.reduce((a, k) => a + (r.d[k] || 0), 0);
-    const grandDef = SL_DATA.reduce((a, r) => a + tot(r), 0);
-    const grandInsp = SL_DATA.reduce((a, r) => a + r.insp, 0);
-    const SEV = {
-      "Sidewall mark": "Minor",
-      "Tread cosmetic": "Minor",
-      "Bead area damage": "Major",
-      "Visual defect": "Minor",
-      "Run-out mark": "Major",
-    };
-    const INSPECTORS = ["Ins-01", "Ins-02", "Ins-03", "Ins-04"];
-    const bcRows = (() => {
-      const out = [];
-      let n = 0;
-      SL_DATA.forEach((r) => {
-        SL_DEFECTS.forEach((dfx) => {
-          const q = r.d[dfx] || 0;
-          for (let i = 0; i < q; i++) {
-            n++;
-            out.push({
-              bc:
-                "BTP-" +
-                r.size.replace(/[^0-9A-Za-z]/g, "") +
-                "-" +
-                String(20001 + n),
-              sku: r.sku,
-              size: r.size,
-              seg: r.seg,
-              defect: dfx,
-              qty: 1,
-              sev: SEV[dfx],
-              shift: ["A", "B", "C"][n % 3],
-              ins: INSPECTORS[n % 4],
-              date: String(1 + (n % 28)).padStart(2, "0") + "-Jun",
-              disp: SEV[dfx] === "Major" ? "Scrapped" : "Sent for rework",
-            });
-          }
-        });
-      });
-      return out;
-    })();
-    const byDefect = {};
-    SL_DEFECTS.forEach((k) => {
-      byDefect[k] = { qty: 0, skus: new Set(), sizes: new Set() };
-    });
-    SL_DATA.forEach((r) =>
-      SL_DEFECTS.forEach((k) => {
-        const q = r.d[k] || 0;
-        if (q) {
-          byDefect[k].qty += q;
-          byDefect[k].skus.add(r.sku);
-          byDefect[k].sizes.add(r.size);
-        }
-      }),
-    );
-    const dc = (v) => (v === 0 ? C.mu : v >= 6 ? C.rd : v >= 3 ? C.am : C.md);
-    const dlSize = () =>
-      _csvDl(
-        "second_line_defects_size-wise.csv",
-        [
-          "Barcode",
-          "SKU",
-          "Size",
-          "Segment",
-          "Defect",
-          "Defect Qty",
-          "Severity",
-          "Inspection Date",
-          "Shift",
-          "Inspector",
-          "Disposition",
-        ],
-        [...bcRows]
-          .sort(
-            (a, b) =>
-              a.size.localeCompare(b.size) || a.defect.localeCompare(b.defect),
-          )
-          .map((t) => [
-            t.bc,
-            t.sku,
-            t.size,
-            t.seg,
-            t.defect,
-            t.qty,
-            t.sev,
-            t.date,
-            t.shift,
-            t.ins,
-            t.disp,
-          ]),
-      );
-    const dlDefect = () =>
-      _csvDl(
-        "second_line_defects_defect-wise.csv",
-        [
-          "Barcode",
-          "Defect",
-          "Defect Qty",
-          "SKU",
-          "Size",
-          "Segment",
-          "Severity",
-          "Inspection Date",
-          "Shift",
-          "Inspector",
-          "Disposition",
-        ],
-        [...bcRows]
-          .sort(
-            (a, b) =>
-              a.defect.localeCompare(b.defect) || a.size.localeCompare(b.size),
-          )
-          .map((t) => [
-            t.bc,
-            t.defect,
-            t.qty,
-            t.sku,
-            t.size,
-            t.seg,
-            t.sev,
-            t.date,
-            t.shift,
-            t.ins,
-            t.disp,
-          ]),
-      );
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title="Second Line Inspection" accent={C.rd}>
-          <Breadcrumb
-            path={[
-              "Product",
-              "Second Line Inspection",
-              slView === "size" ? "Size-wise" : "Defect-wise",
-            ]}
-          />
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              marginBottom: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 11.5,
-                color: C.mu,
-                fontWeight: 700,
-                textTransform: "uppercase",
-              }}
-            >
-              View by
-            </span>
-            {[
-              ["size", "Size-wise"],
-              ["defect", "Defect-wise"],
-            ].map((o) => {
-              const a = slView === o[0];
-              return (
-                <button
-                  key={o[0]}
-                  onClick={() => setSub(o[0])}
-                  style={{
-                    padding: "5px 15px",
-                    borderRadius: 999,
-                    border: "1px solid " + (a ? C.rd : C.bd),
-                    background: a ? C.rd + "15" : C.c2,
-                    color: a ? C.rd : C.tx,
-                    fontSize: 12.5,
-                    fontWeight: a ? 700 : 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  {o[1]}
-                </button>
-              );
-            })}
-            <span style={{ marginLeft: "auto" }}>
-              {_DlBtn({
-                label: "Download barcode details",
-                onClick: slView === "size" ? dlSize : dlDefect,
-                col: C.gn,
-              })}
-            </span>
-          </div>
-          {slView === "size" ? (
-            <>
-              <div style={{ fontSize: 12, color: C.mu, marginBottom: 8 }}>
-                {grandDef +
-                  " defects · " +
-                  grandInsp.toLocaleString("en-IN") +
-                  " inspected"}
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: 13,
-                  }}
-                >
-                  <thead>
-                    <tr>
-                      {[
-                        "Tyre Size",
-                        "Inspected",
-                        ...SL_DEFECTS,
-                        "Total Defects",
-                        "Defect %",
-                      ].map((h, i) => (
-                        <th
-                          key={i}
-                          style={{
-                            textAlign: i < 1 ? "left" : "right",
-                            padding: "6px 7px",
-                            color: C.mu,
-                            fontWeight: 600,
-                            borderBottom: "1px solid " + C.bd,
-                            fontSize: 11.5,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {SL_DATA.map((r, i) => {
-                      const t = tot(r);
-                      return (
-                        <tr
-                          key={i}
-                          style={{ background: i % 2 === 0 ? C.cd : C.rowAlt }}
-                        >
-                          <td
-                            style={{
-                              padding: "7px 7px",
-                              borderBottom: "1px solid " + C.bd,
-                              fontWeight: 700,
-                              color: C.tx,
-                            }}
-                          >
-                            {r.sku + " " + r.size}
-                          </td>
-                          <td
-                            style={{
-                              padding: "7px 7px",
-                              borderBottom: "1px solid " + C.bd,
-                              textAlign: "right",
-                            }}
-                          >
-                            {r.insp.toLocaleString("en-IN")}
-                          </td>
-                          {SL_DEFECTS.map((k, j) => {
-                            const v = r.d[k] || 0;
-                            return (
-                              <td
-                                key={j}
-                                style={{
-                                  padding: "7px 7px",
-                                  borderBottom: "1px solid " + C.bd,
-                                  textAlign: "right",
-                                  color: dc(v),
-                                  fontWeight: v ? 700 : 400,
-                                }}
-                              >
-                                {v || "—"}
-                              </td>
-                            );
-                          })}
-                          <td
-                            style={{
-                              padding: "7px 7px",
-                              borderBottom: "1px solid " + C.bd,
-                              textAlign: "right",
-                              fontWeight: 800,
-                              color: C.rd,
-                            }}
-                          >
-                            {t}
-                          </td>
-                          <td
-                            style={{
-                              padding: "7px 7px",
-                              borderBottom: "1px solid " + C.bd,
-                              textAlign: "right",
-                              color: C.mu,
-                            }}
-                          >
-                            {((t / r.insp) * 100).toFixed(2) + "%"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ borderTop: "2px solid " + C.bd }}>
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          fontWeight: 800,
-                          color: C.tx,
-                        }}
-                      >
-                        {"Total"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          textAlign: "right",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {grandInsp.toLocaleString("en-IN")}
-                      </td>
-                      {SL_DEFECTS.map((k, j) => (
-                        <td
-                          key={j}
-                          style={{
-                            padding: "7px 7px",
-                            textAlign: "right",
-                            fontWeight: 700,
-                            color: C.rd,
-                          }}
-                        >
-                          {byDefect[k].qty}
-                        </td>
-                      ))}
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          textAlign: "right",
-                          fontWeight: 800,
-                          color: C.rd,
-                        }}
-                      >
-                        {grandDef}
-                      </td>
-                      <td
-                        style={{
-                          padding: "7px 7px",
-                          textAlign: "right",
-                          fontWeight: 700,
-                          color: C.mu,
-                        }}
-                      >
-                        {((grandDef / grandInsp) * 100).toFixed(2) + "%"}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 12, color: C.mu, marginBottom: 8 }}>
-                {
-                  "A high “# SKUs” means the defect is systemic rather than SKU-specific."
-                }
-              </div>
-              <DTable
-                cols={[
-                  "Defect",
-                  "Total Qty",
-                  "Severity",
-                  "# SKUs Affected",
-                  "SKU / Size Details",
-                ]}
-                rows={SL_DEFECTS.map((k) => {
-                  const b = byDefect[k];
-                  return [
-                    k,
-                    <span
-                      style={{
-                        fontWeight: 800,
-                        color: b.qty >= 10 ? C.rd : b.qty >= 5 ? C.am : C.md,
-                      }}
-                    >
-                      {b.qty}
-                    </span>,
-                    SEV[k],
-                    b.skus.size,
-                    SL_DATA.filter((r) => (r.d[k] || 0) > 0)
-                      .map((r) => r.sku + " " + r.size + " (" + r.d[k] + ")")
-                      .join(", ") || "—",
-                  ];
-                })}
-              />
-            </>
-          )}
-        </Card>
-      </div>
-    );
-  }
-
-  if (kpi.drill === "sc") {
-    const defects = [
-      { d: "Blow", cnt: 120, sz: "145/13", ps: "Building" },
-      { d: "Under Cure", cnt: 90, sz: "165/14", ps: "Curing" },
-      { d: "Compound Issue", cnt: 50, sz: "175/15", ps: "Mixing" },
-      { d: "Splice Open", cnt: 45, sz: "185/15", ps: "Building" },
-      { d: "Sidewall Crack", cnt: 32, sz: "195/15", ps: "Curing" },
-    ];
-    const selDef = sub;
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title="Scrap — Defect-wise Pareto" accent={C.rd}>
-          <Breadcrumb path={["Product", "Scrap"]} />
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 14,
-              }}
-            >
-              <thead>
-                <tr>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      padding: "5px 8px",
-                      color: C.mu,
-                      fontWeight: 600,
-                      borderBottom: "1px solid " + C.bd,
-                      fontSize: 13,
-                    }}
-                  >
-                    Defect
-                  </th>
-                  <th
-                    style={{
-                      textAlign: "right",
-                      padding: "5px 8px",
-                      color: C.mu,
-                      fontWeight: 600,
-                      borderBottom: "1px solid " + C.bd,
-                      fontSize: 13,
-                    }}
-                  >
-                    Scrap Count
-                  </th>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      padding: "5px 8px",
-                      color: C.mu,
-                      fontWeight: 600,
-                      borderBottom: "1px solid " + C.bd,
-                      fontSize: 13,
-                    }}
-                  >
-                    Top Size
-                  </th>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      padding: "5px 8px",
-                      color: C.mu,
-                      fontWeight: 600,
-                      borderBottom: "1px solid " + C.bd,
-                      fontSize: 13,
-                    }}
-                  >
-                    Suspected Process
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {defects.map((r, i) => (
-                  <tr
-                    key={i}
-                    onClick={() => setSub(selDef === r.d ? "" : r.d)}
-                    style={{
-                      background:
-                        selDef === r.d ? C.aL : i % 2 === 0 ? C.cd : C.rowAlt,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        fontWeight: selDef === r.d ? 700 : 400,
-                        color: selDef === r.d ? C.ac : C.tx,
-                      }}
-                    >
-                      {r.d}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        textAlign: "right",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {r.cnt}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                      }}
-                    >
-                      {r.sz}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                      }}
-                    >
-                      {r.ps}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ fontSize: 12, color: C.am, marginTop: 6 }}>
-            {"▸"} Click defect to see size, machine & root cause
-          </div>
-        </Card>
-        {selDef && (
-          <Card
-            title={"Drill: " + selDef + " — Size & Machine Source"}
-            accent={C.am}
-          >
-            <Breadcrumb path={["Product", "Scrap", selDef, "Size & Machine"]} />
-            <DTable
-              cols={[
-                "Size",
-                "Count",
-                "TBM / Machine",
-                "Root Cause",
-                "Action Status",
-              ]}
-              rows={[
-                [
-                  defects.find((d) => d.d === selDef).sz,
-                  Math.round(defects.find((d) => d.d === selDef).cnt * 0.6),
-                  "TBM-2",
-                  "Splice tension low",
-                  <StatusPill status="Open" />,
-                ],
-                [
-                  "165/14",
-                  Math.round(defects.find((d) => d.d === selDef).cnt * 0.25),
-                  "TBM-3",
-                  "Bladder wear",
-                  <StatusPill status="Closed" />,
-                ],
-                [
-                  "175/15",
-                  Math.round(defects.find((d) => d.d === selDef).cnt * 0.15),
-                  "TBM-1",
-                  "Cure time deviation",
-                  <StatusPill status="Open" />,
-                ],
-              ]}
-            />
-          </Card>
-        )}
-      </div>
-    );
-  }
-
-  if (kpi.drill === "gtw") {
-    const sizes = [
-      {
-        sz: "145/13",
-        tot: 1000,
-        wn: 800,
-        ot: 200,
-        cmp: "80.0%",
-        w2: "92.0%",
-        w3: "97.5%",
-        tbm: "TBM-2",
-        lot: "Lot-A4451",
-        st: "Red",
-      },
-      {
-        sz: "165/14",
-        tot: 1200,
-        wn: 1140,
-        ot: 60,
-        cmp: "95.0%",
-        w2: "98.5%",
-        w3: "99.6%",
-        tbm: "TBM-3",
-        lot: "Lot-A4452",
-        st: "Green",
-      },
-      {
-        sz: "175/15",
-        tot: 900,
-        wn: 855,
-        ot: 45,
-        cmp: "95.0%",
-        w2: "98.7%",
-        w3: "99.8%",
-        tbm: "TBM-1",
-        lot: "Lot-A4453",
-        st: "Green",
-      },
-      {
-        sz: "185/15",
-        tot: 800,
-        wn: 720,
-        ot: 80,
-        cmp: "90.0%",
-        w2: "96.5%",
-        w3: "99.0%",
-        tbm: "TBM-2",
-        lot: "Lot-A4454",
-        st: "Yellow",
-      },
-      {
-        sz: "195/15",
-        tot: 600,
-        wn: 570,
-        ot: 30,
-        cmp: "95.0%",
-        w2: "98.8%",
-        w3: "99.7%",
-        tbm: "TBM-4",
-        lot: "Lot-A4455",
-        st: "Green",
-      },
-    ];
-    const lotData = {
-      "Lot-A4451": {
-        comp: [
-          {
-            cm: "Tread",
-            sup: "Extruder-2",
-            wt: "2.92kg",
-            sp: "2.85±2%",
-            dev: "+2.5%",
-            sp_link: "Cp 1.18 / Cpk 1.12 — Red",
-          },
-          {
-            cm: "Sidewall",
-            sup: "Extruder-1",
-            wt: "0.85kg",
-            sp: "0.84±2%",
-            dev: "+1.2%",
-            sp_link: "Cp 1.32 — Green",
-          },
-          {
-            cm: "Inner Liner",
-            sup: "Calender-1",
-            wt: "0.62kg",
-            sp: "0.62±2%",
-            dev: "OK",
-            sp_link: "Cp 1.45 — Green",
-          },
-          {
-            cm: "Belt",
-            sup: "Cutter LTBC",
-            wt: "0.48kg",
-            sp: "0.48±2%",
-            dev: "OK",
-            sp_link: "Cp 1.38 — Green",
-          },
-          {
-            cm: "Bead",
-            sup: "Bead Wind",
-            wt: "0.32kg",
-            sp: "0.32±2%",
-            dev: "OK",
-            sp_link: "Cp 1.50 — Green",
-          },
-        ],
-        spcLink:
-          "Tread weight on Extruder-2 has Cp 1.18 / Cpk 1.12 (Red SPC project). Direct link to GT weight variation.",
-      },
-    };
-    const selSz = sub;
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card
-          title="GT Weight Variation — ±1% / ±2% / ±3% Compliance"
-          accent={C.rd}
-        >
-          <Breadcrumb path={["Product", "GT Weight Variation"]} />
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 14,
-              }}
-            >
-              <thead>
-                <tr>
-                  {[
-                    "Size",
-                    "Total",
-                    "Within ±1%",
-                    "Within ±2%",
-                    "Within ±3%",
-                    "TBM",
-                    "Lot/Barcode",
-                    "Status",
-                  ].map((h, i) => (
-                    <th
-                      key={i}
-                      style={{
-                        textAlign:
-                          i === 0
-                            ? "left"
-                            : i === 5
-                              ? "left"
-                              : i === 6
-                                ? "left"
-                                : i === 7
-                                  ? "center"
-                                  : "right",
-                        padding: "5px 8px",
-                        color: C.mu,
-                        fontWeight: 600,
-                        borderBottom: "1px solid " + C.bd,
-                        fontSize: 13,
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sizes.map((r, i) => (
-                  <tr
-                    key={i}
-                    onClick={() =>
-                      r.st !== "Green" && setSub(selSz === r.sz ? "" : r.sz)
-                    }
-                    style={{
-                      background:
-                        selSz === r.sz ? C.aL : i % 2 === 0 ? C.cd : C.rowAlt,
-                      cursor: r.st !== "Green" ? "pointer" : "default",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        fontWeight: selSz === r.sz ? 700 : 400,
-                        color: selSz === r.sz ? C.ac : C.tx,
-                      }}
-                    >
-                      {r.sz}
-                      {r.st !== "Green" && (
-                        <span
-                          style={{ fontSize: 12, color: C.am, marginLeft: 6 }}
-                        >
-                          {"▸"}
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        textAlign: "right",
-                      }}
-                    >
-                      {r.tot}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        textAlign: "right",
-                        fontWeight: 700,
-                        color:
-                          r.st === "Red"
-                            ? C.rd
-                            : r.st === "Yellow"
-                              ? C.am
-                              : C.gn,
-                      }}
-                    >
-                      {r.cmp}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        textAlign: "right",
-                        color: C.tx,
-                      }}
-                    >
-                      {r.w2}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        textAlign: "right",
-                        color: C.mu,
-                      }}
-                    >
-                      {r.w3}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                      }}
-                    >
-                      {r.tbm}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        fontFamily: "monospace",
-                        fontSize: 13,
-                      }}
-                    >
-                      {r.lot}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 8px",
-                        borderBottom: "1px solid " + C.bd,
-                        textAlign: "center",
-                      }}
-                    >
-                      <StatusPill status={r.st} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ fontSize: 12, color: C.mu, marginTop: 6 }}>
-            {
-              "±1% is the target band; ±2% and ±3% show progressive (cumulative) compliance. "
-            }
-            {"▸"} Click a size for component traceability and SPC link.
-          </div>
-        </Card>
-        {selSz && lotData[sizes.find((s) => s.sz === selSz).lot] && (
-          <Card
-            title={
-              "Component Traceability — Size " +
-              selSz +
-              " / " +
-              sizes.find((s) => s.sz === selSz).lot
-            }
-            accent={C.bl}
-          >
-            <Breadcrumb
-              path={[
-                "Product",
-                "GT Weight",
-                selSz,
-                sizes.find((s) => s.sz === selSz).lot,
-                "Components",
-              ]}
-            />
-            <DTable
-              cols={[
-                "Component",
-                "Source",
-                "Actual Weight",
-                "Spec",
-                "Deviation",
-                "SPC Link",
-              ]}
-              rows={lotData[sizes.find((s) => s.sz === selSz).lot].comp.map(
-                (c) => [
-                  c.cm,
-                  c.sup,
-                  c.wt,
-                  c.sp,
-                  <span
-                    style={{
-                      color: c.dev.includes("+") ? C.rd : C.gn,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {c.dev}
-                  </span>,
-                  <span
-                    style={{
-                      fontSize: 13,
-                      color: c.sp_link.includes("Red") ? C.rd : C.gn,
-                    }}
-                  >
-                    {c.sp_link}
-                  </span>,
-                ],
-              )}
-            />
-            <div
-              style={{
-                marginTop: 8,
-                padding: "8px 10px",
-                background: C.rd + "12",
-                borderRadius: 6,
-                fontSize: 13,
-                color: C.rd,
-              }}
-            >
-              <strong>Root cause linkage:</strong>{" "}
-              {lotData[sizes.find((s) => s.sz === selSz).lot].spcLink}
-            </div>
-          </Card>
-        )}
-      </div>
-    );
-  }
-
-  if (kpi.drill === "insp") {
-    const INS = [
-      {
-        id: "Ins-01",
-        name: "R. Verma",
-        shift: "A",
-        chk: 3200,
-        found: 34,
-        missed: 2,
-        acc: 94.4,
-        rate: 92,
-      },
-      {
-        id: "Ins-02",
-        name: "S. Kumar",
-        shift: "B",
-        chk: 3100,
-        found: 29,
-        missed: 5,
-        acc: 85.3,
-        rate: 84,
-      },
-      {
-        id: "Ins-03",
-        name: "A. Singh",
-        shift: "C",
-        chk: 2400,
-        found: 21,
-        missed: 3,
-        acc: 87.5,
-        rate: 87,
-      },
-      {
-        id: "Ins-04",
-        name: "P. Yadav",
-        shift: "A",
-        chk: 2900,
-        found: 26,
-        missed: 6,
-        acc: 81.3,
-        rate: 79,
-      },
-    ];
-    const rcx = (v) => (v >= 90 ? C.gn : v >= 85 ? C.am : C.rd);
-    const bc = _inspBc([
-      {
-        sku: "ULTIMA NEO",
-        size: "145/13",
-        defect: "Missed sidewall mark",
-        n: 4,
-      },
-      { sku: "ULTIMA", size: "165/14", defect: "Missed bead damage", n: 3 },
-      {
-        sku: "ULTIMA SPORT",
-        size: "175/15",
-        defect: "Missed tread cosmetic",
-        n: 5,
-      },
-      { sku: "XM2", size: "10.00R20", defect: "Missed run-out", n: 4 },
-    ]);
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title="Inspector Rating" accent={C.bl}>
-          <Breadcrumb path={["Product", "Inspector Rating"]} />
-          <DTable
-            cols={[
-              "Inspector",
-              "Name",
-              "Shift",
-              "Tyres Checked",
-              "Defects Found",
-              "Escapes (Missed)",
-              "Accuracy %",
-              "Rating",
-            ]}
-            rows={INS.map((r) => [
-              r.id,
-              r.name,
-              r.shift,
-              r.chk.toLocaleString("en-IN"),
-              r.found,
-              <span style={{ color: r.missed ? C.rd : C.gn, fontWeight: 700 }}>
-                {r.missed}
-              </span>,
-              <span style={{ color: rcx(r.acc), fontWeight: 600 }}>
-                {r.acc.toFixed(1) + "%"}
-              </span>,
-              <span style={{ fontWeight: 800, color: rcx(r.rate) }}>
-                {r.rate + "/100"}
-              </span>,
-            ])}
-          />
-          <div style={{ fontSize: 12, color: C.mu, marginTop: 6 }}>
-            {
-              "Rating from inspection accuracy — defects correctly caught vs escapes found downstream / at the customer."
-            }
-          </div>
-        </Card>
-        {_BcCard({
-          title: "Escaped defects — barcode details",
-          rows: bc,
-          file: "inspector_escapes_barcodes.csv",
-        })}
-      </div>
-    );
-  }
-
-  if (kpi.drill === "bay") {
-    const bc = _inspBc([
-      { sku: "ULTIMA NEO", size: "145/13", defect: "Sidewall mark", n: 22 },
-      { sku: "ULTIMA", size: "165/14", defect: "Bead area damage", n: 18 },
-      { sku: "ULTIMA SPORT", size: "175/15", defect: "Visual defect", n: 20 },
-      { sku: "XM2", size: "10.00R20", defect: "Sidewall mark", n: 18 },
-    ]);
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title="Bay Area Inspection" accent={C.bl}>
-          <Breadcrumb path={["Product", "Bay Area"]} />
-          <DTable
-            cols={[
-              "Shift",
-              "Manpower",
-              "Tyres Checked",
-              "Rejections",
-              "Defects Found",
-              "Dispatched",
-            ]}
-            rows={[
-              ["A", 6, 3200, 28, "Sidewall, Visual", 3172],
-              ["B", 6, 3100, 32, "Sidewall, Bead", 3068],
-              ["C", 4, 2400, 18, "Visual", 2382],
-            ]}
-          />
-        </Card>
-        {_BcCard({
-          title: "Bay Area rejections — barcode details",
-          rows: bc,
-          file: "bay_area_barcodes.csv",
-        })}
-      </div>
-    );
-  }
-
-  if (kpi.drill === "cta") {
-    const ratings = [
-      { rt: "A (Excellent)", cnt: 15, pct: "75.0%" },
-      { rt: "B (Good)", cnt: 3, pct: "15.0%" },
-      { rt: "C (Acceptable)", cnt: 1, pct: "5.0%" },
-      { rt: "D (Poor) — Action Required", cnt: 1, pct: "5.0%" },
-    ];
-    const selRt = sub;
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <Card title="CTA — Cut Tyre Analysis" accent={C.am}>
-          <Breadcrumb path={["Product", "CTA"]} />
-          <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
-            <div
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                background: C.c2,
-                borderRadius: 6,
-                border: "1px solid " + C.bd,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: C.mu,
-                  textTransform: "uppercase",
-                }}
-              >
-                Target / Month
-              </div>
-              <div style={{ fontSize: 23, fontWeight: 700 }}>43</div>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                background: C.c2,
-                borderRadius: 6,
-                border: "1px solid " + C.bd,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: C.mu,
-                  textTransform: "uppercase",
-                }}
-              >
-                Actual
-              </div>
-              <div style={{ fontSize: 23, fontWeight: 700, color: C.am }}>
-                20
-              </div>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                background: C.rd + "12",
-                borderRadius: 6,
-                border: "1px solid " + C.rd + "33",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: C.rd,
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                }}
-              >
-                Compliance
-              </div>
-              <div style={{ fontSize: 23, fontWeight: 700, color: C.rd }}>
-                46.5%
-              </div>
-            </div>
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: C.md,
-              marginBottom: 6,
-            }}
-          >
-            Rating Distribution
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 14,
-              }}
-            >
-              <thead>
-                <tr>
-                  {["Rating", "Count", "%"].map((h, i) => (
-                    <th
-                      key={i}
-                      style={{
-                        textAlign: i === 0 ? "left" : "right",
-                        padding: "5px 8px",
-                        color: C.mu,
-                        fontWeight: 600,
-                        borderBottom: "1px solid " + C.bd,
-                        fontSize: 13,
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ratings.map((r, i) => {
-                  const isD = r.rt.startsWith("D");
-                  return (
-                    <tr
-                      key={i}
-                      onClick={() => isD && setSub(selRt === "D" ? "" : "D")}
-                      style={{
-                        background:
-                          selRt === "D" && isD
-                            ? C.aL
-                            : i % 2 === 0
-                              ? C.cd
-                              : C.rowAlt,
-                        cursor: isD ? "pointer" : "default",
-                      }}
-                    >
-                      <td
-                        style={{
-                          padding: "6px 8px",
-                          borderBottom: "1px solid " + C.bd,
-                          fontWeight: isD ? 700 : 400,
-                          color: isD ? C.rd : C.tx,
-                        }}
-                      >
-                        {r.rt}
-                        {isD && (
-                          <span
-                            style={{ fontSize: 12, color: C.am, marginLeft: 6 }}
-                          >
-                            {"▸"}
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        style={{
-                          padding: "6px 8px",
-                          borderBottom: "1px solid " + C.bd,
-                          textAlign: "right",
-                          fontWeight: 700,
-                          color: isD ? C.rd : C.tx,
-                        }}
-                      >
-                        {r.cnt}
-                      </td>
-                      <td
-                        style={{
-                          padding: "6px 8px",
-                          borderBottom: "1px solid " + C.bd,
-                          textAlign: "right",
-                        }}
-                      >
-                        {r.pct}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ fontSize: 12, color: C.am, marginTop: 6 }}>
-            {"▸"} Click D-rating row to view failed parameter, barcode, and
-            genealogy
-          </div>
-        </Card>
-        {selRt === "D" && (
-          <Card
-            title="D-Rating Detail — Failed Parameter & Genealogy"
-            accent={C.rd}
-          >
-            <Breadcrumb path={["Product", "CTA", "D Rating", "Genealogy"]} />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4,1fr)",
-                gap: 8,
-                marginBottom: 10,
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.c2,
-                  borderRadius: 6,
-                  border: "1px solid " + C.bd,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.mu,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Tyre Size
-                </div>
-                <div style={{ fontSize: 17, fontWeight: 700 }}>165/14</div>
-              </div>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.c2,
-                  borderRadius: 6,
-                  border: "1px solid " + C.bd,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.mu,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Failed Parameter
-                </div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: C.rd }}>
-                  Belt Edge Sep.
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.c2,
-                  borderRadius: 6,
-                  border: "1px solid " + C.bd,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.mu,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Barcode
-                </div>
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  BC-7842166
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: C.rd + "12",
-                  borderRadius: 6,
-                  border: "1px solid " + C.rd + "33",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: C.rd,
-                    textTransform: "uppercase",
-                    fontWeight: 700,
-                  }}
-                >
-                  Action
-                </div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: C.rd }}>
-                  CAPA Open
-                </div>
-              </div>
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: C.md,
-                marginBottom: 6,
-              }}
-            >
-              Manufacturing Genealogy
-            </div>
-            <DTable
-              cols={[
-                "Stage",
-                "Machine",
-                "Date / Time",
-                "Key Parameter",
-                "Value",
-                "Result",
-              ]}
-              rows={[
-                [
-                  "Mixing",
-                  "Banbury-2",
-                  "04-Apr 02:30",
-                  "Mooney Visc.",
-                  "65",
-                  "OK",
-                ],
-                [
-                  "Stock",
-                  "Cutter LTBC",
-                  "04-Apr 06:15",
-                  "Belt edge gauge",
-                  "Below spec",
-                  "Flag",
-                ],
-                [
-                  "Building",
-                  "TBM-3",
-                  "04-Apr 10:00",
-                  "Belt placement",
-                  "OK",
-                  "OK",
-                ],
-                [
-                  "Curing",
-                  "Press-08",
-                  "04-Apr 11:30",
-                  "Cure pressure",
-                  "Low",
-                  "Flag",
-                ],
-                ["Uniformity", "UF-02", "04-Apr 13:00", "RFV", "Within", "OK"],
-              ]}
-            />
-            <div
-              style={{
-                marginTop: 8,
-                padding: "8px 10px",
-                background: C.rd + "12",
-                borderRadius: 6,
-                fontSize: 13,
-                color: C.rd,
-              }}
-            >
-              <strong>Root cause linkage:</strong> Belt edge gauge low at Cutter
-              LTBC + low cure pressure at Press-08. Combination led to belt edge
-              separation in CTA.
-            </div>
-          </Card>
-        )}
-      </div>
-    );
-  }
-
-  return null;
-}
+/* Product drill-downs are rendered by LiveProductDrillPanel below. */
 
 const COMPLAINT_KPIS = [
   {
@@ -16571,7 +13534,191 @@ function SPCTab({ spcSel, setSpcSel, date, from, to, shift }) {
   );
 }
 
-export default function QualityDashboard({ plant, onBack }) {
+const CURING_SCRAP_KPI = {
+  id: "sc",
+  name: "Scrap",
+  agg: "SUM",
+  drillType: "qScrapRework",
+  drillTargets: [
+    "Scrap_s",
+    "Scrap_reason",
+    "Scrap_m",
+    "Scrap_sku",
+    "Scrap_m_sku",
+  ],
+};
+
+const PRODUCT_KPI_LABELS = {
+  Mtms_Uniformity_Yield: "MTMS Uniformity",
+  Tuo_Uniformity_Yield: "TUO Uniformity",
+  Zf_Uniformity_Yield: "ZF Uniformity",
+  Zf_Balancing_Yield_o: "ZF Balancing",
+  Dbm_Balancing_Yield: "DBM Balancing",
+  Mtms_Uniformity_Yield_m: "MTMS machine yield",
+  Tuo_Uniformity_Yield_m: "TUO machine yield",
+  Zf_Uniformity_Yield_m: "ZF machine yield",
+  Mtms_Uniformity_Production: "MTMS tyres tested",
+  Tuo_Uniformity_Production: "TUO tyres tested",
+  Zf_Uniformity_Production: "ZF tyres tested",
+};
+
+function productValueColor(value, unit) {
+  if (value == null) return "#9CA3AF";
+  if (unit !== "%") return C.bl;
+  return value >= 95 ? C.gn : value >= 90 ? C.am : C.rd;
+}
+
+/** Table-only Product drill: each clickable gold row opens its child table. */
+function LiveCuringScrapDrillPanel({ date, shift, granularity, onClose }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getCuringScrapRows({ date, shift, granularity, includeDrill: true })
+      .then((result) => {
+        if (!cancelled) setRows(Array.isArray(result) ? result : []);
+      })
+      .catch(() => {
+        if (!cancelled) setRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date, shift, granularity]);
+
+  return (
+    <Card title="Curing Scrap — drill-down" accent={C.tl}>
+      <ScrapReworkDrillPanel
+        kind="Scrap"
+        drillRows={toDrillRows(rows)}
+        granularity={
+          granularity ||
+          (["A", "B", "C"].includes(String(shift).toUpperCase())
+            ? `SHIFT ${String(shift).toUpperCase()}`
+            : "DAY")
+        }
+        isLoading={loading}
+        onClose={onClose}
+      />
+    </Card>
+  );
+}
+
+function LiveProductDrillPanel({ kpi, date, shift, granularity }) {
+  const initialLevel = {
+    title: kpi.n,
+    kpiNames: kpi.drillChildren || [],
+  };
+  const [levels, setLevels] = useState([initialLevel]);
+  const [rows, setRows] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const level = levels[levels.length - 1];
+  const nameKey = level.kpiNames.join(",");
+
+  useEffect(() => {
+    setLevels([initialLevel]);
+    // The card's value row is the source of truth for drillability. A missing
+    // drill_down_attribute is a leaf, never a synthesized navigation path.
+  }, [kpi.id]);
+
+  useEffect(() => {
+    if (!nameKey) {
+      setRows([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setRows(null);
+    getProductChildren({
+      kpiNames: level.kpiNames,
+      date,
+      shift,
+      granularity,
+    })
+      .then((result) => {
+        if (!cancelled) setRows(result?.rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nameKey, date, shift, granularity]);
+
+  const path = ["Product", kpi.n, ...levels.slice(1).map((item) => item.title)];
+  const openChild = (row) => {
+    if (row.drill_down?.is_leaf || !row.drill_down?.children?.length) return;
+    setLevels((current) => [
+      ...current,
+      {
+        title: row.machine || PRODUCT_KPI_LABELS[row.kpi_name] || row.kpi_name,
+        kpiNames: row.drill_down.children,
+      },
+    ]);
+  };
+  const tableRows = (rows || []).map((row) => {
+    const canDrill =
+      !row.drill_down?.is_leaf && row.drill_down?.children?.length;
+    const label =
+      row.machine || PRODUCT_KPI_LABELS[row.kpi_name] || row.kpi_name;
+    const cells = [
+      canDrill ? (
+        <span style={{ color: C.ac, fontWeight: 700 }}>{label} ›</span>
+      ) : (
+        label
+      ),
+      row.machine && row.machine !== label ? row.machine : "—",
+      row.actual_value == null ? "—" : fmt(Number(row.actual_value)),
+      row.unit || "—",
+    ];
+    // Keep table rendering generic while retaining the factual gold row used
+    // to determine whether clicking this entire row may open a child level.
+    cells.productRow = row;
+    cells.canDrill = Boolean(canDrill);
+    return cells;
+  });
+
+  return (
+    <Card title={`${kpi.n} — drill-down`} accent={C.tl}>
+      <Breadcrumb
+        path={path}
+        onNav={(index) => {
+          if (index > 0) setLevels((current) => current.slice(0, index));
+        }}
+      />
+      {loading ? (
+        <QualityLoader minHeight={180} message="Loading gold data" />
+      ) : tableRows.length ? (
+        <>
+          <DTable
+            cols={["KPI / machine", "Machine", "Value", "Unit"]}
+            rows={tableRows}
+            isRowClickable={(row) => row.canDrill}
+            onRowClick={(row) => openChild(row.productRow)}
+          />
+          <div style={{ marginTop: 8, fontSize: 12, color: C.mu }}>
+            Click an orange row to open the next gold KPI level.
+          </div>
+        </>
+      ) : (
+        <div style={{ padding: "18px 0", color: C.mu, fontSize: 13 }}>
+          No gold data available for this selection.
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function QualityDashboard({ plant, onBack }) {
   const [tab, setTab] = useState("process");
   const [openKpi, setOpenKpi] = useState(null);
   const [sub, setSub] = useState("");
@@ -16595,6 +13742,9 @@ export default function QualityDashboard({ plant, onBack }) {
   const [liveProcess, setLiveProcess] = useState(null);
   const [processLoading, setProcessLoading] = useState(true);
   const [processSummary, setProcessSummary] = useState(null);
+  const [productSummary, setProductSummary] = useState(null);
+  const [curingScrapRows, setCuringScrapRows] = useState(null);
+  const [productLoading, setProductLoading] = useState(false);
   const processGranularity =
     tf === "month" ? "MONTH" : tf === "year" ? "YEAR" : null;
   const processDate = tf === "month" || tf === "year" ? tfFrom : tfTo;
@@ -16636,6 +13786,43 @@ export default function QualityDashboard({ plant, onBack }) {
     };
   }, [tab, processDate, shift, processGranularity]);
 
+  useEffect(() => {
+    if (tab !== "product") return;
+    let cancelled = false;
+    setProductLoading(true);
+    Promise.allSettled([
+      getProductSummary({
+        date: processDate,
+        shift,
+        granularity: processGranularity,
+      }),
+      getCuringScrapRows({
+        date: processDate,
+        shift,
+        granularity: processGranularity,
+      }),
+    ])
+      .then(([productResult, scrapResult]) => {
+        if (cancelled) return;
+        setProductSummary(
+          productResult.status === "fulfilled"
+            ? (productResult.value || { values: {} })
+            : { values: {} },
+        );
+        setCuringScrapRows(
+          scrapResult.status === "fulfilled" && Array.isArray(scrapResult.value)
+            ? scrapResult.value
+            : [],
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setProductLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, processDate, shift, processGranularity]);
+
   // Merge live overall values onto supported Process cards. KPI cards without
   // an API-backed value render as NA so the quality dashboard never shows dummy
   // KPI data as production data.
@@ -16655,7 +13842,71 @@ export default function QualityDashboard({ plant, onBack }) {
       accentColor: processAccentColor(k.id, live.value),
     };
   });
-  const productCards = PRODUCT_KPIS.map(toNaKpi);
+  // Use the exact Production transformer and Curing/Quality source for the
+  // Product tab's Scrap card, so its value, unit, status, and drill family
+  // stay aligned with the existing Production Quality KPI.
+  const curingScrapCard = Array.isArray(curingScrapRows)
+    ? toKpiGrid(curingScrapRows, {
+        section: "Curing",
+        category: "Q",
+        granularity:
+          processGranularity ||
+          (["A", "B", "C"].includes(String(shift).toUpperCase())
+            ? `SHIFT ${String(shift).toUpperCase()}`
+            : "DAY"),
+        mode: "snapshot",
+        plantId: "banmore",
+        kpiDefs: [CURING_SCRAP_KPI],
+      })[0]
+    : null;
+  const productCards = PRODUCT_KPIS.map((kpi) => {
+    if (kpi.productionSource === "curingScrap") {
+      if (!curingScrapCard || curingScrapCard.value == null) {
+        return {
+          ...toNaKpi(kpi),
+          v: "—",
+          emptyReason: "No gold data available",
+        };
+      }
+      return {
+        ...kpi,
+        v: String(curingScrapCard.value),
+        u: curingScrapCard.unit || "",
+        status: curingScrapCard.status || null,
+        sp: null,
+        na: false,
+        live: true,
+        drill: "curingScrap",
+      };
+    }
+    if (!kpi.sourceKpi) {
+      return {
+        ...toNaKpi(kpi),
+        v: "—",
+        emptyReason: "No gold data available",
+      };
+    }
+    const live = productSummary?.values?.[kpi.sourceKpi];
+    if (!live || live.actual_value == null) {
+      return {
+        ...toNaKpi(kpi),
+        v: "—",
+        emptyReason: "No gold data available",
+      };
+    }
+    return {
+      ...kpi,
+      v: String(live.actual_value),
+      u: live.unit || "",
+      status: null,
+      sp: null,
+      na: false,
+      live: true,
+      drill: live.drill_down?.is_leaf ? null : "product",
+      drillChildren: live.drill_down?.children || [],
+      accentColor: productValueColor(Number(live.actual_value), live.unit),
+    };
+  });
   const complaintCards = COMPLAINT_KPIS.map(toNaKpi);
   const kpis =
     tab === "spc"
@@ -16667,7 +13918,9 @@ export default function QualityDashboard({ plant, onBack }) {
           : complaintCards;
   const openObj = openKpi ? kpis.find((k) => k.id === openKpi) : null;
   const tabAccent = tab === "process" ? C.bl : tab === "product" ? C.tl : C.rd;
-  const bodyLoading = tab === "process" && processLoading;
+  const bodyLoading =
+    (tab === "process" && processLoading) ||
+    (tab === "product" && productLoading);
 
   const toggle = (id) => {
     setOpenKpi(openKpi === id ? null : id);
@@ -16761,7 +14014,7 @@ export default function QualityDashboard({ plant, onBack }) {
   // production). The active tab is the current Quality sub-section.
   const subTabItems = [
     { id: "process", label: "Process", accent: C.bl },
-    { id: "product", label: "Product", accent: C.tl, enabled: false },
+    { id: "product", label: "Product", accent: C.tl, enabled: true },
     {
       id: "complaint",
       label: "Customer Complaint",
@@ -16780,6 +14033,34 @@ export default function QualityDashboard({ plant, onBack }) {
     setOpenKpi(null);
     setSub("");
   };
+
+  const renderKpiCard = (kpi) => (
+    <QKpiCard
+      key={kpi.id}
+      kpi={kpi}
+      isOpen={openKpi === kpi.id}
+      onToggle={() => kpi.drill && toggle(kpi.id)}
+      onTrend={setTrendKpi}
+      tyreType={tyreType}
+      plant={plant}
+    />
+  );
+
+  const productSectionHeading = (label) => (
+    <Box sx={{ gridColumn: "1 / -1", mb: -0.5 }}>
+      <Typography
+        sx={{
+          color: "text.secondary",
+          fontSize: 12,
+          fontWeight: 800,
+          letterSpacing: ".8px",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Typography>
+    </Box>
+  );
 
   return (
     <Box
@@ -16901,17 +14182,16 @@ export default function QualityDashboard({ plant, onBack }) {
                     transition: "all .3s ease",
                   }}
                 >
-                  {kpis.map((k) => (
-                    <QKpiCard
-                      key={k.id}
-                      kpi={k}
-                      isOpen={openKpi === k.id}
-                      onToggle={() => k.drill && toggle(k.id)}
-                      onTrend={setTrendKpi}
-                      tyreType={tyreType}
-                      plant={plant}
-                    />
-                  ))}
+                  {tab === "product" ? (
+                    <>
+                      {productSectionHeading("Uniformity & Balancing")}
+                      {productCards.slice(0, 7).map(renderKpiCard)}
+                      {productSectionHeading("Other Product KPIs")}
+                      {productCards.slice(7).map(renderKpiCard)}
+                    </>
+                  ) : (
+                    kpis.map(renderKpiCard)
+                  )}
                 </Box>
 
                 {openObj && (
@@ -16941,15 +14221,22 @@ export default function QualityDashboard({ plant, onBack }) {
                         }}
                       />
                     )}
-                    {tab === "product" && (
-                      <ProductDrillPanel
-                        kpi={openObj}
-                        sub={sub}
-                        setSub={setSub}
-                        tyreType={tyreType}
-                        plant={plant}
-                      />
-                    )}
+                    {tab === "product" &&
+                      (openObj?.drill === "curingScrap" ? (
+                        <LiveCuringScrapDrillPanel
+                          date={processDate}
+                          shift={shift}
+                          granularity={processGranularity}
+                          onClose={() => setOpenKpi(null)}
+                        />
+                      ) : (
+                        <LiveProductDrillPanel
+                          kpi={openObj}
+                          date={processDate}
+                          shift={shift}
+                          granularity={processGranularity}
+                        />
+                      ))}
                     {tab === "complaint" && (
                       <ComplaintDrillPanel
                         kpi={openObj}
@@ -16977,3 +14264,5 @@ export default function QualityDashboard({ plant, onBack }) {
     </Box>
   );
 }
+
+export default QualityDashboard;

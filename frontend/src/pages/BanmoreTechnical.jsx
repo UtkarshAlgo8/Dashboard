@@ -39,6 +39,7 @@ import {
   toMachineProductionKpi,
 } from "@/lib/technicalKpiSources.js";
 import TechnicalDrillPanel from "@/components/technical/TechnicalDrillPanel.jsx";
+import TechnicalUniformityBalancingSection from "@/components/technical/TechnicalUniformityBalancingSection.jsx";
 
 const TECHNICAL_TABS = [
   { id: "overall", label: "Overall", icon: DonutLargeOutlinedIcon },
@@ -53,7 +54,6 @@ const TECHNICAL_TABS = [
     id: "uniformity",
     label: "Uniformity & Balancing",
     icon: BalanceOutlinedIcon,
-    pending: true,
   },
   { id: "ttc", label: "TTC", icon: ScienceOutlinedIcon, pending: true },
   {
@@ -360,6 +360,17 @@ function BanmoreTechnical() {
     () => presetToDateRange(timeRange, asOfData?.asOf ?? null),
     [timeRange, asOfData?.asOf],
   );
+  // Quality › Product's gold API accepts one snapshot date. This mirrors its
+  // established filter contract: a month uses its first-day aggregate; other
+  // selections use the window's latest day. A selected shift overrides the
+  // base DAY/MONTH granularity.
+  const uniformityGranularity =
+    SHIFT_GRANULARITY[shift] ?? dateWindow.granularity ?? "DAY";
+  const uniformityDate =
+    uniformityGranularity === "MONTH" || uniformityGranularity === "YEAR"
+      ? dateWindow.from
+      : (dateWindow.to ?? dateWindow.from);
+  const uniformityShift = shift === "all" ? "All" : String(shift).toUpperCase();
 
   useEffect(() => {
     if (!isLiveTab) return;
@@ -639,6 +650,13 @@ function BanmoreTechnical() {
           <TechnicalOverallGroups mapKpis={mapDisplayKpis} />
         ) : tab === "analysis" ? (
           <TechnicalAnalysis />
+        ) : tab === "uniformity" ? (
+          <TechnicalUniformityBalancingSection
+            key={`${uniformityDate ?? "no-date"}|${uniformityShift}|${uniformityGranularity}`}
+            date={uniformityDate}
+            shift={uniformityShift}
+            granularity={uniformityGranularity}
+          />
         ) : (
           <>
             <TechnicalKpiSection
