@@ -46,3 +46,4 @@ frontend/.env
 .mcp.json
 CLAUDE.md
 backend/.env.bak  
+golden-fixtures/

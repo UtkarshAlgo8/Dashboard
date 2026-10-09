@@ -25,6 +25,7 @@ import { router as snapshotRouter } from "./routes/snapshot.js";
 import { router as adminRouter } from "./routes/admin.js";
 import { router as chatRouter } from "./routes/chat.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
+import { router as qualityProductRouter } from "./quality/routes/product.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
 import { router as qualityRouter } from "./quality/routes/quality.routes.js";
 import { router as engineeringReliabilityRouter } from "./engineering/routes/reliability.routes.js";
@@ -107,8 +108,10 @@ app.use("/api/v1/chat", gate, chatRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
 //   /api/v1/quality/process/{kpi-value,kpi-value-batch,kpi-children,kpi-history}
+//   /api/v1/quality/product/{summary,children}
 //   /api/v1/quality/spc/{summary,filter-options,widgets,detail,*-observations}
 app.use("/api/v1/quality/process", gate, qualityProcessRouter);
+app.use("/api/v1/quality/product", gate, qualityProductRouter);
 app.use("/api/v1/quality/spc", gate, qualitySpcRouter);
 app.use("/api/v1/quality", gate, qualityRouter);
 

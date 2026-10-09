@@ -83,6 +83,68 @@ export function getProcessSummary({ date, shift = "All", granularity }) {
   return cachedQualityGet(`/quality/process/summary?${params.toString()}`);
 }
 
+/** Live Uniformity & Balancing card values for Quality › Product. */
+export function getProductSummary({ date, shift = "All", granularity }) {
+  const params = new URLSearchParams({ plant: "BANMORE", date, shift });
+  if (granularity) params.set("granularity", granularity);
+  return cachedQualityGet(`/quality/product/summary?${params.toString()}`);
+}
+
+/** One Product drill level, restricted by the backend to the canonical tree. */
+export function getProductChildren({
+  kpiNames,
+  date,
+  shift = "All",
+  granularity,
+}) {
+  const params = new URLSearchParams({
+    plant: "BANMORE",
+    date,
+    shift,
+    kpi_names: kpiNames.join(","),
+  });
+  if (granularity) params.set("granularity", granularity);
+  return cachedQualityGet(`/quality/product/children?${params.toString()}`);
+}
+
+// Product's canonical Scrap card mirrors the existing Production dashboard's
+// Curing → Quality → Scrap KPI exactly: same dashboard endpoint, context,
+// gold-source split, and card/drill KPI family. It intentionally does not
+// calculate a percentage from a different denominator.
+const CURING_SCRAP_DRILL_KPIS = [
+  "Scrap_s",
+  "Scrap_reason",
+  "Scrap_m",
+  "Scrap_sku",
+  "Scrap_m_sku",
+];
+
+export function getCuringScrapRows({
+  date,
+  shift = "All",
+  granularity,
+  includeDrill = false,
+}) {
+  const normalizedShift = String(shift).trim().toUpperCase();
+  const resolvedGranularity =
+    granularity ||
+    (["A", "B", "C"].includes(normalizedShift)
+      ? `SHIFT ${normalizedShift}`
+      : "DAY");
+  return client.post("/dashboard/kpi-data", {
+    plantId: "banmore",
+    context: {
+      section: "Curing",
+      category: "Quality",
+      granularity: resolvedGranularity,
+    },
+    date,
+    landingKpis: ["Scrap"],
+    ...(includeDrill ? { drillKpis: CURING_SCRAP_DRILL_KPIS } : {}),
+    limit: includeDrill ? 5000 : 100,
+  });
+}
+
 /**
  * Section/machine drill for a Process KPI family (FRD §1.2). Pass `section`
  * to drill from sections into that section's machines.

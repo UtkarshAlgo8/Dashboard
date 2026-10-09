@@ -15,6 +15,7 @@ import {
   qualitySourceForRange,
 } from "./gold-source.js";
 import { kpiValueQuery, kpiHistoryQuery } from "./process.queries.js";
+import { productSummaryQuery } from "./product.queries.js";
 import { spcCapabilityRowsQuery } from "./spc.queries.js";
 
 const CUTOFF = freshCutoffKey();
@@ -166,6 +167,22 @@ test("SPC capability rows route the snapshot date through the split", () => {
     });
     assert.ok(sql.includes("FROM gold.gold_daily "));
     assert.ok(sql.includes("category = 'SPC'"), "scope predicate must survive");
+  });
+});
+
+test("Product Uniformity summary uses the same fresh/historic source split", () => {
+  withQualityConfig(DB, () => {
+    const fresh = productSummaryQuery({
+      date: isoFromCutoff(1),
+      granularity: "DAY",
+    });
+    const historic = productSummaryQuery({
+      date: isoFromCutoff(-10),
+      granularity: "DAY",
+    });
+    assert.ok(fresh.includes("FROM gold.gold_daily "));
+    assert.ok(historic.includes("FROM gold.gold "));
+    assert.ok(fresh.includes("category = 'Uniformity Testing'"));
   });
 });
 
