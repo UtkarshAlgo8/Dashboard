@@ -11,8 +11,10 @@ import JKLoader from "@/components/JKLoader.jsx";
 import { Card, C, ReliabilityDrillPanel, LOSS_TREE_LEVELS } from "./reliabilityShared.jsx";
 import { LossTreePie } from "./reliabilityPanels.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
+import { periodRequestParams } from "@/lib/engineeringPeriod.js";
 
-function EngineeringOverviewSection({ date, granularity = "MONTH" }) {
+function EngineeringOverviewSection({ period, periodLabel }) {
+  const { date, granularity, from, to } = period;
   const [lossRows, setLossRows] = useState([]);
   const [lossLoading, setLossLoading] = useState(true);
   const [lossError, setLossError] = useState(null);
@@ -29,27 +31,27 @@ function EngineeringOverviewSection({ date, granularity = "MONTH" }) {
     setLossLoading(true);
     setLossError(null);
     setSelectedCategory(null);
-    getEngineeringLossTree({ date, granularity })
+    getEngineeringLossTree(periodRequestParams(period))
       .then((res) => !cancelled && setLossRows(Array.isArray(res?.rows) ? res.rows : []))
       .catch((err) => !cancelled && setLossError(err))
       .finally(() => !cancelled && setLossLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [date, granularity]);
+  }, [period.kind, date, granularity, from, to]);
 
   useEffect(() => {
     let cancelled = false;
     setSummaryLoading(true);
     setSummaryError(null);
-    getReliabilitySummary({ date, granularity })
+    getReliabilitySummary(periodRequestParams(period))
       .then((res) => !cancelled && setSummaryValues(res?.values ?? null))
       .catch((err) => !cancelled && setSummaryError(err))
       .finally(() => !cancelled && setSummaryLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [date, granularity]);
+  }, [period.kind, date, granularity, from, to]);
 
   if (lossLoading || summaryLoading) {
     return <JKLoader message="Loading Engineering overview" />;
@@ -65,6 +67,7 @@ function EngineeringOverviewSection({ date, granularity = "MONTH" }) {
               levels={LOSS_TREE_LEVELS}
               date={date}
               granularity={granularity}
+              range={period.kind === "range" ? { from, to } : null}
               agg="sum"
               rootLabel="Loss Tree"
               initialFilters={{ productType: selectedCategory }}
@@ -77,7 +80,12 @@ function EngineeringOverviewSection({ date, granularity = "MONTH" }) {
       {summaryError && (
         <div style={{ color: C.rd, fontSize: 13 }}>Summary fetch failed: {summaryError.message}</div>
       )}
-      <ReliabilityCardsGrid values={summaryValues} date={date} granularity={granularity} includeTopMachines={false} />
+      <ReliabilityCardsGrid
+        values={summaryValues}
+        period={period}
+        periodLabel={periodLabel}
+        includeTopMachines={false}
+      />
     </div>
   );
 }

@@ -10,7 +10,9 @@
  * 620×36 horizontal bar geometry. The mock owns how this looks; the KPI
  * spec owns what goes in it.
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { toFileSlug } from "@/lib/tableExport.js";
 import { C, fmtNum } from "./reliabilityShared.jsx";
 
 /**
@@ -32,6 +34,8 @@ export function AnalysisModal({
   align = "start",
   children,
 }) {
+  // The whole panel (title, filters, chart, table) — what the PDF captures.
+  const panelRef = useRef(null);
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -59,6 +63,7 @@ export function AnalysisModal({
       }}
     >
       <div
+        ref={panelRef}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: C.cd,
@@ -95,11 +100,15 @@ export function AnalysisModal({
             <div style={{ fontSize: 19, fontWeight: 700, color: C.tx, marginTop: 2 }}>{title}</div>
           </div>
           {headerExtra}
+          <CardDownloadButton
+            cardRef={panelRef}
+            filename={toFileSlug(`engineering-${title}`)}
+            sx={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 2 }}
+          />
           <button
             onClick={onClose}
             aria-label="Close"
             style={{
-              marginLeft: "auto",
               width: 30,
               height: 30,
               borderRadius: 8,

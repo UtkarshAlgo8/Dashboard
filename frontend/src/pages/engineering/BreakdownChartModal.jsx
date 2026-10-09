@@ -598,6 +598,7 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
               rows={allRows}
               getRowKey={(r) => r.key}
               emptyMessage="No breakdowns recorded in this scope."
+              downloadName="engineering-breakdown-pareto"
             />
           </div>
         </>

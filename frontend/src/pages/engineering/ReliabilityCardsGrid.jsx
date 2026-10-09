@@ -14,7 +14,8 @@
  *   Zero Breakdown Machines  → daily line of the clean-run count
  *   Top Machine Breakdowns   → Pareto of BreakdownMin_m by machine, top 10
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import {
   Card,
   ChevronIcon,
@@ -32,9 +33,13 @@ import BreakdownChartModal from "./BreakdownChartModal.jsx";
 import MtbfMttrChartModal from "./MtbfMttrChartModal.jsx";
 import ZeroBreakdownTrendModal from "./ZeroBreakdownTrendModal.jsx";
 
-function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }) {
+const DOWNLOAD_HEADERS = ["KPI", "Value", "Unit", "Period"];
+
+function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle, download }) {
+  const cardRef = useRef(null);
   return (
     <div
+      ref={cardRef}
       onClick={onToggle}
       style={{
         background: C.cd,
@@ -55,6 +60,19 @@ function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }
           {label}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {/* The download menu renders in a portal, but React still bubbles
+              its clicks through this tree — stop them here so picking a
+              format does not also toggle the card's drill panel. */}
+          <span onClick={(e) => e.stopPropagation()} style={{ display: "flex" }}>
+            <CardDownloadButton
+              cardRef={cardRef}
+              rows={download.rows}
+              headers={download.rows.length ? DOWNLOAD_HEADERS : undefined}
+              filename={download.filename}
+              sheetName={label}
+              sx={{ width: 22, height: 22, borderRadius: 1 }}
+            />
+          </span>
           {onTrend && (
             <button
               onClick={(e) => {
@@ -92,9 +110,28 @@ function SummaryCard({ label, value, unit, accent, onTrend, expanded, onToggle }
 }
 
 /**
- * @param {{ values: Record<string, number|null>, date: string, granularity: string, includeTopMachines?: boolean }} props
+ * One Excel row per measure a card shows, raw numbers (not the formatted
+ * text) so the sheet stays sortable and summable.
  */
-function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = false }) {
+const kpiRow = (kpi, value, unit, period) => ({
+  KPI: kpi,
+  Value: value ?? null,
+  Unit: unit,
+  Period: period,
+});
+
+/**
+ * @param {{ values: Record<string, number|null>, period: { kind: string, date: string, granularity: string }, periodLabel: string, includeTopMachines?: boolean }} props
+ */
+function ReliabilityCardsGrid({ values, period, periodLabel, includeTopMachines = false }) {
+  const { date, granularity } = period;
+  // Breakdown/MTBF/MTTR/Top-Machine drills and charts read ONE published row
+  // per section/machine; those rates cannot be summed across the days of an
+  // arbitrary window, so for a custom range they are withheld rather than
+  // shown for the window's first day only. Headline values are rebuilt
+  // server-side and stay correct.
+  const isRange = period.kind === "range";
+  const perRowCardIds = new Set(["breakdown", "mtbf", "mttr", "topMachines"]);
   const [expanded, setExpanded] = useState(null);
   // Which card's trend icon is open, by card id — every card's icon opens a
   // different analysis, so one id covers all of them. Chevrons are separate
@@ -113,6 +150,10 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       value: fmtNum(values?.Breakdown_Pct_Overall, 2),
       unit: "%",
       sub: fmtMinHrs(values?.BreakdownMin_Overall),
+      rows: [
+        kpiRow("Breakdown", values?.Breakdown_Pct_Overall, "%", periodLabel),
+        kpiRow("Breakdown Minutes", values?.BreakdownMin_Overall, "min", periodLabel),
+      ],
     },
     {
       id: "mtbf",
@@ -120,6 +161,7 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       accent: C.bl,
       value: fmtMinHrs(values?.MTBF_Overall),
       unit: "",
+      rows: [kpiRow("MTBF", values?.MTBF_Overall, "min", periodLabel)],
     },
     {
       id: "mttr",
@@ -127,6 +169,7 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       accent: C.am,
       value: fmtMinHrs(values?.MTTR_Overall),
       unit: "",
+      rows: [kpiRow("MTTR", values?.MTTR_Overall, "min", periodLabel)],
     },
     {
       id: "zeroBreakdown",
@@ -134,6 +177,15 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       accent: C.gn,
       value: zeroBreakdown.total == null ? "—" : fmtNum(zeroBreakdown.total),
       unit: zeroBreakdown.asOf ? `as of ${zeroBreakdown.asOf}` : "",
+      // This card tracks its own as-of day, not the header period.
+      rows: [
+        kpiRow(
+          "Zero Breakdown Machines",
+          zeroBreakdown.total,
+          "machines",
+          zeroBreakdown.asOf ? `as of ${zeroBreakdown.asOf}` : "",
+        ),
+      ],
     },
   ];
   if (includeTopMachines) {
@@ -143,6 +195,8 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       accent: C.pp,
       value: "Top 10",
       unit: "",
+      // No single value to tabulate — PDF of the card only.
+      rows: [],
     });
   }
 
@@ -164,8 +218,10 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
             accent={c.accent}
             expanded={expanded === c.id}
             onToggle={() => toggle(c.id)}
-            // Every Reliability card has an analysis behind its icon.
-            onTrend={() => setTrendCard(c.id)}
+            // Every Reliability card has an analysis behind its icon —
+            // except the per-row ones, which a custom range cannot serve.
+            onTrend={isRange && perRowCardIds.has(c.id) ? undefined : () => setTrendCard(c.id)}
+            download={{ rows: c.rows, filename: `banmore-engineering-${c.id}` }}
           />
         ))}
       </div>
@@ -173,6 +229,14 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
       {expanded && (
         <div style={{ marginTop: 14 }}>
           <Card title={cards.find((c) => c.id === expanded)?.label}>
+            {isRange && perRowCardIds.has(expanded) ? (
+              <div style={{ fontSize: 13, color: C.mu, padding: "8px 0" }}>
+                Section and machine breakdowns are available for a single day or a whole
+                month. Pick Today, This Month, a month, or a one-day / full-month range to
+                drill down — the headline value above covers {periodLabel}.
+              </div>
+            ) : (
+              <>
             {expanded === "breakdown" && (
               <ReliabilityDrillPanel levels={BREAKDOWN_LEVELS} date={date} granularity={granularity} rootLabel="Breakdown" />
             )}
@@ -189,6 +253,8 @@ function ReliabilityCardsGrid({ values, date, granularity, includeTopMachines = 
                 granularity={granularity}
                 totalMinutes={values?.BreakdownMin_Overall}
               />
+            )}
+              </>
             )}
           </Card>
         </div>

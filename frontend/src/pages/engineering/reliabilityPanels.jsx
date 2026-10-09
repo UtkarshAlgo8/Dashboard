@@ -10,7 +10,7 @@
  *     recursive drill.
  *   - TopMachineBreakdownsPanel: flat ranked table, no further drill.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import {
@@ -18,6 +18,7 @@ import {
   getReliabilityLatestDate,
 } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { C, DTable, GradeChip, fmtMinHrs, fmtNum } from "./reliabilityShared.jsx";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
@@ -52,6 +53,12 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
     [rows],
   );
   const total = useMemo(() => data.reduce((sum, d) => sum + (d.y || 0), 0), [data]);
+  const pieRef = useRef(null);
+  const exportRows = data.map((d) => ({
+    Category: d.name,
+    "Lost Time (min)": d.y,
+    "Share (%)": total ? Number(((d.y / total) * 100).toFixed(1)) : null,
+  }));
 
   const options = useMemo(
     () => ({
@@ -130,7 +137,7 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
   }
 
   return (
-    <div>
+    <div ref={pieRef}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
         <div
           style={{
@@ -143,7 +150,16 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
         >
           Overall Breakdown — Lost Time by Category
         </div>
-        <InfoDot />
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <CardDownloadButton
+            cardRef={pieRef}
+            headers={["Category", "Lost Time (min)", "Share (%)"]}
+            rows={exportRows}
+            filename="engineering-loss-tree"
+            sx={{ width: 26, height: 26, borderRadius: 1 }}
+          />
+          <InfoDot />
+        </div>
       </div>
       {!loading && !error && rows && rows.length > 0 && (
         <div style={{ fontSize: 12.5, color: C.mu, lineHeight: 1.5, marginTop: 4, marginBottom: 16, maxWidth: 640 }}>
@@ -312,6 +328,7 @@ export function ZeroBreakdownPanel() {
           rows={machineRows}
           getRowKey={(r) => r.machine}
           emptyMessage={`No zero-breakdown machines${selectedSection ? ` in ${selectedSection}` : ""}.`}
+          downloadName={`engineering-zero-breakdown-machines${selectedSection ? `-${selectedSection}` : ""}`}
         />
       )}
     </div>
@@ -437,5 +454,5 @@ export function TopMachineBreakdownsPanel({ date, granularity, totalMinutes = nu
   if (loading) {
     return <JKLoader message="Loading" />;
   }
-  return <DTable columns={columns} rows={rows} getRowKey={(r) => r.machine} emptyMessage="No breakdowns recorded in this period." />;
+  return <DTable columns={columns} rows={rows} getRowKey={(r) => r.machine} emptyMessage="No breakdowns recorded in this period." downloadName="engineering-top-machine-breakdowns" />;
 }

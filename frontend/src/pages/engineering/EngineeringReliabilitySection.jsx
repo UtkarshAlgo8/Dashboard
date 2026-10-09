@@ -8,18 +8,20 @@ import { getReliabilitySummary } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C } from "./reliabilityShared.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
+import { periodRequestParams } from "@/lib/engineeringPeriod.js";
 
-function EngineeringReliabilitySection({ date, granularity = "MONTH" }) {
+function EngineeringReliabilitySection({ period, periodLabel }) {
   // The response is stamped with the period it answered for, so "still
   // loading" is DERIVED (stamp !== current period) rather than held in its
   // own state. That covers the first render and every period change with one
   // rule, and avoids a setState-in-effect cascading render.
-  const requestKey = `${date}|${granularity}`;
+  const params = periodRequestParams(period);
+  const requestKey = `${params.date}|${params.from}|${params.to}|${params.granularity}`;
   const [result, setResult] = useState({ key: null, values: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
-    getReliabilitySummary({ date, granularity })
+    getReliabilitySummary(params)
       .then(
         (res) =>
           !cancelled &&
@@ -31,7 +33,9 @@ function EngineeringReliabilitySection({ date, granularity = "MONTH" }) {
     return () => {
       cancelled = true;
     };
-  }, [date, granularity, requestKey]);
+    // `params` is rebuilt every render; `requestKey` is its value identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey]);
 
   if (result.key !== requestKey) {
     return <JKLoader message="Loading reliability KPIs" />;
@@ -46,8 +50,8 @@ function EngineeringReliabilitySection({ date, granularity = "MONTH" }) {
       )}
       <ReliabilityCardsGrid
         values={result.values}
-        date={date}
-        granularity={granularity}
+        period={period}
+        periodLabel={periodLabel}
         includeTopMachines={true}
       />
     </div>

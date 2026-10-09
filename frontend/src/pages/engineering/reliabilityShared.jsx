@@ -12,6 +12,8 @@ import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { toExportTable, toFileSlug } from "@/lib/tableExport.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle; normalize the
 // CJS-interop shape (mirrors components/trend/LineChart.jsx).
@@ -286,7 +288,10 @@ export function DTable({
   // Optional: the getRowKey value of the row that is currently drilled into.
   // Matched against getRowKey, so callers do not need a second key scheme.
   selectedRowKey,
+  // Base file name for the table's PDF / Excel download.
+  downloadName = "engineering-table",
 }) {
+  const tableRef = useRef(null);
   const [sc, setSc] = useState(null);
   const [sd, setSd] = useState("desc");
 
@@ -323,8 +328,22 @@ export function DTable({
     );
   }
 
+  // Exported in the order on screen, so a header-click sort carries over.
+  const exported = toExportTable(columns, disp, rows);
+
   return (
+    <div>
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+      <CardDownloadButton
+        cardRef={tableRef}
+        headers={exported.headers}
+        rows={exported.rows}
+        filename={toFileSlug(downloadName)}
+        sx={{ width: 26, height: 26, borderRadius: 1 }}
+      />
+    </div>
     <div
+      ref={tableRef}
       style={{
         overflowX: "auto",
         border: "1px solid " + C.bd,
@@ -404,6 +423,7 @@ export function DTable({
           })}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
@@ -676,6 +696,7 @@ function DrillLevelTable({
   level,
   date,
   granularity,
+  range,
   agg,
   filters,
   caption,
@@ -695,9 +716,14 @@ function DrillLevelTable({
   // DAY grain inside a MONTH panel. One published DAY row is one day, so
   // covering the panel's month means asking for its whole date window —
   // without it the level would show the 1st of the month and nothing else.
-  const levelGranularity = level.granularity ?? granularity;
-  const dayWindow =
-    levelGranularity === "DAY" && granularity === "MONTH"
+  //
+  // A custom `range` (Loss Tree only — lost time and occurrences are
+  // additive, so `agg=sum` over every DAY row in it is the period total)
+  // reads at DAY grain across that window instead.
+  const levelGranularity = range ? "DAY" : (level.granularity ?? granularity);
+  const dayWindow = range
+    ? range
+    : levelGranularity === "DAY" && granularity === "MONTH"
       ? monthRangeFromKey(date)
       : null;
 
@@ -727,7 +753,7 @@ function DrillLevelTable({
     return () => {
       cancelled = true;
     };
-  }, [level, date, granularity, agg, filtersKey]);
+  }, [level, date, granularity, range?.from, range?.to, agg, filtersKey]);
 
   // A newly opened level is usually below the fold, and the tables above it
   // stay on screen now — so without this a click looks like it did nothing.
@@ -807,6 +833,7 @@ function DrillLevelTable({
           onRowClick={onRowClick}
           selectedRowKey={selectedRowKey}
           emptyMessage={`No data for ${caption}.`}
+          downloadName={`engineering-${caption}`}
         />
       )}
       {level.note && !error && !loading && (
@@ -841,6 +868,8 @@ export function ReliabilityDrillPanel({
   levels,
   date,
   granularity,
+  // Optional { from, to } custom window — only valid with `agg="sum"`.
+  range = null,
   agg,
   rootLabel,
   initialFilters = {},
@@ -868,7 +897,7 @@ export function ReliabilityDrillPanel({
     // seed() not seed — a bare function reaching setState is read as an
     // updater, and this is a plain replacement.
     setHistory(seed());
-  }, [levels, date, granularity, initialFiltersKey, initialLabel]);
+  }, [levels, date, granularity, range?.from, range?.to, initialFiltersKey, initialLabel]);
 
   const deepest = history[history.length - 1];
   const path = [rootLabel, ...deepest.crumbs];
@@ -888,6 +917,7 @@ export function ReliabilityDrillPanel({
               level={level}
               date={date}
               granularity={granularity}
+              range={range}
               agg={agg}
               filters={entry.filters}
               caption={scope ? `${level.groupLabel} · ${scope}` : level.groupLabel}
