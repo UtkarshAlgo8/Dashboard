@@ -123,6 +123,25 @@ export function granularityAllowListPredicate(column = "granularity") {
 }
 
 /* ----------------------------------------------------------------- *
+ * Date predicate (Athena-safe; alasql-compatible)                   *
+ * ----------------------------------------------------------------- */
+
+// `gold.gold.date` is a typed DATE in Athena, but the same SQL must run
+// against the Excel workbook (alasql) and against any future Quality gold
+// table. Mirrors Production's DATE_YYYYMMDD: cast to VARCHAR, then normalize
+// both stored ISO ("2026-04-01") and DD-MM-YYYY ("01-04-2026") forms to a
+// YYYYMMDD digit string so the comparison side (always YYYYMMDD) is comparable.
+export const DATE_YYYYMMDD =
+  `(CASE WHEN SUBSTRING(CAST(date AS VARCHAR), 5, 1) = '-' ` +
+  `THEN SUBSTRING(CAST(date AS VARCHAR), 1, 4) || SUBSTRING(CAST(date AS VARCHAR), 6, 2) || SUBSTRING(CAST(date AS VARCHAR), 9, 2) ` +
+  `ELSE SUBSTRING(CAST(date AS VARCHAR), 7, 4) || SUBSTRING(CAST(date AS VARCHAR), 4, 2) || SUBSTRING(CAST(date AS VARCHAR), 1, 2) END)`;
+
+/** ISO yyyy-mm-dd → YYYYMMDD digit string for comparison literals. */
+export function isoToYyyymmdd(iso) {
+  return String(iso).replaceAll("-", "");
+}
+
+/* ----------------------------------------------------------------- *
  * The "null" sentinel + drill parsing (FRD §0.2 / §1.2)              *
  * ----------------------------------------------------------------- */
 

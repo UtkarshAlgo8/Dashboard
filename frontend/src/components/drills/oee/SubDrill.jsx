@@ -3,6 +3,7 @@ import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { EmptyState } from "@/components/common";
 import DataTable from "@/components/tables/DataTable.jsx";
+import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 /**
@@ -37,6 +38,8 @@ function SubDrill({
   onSelectSubCategory,
   rows,
   rowsByDate = [],
+  rowsLoading = false,
+  rowsByDateLoading = false,
   activeTraceItemCode,
   onTraceRowClick,
   accentTier,
@@ -48,6 +51,8 @@ function SubDrill({
   const canToggleView = component !== "quality";
   const view = canToggleView ? detailView : "reason";
   const detailRows = view === "date" ? rowsByDate : rows;
+  const detailLoading =
+    view === "date" ? rowsByDateLoading : rowsLoading;
   // Accent follows the selected cell's status tier (green/amber/red) so
   // the drill box highlight matches the highlighted cell. Falls back to
   // the per-component colour if no tier is supplied.
@@ -153,7 +158,9 @@ function SubDrill({
               })}
             </Stack>
           )}
-          {detailRows && detailRows.length > 0 ? (
+          {detailLoading && (!detailRows || detailRows.length === 0) ? (
+            <DrillSkeleton />
+          ) : detailRows && detailRows.length > 0 ? (
             <DetailTable
               component={component}
               subCategory={subCategory}

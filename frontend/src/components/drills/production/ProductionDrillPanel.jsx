@@ -15,6 +15,7 @@ import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { displayUnit, isKg, kgToTonnes } from "@/lib/units.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import { getProductionDrillAggregate } from "@/api/drills.js";
+import { hasMachine } from "@/lib/dashboardRowScopes.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
@@ -121,6 +122,8 @@ function ProductionDrillPanel({
   plantId = "banmore",
   section,
   subSection = null,
+  // The header's tyre line (null = both), so the drill totals match the card.
+  tyreType = null,
   prodSub,
   rawRows,
   granularity = "DAY",
@@ -188,6 +191,8 @@ function ProductionDrillPanel({
         ? ["itemcode"]
         : ["machine", "itemcode"];
 
+  const groupsByMachine = groupBy.includes("machine");
+
   // ---- Server-side pagination -------------------------------------------
   // Each lens (Machine / SKU / Machine+SKU) is its OWN paginated API call,
   // advancing OFFSET for Prev/Next. The server applies the section / product /
@@ -215,7 +220,7 @@ function ProductionDrillPanel({
   // Reset to page 1 whenever the lens or any scope filter changes — done
   // during render (React's "adjust state on prop change" pattern) so a stale
   // deep page never shows for a different list.
-  const pageKey = `${kpiName}|${activeUnit}|${prodSub}|${granularity}|${sectionName}|${subSection}|${from}|${to}`;
+  const pageKey = `${kpiName}|${activeUnit}|${prodSub}|${granularity}|${sectionName}|${subSection}|${tyreType}|${from}|${to}`;
   const [prevPageKey, setPrevPageKey] = useState(pageKey);
   if (prevPageKey !== pageKey) {
     setPrevPageKey(pageKey);
@@ -231,6 +236,7 @@ function ProductionDrillPanel({
       ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
       ...(prodSub ? { product_type: prodSub } : {}),
       ...(!isCuring && subSection ? { sub_section: subSection } : {}),
+      ...(tyreType ? { tyre_type: tyreType } : {}),
     },
     from,
     to,
@@ -258,13 +264,17 @@ function ProductionDrillPanel({
   // doesn't group by isn't in the response at all.
   const rows = useMemo(() => {
     if (!Array.isArray(pageData)) return [];
-    return pageData.map((r) => ({
+    // A machine lens shows machine data. The server already drops the
+    // machine-less rows (buildDrillAggregateQuery), so this only guards a
+    // response served from an older cache entry.
+    const grouped = groupsByMachine ? pageData.filter(hasMachine) : pageData;
+    return grouped.map((r) => ({
       machine: r.machine ?? "—",
       itemcode: r.itemcode ?? "—",
       planned: num(r.threshold_value),
       actual: num(r.actual_value),
     }));
-  }, [pageData]);
+  }, [pageData, groupsByMachine]);
 
   // Curing trench list (§7): one row per Tredge (Production_s). Grouped
   // server-side for the same reason the table above is — the raw rows are
@@ -280,6 +290,7 @@ function ProductionDrillPanel({
           ...(granularity ? { granularity } : {}),
           ...(activeUnit ? { unit_of_measurement: activeUnit } : {}),
           ...(prodSub ? { product_type: prodSub } : {}),
+          ...(tyreType ? { tyre_type: tyreType } : {}),
         },
         from,
         to,

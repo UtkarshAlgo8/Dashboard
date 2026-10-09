@@ -1,6 +1,8 @@
 /**
  * Turns a JK Agent `plot_spec` ({ chart_type, x, y, group_by }) plus the
- * chat response's `preview_rows` into Highcharts options. Pure function so
+ * rows fetched from /download/{result_id} into Highcharts options. (The
+ * upstream used to inline `preview_rows` on the chat response; it no
+ * longer does — see JkAgentChart.jsx.) Pure function so
  * it's cheap to memoize in the component and easy to unit-test in
  * isolation from Highcharts itself.
  *

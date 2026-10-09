@@ -22,6 +22,7 @@ import {
   toDisplayQuantity,
 } from "./units.js";
 import { toDisplayDate } from "./dateFormat.js";
+import { isProductAgnosticKpi } from "./dashboardRowScopes.js";
 import {
   DOWNTIME_REASONS,
   CARD_DOWNTIME_REASONS,
@@ -159,6 +160,25 @@ export function resolveProductionKpi(section, selectedProduct) {
     };
   }
   return { kpiName: "Production", productPin: denan(selectedProduct) };
+}
+
+/**
+ * Curing PCR Production card source. The gold Production / Production_product
+ * rows for CTP Curing PCR carry only the "Others" trench (2026-09-28: 11,738),
+ * while the Databricks total includes Trench1 + Trench2 (13,326). The SKU
+ * leaf still carries every trench and sums to the gold total at DAY/SHIFT.
+ * MONTH snapshots keep using Production_product: the monthly SKU feed can
+ * contain shift-total rows, which inflates a full-month card.
+ */
+export const CURING_PCR_TOTAL_KPI = "Production_sku";
+
+/** True only for the Curing section on the PCR tyre line. */
+export function readsCuringPcrSkuTotal(section, tyreType, granularity = null) {
+  return (
+    section === "Curing" &&
+    String(tyreType ?? "").toUpperCase() === "PCR" &&
+    normGran(granularity) !== "MONTH"
+  );
 }
 
 // realdata.md §13: the real data only ships Production_m_sku; the dummy's
@@ -1207,6 +1227,23 @@ const UNIT_PINNED_SERIES = new Set([
  */
 const STRICT_FILTER_PLANTS = new Set(["chennai", "ctp"]);
 
+/** CTP quality counts summed per day across their level-1 rows. */
+const SUMMED_QUALITY_KPIS = new Set(["Scrap", "Rework", "NCM_Hold"]);
+
+/**
+ * CTP cards that read their own newest day when the pinned headline day has
+ * no row yet. Their feeds land behind Production (2026-10-07: OEE_o and
+ * NCM_Hold end 10-06, the downtime reasons 10-05), so under the Today preset
+ * they showed "—" all day. The card says which day it is via `asOfDate`.
+ */
+const LATEST_DAY_FALLBACK_KPIS = new Set([
+  "OEE_o",
+  "TotalDowntime",
+  "Scrap",
+  "Rework",
+  "NCM_Hold",
+]);
+
 /**
  * CR-11 follow-up: the single machine with the most downtime across a set
  * of synthesised TotalDowntime rows (each carrying a per-date `machineTotals`
@@ -1249,6 +1286,8 @@ function selectSeries(
     unitOfMeasurement,
     drilledKpiId,
     strictFilters,
+    tyreType = null,
+    granularity = null,
     downtimeByReason = null,
   },
 ) {
@@ -1278,12 +1317,19 @@ function selectSeries(
     // average denominator, or the "top machine" figure below. The
     // drill-down reads the full 6-reason set directly from `downtimeRows`,
     // independently of this synthesis (see DowntimeDrillPanel.jsx).
+    // A kpiDef may narrow the SUM to its own `reasons` (the Technical
+    // dashboard's single-reason Breakdown / Setup & Change cards). The
+    // machine fleet still spans all card reasons, so a reason card is
+    // averaged over the same machines as Total Downtime and the reasons
+    // add up to the total. The Production tile carries no `reasons`.
     for (const reason of CARD_DOWNTIME_REASONS) {
       const g = downtimeByReason.get(reason);
       if (!g) continue;
+      const counted = !kpiDef.reasons || kpiDef.reasons.includes(reason);
       for (const r of g) {
-        const v = numberOrNull(r.actual_value);
-        if (v == null || r.date == null) continue;
+        const raw = numberOrNull(r.actual_value);
+        if (raw == null || r.date == null) continue;
+        const v = counted ? raw : 0;
         const d = r.date;
         const prev = perDate.get(d);
         if (prev) prev.actual_value += v;
@@ -1304,12 +1350,14 @@ function selectSeries(
             machineTotals: new Map(),
           });
         const bucket = prev ?? perDate.get(d);
-        if (r.machine && r.machine !== "nan") {
+        if (!isEmptyToken(r.machine)) {
           bucket.machines.add(r.machine);
-          bucket.machineTotals.set(
-            r.machine,
-            (bucket.machineTotals.get(r.machine) ?? 0) + v,
-          );
+          if (counted) {
+            bucket.machineTotals.set(
+              r.machine,
+              (bucket.machineTotals.get(r.machine) ?? 0) + v,
+            );
+          }
         }
         if (r.granularity) {
           granularityCount.set(
@@ -1516,15 +1564,39 @@ function selectSeries(
     (section === "TBM" || section === "Curing")
   ) {
     const { kpiName, productPin } = resolveProductionKpi(section, productType);
-    const productRows = groups.get(kpiName) ?? [];
-    if (productRows.length > 0) {
-      name = kpiName;
-      strictProductPin = productPin;
-      groupDesc = productRows.filter(
+    const pinnedToProduct = (rows) =>
+      rows.filter(
         (r) =>
           canonicalizeProductType(r.product_type) ===
           canonicalizeProductType(productPin),
       );
+    // CTP reads the plain Production rows — the figure the gold validation
+    // checks — pinned to the product and summed per period across trenches
+    // and tyre lines. Production_product is missing for Carcass and drifts
+    // from Production for Green Tyre (Sep–Oct 2026: 22 of 37 days, up to 81
+    // tyres); Production_sku overstates Carcass. The levels below remain
+    // the fallback when a window carries no plain Production row.
+    const plainRows = strictFilters ? pinnedToProduct(groupDesc) : [];
+    if (plainRows.length > 0) {
+      strictProductPin = productPin;
+      groupDesc = sumRowsPerPeriod(uniqueLeafRows(plainRows));
+    } else {
+      const productRows = groups.get(kpiName) ?? [];
+      if (productRows.length > 0) {
+        name = kpiName;
+        strictProductPin = productPin;
+        groupDesc = sumRowsPerPeriod(
+          uniqueLeafRows(pinnedToProduct(productRows)),
+        );
+      }
+      if (readsCuringPcrSkuTotal(section, tyreType, granularity)) {
+        const skuRows = pinnedToProduct(groups.get(CURING_PCR_TOTAL_KPI) ?? []);
+        if (skuRows.length > 0) {
+          name = kpiName;
+          strictProductPin = productPin;
+          groupDesc = sumRowsPerPeriod(uniqueLeafRows(skuRows));
+        }
+      }
     }
   }
 
@@ -1555,7 +1627,14 @@ function selectSeries(
   // new_change.md C7/C4: a strictly pinned series is already narrowed to
   // exactly one product_type, so the match below would re-admit the
   // aggregate row alongside its children — skip it there.
-  if (productType && !strictProductPin) {
+  //
+  // CTP records the OEE family per section/machine with NO product_type
+  // and a "%" unit, so it is never a product or unit series: the strict
+  // pins below would only ever empty it ("—" on the card while the sidebar
+  // shows the value). Skip both pins for those KPIs on strict plants; the
+  // card then shows exactly the rows in the selected window, nothing else.
+  const pinsApply = !(strictFilters && isProductAgnosticKpi(name));
+  if (pinsApply && productType && !strictProductPin) {
     // changes.md §6: compare canonically so "Sidewall" rows match a
     // "SideWall" selection (and vice-versa) instead of splitting.
     const wantPt = canonicalizeProductType(productType);
@@ -1571,7 +1650,7 @@ function selectSeries(
   // leaves the group alone EXCEPT for the series the unit pills actually
   // describe (UNIT_PINNED_SERIES) — the option list spans all history, and
   // falling back there showed one unit's total under another unit's pill.
-  if (unitOfMeasurement) {
+  if (pinsApply && unitOfMeasurement) {
     const unitRows = groupDesc.filter(
       (r) =>
         canonicalUnit(r.unit_of_measurement) ===
@@ -1615,7 +1694,62 @@ function selectSeries(
     }
   }
 
+  // CTP stores the quality counts as several level-1 rows per day — one per
+  // tyre line, and TBR Curing Scrap once per responsible department (status).
+  // Each set re-sums to the line's Scrap_s total (Curing 2026-10-07: PCR 38 +
+  // TBR 2 + 2 + 3 + 6 = 51), but the card read the first row only (6).
+  if (strictFilters && SUMMED_QUALITY_KPIS.has(name)) {
+    groupDesc = sumRowsPerPeriod(uniqueLeafRows(groupDesc));
+  }
+
   return { name, rows: groupDesc };
+}
+
+/**
+ * Drop repeated copies of the same leaf row. An open Production drill fetches
+ * the SKU rows again and they are merged into the landing rows, so without
+ * this the card would count them twice. A leaf is unique on these columns
+ * once the backend de-duplication has run.
+ */
+function uniqueLeafRows(rows) {
+  const seen = new Map();
+  for (const r of rows) {
+    const key = [
+      isoDate(r.date),
+      normGran(r.granularity),
+      r.tyre_type ?? "",
+      r.unit_of_measurement ?? "",
+      r.sub_section ?? "",
+      r.machine ?? "",
+      r.itemcode ?? "",
+      // CTP Scrap splits one day by responsible department in `status`.
+      r.status ?? "",
+    ].join("|");
+    if (!seen.has(key)) seen.set(key, r);
+  }
+  return [...seen.values()];
+}
+
+/**
+ * Collapse rows sharing (date, granularity, unit) into one row whose
+ * actual_value is their sum. For an additive series split across
+ * sub-sections. Metadata comes from the first row of each period; a
+ * threshold is kept only when the period has a single row.
+ */
+function sumRowsPerPeriod(rows) {
+  const byPeriod = new Map();
+  for (const r of rows) {
+    const key = `${isoDate(r.date)}|${normGran(r.granularity)}|${r.unit_of_measurement ?? ""}`;
+    const v = numberOrNull(r.actual_value);
+    const prev = byPeriod.get(key);
+    if (!prev) {
+      byPeriod.set(key, { ...r, actual_value: v });
+      continue;
+    }
+    if (v !== null) prev.actual_value = (prev.actual_value ?? 0) + v;
+    prev.threshold_value = null;
+  }
+  return [...byPeriod.values()];
 }
 
 /** Rows at ONE granularity, newest date first. */
@@ -1667,6 +1801,9 @@ export function toKpiGrid(
     granularity = "DAY",
     mode = "snapshot",
     productType = null,
+    // The selected tyre line ("PCR" / "TBR" / null for All). Switches the
+    // Curing PCR Production card to its SKU total (CURING_PCR_TOTAL_KPI).
+    tyreType = null,
     // new_change.md C8/C9: the pinned unit_of_measurement. Applied only
     // where the series actually carries several units, so unit-less KPIs
     // (OEE, Plan Compliance) are untouched.
@@ -1679,6 +1816,11 @@ export function toKpiGrid(
     // explicit date/range (`useAnchors`); an explicit window always wins.
     anchors = null,
     useAnchors = false,
+    // The ONE day the headline denotes (Today preset, ISO yyyy-mm-dd). When
+    // set, a card whose newest row in the window is older shows "—" instead
+    // of falling back to the latest available day. null keeps the
+    // newest-row behaviour.
+    headlineDate = null,
     // new_change.md C14: { "<section>|<yyyy-mm-dd>": shiftCount } — the
     // section's latest day while its shifts are still incomplete.
     partialDays = null,
@@ -1686,6 +1828,7 @@ export function toKpiGrid(
     // IDENTICAL pins (C16) — only the date window moved.
     baselineRows = null,
     baselineWindow = null,
+    baselineGranularity = null,
     // new_change.md C10: the row cap was hit, so any total is INCOMPLETE.
     truncated = false,
     // Which plant's rows these are. Decides whether a filter pin is
@@ -1702,6 +1845,10 @@ export function toKpiGrid(
     // tile summed both copies (2x). This is the ONLY feed for the
     // TotalDowntime tile — see selectSeries.
     downtimeRows = null,
+    // The cards to build, in order. Defaults to the Production allow-list
+    // for (section, category); the Technical dashboard passes its own
+    // single-reason downtime cards here.
+    kpiDefs = null,
   } = {},
 ) {
   // CR-11: an empty landing band is not an empty grid when the dedicated
@@ -1726,7 +1873,7 @@ export function toKpiGrid(
   const isSnapshot = mode === "snapshot";
 
   // Get allowed KPI names for this (section, category) combo only.
-  const allowedKpis = ALLOWED_KPIS[section]?.[category] ?? [];
+  const allowedKpis = kpiDefs ?? ALLOWED_KPIS[section]?.[category] ?? [];
   const allowedNames = new Set(allowedKpis.map((k) => k.name));
   // CR-11 / Q-DT-01: the 6 reason leaves are deliberately NOT allow-listed
   // here. They arrive via `downtimeRows`, not `rows` — and any copy of them
@@ -1737,6 +1884,12 @@ export function toKpiGrid(
   // Production_product, so those rows must survive the allow-list filter.
   if (section === "TBM" || section === "Curing") {
     allowedNames.add("Production_product");
+  }
+  if (
+    readsCuringPcrSkuTotal(section, tyreType, granularity) ||
+    readsCuringPcrSkuTotal(section, tyreType, baselineGranularity)
+  ) {
+    allowedNames.add(CURING_PCR_TOTAL_KPI);
   }
   const cat = String(category || "").toUpperCase();
   if (cat === "P") {
@@ -1797,6 +1950,8 @@ export function toKpiGrid(
     unitOfMeasurement,
     drilledKpiId,
     downtimeByReason,
+    tyreType,
+    granularity,
     strictFilters: STRICT_FILTER_PLANTS.has(
       String(plantId ?? "")
         .trim()
@@ -1890,7 +2045,6 @@ export function toKpiGrid(
         }
         resolvedDate = isoDate(preRows[0]?.date) || null;
       }
-
       const kpi = kpiByName.get(name) ?? kpiDef;
       const numericVals = preRows
         .map((r) => numberOrNull(r.actual_value))
@@ -1899,6 +2053,18 @@ export function toKpiGrid(
         result.push(placeholderCard(kpiDef));
         continue;
       }
+
+      // A lagging CTP card shows its newest earlier day instead of "—".
+      const latestDayFallback = Boolean(
+        headlineDate &&
+        narrowOpts.strictFilters &&
+        LATEST_DAY_FALLBACK_KPIS.has(kpiDef.name) &&
+        resolvedDate &&
+        resolvedDate < headlineDate,
+      );
+      const headlineMiss =
+        Boolean(headlineDate && resolvedDate !== headlineDate) &&
+        !latestDayFallback;
 
       // CR-11 / Q-DT-01: TotalDowntime's synthesised rows are per-date sums,
       // so the headline sums them ONLY when the fetched window IS the period
@@ -1957,6 +2123,22 @@ export function toKpiGrid(
         .reverse()
         .map((v) => v / sparkDivisor);
 
+      if (headlineMiss) {
+        const latest = preRows[0];
+        const rawUnit = kpi.unit ?? denan(latest.unit_of_measurement) ?? null;
+        result.push({
+          ...placeholderCard(kpiDef),
+          unit: toDisplayQuantity(null, rawUnit).unit,
+          spark: isKg(rawUnit) ? sparkVals.map(kgToTonnes) : sparkVals,
+          target: round2(
+            toDisplayQuantity(numberOrNull(latest.threshold_value), rawUnit)
+              .value,
+          ),
+          truncated,
+        });
+        continue;
+      }
+
       // new_change.md C14 / spike defect S-3: the section's latest day is
       // still IN PROGRESS (its shifts are incomplete). Comparing a part-day
       // against a full previous day reads as a catastrophic drop (~-75 %)
@@ -1974,16 +2156,23 @@ export function toKpiGrid(
       // the rows already in hand. MONTH-wise -> the previous COMPLETE
       // month, which only the backend baseline window carries.
       const latest = preRows[0];
-      let trend = null;
+      let trend;
+      let trendValueRaw = null;
       let trendBaseline = null;
-      if (partialDay) {
-        // suppressed — blank, never "0 %", "∞" or "−100 %" (C18)
-      } else if (normGran(granularity) === "MONTH") {
+      if (normGran(granularity) === "MONTH") {
+        const comparisonGranularity = baselineGranularity ?? granularity;
+        const baselineValue = baselineAggregate(
+          baselineGroups,
+          kpiDef,
+          { ...narrowOpts, granularity: comparisonGranularity },
+          comparisonGranularity,
+        );
         trend = spikePct(
           value,
-          baselineAggregate(baselineGroups, kpiDef, narrowOpts, granularity),
+          baselineValue,
         );
         if (trend != null) {
+          trendValueRaw = value - baselineValue;
           trendBaseline = formatBaselineWindow(baselineWindow, granularity);
         }
       } else {
@@ -1994,20 +2183,64 @@ export function toKpiGrid(
         // preRows is sorted newest-first, so the first row dated before the
         // current day is the most recent prior day.
         const currentIso = isoDate(resolvedDate) || isoDate(latest.date);
-        const wantPrev = prevDayIso(currentIso);
+        // Today preset (headlineDate set) and any single-day snapshot:
+        // preRows holds the ONE pinned day only, so D-1 must come from the
+        // baseline window the backend fetched. The same applies when the
+        // trailing window has no prior day.
         const prevRow =
-          preRows.find((r) => isoDate(r.date) === wantPrev) ??
+          preRows.find((r) => isoDate(r.date) === prevDayIso(currentIso)) ??
           preRows.find((r) => isoDate(r.date) < currentIso);
-        // CR-11: `value` is per-machine for TotalDowntime, so the previous
-        // day must be divided by the same fleet before the two are compared
-        // — otherwise the spike reads as a ~N-fold jump every single day.
-        const prevVal = prevRow ? numberOrNull(prevRow.actual_value) : null;
-        trend = spikePct(
-          value,
-          prevVal == null ? null : prevVal / sparkDivisor,
-        );
-        if (trend != null) {
-          trendBaseline = `vs ${fmtDayLabel(isoDate(prevRow.date))}`;
+        if (!prevRow) {
+          // No in-window previous day -> ask the backend baseline for D-1
+          // (or D-1's same shift). Total Downtime has its own baseline path
+          // because the value was divided by the contributing fleet.
+          const baselineVal =
+            isTotalDowntime && baselineRows
+              ? (() => {
+                  const { rows: bRows } = selectSeries(
+                    baselineGroups,
+                    kpiDef,
+                    { ...narrowOpts, downtimeByReason: null },
+                  );
+                  const dayRows = atGranularity(bRows, granularity).filter(
+                    (r) => isoDate(r.date) === prevDayIso(currentIso),
+                  );
+                  const fleet = new Set();
+                  let total = 0;
+                  for (const r of dayRows) {
+                    const v = numberOrNull(r.actual_value);
+                    if (v == null) continue;
+                    total += v;
+                    if (r.machines) for (const m of r.machines) fleet.add(m);
+                  }
+                  return fleet.size > 0 ? total / fleet.size : null;
+                })()
+              : baselineAggregate(
+                  baselineGroups,
+                  kpiDef,
+                  narrowOpts,
+                  granularity,
+                );
+          if (baselineVal != null) {
+            trend = spikePct(value, baselineVal);
+            trendValueRaw = value - baselineVal;
+            trendBaseline = `vs ${fmtDayLabel(prevDayIso(currentIso))}`;
+          } else {
+            trend = null;
+            trendValueRaw = null;
+            trendBaseline = null;
+          }
+        } else {
+          // CR-11: `value` is per-machine for TotalDowntime, so the previous
+          // day must be divided by the same fleet before the two are compared
+          // — otherwise the spike reads as a ~N-fold jump every single day.
+          const prevVal = numberOrNull(prevRow.actual_value);
+          const previousValue = prevVal == null ? null : prevVal / sparkDivisor;
+          trend = spikePct(value, previousValue);
+          if (trend != null) {
+            trendValueRaw = value - previousValue;
+            trendBaseline = `vs ${fmtDayLabel(isoDate(prevRow.date))}`;
+          }
         }
       }
 
@@ -2016,6 +2249,10 @@ export function toKpiGrid(
       // (%, M, NOS, Batch) pass through untouched. See lib/units.js.
       const rawUnit = kpi.unit ?? denan(latest.unit_of_measurement) ?? null;
       const disp = toDisplayQuantity(value, rawUnit);
+      const trendValue =
+        trendValueRaw == null
+          ? null
+          : round2(toDisplayQuantity(trendValueRaw, rawUnit).value);
       result.push({
         id: kpi.id,
         name: DISPLAY_NAME[kpiDef.name] ?? kpiDef.name,
@@ -2024,6 +2261,7 @@ export function toKpiGrid(
         unit: disp.unit,
         spark: isKg(rawUnit) ? sparkVals.map(kgToTonnes) : sparkVals,
         trend,
+        trendValue,
         trendBaseline,
         trendFavourable: trendFavourable(kpiDef.name, trend),
         drillable: kpi.drillType != null,
@@ -2037,11 +2275,13 @@ export function toKpiGrid(
         // C3/C6: the drill inherits THIS date — it never resolves its own.
         resolvedDate,
         // C6: only labelled when this KPI actually lags the section's
-        // newest anchor; the up-to-date cards stay unadorned.
-        asOfDate:
-          sectionNewestAnchor &&
-          resolvedDate &&
-          resolvedDate < sectionNewestAnchor
+        // newest anchor (or the pinned headline day); the up-to-date cards
+        // stay unadorned.
+        asOfDate: latestDayFallback
+          ? resolvedDate
+          : sectionNewestAnchor &&
+              resolvedDate &&
+              resolvedDate < sectionNewestAnchor
             ? resolvedDate
             : null,
         partialDay,
@@ -2168,17 +2408,25 @@ export function toKpiGrid(
     // here with the SAME C5 class as the current window. A within-window
     // day-over-day fallback would be a different, wrong comparison (defect
     // S-2), so a missing/zero baseline still renders BLANK.
-    const trend = spikePct(
-      value,
-      baselineAggregate(baselineGroups, kpiDef, narrowOpts, granularity),
+    const baselineValue = baselineAggregate(
+      baselineGroups,
+      kpiDef,
+      narrowOpts,
+      granularity,
     );
+    const trend = spikePct(value, baselineValue);
     const trendBaseline =
       trend != null ? formatBaselineWindow(baselineWindow, granularity) : null;
+    const trendValueRaw = trend != null ? value - baselineValue : null;
 
     const latest = dailyRows[0];
     // KG → MT display conversion (see snapshot path above / lib/units.js).
     const rawUnit = kpi.unit ?? denan(latest.unit_of_measurement) ?? null;
     const disp = toDisplayQuantity(value, rawUnit);
+    const trendValue =
+      trendValueRaw == null
+        ? null
+        : round2(toDisplayQuantity(trendValueRaw, rawUnit).value);
     result.push({
       id: kpi.id,
       name: DISPLAY_NAME[kpiDef.name] ?? kpiDef.name,
@@ -2187,6 +2435,7 @@ export function toKpiGrid(
       unit: disp.unit,
       spark: isKg(rawUnit) ? sparkVals.map(kgToTonnes) : sparkVals,
       trend,
+      trendValue,
       trendBaseline,
       trendFavourable: trendFavourable(kpiDef.name, trend),
       drillable: kpi.drillType != null,

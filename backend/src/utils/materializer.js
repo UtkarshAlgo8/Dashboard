@@ -365,7 +365,7 @@ async function refreshPlant(plantId) {
 
 async function refreshAll() {
   if (!config.materialize.enabled) return;
-  const plants = config.warm.plants.filter((id) => normalizePlantId(id));
+  const plants = config.materialize.plants.filter((id) => normalizePlantId(id));
   await Promise.allSettled(plants.map((p) => refreshPlant(p)));
 }
 
@@ -377,7 +377,7 @@ async function refreshAll() {
  * --------------------------------------------------------------------- */
 
 async function tryRestoreFromRedis() {
-  for (const plantId of config.warm.plants) {
+  for (const plantId of config.materialize.plants) {
     try {
       const stored = await cacheGet(redisKey(plantId));
       if (!stored || !Array.isArray(stored.rows)) continue;
@@ -411,7 +411,7 @@ export function startMaterializer() {
   console.log(
     `[materializer] enabled — every ${Math.round(config.materialize.intervalMs / 1000)}s, ` +
       `window ${config.materialize.windowDays}d, levels ${config.materialize.levels.join(",")}, ` +
-      `plants: ${config.warm.plants.join(", ")}`,
+      `plants: ${config.materialize.plants.join(", ")}`,
   );
 
   // Best-effort restore from Redis on boot. If successful, the boot
@@ -587,6 +587,9 @@ export function lookupDrillAggregate(body) {
     if (!rowMatchesContext(row, context, row.kpi_name)) continue;
     if (!rowMatchesTime(row, { date, from, to })) continue;
     if (!rowMatchesParentFilters(row, parentFilters)) continue;
+    // Mirrors buildDrillAggregateQuery: a machine-grouped lens shows machine
+    // data, so rows carrying no machine are not one of its rows.
+    if (cols.includes("machine") && isEmpty(row.machine)) continue;
 
     const keyParts = cols.map((c) => normalizeForCompare(row[c]) ?? "");
     const key = keyParts.join("\x00");
@@ -640,7 +643,11 @@ export function materializerStats() {
       levels: config.materialize.levels,
     });
   }
-  return { enabled: config.materialize.enabled, plants };
+  return {
+    enabled: config.materialize.enabled,
+    configuredPlants: config.materialize.plants,
+    plants,
+  };
 }
 
 /* Exposed for tests — reset all state. */

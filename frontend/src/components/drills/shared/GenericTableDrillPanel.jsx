@@ -33,6 +33,7 @@ export default function GenericTableDrillPanel({
   // when the card sits on MONTH.
   plantId = "banmore",
   subSection = null,
+  tyreType = null,
   productType = null,
   from = null,
   to = null,
@@ -105,6 +106,7 @@ export default function GenericTableDrillPanel({
           plantId={plantId}
           sectionName={sectionName}
           subSection={subSection}
+          tyreType={tyreType}
           productType={productType}
           from={from}
           to={to}

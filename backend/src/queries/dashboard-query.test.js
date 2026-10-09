@@ -14,6 +14,9 @@ import {
   buildDrillAggregateQuery,
   buildFetchQuery,
   buildLatestDateQuery,
+  buildSectionMachinesQuery,
+  buildShiftComparisonQuery,
+  previousWindowGranularity,
   previousWindow,
   resolveDatePredicate,
   resolveGranularity,
@@ -24,9 +27,50 @@ import { normalizeUnit, unitPredicate } from "../utils/normalize.js";
 
 const CURING = { section: "Curing", granularity: "DAY" };
 
+/**
+ * goldSource() embeds its OWN date predicates inside a UNION ALL table
+ * subquery whenever a window straddles the fresh/historical cutoff (see
+ * gold-source.js) — this happens for any query whose window is open-ended
+ * toward "today", which drifts with the real calendar. Strip that
+ * subquery out before asserting on date literals / the outer WHERE, so
+ * these SQL-shape assertions test the query builder's OWN predicates,
+ * not goldSource's, and stay stable as "today" moves forward.
+ */
+function stripGoldSourceUnion(sql) {
+  const marker = sql.indexOf(" UNION ALL ");
+  if (marker === -1) return sql;
+  let depth = 0;
+  let start = -1;
+  for (let i = marker; i >= 0; i--) {
+    if (sql[i] === ")") depth++;
+    else if (sql[i] === "(") {
+      if (depth === 0) {
+        start = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (start === -1) return sql;
+  depth = 0;
+  let end = -1;
+  for (let i = start; i < sql.length; i++) {
+    if (sql[i] === "(") depth++;
+    else if (sql[i] === ")") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  if (end === -1) return sql;
+  return sql.slice(0, start) + "__GOLD_SOURCE_UNION__" + sql.slice(end + 1);
+}
+
 /** Extract the YYYYMMDD date comparisons a built query emits. */
 function dateLiterals(sql) {
-  return [...sql.matchAll(/END\) (=|>=|<=) '(\d{8})'/g)].map(
+  return [...stripGoldSourceUnion(sql).matchAll(/END\) (=|>=|<=) '(\d{8})'/g)].map(
     (m) => `${m[1]} ${m[2]}`,
   );
 }
@@ -180,6 +224,30 @@ test("C15: each time filter gets its defined previous period", () => {
     from: "2026-06-01",
     to: "2026-06-30",
   });
+  // Month-to-date ranges are aggregated as MONTH rows for the card, but the
+  // comparison must use the same day span in the previous month.
+  assert.deepEqual(
+    previousWindow(at({ from: "2026-10-01", to: "2026-10-05" }), "MONTH"),
+    { from: "2026-09-01", to: "2026-09-05" },
+  );
+  assert.equal(
+    previousWindowGranularity(
+      at({ from: "2026-10-01", to: "2026-10-05" }),
+      "MONTH",
+    ),
+    "DAY",
+  );
+  assert.deepEqual(
+    previousWindow(at({ from: "2026-09-01", to: "2026-09-30" }), "MONTH"),
+    { from: "2026-08-01", to: "2026-08-31" },
+  );
+  assert.equal(
+    previousWindowGranularity(
+      at({ from: "2026-09-01", to: "2026-09-30" }),
+      "MONTH",
+    ),
+    "MONTH",
+  );
   // Month picker -> a full calendar month arrives as a DAY range (1st -> last
   // day). Its baseline is the previous WHOLE month so the label reads "vs Jun",
   // not the equal-length day-shifted "31 May - 30 Jun".
@@ -269,6 +337,28 @@ test("drill-aggregate groups by both dimensions for the Machine + SKU lens", () 
   assert.match(sql, /ORDER BY machine, itemcode/);
 });
 
+test("drill-aggregate drops machine-less rows from a machine lens", () => {
+  // CTP's gold table carries Production_m rows with no machine; grouped,
+  // they collapse into one anonymous bucket that belongs to no machine.
+  const sql = buildDrillAggregateQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+    kpiName: "Production_m",
+    groupBy: ["machine"],
+  });
+  assert.match(sql, /NOT \(machine IS NULL OR LOWER\(machine\) = 'nan'/);
+});
+
+test("drill-aggregate leaves a SKU-only lens unfiltered by machine", () => {
+  const sql = buildDrillAggregateQuery({
+    context: { section: "Mixing", granularity: "DAY" },
+    date: "2026-07-16",
+    kpiName: "Production_sku",
+    groupBy: ["itemcode"],
+  });
+  assert.ok(!sql.includes("NOT (machine IS NULL"));
+});
+
 test("drill-aggregate refuses a KPI that SUM would misaggregate", () => {
   // A rate KPI needs AVERAGE and a level KPI the latest day — summing either
   // yields a plausible, silently wrong number, so they are rejected outright.
@@ -318,10 +408,11 @@ test("drill-aggregate rejects an unknown group-by column", () => {
  * tell a filter from a sort key.
  */
 function scopeWhere(sql) {
-  const start = sql.indexOf(" WHERE ");
-  const end = sql.indexOf(") WHERE (__dedupe_rn");
+  const stripped = stripGoldSourceUnion(sql);
+  const start = stripped.indexOf(" WHERE ");
+  const end = stripped.indexOf(") WHERE (__dedupe_rn");
   assert.ok(start > -1 && end > start, "unexpected query shape");
-  return sql.slice(start, end);
+  return stripped.slice(start, end);
 }
 
 test("landingKpis narrows the landing band to the rendered KPIs", () => {
@@ -414,7 +505,6 @@ test("the response projection drops the columns no consumer reads", () => {
     "record_id",
     "plant",
     "department",
-    "tyre_type",
     "production_ids",
     "previous_values",
     "plot_data",
@@ -424,6 +514,7 @@ test("the response projection drops the columns no consumer reads", () => {
   for (const col of [
     "date",
     "section",
+    "tyre_type",
     "machine",
     "kpi_name",
     "actual_value",
@@ -438,4 +529,84 @@ test("the response projection drops the columns no consumer reads", () => {
   // scan must still carry them — narrowing the projection must not change
   // which duplicate row wins.
   assert.ok(sql.includes("PARTITION BY date, plant, department"));
+});
+
+test("buildShiftComparisonQuery: Banmore + Quality keeps a strict category='Quality' predicate", () => {
+  const sql = buildShiftComparisonQuery({
+    plantId: "banmore",
+    section: "Curing",
+    category: "Quality",
+    date: "2026-07-16",
+  });
+  assert.match(
+    sql,
+    /category = 'Quality'/,
+    "Banmore path must keep the strict Quality category filter",
+  );
+  assert.doesNotMatch(
+    sql,
+    /OR category = 'Scrap'/,
+    "Banmore path must not widen to Scrap",
+  );
+});
+
+test("buildShiftComparisonQuery: CTP + Quality widens to include Scrap (gold.ctp_gold vocabulary)", () => {
+  // CTP's gold layer stores Scrap-family rows under category='Scrap'
+  // while Banmore uses 'Quality'. The frontend always sends 'Quality'
+  // for the shift-comparison Scrap/Rework charts; on CTP we widen the
+  // predicate so the chart reflects the actual data instead of always
+  // returning empty. Rework rows still don't exist at CTP — that's a
+  // data-side gap, not a filter mismatch.
+  const sql = buildShiftComparisonQuery({
+    plantId: "chennai",
+    section: "TBM",
+    category: "Quality",
+    date: "2026-08-30",
+  });
+  assert.match(
+    sql,
+    /\(category = 'Quality' OR category = 'Scrap'\)/,
+    "CTP Quality must widen to Scrap",
+  );
+});
+
+test("buildShiftComparisonQuery: CTP + non-Quality category keeps a strict predicate", () => {
+  const sql = buildShiftComparisonQuery({
+    plantId: "chennai",
+    section: "Curing",
+    category: "Productivity",
+    date: "2026-07-16",
+  });
+  assert.match(sql, /category = 'Productivity'/);
+  assert.doesNotMatch(sql, /OR category = 'Scrap'/);
+});
+
+test("section machines: production machine names since the lookback date", () => {
+  const sql = buildSectionMachinesQuery({ sinceIso: "2026-07-01" });
+  assert.match(sql, /^SELECT DISTINCT section, machine FROM /);
+  assert.ok(sql.includes("kpi_name = 'Production_m'"));
+  assert.ok(sql.includes("machine IS NOT NULL"));
+  assert.ok(sql.includes("machine NOT IN ('', 'nan', 'null')"));
+  assert.ok(sql.includes(">= '20260701'"));
+  assert.match(sql, /ORDER BY section, machine$/);
+});
+
+test("section machines: scoped to the requested plant", () => {
+  const banmore = buildSectionMachinesQuery({
+    plantId: "banmore",
+    sinceIso: "2026-07-01",
+  });
+  const other = buildSectionMachinesQuery({
+    plantId: "chennai",
+    sinceIso: "2026-07-01",
+  });
+  assert.notEqual(banmore, other);
+});
+
+test("section machines: rejects a missing or malformed lookback date", () => {
+  assert.throws(() => buildSectionMachinesQuery(), QueryValidationError);
+  assert.throws(
+    () => buildSectionMachinesQuery({ sinceIso: "July" }),
+    QueryValidationError,
+  );
 });

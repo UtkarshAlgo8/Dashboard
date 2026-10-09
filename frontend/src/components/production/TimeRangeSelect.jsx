@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { Box, Menu, MenuItem, Select, Stack, useTheme } from "@mui/material";
+import {
+  Box,
+  Menu,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  useTheme,
+} from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { format, parseISO, isValid } from "date-fns";
 import { DateRangeFilterDialog } from "@/components/common";
@@ -24,6 +32,13 @@ function TimeRangeSelect({
   asOf = null,
   month = null,
   onMonthChange,
+  // Preset ids the host page does not support (e.g. SPC has no month view).
+  // Rendered greyed out and non-clickable, like the Yearly pill.
+  disabledPresets = [],
+  // Preset ids the host page should not render at all.
+  hiddenPresets = [],
+  singleDay = null,
+  onSingleDayChange,
   size = "md",
 }) {
   const theme = useTheme();
@@ -34,13 +49,34 @@ function TimeRangeSelect({
   const toDateVal = parseSafe(to);
   const isCustomRange =
     Boolean(from || to) && preset !== "today" && preset !== "month";
-  const customLabel = isCustomRange
-    ? formatRangeLabel(fromDate, toDateVal)
-    : "Date Range";
 
   const monthOptions = useMemo(() => buildMonthOptions(asOf), [asOf]);
-  const selectedMonthKey = month ?? asOfMonthKey(asOf);
-  const showShift = preset === "today" && typeof onShiftChange === "function";
+  const defaultMonthKey = asOfMonthKey(asOf);
+  const selectedMonthKey = month ?? defaultMonthKey;
+  // A PAST month picked from the dropdown. Without this the control gave the
+  // choice no feedback at all: "This Month" stayed lit and the dropdown pill
+  // still read "Date Range", so a page correctly showing Aug looked like it
+  // had ignored the click and stayed on the current month. The pinned month
+  // now owns the dropdown pill (lit, labelled "Aug 2026") and releases the
+  // "This Month" pill, which is what "this month" actually means.
+  const isPinnedMonth =
+    preset === "month" && selectedMonthKey !== defaultMonthKey;
+  const isMonthPreset = preset === "month" && !isPinnedMonth;
+  const dropdownActive = isCustomRange || isPinnedMonth;
+  const customLabel = isCustomRange
+    ? formatRangeLabel(fromDate, toDateVal)
+    : isPinnedMonth
+      ? (monthOptions.find((o) => o.key === selectedMonthKey)?.label ??
+        selectedMonthKey)
+      : "Date Range";
+  const monthDisabled = disabledPresets.includes("month");
+  const showMonthPreset = !hiddenPresets.includes("month");
+  const showRangePreset = !hiddenPresets.includes("range");
+  const hasSingleDayPicker = typeof onSingleDayChange === "function";
+  const singleDayActive = hasSingleDayPicker && preset === "day";
+  const showShift =
+    (preset === "today" || hasSingleDayPicker) &&
+    typeof onShiftChange === "function";
   const isTrendVariant = variant === "trend";
   const presetLabel = (id, fallback) => presetLabels?.[id] ?? fallback;
   const selectPreset = (nextPreset) => {
@@ -48,7 +84,11 @@ function TimeRangeSelect({
       onPresetChange(nextPreset);
       return;
     }
-    onPresetChange({ preset: nextPreset, from: "", to: "" });
+    // `month: null` is explicit, not incidental: consumers build their next
+    // state by spreading the previous one, so a month left over from the
+    // dropdown would survive a pill click and silently pin the page to that
+    // past month. Clicking "This Month" has to mean this month.
+    onPresetChange({ preset: nextPreset, from: "", to: "", month: null });
   };
 
   const shiftOptions = [
@@ -152,34 +192,85 @@ function TimeRangeSelect({
           {presetLabel("today", "Today")}
         </Box>
 
-        {/* 2. This Month Pill */}
-        <Box
-          onClick={() => selectPreset("month")}
-          sx={{
-            ...pad,
-            m: preset === "month" ? "-1px" : 0,
-            zIndex: preset === "month" ? 1 : 0,
-            fontWeight: preset === "month" ? 600 : 500,
-            whiteSpace: "nowrap",
-            userSelect: "none",
-            borderRadius: 999,
-            cursor: "pointer",
-            border: 1,
-            borderColor: preset === "month" ? "primary.main" : "transparent",
-            backgroundColor:
-              preset === "month" ? theme.custom.pills.activeBg : "transparent",
-            color: preset === "month" ? "primary.main" : "text.primary",
-            transition: "all 0.15s ease",
-            "&:hover": {
-              backgroundColor:
-                preset === "month"
+        {hasSingleDayPicker && (
+          <TextField
+            type="date"
+            size="small"
+            value={singleDay || ""}
+            inputProps={{
+              "aria-label": "Select SPC day",
+              title: "Select day",
+            }}
+            onChange={(event) => {
+              if (event.target.value) onSingleDayChange(event.target.value);
+            }}
+            sx={{
+              width: 170,
+              "& .MuiInputBase-root": {
+                height: 42,
+                borderRadius: 0,
+                borderLeft: 1,
+                borderColor: "divider",
+                backgroundColor: singleDayActive
                   ? theme.custom.pills.activeBg
-                  : theme.custom.surface.soft,
-            },
-          }}
-        >
-          {presetLabel("month", "This Month")}
-        </Box>
+                  : "transparent",
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                border: "0 !important",
+              },
+              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                border: "0 !important",
+              },
+              "& .MuiInputBase-input": {
+                py: 0,
+                px: 2,
+                fontSize: 13,
+                fontWeight: singleDayActive ? 600 : 500,
+                color: singleDayActive ? "primary.main" : "text.primary",
+                outline: "none",
+              },
+            }}
+          />
+        )}
+
+        {showMonthPreset && (
+          /* 2. This Month Pill */
+          <Box
+            onClick={monthDisabled ? undefined : () => selectPreset("month")}
+            aria-disabled={monthDisabled || undefined}
+            title={monthDisabled ? "Not available on this view" : undefined}
+            sx={{
+              ...pad,
+              m: isMonthPreset ? "-1px" : 0,
+              zIndex: isMonthPreset ? 1 : 0,
+              fontWeight: isMonthPreset ? 600 : 500,
+              whiteSpace: "nowrap",
+              userSelect: "none",
+              borderRadius: 999,
+              cursor: monthDisabled ? "not-allowed" : "pointer",
+              border: 1,
+              borderColor: isMonthPreset ? "primary.main" : "transparent",
+              backgroundColor: isMonthPreset
+                ? theme.custom.pills.activeBg
+                : "transparent",
+              color: monthDisabled
+                ? "text.disabled"
+                : isMonthPreset
+                  ? "primary.main"
+                  : "text.primary",
+              transition: "all 0.15s ease",
+              "&:hover": {
+                backgroundColor: monthDisabled
+                  ? "transparent"
+                  : isMonthPreset
+                    ? theme.custom.pills.activeBg
+                    : theme.custom.surface.soft,
+              },
+            }}
+          >
+            {presetLabel("month", "This Month")}
+          </Box>
+        )}
 
         {isTrendVariant && (
           <Box
@@ -196,41 +287,43 @@ function TimeRangeSelect({
           </Box>
         )}
 
-        {/* 3. Date Range Dropdown Trigger Pill */}
-        <Box
-          onClick={(e) => {
-            if (isTrendVariant) setDialogOpen(true);
-            else setMonthAnchor(e.currentTarget);
-          }}
-          sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 0.5,
-            ...pad,
-            m: isCustomRange ? "-1px" : 0,
-            zIndex: isCustomRange ? 1 : 0,
-            fontWeight: isCustomRange ? 600 : 500,
-            whiteSpace: "nowrap",
-            userSelect: "none",
-            borderRadius: 999,
-            cursor: "pointer",
-            border: 1,
-            borderColor: isCustomRange ? "primary.main" : "transparent",
-            backgroundColor: isCustomRange
-              ? theme.custom.pills.activeBg
-              : "transparent",
-            color: isCustomRange ? "primary.main" : "text.primary",
-            transition: "all 0.15s ease",
-            "&:hover": {
-              backgroundColor: isCustomRange
+        {showRangePreset && (
+          /* 3. Date Range Dropdown Trigger Pill */
+          <Box
+            onClick={(e) => {
+              if (isTrendVariant) setDialogOpen(true);
+              else setMonthAnchor(e.currentTarget);
+            }}
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 0.5,
+              ...pad,
+              m: dropdownActive ? "-1px" : 0,
+              zIndex: dropdownActive ? 1 : 0,
+              fontWeight: dropdownActive ? 600 : 500,
+              whiteSpace: "nowrap",
+              userSelect: "none",
+              borderRadius: 999,
+              cursor: "pointer",
+              border: 1,
+              borderColor: dropdownActive ? "primary.main" : "transparent",
+              backgroundColor: dropdownActive
                 ? theme.custom.pills.activeBg
-                : theme.custom.surface.soft,
-            },
-          }}
-        >
-          <span>{customLabel}</span>
-          <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
-        </Box>
+                : "transparent",
+              color: dropdownActive ? "primary.main" : "text.primary",
+              transition: "all 0.15s ease",
+              "&:hover": {
+                backgroundColor: dropdownActive
+                  ? theme.custom.pills.activeBg
+                  : theme.custom.surface.soft,
+              },
+            }}
+          >
+            <span>{customLabel}</span>
+            <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
+          </Box>
+        )}
       </Box>
 
       {/* Date Range Popover Menu */}

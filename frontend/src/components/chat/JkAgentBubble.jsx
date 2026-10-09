@@ -9,10 +9,13 @@ import {
 } from "@mui/material";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import Chip from "@mui/material/Chip";
 import CheckIcon from "@mui/icons-material/Check";
 import JkAgentMarkdown from "./JkAgentMarkdown.jsx";
 import JkAgentDownloadButton from "./JkAgentDownloadButton.jsx";
 import JkAgentChart from "./JkAgentChart.jsx";
+import JkAgentReportButton from "./JkAgentReportButton.jsx";
+import { DEFAULT_INTENT, findIntent } from "@/lib/chatIntents.js";
 
 function formatMessageTime(isoString) {
   if (!isoString) return "";
@@ -52,6 +55,13 @@ export default function JkAgentBubble({ message }) {
     }
   };
 
+  // Only non-default intents are worth showing — a plain question is the
+  // norm and a "Query" chip on every bubble would be noise.
+  const messageIntent =
+    message.intent && message.intent !== DEFAULT_INTENT
+      ? findIntent(message.intent)
+      : null;
+
   if (isUser) {
     return (
       <Stack
@@ -59,6 +69,22 @@ export default function JkAgentBubble({ message }) {
         alignItems="flex-end"
         sx={{ maxWidth: "84%", alignSelf: "flex-end", my: 0.75 }}
       >
+        {messageIntent && (
+          <Chip
+            size="small"
+            icon={<messageIntent.Icon sx={{ fontSize: 14 }} />}
+            label={messageIntent.label}
+            sx={{
+              mb: 0.5,
+              height: 21,
+              fontSize: "0.68rem",
+              fontWeight: 600,
+              bgcolor: "action.selected",
+              color: "text.secondary",
+              "& .MuiChip-icon": { color: "primary.main", ml: 0.6 },
+            }}
+          />
+        )}
         <Box
           sx={{
             px: 2,
@@ -128,15 +154,27 @@ export default function JkAgentBubble({ message }) {
           <JkAgentMarkdown content={message.text} />
 
           {message.wantsPlot && message.plotSpec && (
-            <JkAgentChart plotSpec={message.plotSpec} rows={message.previewRows} />
-          )}
-
-          {message.downloadAvailable && message.resultId && (
-            <JkAgentDownloadButton
+            <JkAgentChart
+              plotSpec={message.plotSpec}
               resultId={message.resultId}
-              columns={message.columns}
             />
           )}
+
+          <Stack direction="row" flexWrap="wrap" alignItems="center">
+            {message.downloadAvailable && message.resultId && (
+              <JkAgentDownloadButton
+                resultId={message.resultId}
+                rowCount={message.rowCount}
+              />
+            )}
+
+            {message.reportAvailable && message.reportId && (
+              <JkAgentReportButton
+                reportId={message.reportId}
+                reportType={message.reportType}
+              />
+            )}
+          </Stack>
 
           <Stack
             direction="row"

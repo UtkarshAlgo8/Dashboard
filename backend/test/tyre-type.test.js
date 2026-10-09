@@ -9,12 +9,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  CTP_OEE_KPIS,
+  emptyColumnPredicate,
+  plantPredicate,
   plantTyreTypes,
   tyreTypePredicate,
   TYRE_TYPE_ALL,
 } from "../src/utils/normalize.js";
 import {
   buildFetchQuery,
+  buildShiftComparisonQuery,
   QueryValidationError,
 } from "../src/queries/dashboard-query.js";
 
@@ -26,15 +30,24 @@ test("CTP offers All / PCR / TBR, Banmore only its single line", () => {
   assert.ok(!plantTyreTypes("chennai").includes("Both"));
 });
 
-test("a line selection also keeps the shared-compound rows", () => {
+test("a line selection also keeps the shared-compound and untagged rows", () => {
+  const untagged = emptyColumnPredicate("tyre_type");
   assert.equal(
     tyreTypePredicate("PCR"),
-    "UPPER(tyre_type) IN ('PCR', 'BOTH')",
+    `(UPPER(tyre_type) IN ('PCR', 'BOTH') OR ${untagged})`,
   );
   assert.equal(
     tyreTypePredicate("TBR"),
-    "UPPER(tyre_type) IN ('TBR', 'BOTH')",
+    `(UPPER(tyre_type) IN ('TBR', 'BOTH') OR ${untagged})`,
   );
+});
+
+test("a line selection on CTP keeps the untagged OEE rows", () => {
+  const sql = buildFetchQuery({
+    plantId: "chennai",
+    context: { section: "Curing", granularity: "DAY", tyre_type: "PCR" },
+  });
+  assert.ok(sql.includes(emptyColumnPredicate("tyre_type")));
 });
 
 test("All / empty places no tyre_type restriction", () => {
@@ -71,4 +84,63 @@ test("an unsupported tyre type is rejected", () => {
       }),
     QueryValidationError,
   );
+});
+
+test("kpi-data rows carry tyre_type so All can tell the two lines apart", () => {
+  // Without it the client merged PCR Trench1 with TBR Trench1 (Curing
+  // 2026-10-06 read 14,251 under All against a true 16,898).
+  const sql = buildFetchQuery({
+    plantId: "chennai",
+    context: { section: "Curing", granularity: "DAY" },
+  });
+  const outer = sql.slice(0, sql.indexOf(" FROM "));
+  assert.match(outer, /\btyre_type\b/);
+});
+
+test("the shift comparison filters on the selected line, and not on All", () => {
+  const base = {
+    plantId: "chennai",
+    section: "Curing",
+    category: "Productivity",
+    date: "2026-10-06",
+  };
+  const pcr = buildShiftComparisonQuery({ ...base, tyreType: "PCR" });
+  assert.match(pcr, /UPPER\(tyre_type\) IN \('PCR', 'BOTH'\)/);
+
+  const all = buildShiftComparisonQuery({ ...base, tyreType: "All" });
+  assert.ok(!/UPPER\(tyre_type\) IN/.test(all));
+  const none = buildShiftComparisonQuery(base);
+  assert.ok(!/UPPER\(tyre_type\) IN/.test(none));
+});
+
+test("the shift comparison rejects an unsupported tyre type", () => {
+  assert.throws(
+    () =>
+      buildShiftComparisonQuery({
+        plantId: "chennai",
+        section: "Curing",
+        category: "Productivity",
+        date: "2026-10-06",
+        tyreType: "LTR",
+      }),
+    QueryValidationError,
+  );
+});
+
+test("Chennai reads the OEE family from plant CTP and the rest from CHENNAI", () => {
+  const p = plantPredicate("plant", "chennai");
+  assert.match(p, /UPPER\(plant\) = 'CHENNAI' AND kpi_name NOT IN \(/);
+  assert.match(p, /UPPER\(plant\) = 'CTP' AND kpi_name IN \(/);
+  for (const k of ["OEE_o", "OEE_s", "Breakdown", "Setup & Change"]) {
+    assert.ok(CTP_OEE_KPIS.includes(k), k);
+  }
+  assert.equal(plantPredicate("plant", "ctp"), p);
+});
+
+test("Banmore still matches only BANMORE", () => {
+  assert.equal(plantPredicate("plant", "banmore"), "UPPER(plant) = 'BANMORE'");
+});
+
+test("an unknown plant is rejected by the plant predicate", () => {
+  assert.throws(() => plantPredicate("plant", "nowhere"), /Unknown plant/);
 });

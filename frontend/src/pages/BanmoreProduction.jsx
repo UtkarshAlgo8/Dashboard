@@ -28,7 +28,11 @@ import {
 } from "@/api/plants.js";
 import { getAnchors, getVocab } from "@/api/dashboard.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
-import { presetToDateRange } from "@/lib/timeRange.js";
+import {
+  normalizeDateInput,
+  presetToDateRange,
+  todayIso,
+} from "@/lib/timeRange.js";
 import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { canonicalizeProductType } from "@/lib/dashboardRowScopes.js";
 import client from "@/api/client.js";
@@ -59,6 +63,14 @@ function latestIsoDate(values) {
       .sort()
       .at(-1) ?? null
   );
+}
+
+function shiftIsoDate(iso, days) {
+  const date = normalizeDateInput(iso);
+  if (!date) return null;
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -185,14 +197,22 @@ function BanmoreProduction() {
     (dashboard.from && dashboard.to) || dashboard.date,
   );
   const oeeGran = dashboard.granularity ?? "MONTH";
+  // Today: the rings and plant card read that one day only, so a day with
+  // no data shows "—" instead of the newest day in the trailing window.
+  // CTP's OEE feed lands a day behind, so there they read the newest day in
+  // the trailing window instead, matching the CTP OEE card.
+  const headlineFrom =
+    plantId === "chennai"
+      ? dashboard.from
+      : (dashboard.headlineDate ?? dashboard.from);
   const { data: sectionOeeData, isLoading: sectionOeeLoading } = usePolledQuery(
-    () => getSectionOee(plantId, oeeGran, dashboard.from, dashboard.to),
+    () => getSectionOee(plantId, oeeGran, headlineFrom, dashboard.to),
     {
       interval: 0,
       enabled: hasDateRange,
-      deps: [plantId, oeeGran, dashboard.from, dashboard.to, hasDateRange],
+      deps: [plantId, oeeGran, headlineFrom, dashboard.to, hasDateRange],
       keepPreviousData: true,
-      cacheKey: `production:${plantId}:section-oee:${oeeGran}:${dashboard.from ?? ""}:${dashboard.to ?? ""}`,
+      cacheKey: `production:${plantId}:section-oee:${oeeGran}:${headlineFrom ?? ""}:${dashboard.to ?? ""}`,
       staleTime: 2 * 60 * 1000,
     },
   );
@@ -211,13 +231,13 @@ function BanmoreProduction() {
   // Plant summary card (bottom-left): plant-level OEE_p + FTQ/Scrap, scoped to
   // the SELECTED window so the headline OEE tracks the chosen month.
   const { data: summary, isLoading: summaryLoading } = usePolledQuery(
-    () => getPlantSummary(plantId, dashboard.from, dashboard.to),
+    () => getPlantSummary(plantId, headlineFrom, dashboard.to),
     {
       interval: 0,
       enabled: hasDateRange,
-      deps: [plantId, dashboard.from, dashboard.to, hasDateRange],
+      deps: [plantId, headlineFrom, dashboard.to, hasDateRange],
       keepPreviousData: true,
-      cacheKey: `production:${plantId}:summary:${dashboard.from ?? ""}:${dashboard.to ?? ""}`,
+      cacheKey: `production:${plantId}:summary:${headlineFrom ?? ""}:${dashboard.to ?? ""}`,
       staleTime: 2 * 60 * 1000,
     },
   );
@@ -259,6 +279,12 @@ function BanmoreProduction() {
   const activeTyreType = tyreTypes.includes(dashboard.tyreType)
     ? dashboard.tyreType
     : tyreTypes[0];
+  // The tyre line the cards are scoped to (null = both lines) — the same
+  // value buildContext sends, so the shift box and drills match the cards.
+  const lineTyreType =
+    dashboard.tyreType && dashboard.tyreType !== "All"
+      ? dashboard.tyreType
+      : null;
 
   const BANMORE_STOCK_SUBSECTIONS = [
     "4 Roll",
@@ -452,11 +478,29 @@ function BanmoreProduction() {
 
   const [shiftKey, setShiftKey] = useState("all");
 
+  // Today means the calendar day, not the latest day with data: a section
+  // with nothing recorded today shows "—" rather than yesterday's figures.
+  // A custom Date Range with the same start/end is also a single-day view:
+  // keep the headline pinned to that day, but fetch a short trailing window
+  // so card sparklines and the previous-day comparison still have context.
+  const normalizedRangeFrom = normalizeDateInput(timeRange.from);
+  const normalizedRangeTo = normalizeDateInput(timeRange.to);
+  const selectedSingleDay =
+    timeRange.preset === "today"
+      ? todayIso()
+      : normalizedRangeFrom &&
+          normalizedRangeTo &&
+          normalizedRangeFrom === normalizedRangeTo
+        ? normalizedRangeTo
+        : null;
+  const isSingleDay = Boolean(selectedSingleDay);
+  const windowAnchor = isSingleDay ? selectedSingleDay : effectiveAsOf;
+
   const effectiveGranularity = (preset, shift) => {
     const map = { all: null, a: "SHIFT A", b: "SHIFT B", c: "SHIFT C" };
     const shiftGran = map[shift];
     if (shiftGran) return shiftGran;
-    return presetToDateRange({ ...timeRange, preset }, effectiveAsOf)
+    return presetToDateRange({ ...timeRange, preset }, windowAnchor)
       .granularity;
   };
 
@@ -471,25 +515,35 @@ function BanmoreProduction() {
   };
 
   useEffect(() => {
-    if ((asOfLoading || anchorsLoading) && !effectiveAsOf) return;
-    if (!effectiveAsOf) return;
+    if (!windowAnchor) return;
     const effShift = timeRange.preset === "today" ? shiftKey : "all";
-    const resolved = presetToDateRange(timeRange, effectiveAsOf);
+    const resolved = presetToDateRange(timeRange, windowAnchor);
+    const singleDayWindow =
+      selectedSingleDay && resolved.from === resolved.to
+        ? {
+            ...resolved,
+            from: shiftIsoDate(selectedSingleDay, -7),
+            to: selectedSingleDay,
+          }
+        : resolved;
     setFilter(
       {
         date: null,
-        from: resolved.from,
-        to: resolved.to,
+        from: singleDayWindow.from,
+        to: singleDayWindow.to,
         granularity: effectiveGranularity(timeRange.preset, effShift),
-        mode: resolved.mode,
+        mode: singleDayWindow.mode,
         userWindow: Boolean(timeRange.from && timeRange.to),
+        headlineDate: selectedSingleDay,
       },
       false,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeRange, shiftKey, effectiveAsOf, asOfLoading, anchorsLoading]);
+  }, [timeRange, shiftKey, windowAnchor, selectedSingleDay, asOfLoading, anchorsLoading]);
 
-  const { from, to } = presetToDateRange(timeRange, effectiveAsOf);
+  const { from, to } = presetToDateRange(timeRange, windowAnchor);
+  const shiftComparisonSingleDay =
+    selectedSingleDay ?? (timeRange.preset === "today" ? to : null);
 
   const onSectionSelect = (id) => {
     setOpenDrillKpiId(null);
@@ -677,7 +731,14 @@ function BanmoreProduction() {
               }}
             >
               {dashboard.category === "i" ? (
-                <InventoryPage plantId={plantId} />
+                <InventoryPage
+                  plantId={plantId}
+                  tyreType={activeTyreType}
+                  shift={shiftKey}
+                  granularity={dashboard.granularity}
+                  from={dashboard.from}
+                  to={dashboard.to}
+                />
               ) : (
                 <>
                   {/* Section subheader row — Title (left) + Type & UoM pills (right) */}
@@ -878,14 +939,13 @@ function BanmoreProduction() {
                             plantId={plantId}
                             section={sectionName}
                             subSection={pinnedSubSection}
+                            tyreType={lineTyreType}
                             productType={activeProductType}
                             unit={activeUnit}
-                            mode={
-                              timeRange.preset === "today" ? "day" : "range"
-                            }
-                            date={timeRange.preset === "today" ? to : null}
-                            from={timeRange.preset === "today" ? null : from}
-                            to={timeRange.preset === "today" ? null : to}
+                            mode={shiftComparisonSingleDay ? "day" : "range"}
+                            date={shiftComparisonSingleDay}
+                            from={shiftComparisonSingleDay ? null : from}
+                            to={shiftComparisonSingleDay ? null : to}
                             isDrilldown={Boolean(openDrillKpiId)}
                           />
                         </Box>
@@ -927,6 +987,7 @@ function BanmoreProduction() {
                               section={dashboard.section}
                               sectionName={sectionName}
                               subSection={pinnedSubSection}
+                              tyreType={lineTyreType}
                               cardDate={cardDate}
                               from={useMonthRange ? from : (cardDate ?? from)}
                               to={useMonthRange ? to : (cardDate ?? to)}
@@ -999,6 +1060,8 @@ function BanmoreProduction() {
         // Production Trend must discover all products in the active scope.
         subSection={isStock ? pinnedSubSection : null}
         productType={null}
+        tyreType={lineTyreType}
+        cardProductType={activeProductType}
         unit={activeUnit}
         asOf={effectiveAsOf}
         dashPreset={timeRange.preset}
@@ -1015,6 +1078,7 @@ function DrillPanelRouter({
   section,
   sectionName,
   subSection,
+  tyreType = null,
   cardDate = null,
   from,
   to,
@@ -1054,6 +1118,7 @@ function DrillPanelRouter({
           // Stock records OEE per sub_section; without the active tab the
           // panel lists every sub-section's machines.
           subSection={subSection}
+          tyreType={tyreType}
           rawRows={rawRows}
           mode={mode}
           granularity={productivityDrillGranularity}
@@ -1075,6 +1140,7 @@ function DrillPanelRouter({
           plantId={plantId}
           section={section}
           subSection={section === "stk" ? subSection : null}
+          tyreType={tyreType}
           prodSub={prodSub}
           unitPin={unitPin}
           rawRows={rawRows}
@@ -1110,6 +1176,7 @@ function DrillPanelRouter({
           isLoading={isLoading}
           plantId={plantId}
           subSection={subSection}
+          tyreType={tyreType}
           productType={prodSub}
           from={windowFrom ?? from}
           to={windowTo ?? to}

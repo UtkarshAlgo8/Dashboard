@@ -5,8 +5,8 @@
  * `runQuery(sql)` from here and knows nothing about excel vs db. Flip
  * `QUALITY_DATA_SOURCE` in the environment to change the backing store:
  *
- *   excel → in-process alasql over the reference workbook (default)
- *   db    → the same remote data API Production uses
+ *   excel → in-process alasql over the reference workbook (explicit fixtures)
+ *   db    → the same remote data API Production uses (default)
  *
  * The SQL is identical across both; only the executor changes.
  */

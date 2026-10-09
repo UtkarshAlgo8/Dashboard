@@ -6,7 +6,22 @@ import {
   SECTIONS,
   CATEGORY_TABS,
   PLANT_SUMMARIES,
+  ENGINEERING_OVERALL_KPIS,
+  ENGINEERING_RELIABILITY_KPIS,
+  ENGINEERING_MAINTENANCE_KPIS,
+  ENGINEERING_UTILITIES_KPIS,
+  ENGINEERING_PROJECTS_KPIS,
+  ENGINEERING_OPS_KPIS,
 } from "@/lib/mockData.js";
+
+const ENGINEERING_KPIS_BY_TAB = {
+  overall: ENGINEERING_OVERALL_KPIS,
+  reliability: ENGINEERING_RELIABILITY_KPIS,
+  maintenance: ENGINEERING_MAINTENANCE_KPIS,
+  utilities: ENGINEERING_UTILITIES_KPIS,
+  projects: ENGINEERING_PROJECTS_KPIS,
+  ops: ENGINEERING_OPS_KPIS,
+};
 
 // Phase 1 default is mock data (Q-BE-01). Only the explicit string
 // "false" disables it — handles the case where no .env file exists
@@ -146,6 +161,23 @@ export function getSectionOee(plantId, granularity, from = null, to = null) {
   }
   const q = buildQuery({ granularity, from, to });
   return client.get(`/plants/${plantId}/section-oee${q}`);
+}
+
+/**
+ * Engineering Head dashboard KPI set for a given tab (spec 16). Returns
+ * `[]` for any plant other than Banmore — Phase 2 ships Banmore only.
+ *
+ * @param {string} plantId
+ * @param {string} tabId - One of ENGINEERING_TABS' `id` values.
+ * @returns {Promise<Array<{id: string, name: string, value: number, unit: string, target: number, status: string}>>}
+ */
+export function getEngineeringKpis(plantId, tabId) {
+  if (plantId !== "banmore") return mockDelay([]);
+  // TEMP: backend has no /engineering-kpis route yet (Phase 2, unbuilt
+  // server-side) — force mock regardless of USE_MOCK until it ships.
+  // Restore the USE_MOCK / client.get(`/plants/${plantId}/engineering-kpis`)
+  // branch (see git history) once the backend route exists.
+  return mockDelay(ENGINEERING_KPIS_BY_TAB[tabId] ?? []);
 }
 
 /** Build a `?a=1&b=2` query string from defined, non-empty values. */

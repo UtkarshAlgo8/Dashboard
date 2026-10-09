@@ -8,6 +8,7 @@ import { config } from "./config.js";
 import { app } from "./app.js";
 import { startWarmer } from "./utils/warmer.js";
 import { startMaterializer } from "./utils/materializer.js";
+import { startPreheater } from "./utils/preheater.js";
 
 app.listen(config.port, () => {
   // eslint-disable-next-line no-console
@@ -21,4 +22,5 @@ app.listen(config.port, () => {
   // against this server, so it can only start once we are listening.
   startWarmer();
   startMaterializer();
+  startPreheater();
 });

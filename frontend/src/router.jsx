@@ -2,6 +2,8 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import {
   BanmoreProduction,
   BanmoreQuality,
+  BanmoreEngineering,
+  BanmoreTechnical,
   LandingPage,
   LazyRoute,
 } from "@/routerComponents.jsx";
@@ -43,6 +45,22 @@ const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <LazyRoute Page={BanmoreQuality} />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/banmore/technical",
+    element: (
+      <ProtectedRoute>
+        <LazyRoute Page={BanmoreTechnical} />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/banmore/engineering",
+    element: (
+      <ProtectedRoute>
+        <LazyRoute Page={BanmoreEngineering} />
       </ProtectedRoute>
     ),
   },

@@ -2,20 +2,23 @@
  * SQL builders for the Quality Process tab (Backend FRD §1). Pure functions.
  *
  * These emit the SAME SQL whether it runs against the local alasql table or
- * the remote DB — the FROM target and every predicate come from the shared
- * normalize layer, so nothing here changes when the data-source switch flips.
+ * the remote DB — every predicate comes from the shared normalize layer and
+ * the FROM target from ./gold-source.js, so nothing here changes when the
+ * data-source switch flips. Against the DB that FROM target is gold.gold,
+ * gold.gold_daily, or a UNION ALL of both, depending on how recent the
+ * requested dates are; see ./gold-source.js.
  *
  * String concatenation (not bind params) mirrors Production and the upstream
  * contract; every value goes through `escapeLiteral`.
  */
-import { config } from "../../config.js";
 import {
   escapeLiteral,
   processScopePredicate,
   granularityAllowListPredicate,
+  DATE_YYYYMMDD,
+  isoToYyyymmdd,
 } from "../normalize.js";
-
-const TABLE = () => config.quality.sqlTable;
+import { qualitySourceForDate, qualitySourceForRange } from "./gold-source.js";
 
 // Columns every Process response needs. drill_down_attribute is selected raw
 // and parsed in the transformer (the generalized navigation rule, §1.2).
@@ -38,12 +41,12 @@ function scopeFragment({ section, machine } = {}) {
  */
 export function kpiValueQuery({ kpiName, date, granularity, section, machine }) {
   return (
-    `SELECT ${SELECT_COLS} FROM ${TABLE()} ` +
+    `SELECT ${SELECT_COLS} FROM ${qualitySourceForDate(date, granularity)} ` +
     `WHERE ${processScopePredicate()} ` +
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date = ${escapeLiteral(date)}` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}` +
     scopeFragment({ section, machine })
   );
 }
@@ -55,12 +58,12 @@ export function kpiValueQuery({ kpiName, date, granularity, section, machine }) 
 export function kpiValueBatchQuery({ kpiNames, date, granularity, section, machine }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT ${SELECT_COLS} FROM ${TABLE()} ` +
+    `SELECT ${SELECT_COLS} FROM ${qualitySourceForDate(date, granularity)} ` +
     `WHERE ${processScopePredicate()} ` +
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date = ${escapeLiteral(date)}` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}` +
     scopeFragment({ section, machine })
   );
 }
@@ -74,12 +77,12 @@ export function kpiValueBatchQuery({ kpiNames, date, granularity, section, machi
 export function kpiChildrenQuery({ kpiNames, date, granularity, section }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT ${SELECT_COLS} FROM ${TABLE()} ` +
+    `SELECT ${SELECT_COLS} FROM ${qualitySourceForDate(date, granularity)} ` +
     `WHERE ${processScopePredicate()} ` +
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date = ${escapeLiteral(date)}` +
+    `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}` +
     scopeFragment({ section })
   );
 }
@@ -91,12 +94,13 @@ export function kpiChildrenQuery({ kpiNames, date, granularity, section }) {
  */
 export function kpiHistoryQuery({ kpiName, from, to, granularity, section, machine }) {
   return (
-    `SELECT date, actual_value FROM ${TABLE()} ` +
+    `SELECT date, actual_value FROM ${qualitySourceForRange(from, to, granularity)} ` +
     `WHERE ${processScopePredicate()} ` +
     `AND ${granularityAllowListPredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
-    `AND date >= ${escapeLiteral(from)} AND date <= ${escapeLiteral(to)}` +
+    `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+    `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))}` +
     scopeFragment({ section, machine }) +
     ` ORDER BY date ASC`
   );

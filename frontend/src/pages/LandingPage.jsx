@@ -7,6 +7,7 @@ import PlantCardList from "@/components/landing/PlantCardList.jsx";
 import SatelliteIndiaMap from "@/components/landing/SatelliteIndiaMap.jsx";
 import PlantFunctionModal from "@/components/landing/PlantFunctionModal.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import { monthKeyToRange } from "@/lib/timeRange.js";
 import { getPlants, getFunctions } from "@/api/plants.js";
 import {
   PHASE_1_ACTIVE_PLANTS,
@@ -26,15 +27,36 @@ function LandingPage() {
   const [range, setRange] = useState("today");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // The month pinned from the picker's dropdown ("yyyy-MM"), or null for
+  // "this month". Kept separately from from/to so the picker can light the
+  // right pill; the fetch only ever sees the from/to it expands to.
+  const [month, setMonth] = useState(null);
 
   const handleRangeChange = useCallback((value) => {
     if (typeof value === "object" && value !== null) {
       setRange(value.preset ?? "today");
       if ("from" in value) setFrom(value.from ?? "");
       if ("to" in value) setTo(value.to ?? "");
+      // A pill click means the pinned month is over — the picker sends
+      // month: null to say so.
+      if ("month" in value) setMonth(value.month ?? null);
     } else {
       setRange(value ?? "today");
+      setMonth(null);
     }
+  }, []);
+
+  // The dropdown was previously unwired here: TimeRangeSelect called an
+  // undefined onMonthChange, so picking a past month did nothing at all and
+  // the page stayed on the current one. /plants takes only range + from/to,
+  // so the month key is expanded to its calendar window.
+  const handleMonthChange = useCallback((monthKey) => {
+    const window = monthKeyToRange(monthKey);
+    if (!window) return;
+    setRange("month");
+    setMonth(monthKey);
+    setFrom(window.from);
+    setTo(window.to);
   }, []);
 
   const { data: rawPlants, isLoading: plantsLoading } = usePolledQuery(
@@ -99,6 +121,10 @@ function LandingPage() {
       navigate(`/${modalPlant.id}/production`);
     } else if (fn.id === "qual" && modalPlant.id === "banmore") {
       navigate("/banmore/quality");
+    } else if (fn.id === "tech" && modalPlant.id === "banmore") {
+      navigate("/banmore/technical");
+    } else if (fn.id === "eng" && modalPlant.id === "banmore") {
+      navigate("/banmore/engineering");
     }
   };
 
@@ -116,9 +142,11 @@ function LandingPage() {
         range={range}
         from={from}
         to={to}
+        month={month}
         onRangeChange={handleRangeChange}
         onFromChange={setFrom}
         onToChange={setTo}
+        onMonthChange={handleMonthChange}
       />
 
       <Box

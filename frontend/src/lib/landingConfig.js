@@ -1,6 +1,11 @@
 export const PHASE_1_ACTIVE_PLANTS = new Set(["banmore", "chennai"]);
 
-export const PHASE_1_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
+export const PHASE_1_NAVIGABLE_FUNCTIONS = new Set([
+  "prod",
+  "qual",
+  "tech",
+  "eng",
+]);
 
 export const PRODUCTION_ONLY_FUNCTIONS = new Set(["prod"]);
 

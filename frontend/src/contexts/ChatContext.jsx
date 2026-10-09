@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { sendChatMessage } from "@/api/chat.js";
+import { DEFAULT_INTENT } from "@/lib/chatIntents.js";
 import { useAuth } from "@/hooks/useAuth.js";
 
 const SESSION_KEY = "jkdash.chatSession";
@@ -184,8 +185,13 @@ export function ChatProvider({ children }) {
     writeStoredMessages(sessionId, []);
   }, [sessionId]);
 
+  /**
+   * @param {string} text the question, with any slash command already
+   *   stripped by the input — `query` never carries the command.
+   * @param {import("@/lib/chatIntents.js").ChatIntent} [intent]
+   */
   const sendMessage = useCallback(
-    async (text) => {
+    async (text, intent = DEFAULT_INTENT) => {
       const cleanText = text?.trim();
       if (!cleanText || isTyping || !sessionId) return;
 
@@ -193,6 +199,7 @@ export function ChatProvider({ children }) {
         id: `user-${Date.now()}`,
         sender: "user",
         text: cleanText,
+        intent,
         timestamp: new Date().toISOString(),
       };
 
@@ -204,25 +211,46 @@ export function ChatProvider({ children }) {
         const response = await sendChatMessage({
           query: cleanText,
           session_id: sessionId,
+          intent,
         });
+
+        // The intent the upstream actually served, which is what every
+        // rendering decision below keys off — not the one we asked for.
+        const servedIntent = response.intent ?? intent;
 
         const agentMessage = {
           id: `agent-${Date.now()}`,
           sender: "agent",
-          text:
-            response.final_answer ??
-            response.execution_error ??
-            "I couldn't generate a response for that.",
+          // No fallback line: `final_answer` is legitimately null in
+          // `plot` mode, where the chart is the whole answer, and an
+          // apology under a rendered chart just reads as a failure.
+          text: response.final_answer ?? response.execution_error ?? "",
           timestamp: new Date().toISOString(),
           isError: Boolean(response.execution_error),
+          intent: servedIntent,
           resultId: response.result_id ?? null,
+          // `query` answers the question in prose, so the CSV is offered
+          // only when the result was truncated and the rows are the only
+          // way to see the rest. The other intents hand back a dataset,
+          // so there `download_available` alone is the gate.
           downloadAvailable: Boolean(
-            response.is_large_result && response.download_available,
+            response.download_available &&
+              response.result_id &&
+              (servedIntent !== "query" || response.is_large_result),
           ),
-          columns: response.columns ?? null,
-          wantsPlot: Boolean(response.wants_plot && response.plot_spec),
+          rowCount: response.row_count ?? null,
+          // Only `plot` charts. The upstream carries `plot_spec` forward
+          // across turns in a session, so without this an `analyze` or
+          // `report` answer re-renders the previous question's chart.
+          wantsPlot: Boolean(
+            servedIntent === "plot" && response.wants_plot && response.plot_spec,
+          ),
           plotSpec: response.plot_spec ?? null,
-          previewRows: response.preview_rows ?? null,
+          reportId: response.report_id ?? null,
+          reportType: response.report_type ?? null,
+          reportAvailable: Boolean(
+            response.report_available && response.report_id,
+          ),
         };
 
         setMessages((prev) => [...prev, agentMessage]);

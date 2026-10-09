@@ -2,10 +2,10 @@ import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
+import { goldSource } from "../queries/gold-source.js";
 import {
   normalizePlantId,
   plantDepartmentPredicate,
-  plantSqlTable,
   emptyColumnPredicate,
   GRAN_DAY,
   GRAN_MONTH,
@@ -153,8 +153,8 @@ export const PLANTS = [
 export const FUNCTIONS = [
   { id: "ph", name: "Plant Head", enabled: false },
   { id: "prod", name: "Production", enabled: true },
-  { id: "qual", name: "Quality", enabled: false },
-  { id: "tech", name: "Technical", enabled: false },
+  { id: "qual", name: "Quality", enabled: true },
+  { id: "tech", name: "Technical", enabled: true },
   { id: "eng", name: "Engineering", enabled: false },
 ];
 
@@ -212,7 +212,7 @@ async function landingOeePForPlant(plantId) {
              ROW_NUMBER() OVER (
                ORDER BY ${DATE_YYYYMMDD} DESC
              ) AS rn
-      FROM ${plantSqlTable(plantId)}
+      FROM ${goldSource({ plantId, fromKey: null, toKey: null })}
       WHERE ${plantDepartmentPredicate(plantId)}
         AND kpi_name = ${escapeLiteral("OEE_p")}
         AND ${emptyColumnPredicate("machine")}
@@ -285,10 +285,11 @@ async function landingTimeAwareKpisForPlant(plantId, timeRange) {
   }
   const fromEsc = escapeLiteral(from);
   const toEsc = escapeLiteral(to);
+  const table = goldSource({ plantId, fromKey: from, toKey: to });
 
   const curedTyreSql = `
     SELECT COALESCE(SUM(actual_value), 0) AS total
-    FROM ${plantSqlTable(plantId)}
+    FROM ${table}
     WHERE ${plantDepartmentPredicate(plantId)}
       AND kpi_name = ${escapeLiteral("Production_product")}
       AND section = ${escapeLiteral("Curing")}
@@ -301,7 +302,7 @@ async function landingTimeAwareKpisForPlant(plantId, timeRange) {
 
   const scrapSql = `
     SELECT COALESCE(SUM(actual_value), 0) AS total
-    FROM ${plantSqlTable(plantId)}
+    FROM ${table}
     WHERE ${plantDepartmentPredicate(plantId)}
       AND kpi_name = ${escapeLiteral("Scrap")}
       AND ${emptyColumnPredicate("machine")}
@@ -343,7 +344,7 @@ async function landingKpisForPlant(plantId) {
             END
           ORDER BY ${DATE_YYYYMMDD} DESC
         ) AS rn
-      FROM ${plantSqlTable(plantId)}
+      FROM ${goldSource({ plantId, fromKey: null, toKey: null })}
       WHERE ${plantDepartmentPredicate(plantId)}
         AND LOWER(kpi_name) IN (
           ${aliasList([
@@ -371,8 +372,10 @@ async function landingKpisForPlant(plantId) {
 /**
  * Per-plant KPI fan-out that degrades instead of failing the page.
  *
- * Each enabled plant reads its OWN gold table (Banmore `gold.gold`,
- * Chennai `gold.ctp_gold`), so a table that has not landed upstream
+ * Each enabled plant reads its OWN gold table (Banmore `gold.gold`, plus
+ * `gold.gold_daily` for the last couple of days via goldSource();
+ * Chennai `gold.ctp_gold`, no daily counterpart), so a table that has not
+ * landed upstream
  * yet makes that plant's query throw. Under a plain Promise.all one such
  * plant rejected the whole batch and the landing page 502'd — every
  * plant went dark because one was missing. Failures are per-plant now:

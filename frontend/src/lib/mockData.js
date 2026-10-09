@@ -182,7 +182,7 @@ export const FUNCTIONS = [
   { id: "ph", name: "Plant Head", icon: "⌂", active: false },
   { id: "prod", name: "Production", icon: "⚡", active: true },
   { id: "qual", name: "Quality", icon: "◆", active: true },
-  { id: "tech", name: "Technical", icon: "⚙", active: false },
+  { id: "tech", name: "Technical", icon: "⚙", active: true },
   { id: "eng", name: "Engineering", icon: "⚒", active: true },
 ];
 
@@ -3639,3 +3639,351 @@ export const INVENTORY_BY_PLANT = {
     ],
   },
 };
+
+/**
+ * Engineering Head dashboard tab strip (spec 16), ported from the
+ * reference mockup's `EngineeringDashboard` component. "Overall" is the
+ * default active tab.
+ */
+export const ENGINEERING_TABS = [
+  { id: "overall", name: "Overall" },
+  { id: "reliability", name: "Reliability" },
+  { id: "maintenance", name: "Maintenance", enabled: false },
+  { id: "utilities", name: "Utilities", enabled: false },
+  { id: "projects", name: "Capex Projects", enabled: false },
+  { id: "ops", name: "Ops & Compliance", enabled: false },
+];
+
+/**
+ * Per-tab Engineering KPI sets (spec 16). Illustrative mock values only —
+ * shaped `{ id, name, value, unit, target, status }`, status ∈
+ * green/yellow/red/grey. Ported from the reference's RELIABILITY_KPIS /
+ * MAINTENANCE_KPIS / UTILITY_KPIS / PROJECT_KPIS / OPS_KPIS, dropping
+ * fields (`drill`, `pareto`, `chart`, `chartData`, `multi`, `panel`) only
+ * consumed by later drill specs.
+ */
+export const ENGINEERING_RELIABILITY_KPIS = [
+  {
+    id: "mtbf",
+    name: "MTBF",
+    value: 168,
+    unit: "hrs",
+    target: 180,
+    status: "yellow",
+  },
+  {
+    id: "mttr",
+    name: "MTTR",
+    value: 3.2,
+    unit: "hrs",
+    target: 3.0,
+    status: "yellow",
+  },
+  {
+    id: "equipAvailability",
+    name: "Equipment Availability",
+    value: 96.4,
+    unit: "%",
+    target: 97,
+    status: "yellow",
+  },
+  {
+    id: "criticalAssetUptime",
+    name: "Critical Asset Uptime",
+    value: 98.1,
+    unit: "%",
+    target: 98,
+    status: "green",
+  },
+  {
+    id: "breakdownFrequency",
+    name: "Breakdown Frequency",
+    value: 14,
+    unit: "events/mo",
+    target: 10,
+    status: "red",
+  },
+  {
+    id: "repeatFailureRate",
+    name: "Repeat Failure Rate",
+    value: 6.5,
+    unit: "%",
+    target: 5,
+    status: "yellow",
+  },
+];
+
+export const ENGINEERING_MAINTENANCE_KPIS = [
+  {
+    id: "pmCompliance",
+    name: "PM Compliance",
+    value: 94.2,
+    unit: "%",
+    target: 95,
+    status: "yellow",
+  },
+  {
+    id: "cbmCoverage",
+    name: "CBM Coverage",
+    value: 62,
+    unit: "%",
+    target: 70,
+    status: "yellow",
+  },
+  {
+    id: "breakdownHours",
+    name: "Breakdown Hours",
+    value: 38,
+    unit: "hrs/mo",
+    target: 25,
+    status: "red",
+  },
+  {
+    id: "wrenchTime",
+    name: "Wrench Time",
+    value: 71,
+    unit: "%",
+    target: 75,
+    status: "yellow",
+  },
+  {
+    id: "sparesFillRate",
+    name: "Spares Fill Rate",
+    value: 91.5,
+    unit: "%",
+    target: 92,
+    status: "green",
+  },
+  {
+    id: "workOrderBacklog",
+    name: "Work Order Backlog",
+    value: 27,
+    unit: "orders",
+    target: 15,
+    status: "red",
+  },
+];
+
+export const ENGINEERING_UTILITIES_KPIS = [
+  {
+    id: "powerConsumption",
+    name: "Power Consumption",
+    value: 4.82,
+    unit: "kWh/kg",
+    target: 4.6,
+    status: "yellow",
+  },
+  {
+    id: "compressedAirEfficiency",
+    name: "Compressed Air Efficiency",
+    value: 78.4,
+    unit: "%",
+    target: 82,
+    status: "yellow",
+  },
+  {
+    id: "steamConsumption",
+    name: "Steam Consumption",
+    value: 3.15,
+    unit: "MT/hr",
+    target: 3.0,
+    status: "yellow",
+  },
+  {
+    id: "waterConsumption",
+    name: "Water Consumption",
+    value: 2.4,
+    unit: "kL/MT",
+    target: 2.2,
+    status: "yellow",
+  },
+  {
+    id: "dgRunHours",
+    name: "DG Run Hours",
+    value: 12,
+    unit: "hrs/mo",
+    target: 10,
+    status: "grey",
+  },
+  {
+    id: "energyCostPerTonne",
+    name: "Energy Cost per Tonne",
+    value: 6180,
+    unit: "₹/MT",
+    target: 5900,
+    status: "red",
+  },
+];
+
+export const ENGINEERING_PROJECTS_KPIS = [
+  {
+    id: "projectsOnTrack",
+    name: "Projects on Track",
+    value: 7,
+    unit: "of 9",
+    target: 9,
+    status: "yellow",
+  },
+  {
+    id: "budgetUtilization",
+    name: "Budget Utilization",
+    value: 68.5,
+    unit: "%",
+    target: 75,
+    status: "yellow",
+  },
+  {
+    id: "milestonesCompleted",
+    name: "Milestones Completed",
+    value: 24,
+    unit: "of 30",
+    target: 30,
+    status: "yellow",
+  },
+  {
+    id: "capexSpendYtd",
+    name: "Capex Spend YTD",
+    value: 4.2,
+    unit: "₹Cr",
+    target: 6.0,
+    status: "grey",
+  },
+  {
+    id: "roiProjectsClosed",
+    name: "ROI Projects Closed",
+    value: 3,
+    unit: "projects",
+    target: 4,
+    status: "yellow",
+  },
+  {
+    id: "schedulesSlipped",
+    name: "Schedules Slipped",
+    value: 2,
+    unit: "projects",
+    target: 0,
+    status: "red",
+  },
+];
+
+export const ENGINEERING_OPS_KPIS = [
+  {
+    id: "safetyIncidents",
+    name: "Safety Incidents",
+    value: 1,
+    unit: "this month",
+    target: 0,
+    status: "red",
+  },
+  {
+    id: "statutoryCompliance",
+    name: "Statutory Compliance",
+    value: 98.6,
+    unit: "%",
+    target: 100,
+    status: "yellow",
+  },
+  {
+    id: "auditFindingsOpen",
+    name: "Audit Findings Open",
+    value: 5,
+    unit: "findings",
+    target: 0,
+    status: "red",
+  },
+  {
+    id: "safeManHours",
+    name: "Safe Man-Hours",
+    value: 214000,
+    unit: "hrs",
+    target: 200000,
+    status: "green",
+  },
+  {
+    id: "environmentalNc",
+    name: "Environmental NCs",
+    value: 2,
+    unit: "open",
+    target: 0,
+    status: "red",
+  },
+  {
+    id: "trainingCompliance",
+    name: "Training Compliance",
+    value: 89,
+    unit: "%",
+    target: 90,
+    status: "yellow",
+  },
+];
+
+/**
+ * "Overall" tab (spec 16) — curated cross-tab subset pulling headline KPIs
+ * from each other tab, per the reference's OVERALL_GROUPS composite list.
+ */
+export const ENGINEERING_OVERALL_KPIS = [
+  {
+    id: "equipAvailability",
+    name: "Equipment Availability",
+    value: 96.4,
+    unit: "%",
+    target: 97,
+    status: "yellow",
+  },
+  {
+    id: "mtbf",
+    name: "MTBF",
+    value: 168,
+    unit: "hrs",
+    target: 180,
+    status: "yellow",
+  },
+  {
+    id: "pmCompliance",
+    name: "PM Compliance",
+    value: 94.2,
+    unit: "%",
+    target: 95,
+    status: "yellow",
+  },
+  {
+    id: "breakdownHours",
+    name: "Breakdown Hours",
+    value: 38,
+    unit: "hrs/mo",
+    target: 25,
+    status: "red",
+  },
+  {
+    id: "powerConsumption",
+    name: "Power Consumption",
+    value: 4.82,
+    unit: "kWh/kg",
+    target: 4.6,
+    status: "yellow",
+  },
+  {
+    id: "projectsOnTrack",
+    name: "Projects on Track",
+    value: 7,
+    unit: "of 9",
+    target: 9,
+    status: "yellow",
+  },
+  {
+    id: "safetyIncidents",
+    name: "Safety Incidents",
+    value: 1,
+    unit: "this month",
+    target: 0,
+    status: "red",
+  },
+  {
+    id: "statutoryCompliance",
+    name: "Statutory Compliance",
+    value: 98.6,
+    unit: "%",
+    target: 100,
+    status: "yellow",
+  },
+];

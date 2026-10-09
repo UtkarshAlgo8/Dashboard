@@ -76,6 +76,14 @@ export const config = {
     // requires the `gold.gold` schema-qualified form.
     table: optional("AWS_DATA_TABLE", "databricks_table/gold"),
     sqlTable: optional("AWS_DATA_SQL_TABLE", "gold.gold"),
+    // Rolling ~48-day table: complete for today and the last couple of days
+    // (gold.gold is incomplete for those), but unreliable further back
+    // within its own window — reads older than `dailyFreshDays` always go
+    // to `sqlTable` instead. See queries/gold-source.js.
+    dailySqlTable: optional("AWS_DATA_SQL_TABLE_DAILY", "gold.gold_daily"),
+    // How many trailing days (from today, Asia/Kolkata) count as "fresh"
+    // and should read from dailySqlTable instead of sqlTable.
+    dailyFreshDays: asInt("GOLD_DAILY_FRESH_DAYS", 2),
     timeoutMs: asInt("AWS_DATA_TIMEOUT_MS", 30_000),
   },
   // JK KPI Assistant (chatbot) — separate FastAPI service, proxied so the
@@ -93,7 +101,7 @@ export const config = {
   // API Production uses. Everything else — SQL builders, transformers,
   // controllers — is unchanged across the switch.
   quality: {
-    dataSource: optional("QUALITY_DATA_SOURCE", "excel"), // "excel" | "db"
+    dataSource: optional("QUALITY_DATA_SOURCE", "db"), // "excel" | "db"
     // Reference workbook (FRD §B): sheet `result`, 23 columns.
     excelPath: optional(
       "QUALITY_EXCEL_PATH",
@@ -108,7 +116,36 @@ export const config = {
     ),
     // SQL FROM target. For the excel source this is the in-memory alasql
     // table name; for upstream it becomes the Quality gold table path.
-    sqlTable: optional("QUALITY_SQL_TABLE", "quality_gold"),
+    sqlTable: optional("QUALITY_SQL_TABLE", "gold.gold"),
+    // Rolling daily counterpart of `sqlTable`, read for the trailing
+    // `upstream.dailyFreshDays` days exactly as Production does — the base
+    // table is incomplete for today (verified 2026-09-16: Quality rows for
+    // today were ~2x more numerous in gold_daily than in gold). Set to ""
+    // to disable and read `sqlTable` for every date. Ignored entirely by
+    // the excel source, which has only the one in-memory table.
+    dailySqlTable: optional("QUALITY_SQL_TABLE_DAILY", "gold.gold_daily"),
+  },
+  // Engineering Head dashboard data layer (Overview + Reliability tabs,
+  // spec 16/17). Additive and fully decoupled — same shape as `quality`
+  // above, department='Engineering'/category='Reliability' instead of
+  // Quality's Process/SPC families.
+  engineering: {
+    // "db" is the default: Engineering serves the live gold table, never the
+    // mock. The excel path below is kept only as a local-dev escape hatch and
+    // must be opted into explicitly (ENGINEERING_DATA_SOURCE=excel) — a
+    // missing/blank env var must never silently fall back to mock numbers.
+    dataSource: optional("ENGINEERING_DATA_SOURCE", "db"), // "db" | "excel"
+    // Reference workbook: sheet `data`, 27 columns.
+    excelPath: optional(
+      "ENGINEERING_EXCEL_PATH",
+      path.join(projectRoot, "data", "gold_mock.xlsx"),
+    ),
+    excelSheet: optional("ENGINEERING_EXCEL_SHEET", "data"),
+    excelCachePath: optional(
+      "ENGINEERING_EXCEL_CACHE_PATH",
+      path.join(projectRoot, "data", ".engineering_gold.cache.json"),
+    ),
+    sqlTable: optional("ENGINEERING_SQL_TABLE", "gold.gold"),
   },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),
   // Cache backing store. "memory" (default) is a Map in this process and is
@@ -155,10 +192,35 @@ export const config = {
     enabled: optional("CACHE_MATERIALIZE_ENABLED", "true") !== "false",
     intervalMs: asInt("CACHE_MATERIALIZE_INTERVAL_MS", 30 * 60 * 1000),
     bootDelayMs: asInt("CACHE_MATERIALIZE_BOOT_DELAY_MS", 5_000),
+    // The materializer is an optimization layer, not the source of truth.
+    // Keep it on the stable Banmore dashboard by default; CTP data is still
+    // changing frequently and should use the live query/cache path so corrected
+    // gold rows are visible immediately after the short KPI cache expires.
+    plants: optional("CACHE_MATERIALIZE_PLANTS", "banmore")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     windowDays: asInt("CACHE_MATERIALIZE_WINDOW_DAYS", 60),
     levels: optional("CACHE_MATERIALIZE_LEVELS", "1,2")
       .split(",")
       .map((s) => Number(s.trim()))
       .filter((n) => Number.isFinite(n)),
+  },
+  // Deterministic cache preheater — runs on a fixed interval (default 30 min)
+  // and replays every cache key the FE *could* legitimately ask for on the
+  // configured plants, regardless of whether real traffic has hit it yet.
+  // Companion to the reactive warmer (which only knows the top-20 most-
+  // requested signatures); the preheater is the deterministic floor that
+  // covers every (section, tab, period) combo so first-visit waits on the
+  // upstream API never happen.
+  preheat: {
+    enabled: optional("CACHE_PREHEAT_ENABLED", "true") !== "false",
+    intervalMs: asInt("CACHE_PREHEAT_INTERVAL_MS", 30 * 60 * 1000),
+    bootDelayMs: asInt("CACHE_PREHEAT_BOOT_DELAY_MS", 5_000),
+    plants: optional("CACHE_PREHEAT_PLANTS", "banmore")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    concurrency: asInt("CACHE_PREHEAT_CONCURRENCY", 2),
   },
 };

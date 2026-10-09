@@ -8,10 +8,19 @@
  * the shared asset.
  */
 import { useState, useRef, useEffect, Fragment } from "react";
-import { IconButton, Tooltip } from "@mui/material";
+import {
+  Box,
+  Stack,
+  Tooltip,
+  Typography,
+  IconButton,
+} from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import jkLogo from "@/assets/jk-logo.png";
+import JKLoader from "@/components/JKLoader.jsx";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
+import ProductionHeader from "@/components/production/ProductionHeader.jsx";
+import NavTabs from "@/components/production/NavTabs.jsx";
 import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
@@ -21,17 +30,59 @@ import {
   getProcessSummary,
   getSpcDetail,
   getSpcFilterOptions,
-  getSpcSummary,
+  getSpcTrend,
   getSpcWidgets,
   PROCESS_KPI_NAME,
 } from "@/api/quality.js";
 
-// The gold workbook covers 2026-04-01 → 2026-06-30, so the live view opens on
-// the FRD base date (real "today" is outside the data range). The header date
-// picker drives which snapshot the Process cards read.
+// The gold workbook is static (current snapshot 2026-04-01 → 2026-06-30), so
+// these constants are fallbacks used only by the per-KPI trend panel when
+// its caller doesn't pin a date range. The dashboard's main date state is
+// driven by the system clock in IST (see todayInIST below), not these.
 const QUALITY_DATA_DATE = "2026-06-10";
 const QUALITY_MONTH_FROM = "2026-06-01";
 const QUALITY_MONTH_TO = "2026-06-30";
+
+// Dashboard date defaults are calendar-driven (system clock in IST), NOT pinned
+// to the gold workbook's latest row. The user can pick any month in the
+// dropdown — if it has no data, the cards render NA. Use Intl.DateTimeFormat so
+// the timezone conversion is correct regardless of the server's TZ.
+function todayInIST() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === "year").value;
+  const m = parts.find((p) => p.type === "month").value;
+  const d = parts.find((p) => p.type === "day").value;
+  return `${y}-${m}-${d}`;
+}
+
+function offsetIsoDate(isoDate, days) {
+  const [year, month, day] = String(isoDate).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function currentMonthKeyInIST() {
+  return todayInIST().slice(0, 7);
+}
+
+function currentYearRange() {
+  return { from: "2026-01-01", to: "2026-12-31" };
+}
+function monthRangeFromKey(monthKey) {
+  const [yStr, mStr] = String(monthKey).split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    from: `${y}-${_pad2(m)}-01`,
+    to: `${y}-${_pad2(m)}-${_pad2(lastDay)}`,
+  };
+}
 const QUALITY_USER = {
   ...MOCK_USER,
   name: "Quality Head",
@@ -69,7 +120,57 @@ const C = {
   r: 8,
 };
 const rc = (v) => (v >= 90 ? C.gn : v >= 80 ? C.am : C.rd);
+
+/**
+ * SPC headline statuses, worst-first. Gold publishes five: Critical, Major,
+ * Warning, Healthy, Insufficient Data. `Major` is a marginal process — a real
+ * status, not a missing one — so it gets its own colour and pill rather than
+ * falling through to "Insufficient".
+ */
+const SPC_STATUS = {
+  Critical: { col: C.rd, pill: "Red", label: "Out of specification" },
+  Major: { col: C.ac, pill: "Marginal", label: "Marginal" },
+  Warning: { col: C.am, pill: "Yellow", label: "Not capable" },
+  Healthy: { col: C.gn, pill: "Green", label: "Capable" },
+  "Insufficient Data": {
+    col: C.mu,
+    pill: "Insufficient",
+    label: "Insufficient",
+  },
+};
+const spcStatus = (s) => SPC_STATUS[s] || SPC_STATUS["Insufficient Data"];
 const fmt = (n) => (typeof n === "number" ? n.toLocaleString("en-IN") : n);
+const productionCardBg = (color) =>
+  color === C.rd
+    ? "#FEF2F2"
+    : color === C.am
+      ? "#FFFBEB"
+      : color === C.gn
+        ? "#F0FDF4"
+        : color === C.bl
+          ? "#EFF6FF"
+          : "#FFFFFF";
+const numericKpiValue = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const n = parseFloat(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+};
+
+function QualityLoader({ minHeight = 360, message = "Please wait" }) {
+  return (
+    <div
+      style={{
+        minHeight,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <JKLoader message={message} />
+    </div>
+  );
+}
 
 const isBanmorePlant = (p) =>
   p &&
@@ -543,7 +644,15 @@ function _genInsight(series, target, current, inv, name) {
     worstIdx: series.indexOf(worst),
   };
 }
-function TrendChart({ labels, series, target, color, bestIdx, worstIdx }) {
+function TrendChart({
+  labels,
+  axisLabels = labels,
+  series,
+  target,
+  color,
+  bestIdx,
+  worstIdx,
+}) {
   const w = 620,
     h = 200,
     padL = 44,
@@ -657,7 +766,7 @@ function TrendChart({ labels, series, target, color, bestIdx, worstIdx }) {
           </g>
         );
       })}
-      {labels.map((l, i) => (
+      {axisLabels.map((l, i) => (
         <text
           key={i}
           x={x(i)}
@@ -2519,7 +2628,14 @@ function TrendPanel({ kpi, onClose, tyreType, plant }) {
   );
 }
 
-function LiveProcessTrendPanel({ kpi, onClose, dateFrom, dateTo, shift }) {
+function LiveProcessTrendPanel({
+  kpi,
+  onClose,
+  dateFrom,
+  dateTo,
+  shift,
+  granularity,
+}) {
   const initialPreset =
     dateFrom === dateTo
       ? "day"
@@ -2573,6 +2689,7 @@ function LiveProcessTrendPanel({ kpi, onClose, dateFrom, dateTo, shift }) {
       dateFrom: trendFrom,
       dateTo: trendTo,
       shift,
+      granularity,
     })
       .then((res) => {
         if (!cancelled)
@@ -2591,7 +2708,7 @@ function LiveProcessTrendPanel({ kpi, onClose, dateFrom, dateTo, shift }) {
     return () => {
       cancelled = true;
     };
-  }, [kpi?.trendKpiName, trendFrom, trendTo, shift]);
+  }, [kpi?.trendKpiName, trendFrom, trendTo, shift, granularity]);
   if (!kpi) return null;
   const labels = points.map((p) => toDisplayDate(p.date) ?? "");
   const series = points.map((p) => Number(p.value));
@@ -3892,13 +4009,13 @@ function Card({ title, children, accent, style: s, hideExport }) {
     <div
       style={{
         background: C.cd,
-        borderRadius: C.r,
+        borderRadius: 10,
         border: "1px solid " + C.bd,
-        padding: "12px 14px",
-        boxShadow: C.sh,
+        padding: "14px 16px",
+        boxShadow: "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
         minWidth: 0,
         overflow: "hidden",
-        borderTop: accent ? "2px solid " + accent : undefined,
+        borderTop: accent ? "3px solid " + accent : undefined,
         position: "relative",
         ...s,
       }}
@@ -3916,11 +4033,11 @@ function Card({ title, children, accent, style: s, hideExport }) {
           {title ? (
             <div
               style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: C.md,
+                fontSize: 15,
+                fontWeight: 700,
+                color: accent || C.bl,
                 textTransform: "uppercase",
-                letterSpacing: ".4px",
+                letterSpacing: ".6px",
                 flex: 1,
                 minWidth: 0,
               }}
@@ -3943,8 +4060,8 @@ function Card({ title, children, accent, style: s, hideExport }) {
                   height: 22,
                   borderRadius: 4,
                   border: "1px solid " + C.bd,
-                  background: C.c2,
-                  color: C.mu,
+                  background: "#F8FAFC",
+                  color: C.bl,
                   fontSize: 14,
                   cursor: "pointer",
                   display: "flex",
@@ -4064,9 +4181,21 @@ function DTable({ cols, rows }) {
     }
   };
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div
+      style={{
+        overflowX: "auto",
+        border: "1px solid " + C.bd,
+        borderRadius: 10,
+        maxHeight: 320,
+      }}
+    >
       <table
-        style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
+        style={{
+          width: "100%",
+          borderCollapse: "separate",
+          borderSpacing: 0,
+          fontSize: 13,
+        }}
       >
         <thead>
           <tr>
@@ -4078,15 +4207,17 @@ function DTable({ cols, rows }) {
                   onClick={() => onH(i)}
                   title="Click to sort"
                   style={{
-                    textAlign: i === 0 ? "left" : "right",
-                    padding: "6px 8px",
+                    textAlign: "center",
+                    padding: "8px 10px",
                     background: C.thBg,
-                    color: a ? C.ac : C.tx,
+                    color: a ? C.bl : C.tx,
                     fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: ".6px",
                     borderBottom: "2px solid " + C.bd,
                     borderRight:
                       i === cols.length - 1 ? "none" : "1px solid " + C.bd,
-                    fontSize: 13,
+                    fontSize: 11,
                     cursor: "pointer",
                     userSelect: "none",
                     whiteSpace: "nowrap",
@@ -4105,7 +4236,13 @@ function DTable({ cols, rows }) {
         </thead>
         <tbody>
           {disp.map((row, ri) => (
-            <tr key={ri} style={{ background: ri % 2 === 0 ? C.cd : C.rowAlt }}>
+            <tr
+              key={ri}
+              style={{
+                background: ri % 2 === 0 ? C.cd : C.rowAlt,
+                transition: "background .15s ease",
+              }}
+            >
               {row.map((cell, ci) => {
                 const isS =
                   typeof cell === "string" &&
@@ -4148,13 +4285,13 @@ function DTable({ cols, rows }) {
                   <td
                     key={ci}
                     style={{
-                      padding: "6px 8px",
+                      padding: "8px 10px",
                       borderBottom: "1px solid " + C.bd,
                       borderRight:
                         ci === row.length - 1 ? "none" : "1px solid " + C.bd,
-                      textAlign: ci === 0 ? "left" : "right",
+                      textAlign: "center",
                       color: stC || C.tx,
-                      fontWeight: stC ? 600 : 400,
+                      fontWeight: ci === 0 || stC ? 600 : 400,
                     }}
                   >
                     {isS ? (
@@ -4200,6 +4337,8 @@ function StatusPill({ status }) {
     Accepted: { bg: C.gn + "18", fg: C.gn, t: "Accepted" },
     Rejected: { bg: C.rd + "18", fg: C.rd, t: "Rejected" },
     Manual: { bg: "#9CA3AF18", fg: "#6B7280", t: "Manual" },
+    Insufficient: { bg: "#9CA3AF18", fg: "#6B7280", t: "Insufficient" },
+    Marginal: { bg: C.ac + "18", fg: C.ac, t: "Marginal" },
   };
   const s = map[status] || { bg: C.bd, fg: C.mu, t: status };
   return (
@@ -4344,6 +4483,13 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
           ? C.gn
           : "#9CA3AF");
   const v = tAdjust(kpi.v, kpi.n, tyreType, plant);
+  const numVal = numericKpiValue(v);
+  const progressPct =
+    numVal == null
+      ? 0
+      : kpi.u === "%"
+        ? Math.max(0, Math.min(100, numVal))
+        : Math.max(0, Math.min(100, numVal > 0 ? 100 : 0));
   const canTrend = !kpi.na && kpi.trendApi && typeof onTrend === "function";
   const trendClick = (e) => {
     e.stopPropagation();
@@ -4353,25 +4499,26 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
     <div
       onClick={onToggle}
       style={{
-        background: C.cd,
-        borderRadius: C.r,
-        border: "1px solid " + (isOpen ? C.ac + "88" : C.bd),
-        boxShadow: isOpen ? "0 0 0 1px " + C.ac + "40, " + C.sh : C.sh,
+        background: productionCardBg(stCol),
+        borderRadius: 10,
+        border: "1px solid " + (isOpen ? C.bl : stCol + "35"),
+        boxShadow: isOpen
+          ? "0 4px 14px rgba(0,0,0,.08)"
+          : "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
         cursor: kpi.drill ? "pointer" : "default",
         overflow: "hidden",
-        transition: "border-color .2s",
-        borderLeft: "3px solid " + stCol,
+        transition:
+          "border-color .15s ease, box-shadow .15s ease, transform .15s ease",
+        minHeight: 136,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
       }}
     >
-      <div style={{ padding: "10px 12px" }}>
+      <div style={{ padding: "14px 16px" }}>
         <div
           style={{
-            fontSize: 11,
-            color: C.mu,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: ".5px",
-            marginBottom: 4,
+            marginBottom: 8,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -4382,11 +4529,37 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
             style={{
               flex: 1,
               minWidth: 0,
+              fontSize: 15,
+              color: C.tx,
+              fontWeight: 700,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
           >
+            <span
+              style={{
+                display: "inline-flex",
+                width: 20,
+                height: 20,
+                borderRadius: 6,
+                background: stCol + "16",
+                color: stCol,
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: 8,
+                fontSize: 12,
+                verticalAlign: "middle",
+              }}
+            >
+              {kpi.id === "pqr"
+                ? "Q"
+                : kpi.id === "audit"
+                  ? "✓"
+                  : kpi.id === "mqv"
+                    ? "!"
+                    : "•"}
+            </span>
             {kpi.n}
             {kpi.manual && (
               <span
@@ -4416,12 +4589,12 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
                 onClick={trendClick}
                 title="View Trend (Daily / Monthly / Yearly)"
                 style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 7,
                   border: "1px solid " + C.bd,
-                  background: C.c2,
-                  color: C.mu,
+                  background: C.cd,
+                  color: C.bl,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -4436,7 +4609,7 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
               <span
                 title="Click card to drill down"
                 style={{
-                  color: isOpen ? C.ac : C.mu,
+                  color: isOpen ? C.bl : C.mu,
                   transform: isOpen ? "rotate(180deg)" : "",
                   transition: "transform .2s",
                   fontSize: 13,
@@ -4450,16 +4623,26 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
         <div
           style={{
             display: "flex",
-            alignItems: "flex-end",
+            alignItems: "center",
             justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-            <span style={{ fontSize: 22, fontWeight: 700, color: C.tx }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span
+              style={{
+                fontSize: 28,
+                fontWeight: 800,
+                color: stCol,
+                lineHeight: 1.1,
+              }}
+            >
               {v}
             </span>
             {kpi.u && (
-              <span style={{ fontSize: 12, color: C.mu }}>{kpi.u}</span>
+              <span style={{ fontSize: 13, color: C.mu, fontWeight: 600 }}>
+                {kpi.u}
+              </span>
             )}
           </div>
           {kpi.sp && (
@@ -4480,18 +4663,37 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
         </div>
         <div
           style={{
-            marginTop: 4,
+            marginTop: 12,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            minHeight: 22,
           }}
         >
           {kpi.target && (
-            <span style={{ fontSize: 12, color: C.mu }}>
+            <span style={{ fontSize: 12, color: C.mu, fontWeight: 500 }}>
               Target: {kpi.target}
             </span>
           )}
           {kpi.status && <StatusPill status={kpi.status} />}
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            height: 5,
+            borderRadius: 999,
+            background: "rgba(15,23,42,.10)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: progressPct + "%",
+              height: "100%",
+              borderRadius: 999,
+              background: stCol,
+            }}
+          />
         </div>
       </div>
     </div>
@@ -4711,7 +4913,7 @@ const LIVE_PROCESS_DRILLS = {
   },
 };
 
-function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
+function LiveProcessDrillPanel({ kpi, date, shift, granularity, summaryRows }) {
   const cfg = LIVE_PROCESS_DRILLS[kpi?.drill];
   const [sectionRows, setSectionRows] = useState([]);
   const [machineRows, setMachineRows] = useState([]);
@@ -4731,7 +4933,12 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
       return;
     }
     setLoading(true);
-    getProcessKpiChildren({ kpiNames: cfg.sectionKpis, date, shift })
+    getProcessKpiChildren({
+      kpiNames: cfg.sectionKpis,
+      date,
+      shift,
+      granularity,
+    })
       .then((res) => {
         if (!cancelled)
           setSectionRows(Array.isArray(res?.rows) ? res.rows : []);
@@ -4745,7 +4952,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
     return () => {
       cancelled = true;
     };
-  }, [cfg, date, shift, summaryRows]);
+  }, [cfg, date, shift, granularity, summaryRows]);
   useEffect(() => {
     if (!cfg || !selectedSection) {
       setMachineRows([]);
@@ -4757,6 +4964,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
       kpiNames: cfg.machineKpis,
       date,
       shift,
+      granularity,
       section: selectedSection,
     })
       .then((res) => {
@@ -4772,7 +4980,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
     return () => {
       cancelled = true;
     };
-  }, [cfg, date, shift, selectedSection]);
+  }, [cfg, date, shift, granularity, selectedSection]);
   if (!cfg) return null;
   if (error)
     return (
@@ -4783,8 +4991,9 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
       </Card>
     );
   const rowStyle = (active, i) => ({
-    background: active ? C.aL : i % 2 === 0 ? C.cd : C.rowAlt,
+    background: active ? C.bl + "10" : i % 2 === 0 ? C.cd : C.rowAlt,
     cursor: "pointer",
+    outline: active ? "1px solid " + C.bl : "none",
   });
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -4798,7 +5007,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
           }}
         >
           <a
-            href="http://192.168.225.62:3000/process-audit-logbook"
+            href="http://35.208.174.2:3001/"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -4819,23 +5028,22 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
           </a>
         </div>
         {loading ? (
+          <QualityLoader minHeight={180} />
+        ) : (
           <div
             style={{
-              padding: 18,
-              textAlign: "center",
-              fontSize: 13,
-              color: C.mu,
+              overflowX: "auto",
+              border: "1px solid " + C.bd,
+              borderRadius: 10,
+              maxHeight: 320,
             }}
           >
-            Fetching drill rows...
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
             <table
               style={{
                 width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 14,
+                borderCollapse: "separate",
+                borderSpacing: 0,
+                fontSize: 13,
               }}
             >
               <thead>
@@ -4844,12 +5052,20 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
                     <th
                       key={h}
                       style={{
-                        textAlign: i === 0 ? "left" : "right",
-                        padding: "5px 8px",
-                        color: C.mu,
-                        fontWeight: 600,
-                        borderBottom: "1px solid " + C.bd,
-                        fontSize: 13,
+                        textAlign: "center",
+                        padding: "8px 10px",
+                        color: C.tx,
+                        background: C.thBg,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: ".6px",
+                        borderBottom: "2px solid " + C.bd,
+                        borderRight:
+                          i === cfg.columns.length - 1
+                            ? "none"
+                            : "1px solid " + C.bd,
+                        fontSize: 11,
+                        whiteSpace: "nowrap",
                       }}
                     >
                       {h}
@@ -4872,11 +5088,15 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
                         <td
                           key={ci}
                           style={{
-                            padding: "6px 8px",
+                            padding: "8px 10px",
                             borderBottom: "1px solid " + C.bd,
-                            textAlign: ci === 0 ? "left" : "right",
-                            fontWeight: active && ci === 0 ? 700 : 400,
-                            color: active && ci === 0 ? cfg.accent : C.tx,
+                            borderRight:
+                              ci === cfg.row(r).length - 1
+                                ? "none"
+                                : "1px solid " + C.bd,
+                            textAlign: "center",
+                            fontWeight: active || ci === 0 ? 700 : 400,
+                            color: active && ci === 0 ? C.bl : C.tx,
                           }}
                         >
                           {cell}
@@ -4909,16 +5129,7 @@ function LiveProcessDrillPanel({ kpi, date, shift, summaryRows }) {
         <Card title={`${selectedSection} — Machine Level`} accent={cfg.accent}>
           <Breadcrumb path={[...cfg.path, selectedSection, "Machines"]} />
           {machineLoading ? (
-            <div
-              style={{
-                padding: 18,
-                textAlign: "center",
-                fontSize: 13,
-                color: C.mu,
-              }}
-            >
-              Fetching machine rows...
-            </div>
+            <QualityLoader minHeight={180} />
           ) : (
             <DTable
               cols={cfg.machineColumns}
@@ -4950,6 +5161,7 @@ function ProcessDrillPanel({
   onOpenSPC,
   date,
   shift,
+  granularity,
   processSummary,
 }) {
   if (!kpi) return null;
@@ -4959,6 +5171,7 @@ function ProcessDrillPanel({
         kpi={kpi}
         date={date}
         shift={shift}
+        granularity={granularity}
         summaryRows={processSummary?.children?.[kpi.drill]?.rows}
       />
     );
@@ -5074,7 +5287,7 @@ function ProcessDrillPanel({
             }}
           >
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -5328,7 +5541,7 @@ function ProcessDrillPanel({
             }}
           >
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -5420,7 +5633,7 @@ function ProcessDrillPanel({
             }}
           >
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -6193,7 +6406,7 @@ function ProcessDrillPanel({
               }
             </span>
             <a
-              href="http://192.168.225.62:3000/process-audit-logbook"
+              href="http://35.208.174.2:3001/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -12434,11 +12647,12 @@ function _SpcTile({ label, val, sub, col, onTrend, onClick, active }) {
       style={{
         flex: 1,
         minWidth: 118,
-        background: active ? (col || C.ac) + "12" : C.cd,
-        border: "1px solid " + (active ? col || C.ac : C.bd),
-        outline: active ? "1px solid " + (col || C.ac) : "none",
-        borderRadius: 8,
-        padding: "9px 11px",
+        background: active ? (col || C.bl) + "12" : productionCardBg(col),
+        border: "1px solid " + (active ? col || C.bl : (col || C.bd) + "35"),
+        outline: active ? "1px solid " + (col || C.bl) : "none",
+        borderRadius: 10,
+        padding: "12px 14px",
+        boxShadow: "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
         position: "relative",
         cursor: onClick ? "pointer" : "default",
       }}
@@ -12451,12 +12665,12 @@ function _SpcTile({ label, val, sub, col, onTrend, onClick, active }) {
             position: "absolute",
             top: 7,
             right: 7,
-            width: 20,
-            height: 20,
-            borderRadius: 4,
+            width: 26,
+            height: 26,
+            borderRadius: 7,
             border: "1px solid " + C.bd,
-            background: C.c2,
-            color: C.mu,
+            background: C.cd,
+            color: C.bl,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -12469,27 +12683,28 @@ function _SpcTile({ label, val, sub, col, onTrend, onClick, active }) {
       )}
       <div
         style={{
-          fontSize: 10.5,
+          fontSize: 11,
           color: C.mu,
-          fontWeight: 600,
+          fontWeight: 700,
           textTransform: "uppercase",
-          letterSpacing: ".3px",
+          letterSpacing: ".6px",
         }}
       >
         {label}
       </div>
       <div
         style={{
-          fontSize: 19,
-          fontWeight: 700,
+          fontSize: 24,
+          fontWeight: 800,
           color: col || C.tx,
-          marginTop: 2,
+          marginTop: 6,
+          lineHeight: 1.1,
         }}
       >
         {val}
       </div>
       {sub && (
-        <div style={{ fontSize: 10.5, color: C.mu, marginTop: 1 }}>{sub}</div>
+        <div style={{ fontSize: 11.5, color: C.mu, marginTop: 4 }}>{sub}</div>
       )}
     </div>
   );
@@ -12588,8 +12803,8 @@ function SPCOverview({ onSelect }) {
   const nOK = rows.filter((r) => r.s.status === "Green").length;
   const filtered = fMachine !== "All" || fSize !== "All";
   const sel = {
-    padding: "5px 10px",
-    borderRadius: 6,
+    padding: "7px 12px",
+    borderRadius: 8,
     border: "1px solid " + C.bd,
     background: C.cd,
     color: C.tx,
@@ -12661,9 +12876,9 @@ function SPCOverview({ onSelect }) {
           gap: 10,
           alignItems: "center",
           flexWrap: "wrap",
-          padding: "8px 10px",
-          background: C.c2,
-          borderRadius: 8,
+          padding: "10px 12px",
+          background: "#F8FAFC",
+          borderRadius: 10,
           border: "1px solid " + C.bd,
         }}
       >
@@ -14426,7 +14641,8 @@ function LiveSpcMini({ chart }) {
     return (
       <div
         style={{
-          height: 58,
+          height: "100%",
+          width: "100%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -14445,8 +14661,8 @@ function LiveSpcMini({ chart }) {
     padB = 6;
   const pw = W - padL - padR,
     ph = H - padT - padB;
-  const lo = Math.min(chart.lcl ?? Infinity, ...values),
-    hi = Math.max(chart.ucl ?? -Infinity, ...values),
+  const lo = values.reduce((m, v) => (v < m ? v : m), chart.lcl ?? Infinity),
+    hi = values.reduce((m, v) => (v > m ? v : m), chart.ucl ?? -Infinity),
     pad = (hi - lo) * 0.15 || 1;
   const X = (i) =>
     padL + (values.length <= 1 ? pw / 2 : i * (pw / (values.length - 1)));
@@ -14455,7 +14671,7 @@ function LiveSpcMini({ chart }) {
   return (
     <svg
       viewBox={"0 0 " + W + " " + H}
-      style={{ width: "100%", height: "auto", marginTop: 6 }}
+      style={{ width: "100%", height: "100%" }}
     >
       {chart.ucl != null && (
         <line
@@ -14498,11 +14714,6 @@ function LiveSpcMini({ chart }) {
         stroke={C.bl}
         strokeWidth="1.4"
       />
-      {values.map((v, i) => (
-        <circle key={i} cx={X(i)} cy={Y(v)} r="1.8" fill={C.bl}>
-          <title>{`${chart.time?.[i] || "Point " + (i + 1)}: ${_spcFmt(v)}`}</title>
-        </circle>
-      ))}
     </svg>
   );
 }
@@ -14521,11 +14732,19 @@ function spcPointClass(rules = []) {
   return rules.map(spcRuleClass).sort((a, b) => a.rank - b.rank)[0];
 }
 
+/** Above this many points the detail chart draws markers for flagged points only. */
+const SPC_DENSE_POINTS = 1500;
+
 function LiveSpcChart({ title, chart, accent }) {
   const points = Array.isArray(chart?.points) ? chart.points : [];
   const [hover, setHover] = useState(null);
+  const scrollRef = useRef(null);
   const plotPoints = points.filter((p) => typeof p.value === "number");
   const values = plotPoints.map((p) => p.value);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [plotPoints.length]);
   if (!values.length)
     return (
       <Card title={title} accent={accent}>
@@ -14542,16 +14761,20 @@ function LiveSpcChart({ title, chart, accent }) {
       </Card>
     );
   const timeAxis = /\bX\b|X Chart|X Control/i.test(title || "");
-  const W = 720,
-    H = timeAxis ? 250 : 230,
+  const POINT_GAP = 34,
+    VIEW_W = 720,
+    H = timeAxis ? 262 : 230,
     padL = 48,
     padR = 70,
     padT = 18,
-    padB = timeAxis ? 48 : 28;
+    padB = timeAxis ? 60 : 28;
+  const W = Math.max(VIEW_W, padL + padR + (values.length - 1) * POINT_GAP);
   const pw = W - padL - padR,
     ph = H - padT - padB;
-  const lo0 = Math.min(chart.lcl ?? Infinity, ...values),
-    hi0 = Math.max(chart.ucl ?? -Infinity, ...values),
+  // reduce, not Math.min(...values): a whole-history chart can carry tens of
+  // thousands of points, and spreading them as arguments can overflow.
+  const lo0 = values.reduce((m, v) => (v < m ? v : m), chart.lcl ?? Infinity),
+    hi0 = values.reduce((m, v) => (v > m ? v : m), chart.ucl ?? -Infinity),
     pad = (hi0 - lo0) * 0.14 || 1,
     lo = lo0 - pad,
     hi = hi0 + pad;
@@ -14561,183 +14784,208 @@ function LiveSpcChart({ title, chart, accent }) {
   const hoverPoint = hover != null ? plotPoints[hover] : null;
   const hoverRules = hoverPoint?.rules || [];
   const hoverClass = spcPointClass(hoverRules);
+  const BOX_W = 224;
   const tx =
     hover != null
-      ? Math.min(Math.max(X(hover) - 82, padL), padL + pw - 164)
+      ? Math.min(Math.max(X(hover) - BOX_W / 2, padL), padL + pw - BOX_W)
       : 0;
   const ty = hoverPoint ? Math.max(Y(hoverPoint.value) - 82, padT + 4) : 0;
   return (
     <Card title={title} accent={accent}>
-      <svg
-        viewBox={"0 0 " + W + " " + H}
-        onMouseLeave={() => setHover(null)}
-        style={{ width: "100%", height: "auto", display: "block" }}
-      >
-        {chart.ucl != null && (
-          <line
-            x1={padL}
-            y1={Y(chart.ucl)}
-            x2={padL + pw}
-            y2={Y(chart.ucl)}
-            stroke={C.rd}
-            strokeWidth="1.3"
-            strokeDasharray="6 3"
-          />
-        )}
-        {chart.cl != null && (
-          <line
-            x1={padL}
-            y1={Y(chart.cl)}
-            x2={padL + pw}
-            y2={Y(chart.cl)}
-            stroke={C.gn}
-            strokeWidth="1.3"
-          />
-        )}
-        {chart.lcl != null && (
-          <line
-            x1={padL}
-            y1={Y(chart.lcl)}
-            x2={padL + pw}
-            y2={Y(chart.lcl)}
-            stroke={C.rd}
-            strokeWidth="1.3"
-            strokeDasharray="6 3"
-          />
-        )}
-        <polyline
-          points={values.map((v, i) => X(i) + "," + Y(v)).join(" ")}
-          fill="none"
-          stroke={C.bl}
-          strokeWidth="2"
-        />
-        {plotPoints.map((p, i) => {
-          const pc = spcPointClass(p.rules);
-          const flagged = Boolean(p.rules?.length);
-          return (
-            <circle
-              key={p.index}
-              cx={X(i)}
-              cy={Y(p.value)}
-              r={flagged ? 4.6 : 3}
-              fill={flagged ? pc.color : C.bl}
-              stroke="#fff"
-              strokeWidth={flagged ? 1.3 : 0}
+      <div ref={scrollRef} style={{ overflowX: "auto" }}>
+        <svg
+          viewBox={"0 0 " + W + " " + H}
+          onMouseLeave={() => setHover(null)}
+          style={{
+            width: W,
+            minWidth: "100%",
+            height: "auto",
+            display: "block",
+            overflow: "visible",
+          }}
+        >
+          {chart.ucl != null && (
+            <line
+              x1={padL}
+              y1={Y(chart.ucl)}
+              x2={padL + pw}
+              y2={Y(chart.ucl)}
+              stroke={C.rd}
+              strokeWidth="1.3"
+              strokeDasharray="6 3"
             />
-          );
-        })}
-        {plotPoints.map((p, i) => (
-          <circle
-            key={"hit" + p.index}
-            cx={X(i)}
-            cy={Y(p.value)}
-            r="9"
+          )}
+          {chart.cl != null && (
+            <line
+              x1={padL}
+              y1={Y(chart.cl)}
+              x2={padL + pw}
+              y2={Y(chart.cl)}
+              stroke={C.gn}
+              strokeWidth="1.3"
+            />
+          )}
+          {chart.lcl != null && (
+            <line
+              x1={padL}
+              y1={Y(chart.lcl)}
+              x2={padL + pw}
+              y2={Y(chart.lcl)}
+              stroke={C.rd}
+              strokeWidth="1.3"
+              strokeDasharray="6 3"
+            />
+          )}
+          <polyline
+            points={values.map((v, i) => X(i) + "," + Y(v)).join(" ")}
+            fill="none"
+            stroke={C.bl}
+            strokeWidth="2"
+          />
+          {plotPoints.map((p, i) => {
+            const pc = spcPointClass(p.rules);
+            const flagged = Boolean(p.rules?.length);
+            // A whole-history chart can hold ~24k points; one circle each
+            // froze the page. The line already passes through every point,
+            // so past SPC_DENSE_POINTS only rule-flagged points get a marker.
+            if (!flagged && plotPoints.length > SPC_DENSE_POINTS) return null;
+            return (
+              <circle
+                key={p.index}
+                cx={X(i)}
+                cy={Y(p.value)}
+                r={flagged ? 4.6 : 3}
+                fill={flagged ? pc.color : C.bl}
+                stroke="#fff"
+                strokeWidth={flagged ? 1.3 : 0}
+              />
+            );
+          })}
+          {/* One hover target for the whole plot (not one per point): the
+              nearest point to the cursor's x is the hovered one. */}
+          <rect
+            x={padL}
+            y={padT}
+            width={pw}
+            height={ph}
             fill="transparent"
             style={{ cursor: "crosshair" }}
-            onMouseEnter={() => setHover(i)}
+            onMouseMove={(e) => {
+              const box = e.currentTarget.ownerSVGElement.getBoundingClientRect();
+              const svgX = ((e.clientX - box.left) / box.width) * W;
+              const step = values.length <= 1 ? 1 : pw / (values.length - 1);
+              const i = Math.round((svgX - padL) / step);
+              setHover(Math.min(Math.max(i, 0), values.length - 1));
+            }}
           />
-        ))}
-        {plotPoints.map((p, i) => {
-          const every = timeAxis
-            ? Math.max(1, Math.ceil(plotPoints.length / 10))
-            : 2;
-          if (i % every !== 0 && i !== plotPoints.length - 1) return null;
-          const label = timeAxis ? p.time || p.index : p.index;
-          return (
-            <text
-              key={"t" + p.index}
-              x={X(i)}
-              y={H - 10}
-              fontSize="8.5"
-              fill={C.mu}
-              textAnchor={timeAxis ? "end" : "middle"}
-              transform={timeAxis ? `rotate(-35 ${X(i)} ${H - 10})` : undefined}
-            >
-              {label}
-            </text>
-          );
-        })}
-        {chart.ucl != null && (
-          <text
-            x={padL + pw + 5}
-            y={Y(chart.ucl) + 3}
-            fontSize="10"
-            fill={C.rd}
-          >
-            {"UCL " + _spcFmt(chart.ucl)}
-          </text>
-        )}
-        {chart.cl != null && (
-          <text x={padL + pw + 5} y={Y(chart.cl) + 3} fontSize="10" fill={C.gn}>
-            {"CL " + _spcFmt(chart.cl)}
-          </text>
-        )}
-        {chart.lcl != null && (
-          <text
-            x={padL + pw + 5}
-            y={Y(chart.lcl) + 3}
-            fontSize="10"
-            fill={C.rd}
-          >
-            {"LCL " + _spcFmt(chart.lcl)}
-          </text>
-        )}
-        {hoverPoint && (
-          <g pointerEvents="none">
-            <line
-              x1={X(hover)}
-              y1={padT}
-              x2={X(hover)}
-              y2={padT + ph}
-              stroke={C.mu}
-              strokeWidth="0.8"
-              strokeDasharray="3 3"
-              opacity="0.55"
-            />
-            <rect
-              x={tx}
-              y={ty}
-              width="164"
-              height={hoverRules.length ? 76 : 58}
-              rx="6"
-              fill="#fff"
-              stroke={hoverClass.color}
-              strokeWidth="1.2"
-            />
-            <text x={tx + 9} y={ty + 15} fontSize="10" fill={C.mu}>
-              {"Point #" +
-                hoverPoint.index +
-                (hoverPoint.time ? " · " + hoverPoint.time : "")}
-            </text>
-            <text
-              x={tx + 9}
-              y={ty + 31}
-              fontSize="11"
-              fontWeight="800"
-              fill={C.tx}
-            >
-              {"Value: " + _spcFmt(hoverPoint.value)}
-            </text>
-            <text
-              x={tx + 9}
-              y={ty + 47}
-              fontSize="10.5"
-              fill={hoverClass.color}
-              fontWeight="700"
-            >
-              {hoverRules.length ? hoverClass.label : "No Nelson violation"}
-            </text>
-            {hoverRules.length > 0 && (
-              <text x={tx + 9} y={ty + 63} fontSize="10" fill={C.md}>
-                {"Rules: " +
-                  hoverRules.map((r) => "R" + r).join(", ") +
-                  " · z " +
-                  _spcFmt(hoverPoint.z)}
+          {plotPoints.map((p, i) => {
+            const minLabelPx = timeAxis ? 56 : 40;
+            const every = Math.max(1, Math.round(minLabelPx / POINT_GAP));
+            if (i % every !== 0 && i !== plotPoints.length - 1) return null;
+            const label = timeAxis ? p.time || p.index : p.index;
+            const ly = H - 18;
+            return (
+              <text
+                key={"t" + p.index}
+                x={X(i)}
+                y={ly}
+                fontSize="9.5"
+                fontWeight={timeAxis ? "600" : "400"}
+                fill={C.tx}
+                textAnchor={timeAxis ? "end" : "middle"}
+                transform={timeAxis ? `rotate(35 ${X(i)} ${ly})` : undefined}
+              >
+                {label}
               </text>
-            )}
-          </g>
-        )}
-      </svg>
+            );
+          })}
+          {chart.ucl != null && (
+            <text
+              x={padL + pw + 5}
+              y={Y(chart.ucl) + 3}
+              fontSize="10"
+              fill={C.rd}
+            >
+              {"UCL " + _spcFmt(chart.ucl)}
+            </text>
+          )}
+          {chart.cl != null && (
+            <text
+              x={padL + pw + 5}
+              y={Y(chart.cl) + 3}
+              fontSize="10"
+              fill={C.gn}
+            >
+              {"CL " + _spcFmt(chart.cl)}
+            </text>
+          )}
+          {chart.lcl != null && (
+            <text
+              x={padL + pw + 5}
+              y={Y(chart.lcl) + 3}
+              fontSize="10"
+              fill={C.rd}
+            >
+              {"LCL " + _spcFmt(chart.lcl)}
+            </text>
+          )}
+          {hoverPoint && (
+            <g pointerEvents="none">
+              <line
+                x1={X(hover)}
+                y1={padT}
+                x2={X(hover)}
+                y2={padT + ph}
+                stroke={C.mu}
+                strokeWidth="0.8"
+                strokeDasharray="3 3"
+                opacity="0.55"
+              />
+              <rect
+                x={tx}
+                y={ty}
+                width={BOX_W}
+                height={hoverRules.length ? 76 : 58}
+                rx="6"
+                fill="#fff"
+                stroke={hoverClass.color}
+                strokeWidth="1.2"
+              />
+              <text x={tx + 9} y={ty + 15} fontSize="10" fill={C.mu}>
+                {"Point #" +
+                  hoverPoint.index +
+                  (hoverPoint.time ? " · " + hoverPoint.time : "")}
+              </text>
+              <text
+                x={tx + 9}
+                y={ty + 31}
+                fontSize="11"
+                fontWeight="800"
+                fill={C.tx}
+              >
+                {"Value: " + _spcFmt(hoverPoint.value)}
+              </text>
+              <text
+                x={tx + 9}
+                y={ty + 47}
+                fontSize="10.5"
+                fill={hoverClass.color}
+                fontWeight="700"
+              >
+                {hoverRules.length ? hoverClass.label : "No Nelson violation"}
+              </text>
+              {hoverRules.length > 0 && (
+                <text x={tx + 9} y={ty + 63} fontSize="9.5" fill={C.md}>
+                  {"Rules: " +
+                    hoverRules.map((r) => "R" + r).join(", ") +
+                    " · z " +
+                    _spcFmt(hoverPoint.z)}
+                </text>
+              )}
+            </g>
+          )}
+        </svg>
+      </div>
       <div
         style={{
           fontSize: 11.5,
@@ -14757,31 +15005,128 @@ function LiveSpcChart({ title, chart, accent }) {
         <span style={{ color: C.am }}>R5/R6/R8 Warning</span>
         <span style={{ color: C.bl }}>R2/R3/R4/R7 Run / Trend</span>
       </div>
+      {/* Where the limits came from. The dots are silver readings but the
+          band judging them is a gold baseline, and the two can disagree —
+          so say which baseline, and say when there is no usable pair at all
+          (Nelson is skipped there, and an unlabelled chart would hide it). */}
+      <div
+        style={{
+          fontSize: 11,
+          color: chart.limits_valid === false ? C.rd : C.mu,
+          marginTop: 4,
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        {chart.limits_source && <span>Limits: {chart.limits_source}</span>}
+        {chart.subgroup_size != null && (
+          <span>Subgroup n = {chart.subgroup_size}</span>
+        )}
+        {chart.sigma != null && <span>&sigma; {_spcFmt(chart.sigma)}</span>}
+        {chart.baseline_date && (
+          <span>
+            Baseline {chart.baseline_date}
+            {chart.baseline_on_or_before === false
+              ? " (later than the selected date)"
+              : ""}
+          </span>
+        )}
+        {chart.limits_valid === false && (
+          <span style={{ fontWeight: 700 }}>
+            Limits unusable{chart.limits_note ? ` — ${chart.limits_note}` : ""}.
+            Nelson rules not evaluated.
+          </span>
+        )}
+      </div>
     </Card>
   );
 }
 
 function LiveHistogram({ histogram }) {
   const bins = Array.isArray(histogram?.bins) ? histogram.bins : [];
+  const [hoverBin, setHoverBin] = useState(null);
   if (!bins.length) return null;
   const max = Math.max(...bins.map((b) => b.count || 0), 1);
+  const curveX = Array.isArray(histogram?.curve?.x) ? histogram.curve.x : [];
+  const curveY = Array.isArray(histogram?.curve?.y) ? histogram.curve.y : [];
+  const curveMax = Math.max(...curveY, 0);
   const refs = [
     { key: "lsl", label: "LSL", value: histogram.lsl, color: C.rd },
+    { key: "target", label: "Target", value: histogram.target, color: C.pp },
+    { key: "mean", label: "Mean", value: histogram.mean, color: C.bl },
     { key: "median", label: "Median", value: histogram.median, color: C.gn },
     { key: "usl", label: "USL", value: histogram.usl, color: C.rd },
   ].filter((r) => typeof r.value === "number");
-  const lo = Math.min(...bins.map((b) => b.from), ...refs.map((r) => r.value));
-  const hi = Math.max(...bins.map((b) => b.to), ...refs.map((r) => r.value));
+  const sigmaGuides = [histogram.sigma_minus_3, histogram.sigma_plus_3].filter(
+    (v) => typeof v === "number",
+  );
+  // Domain is anchored to where the data actually lives (bins + curve), not
+  // to spec/sigma reference values, so a far-off LSL/USL doesn't compress
+  // the bars into a sliver of the chart. Refs/guides only get to stretch the
+  // domain a bounded amount; beyond that they're clamped to the edge when
+  // rendered (see clampX below).
+  const dataXs = [
+    ...bins.map((b) => b.from),
+    ...bins.map((b) => b.to),
+    ...curveX,
+  ].filter((v) => typeof v === "number" && Number.isFinite(v));
+  const dataLo = dataXs.length ? Math.min(...dataXs) : 0;
+  const dataHi = dataXs.length ? Math.max(...dataXs) : 1;
+  const dataPad = (dataHi - dataLo) * 0.06 || 1;
+  const domainLo0 = dataLo - dataPad;
+  const domainHi0 = dataHi + dataPad;
+  const extendSlack = (dataHi - dataLo) * 0.35 || 1;
+  const extendVals = [...refs.map((r) => r.value), ...sigmaGuides].filter(
+    (v) => v >= domainLo0 - extendSlack && v <= domainHi0 + extendSlack,
+  );
+  const lo = Math.min(domainLo0, ...extendVals);
+  const hi = Math.max(domainHi0, ...extendVals);
+  const clampX = (v) => Math.min(hi, Math.max(lo, v));
   const W = 760,
-    H = 205,
     padL = 36,
     padR = 22,
-    padT = 24,
-    padB = 24;
-  const pw = W - padL - padR,
-    ph = H - padT - padB;
+    padB = 34;
+  const pw = W - padL - padR;
   const X = (v) => padL + ((v - lo) / (hi - lo || 1)) * pw;
+  const ticks = Array.from({ length: 5 }, (_, i) => lo + (i / 4) * (hi - lo));
+  const refRows = [];
+  {
+    const rowRight = [];
+    [...refs]
+      .sort((a, b) => X(clampX(a.value)) - X(clampX(b.value)))
+      .forEach((r) => {
+        const text = r.label + " " + _spcFmt(r.value);
+        const halfW = (text.length * 5.6 + 6) / 2;
+        const x = X(clampX(r.value));
+        let row = rowRight.findIndex((right) => x - halfW > right + 4);
+        if (row === -1) {
+          row = rowRight.length;
+          rowRight.push(x + halfW);
+        } else {
+          rowRight[row] = x + halfW;
+        }
+        refRows.push({ key: r.key, row });
+      });
+  }
+  const rowCount = Math.max(1, ...refRows.map((r) => r.row + 1));
+  const padT = 16 + rowCount * 13;
+  const ph = 157;
+  const H = padT + ph + padB;
   const Y = (c) => padT + ph - (c / max) * ph;
+  const YCurve = (v) =>
+    padT + ph - (curveMax > 0 ? (v / curveMax) * ph * 0.92 : 0);
+  const curvePoints =
+    curveX.length && curveY.length
+      ? curveX
+          .map((x, i) =>
+            typeof x === "number" && typeof curveY[i] === "number"
+              ? `${X(x)},${YCurve(curveY[i])}`
+              : null,
+          )
+          .filter(Boolean)
+          .join(" ")
+      : "";
   return (
     <Card
       title="Process Capability — distribution vs specification"
@@ -14798,6 +15143,7 @@ function LiveHistogram({ histogram }) {
         <svg
           viewBox={"0 0 " + W + " " + H}
           style={{ width: "100%", height: "auto", display: "block" }}
+          onMouseLeave={() => setHoverBin(null)}
         >
           <line
             x1={padL}
@@ -14807,29 +15153,92 @@ function LiveHistogram({ histogram }) {
             stroke={C.bd}
             strokeWidth="1"
           />
+          {ticks.map((v, i) => {
+            const x = X(v);
+            return (
+              <g key={`tick-${i}`} pointerEvents="none">
+                <line
+                  x1={x}
+                  y1={padT + ph}
+                  x2={x}
+                  y2={padT + ph + 4}
+                  stroke={C.bd}
+                  strokeWidth="1"
+                />
+                <text
+                  x={x}
+                  y={padT + ph + 15}
+                  fontSize="9"
+                  fill={C.mu}
+                  textAnchor="middle"
+                >
+                  {_spcFmt(v)}
+                </text>
+              </g>
+            );
+          })}
           {bins.map((b, i) => {
             const x = X(b.from),
               w = Math.max(1, X(b.to) - X(b.from) - 1),
               y = Y(b.count || 0);
+            const hovered = hoverBin === i;
             return (
-              <rect
-                key={i}
-                x={x}
-                y={y}
-                width={w}
-                height={padT + ph - y}
-                fill={b.out_of_spec ? C.rd : C.bl}
-                opacity={b.out_of_spec ? 0.9 : 0.58}
-                rx="2"
-              >
-                <title>{`${_spcFmt(b.from)} - ${_spcFmt(b.to)}: ${b.count}`}</title>
-              </rect>
+              <g key={i}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={padT + ph - y}
+                  fill={b.out_of_spec ? C.rd : C.bl}
+                  opacity={hovered ? 1 : b.out_of_spec ? 0.9 : 0.58}
+                  rx="2"
+                />
+                <rect
+                  x={x}
+                  y={padT}
+                  width={w}
+                  height={ph}
+                  fill="transparent"
+                  style={{ cursor: "crosshair" }}
+                  onMouseEnter={() => setHoverBin(i)}
+                />
+              </g>
             );
           })}
-          {refs.map((r, i) => {
-            const x = X(r.value);
+          {curvePoints ? (
+            <polyline
+              points={curvePoints}
+              fill="none"
+              stroke={C.pp}
+              strokeWidth="2"
+              opacity="0.85"
+              pointerEvents="none"
+            />
+          ) : null}
+          {sigmaGuides.map((v, i) => {
+            const clamped = v !== clampX(v);
+            const x = X(clampX(v));
             return (
-              <g key={r.key}>
+              <line
+                key={`sigma-${i}`}
+                x1={x}
+                y1={padT}
+                x2={x}
+                y2={padT + ph}
+                stroke={C.mu}
+                strokeWidth="1"
+                strokeDasharray="2 3"
+                opacity={clamped ? 0.3 : 0.55}
+                pointerEvents="none"
+              />
+            );
+          })}
+          {refs.map((r) => {
+            const clamped = r.value !== clampX(r.value);
+            const x = X(clampX(r.value));
+            const row = refRows.find((rr) => rr.key === r.key)?.row ?? 0;
+            return (
+              <g key={r.key} pointerEvents="none">
                 <line
                   x1={x}
                   y1={padT}
@@ -14837,11 +15246,14 @@ function LiveHistogram({ histogram }) {
                   y2={padT + ph}
                   stroke={r.color}
                   strokeWidth={r.key === "median" ? "1.5" : "1.8"}
-                  strokeDasharray={r.key === "median" ? "4 3" : undefined}
+                  strokeDasharray={
+                    clamped ? "3 2" : r.key === "median" ? "4 3" : undefined
+                  }
+                  opacity={clamped ? 0.6 : 1}
                 />
                 <text
                   x={x}
-                  y={padT - 7 + (i % 2) * 11}
+                  y={padT - 8 - (rowCount - 1 - row) * 13}
                   fontSize="9.5"
                   fill={r.color}
                   fontWeight="700"
@@ -14852,41 +15264,133 @@ function LiveHistogram({ histogram }) {
               </g>
             );
           })}
+          {hoverBin != null &&
+            bins[hoverBin] &&
+            (() => {
+              const b = bins[hoverBin];
+              const bx = X(b.from),
+                bw = Math.max(1, X(b.to) - X(b.from) - 1),
+                by = Y(b.count || 0);
+              const boxW = 132,
+                boxH = 40;
+              const tx = Math.min(
+                Math.max(bx + bw / 2 - boxW / 2, padL),
+                padL + pw - boxW,
+              );
+              const ty = Math.max(by - boxH - 6, 2);
+              return (
+                <g pointerEvents="none">
+                  <rect
+                    x={tx}
+                    y={ty}
+                    width={boxW}
+                    height={boxH}
+                    rx="6"
+                    fill="#fff"
+                    stroke={b.out_of_spec ? C.rd : C.bl}
+                    strokeWidth="1.2"
+                  />
+                  <text x={tx + 8} y={ty + 16} fontSize="10" fill={C.mu}>
+                    {_spcFmt(b.from) + " – " + _spcFmt(b.to)}
+                  </text>
+                  <text
+                    x={tx + 8}
+                    y={ty + 31}
+                    fontSize="11"
+                    fontWeight="800"
+                    fill={C.tx}
+                  >
+                    {"Count: " + b.count}
+                  </text>
+                </g>
+              );
+            })()}
         </svg>
       </div>
       <div style={{ fontSize: 11.5, color: C.mu, marginTop: 6 }}>
         Sample size {histogram.sample_size ?? "—"} · Mean{" "}
         {histogram.mean != null ? _spcFmt(histogram.mean) : "—"} · Median{" "}
         {histogram.median != null ? _spcFmt(histogram.median) : "—"} · Std{" "}
-        {histogram.std != null ? _spcFmt(histogram.std) : "—"}
+        {histogram.std != null ? _spcFmt(histogram.std) : "—"} · OOS{" "}
+        {/* With no spec window there is nothing to be out of, so the count is
+            unknown rather than zero — "OOS 0" would read as a clean process. */}
+        {histogram.spec_limits_available
+          ? (histogram.out_of_spec?.count ?? 0)
+          : "—"}
+      </div>
+      {/* Only Belt 1 Length has a documented tolerance; the rest are either
+          extended from it ("assumed") or have none. An invented spec window
+          is worse than a missing one, so the chart draws no USL/LSL and this
+          line says why. */}
+      <div style={{ fontSize: 11, color: C.mu, marginTop: 3 }}>
+        {histogram.spec_limits_available ? (
+          <span
+            style={{
+              color: histogram.tolerance_provenance === "assumed" ? C.am : C.mu,
+            }}
+          >
+            Spec window: {histogram.spec_source}
+            {histogram.tolerance_provenance === "assumed"
+              ? " · tolerance assumed, not plant-documented"
+              : ""}
+          </span>
+        ) : (
+          <span>
+            Spec limits not shown
+            {histogram.spec_note ? ` — ${histogram.spec_note}` : ""}
+          </span>
+        )}
       </div>
     </Card>
   );
 }
 
-function LiveSPCOverview({ date, shift, onSelect }) {
+const SPC_CARDS_PER_PAGE = 60;
+
+function LiveSPCOverview({ date, from, to, shift, onSelect }) {
   const [machine, setMachine] = useState("All");
   const [recipe, setRecipe] = useState("All");
   const [headline, setHeadline] = useState("All");
-  const [summary, setSummary] = useState(null);
   const [options, setOptions] = useState({ machines: [], recipes: [] });
+  const [baseWidgets, setBaseWidgets] = useState([]);
   const [widgets, setWidgets] = useState([]);
+  const [snapshotDate, setSnapshotDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Cards rendered so far. Every card draws a sparkline now that chart points
+  // are whole-history; ~2,000 at once froze the page.
+  const [shown, setShown] = useState(SPC_CARDS_PER_PAGE);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setShown(SPC_CARDS_PER_PAGE);
     Promise.all([
-      getSpcSummary({ date, machine }),
-      getSpcFilterOptions({ date }),
-      getSpcWidgets({ date, machine, recipe, headlineStatus: headline }),
+      getSpcFilterOptions({ date: to || date, shift }),
+      getSpcWidgets({ date, from, to, shift, machine, recipe }),
+      getSpcWidgets({
+        date,
+        from,
+        to,
+        shift,
+        machine,
+        recipe,
+        headlineStatus: headline,
+      }),
     ])
-      .then(([sum, opt, board]) => {
+      .then(([opt, baseBoard, board]) => {
         if (cancelled) return;
-        setSummary(sum || null);
         setOptions(opt || { machines: [], recipes: [] });
+        setBaseWidgets(
+          Array.isArray(baseBoard?.widgets) ? baseBoard.widgets : [],
+        );
         setWidgets(Array.isArray(board?.widgets) ? board.widgets : []);
+        setSnapshotDate(
+          board?.context?.snapshot_date ??
+            baseBoard?.context?.snapshot_date ??
+            opt?.context?.snapshot_date ??
+            null,
+        );
       })
       .catch((err) => {
         if (!cancelled) setError(err);
@@ -14897,23 +15401,33 @@ function LiveSPCOverview({ date, shift, onSelect }) {
     return () => {
       cancelled = true;
     };
-  }, [date, shift, machine, recipe, headline]);
+  }, [date, from, to, shift, machine, recipe, headline]);
+  const baseCounts = baseWidgets.reduce(
+    (acc, w) => {
+      acc.total += 1;
+      if (w.headline_status === "Critical") acc.critical += 1;
+      else if (w.headline_status === "Major") acc.major += 1;
+      else if (w.headline_status === "Warning") acc.warning += 1;
+      else if (w.headline_status === "Healthy") acc.healthy += 1;
+      else acc.insufficient += 1;
+      return acc;
+    },
+    {
+      total: 0,
+      critical: 0,
+      major: 0,
+      warning: 0,
+      healthy: 0,
+      insufficient: 0,
+    },
+  );
   const tiles = [
-    ["Processes", summary?.total_parameters ?? 0, C.tx, "All"],
-    [
-      "Out of specification",
-      summary?.out_of_specification ?? 0,
-      C.rd,
-      "Critical",
-    ],
-    ["Not capable", summary?.not_capable ?? 0, C.am, "Warning"],
-    ["Capable", summary?.capable ?? 0, C.gn, "Healthy"],
-    [
-      "Insufficient",
-      summary?.insufficient_data ?? 0,
-      C.mu,
-      "Insufficient Data",
-    ],
+    ["Processes", baseCounts.total, C.tx, "All"],
+    ["Out of specification", baseCounts.critical, C.rd, "Critical"],
+    ["Marginal", baseCounts.major, C.ac, "Major"],
+    ["Not capable", baseCounts.warning, C.am, "Warning"],
+    ["Capable", baseCounts.healthy, C.gn, "Healthy"],
+    ["Insufficient", baseCounts.insufficient, C.mu, "Insufficient Data"],
   ];
   const sel = {
     padding: "5px 10px",
@@ -14961,9 +15475,9 @@ function LiveSPCOverview({ date, shift, onSelect }) {
           gap: 10,
           alignItems: "center",
           flexWrap: "wrap",
-          padding: "8px 10px",
-          background: C.c2,
-          borderRadius: 8,
+          padding: "10px 12px",
+          background: "#F8FAFC",
+          borderRadius: 10,
           border: "1px solid " + C.bd,
         }}
       >
@@ -15037,9 +15551,24 @@ function LiveSPCOverview({ date, shift, onSelect }) {
           </button>
         )}
         <span style={{ marginLeft: "auto", fontSize: 11.5, color: C.mu }}>
-          {loading ? "Fetching SPC..." : `Showing ${widgets.length} charts`}
+          {loading
+            ? "Fetching SPC..."
+            : `Showing ${widgets.length} of ${baseCounts.total} charts`}
         </span>
       </div>
+      {from && to ? (
+        <div style={{ fontSize: 11.5, color: C.mu }}>
+          Cp / Cpk / Pp / Ppk are averaged over {from} to {to} — gold publishes
+          SPC capability per day only, so a range has no snapshot of its own.
+          Chart points show every available silver reading, not just this range.
+        </div>
+      ) : snapshotDate ? (
+        <div style={{ fontSize: 11.5, color: C.mu }}>
+          Snapshot {snapshotDate}. SPC rows use the latest available snapshot on
+          or before the selected date. Chart points show every available silver
+          reading, not just the selected date.
+        </div>
+      ) : null}
       {!loading && widgets.length === 0 ? (
         <div
           style={{
@@ -15055,134 +15584,748 @@ function LiveSPCOverview({ date, shift, onSelect }) {
           No SPC rows for this selection.
         </div>
       ) : null}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
-          gap: 10,
-        }}
-      >
-        {widgets.map((w, i) => {
-          const col =
-            w.headline_status === "Critical"
-              ? C.rd
-              : w.headline_status === "Warning"
-                ? C.am
-                : w.headline_status === "Healthy"
-                  ? C.gn
-                  : C.mu;
-          return (
-            <div
-              key={`${w.machine}|${w.recipe}|${w.parameter}|${i}`}
-              onClick={() =>
-                onSelect({
-                  machine: w.machine,
-                  recipe: w.recipe,
-                  parameter: w.parameter,
-                })
-              }
-              style={{
-                cursor: "pointer",
-                background: C.cd,
-                border: "1px solid " + C.bd,
-                borderLeft: "3px solid " + col,
-                borderRadius: 8,
-                padding: "12px 14px",
-              }}
-            >
+      {loading ? (
+        <QualityLoader minHeight={360} />
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
+            gap: 10,
+          }}
+        >
+          {widgets.slice(0, shown).map((w, i) => {
+            const col = spcStatus(w.headline_status).col;
+            return (
               <div
+                key={`${w.machine}|${w.recipe}|${w.parameter}|${i}`}
+                onClick={() =>
+                  onSelect({
+                    machine: w.machine,
+                    recipe: w.recipe,
+                    parameter: w.parameter,
+                  })
+                }
                 style={{
+                  cursor: "pointer",
+                  background: productionCardBg(col),
+                  border: "1px solid " + col + "35",
+                  borderRadius: 10,
+                  padding: "14px 16px",
+                  boxShadow:
+                    "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
+                  minHeight: 150,
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  gap: 8,
+                  flexDirection: "column",
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: C.tx,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {w.parameter}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11.5,
-                      color: C.mu,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {w.machine + " · " + w.recipe}
-                  </div>
-                </div>
-                <StatusPill
-                  status={
-                    w.headline_status === "Critical"
-                      ? "Red"
-                      : w.headline_status === "Warning"
-                        ? "Yellow"
-                        : w.headline_status === "Healthy"
-                          ? "Green"
-                          : "Insufficient"
-                  }
-                />
-              </div>
-              {w.control_chart ? (
-                <LiveSpcMini chart={w.control_chart} />
-              ) : (
                 <div
                   style={{
-                    height: 58,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: C.tx,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {w.parameter}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: C.mu,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {w.machine + " · " + w.recipe}
+                    </div>
+                  </div>
+                  <StatusPill status={spcStatus(w.headline_status).pill} />
+                </div>
+                <div
+                  style={{
+                    height: 64,
+                    marginTop: 6,
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
                     fontSize: 12,
                     color: C.mu,
                   }}
                 >
-                  Insufficient sample size {w.insufficient?.sample_size ?? "—"}
+                  {w.control_chart ? (
+                    <LiveSpcMini chart={w.control_chart} />
+                  ) : (
+                    w.insufficient?.reason ||
+                    `Insufficient sample size ${w.insufficient?.sample_size ?? "—"}`
+                  )}
                 </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    marginTop: "auto",
+                    paddingTop: 6,
+                    fontSize: 11.5,
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ color: C.mu }}>
+                    Cp{" "}
+                    <b style={{ color: col }}>
+                      {typeof w.cp === "number" ? w.cp.toFixed(2) : "—"}
+                    </b>
+                  </span>
+                  <span style={{ color: C.mu }}>
+                    Cpk{" "}
+                    <b style={{ color: col }}>
+                      {typeof w.cpk === "number" ? w.cpk.toFixed(2) : "—"}
+                    </b>
+                  </span>
+                  <span style={{ color: C.mu, marginLeft: "auto" }}>
+                    {w.subgroups ?? "—"} subgroups · {w.sample_size ?? "—"}{" "}
+                    readings
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!loading && shown < widgets.length ? (
+        <button
+          onClick={() => setShown((n) => n + SPC_CARDS_PER_PAGE)}
+          style={{ ...sel, alignSelf: "center", color: C.pp, fontWeight: 700 }}
+        >
+          Show more ({widgets.length - shown} remaining)
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function spcTrendWindow(view, to) {
+  if (view === "daily") {
+    return { from: offsetIsoDate(to, -29), to, label: "Daily · last 30 days" };
+  }
+  const end = new Date(`${to}T00:00:00Z`);
+  if (view === "monthly") {
+    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1));
+    return {
+      from: start.toISOString().slice(0, 10),
+      to,
+      label: "Monthly · last 12 months",
+    };
+  }
+  return {
+    from: `${end.getUTCFullYear() - 4}-01-01`,
+    to,
+    label: "Yearly · last 5 years",
+  };
+}
+
+function aggregateSpcTrend(points, view) {
+  if (view === "daily") return points;
+  const groups = new Map();
+  for (const point of points) {
+    const key = view === "monthly" ? point.date.slice(0, 7) : point.date.slice(0, 4);
+    const group = groups.get(key) || { date: key, total: 0, count: 0 };
+    group.total += Number(point.value);
+    group.count += 1;
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) => ({
+    date: group.date,
+    value: group.total / group.count,
+  }));
+}
+
+function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const width = 1420;
+  const height = 410;
+  const pad = { left: 70, right: 24, top: 38, bottom: 46 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const values = points.map((point) => Number(point.value));
+  const low = Math.min(...values, target, baseline);
+  const high = Math.max(...values, target, baseline);
+  const spread = high - low || Math.abs(high) * 0.2 || 1;
+  const min = low - spread * 0.14;
+  const max = high + spread * 0.14;
+  const x = (index) =>
+    points.length === 1
+      ? pad.left + plotWidth
+      : pad.left + (index * plotWidth) / (points.length - 1);
+  const y = (value) => pad.top + ((max - value) / (max - min)) * plotHeight;
+  const targetY = y(target);
+  const baselineY = y(baseline);
+  const axisEvery = Math.max(1, Math.ceil(points.length / 7));
+  const formatAxisLabel = (point) => {
+    if (view === "monthly") {
+      const [year, month] = point.date.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(
+        new Date(Date.UTC(year, month - 1, 1)),
+      );
+    }
+    if (view === "yearly") return point.date;
+    const days = Math.round(
+      (Date.parse(`${endDate}T00:00:00Z`) -
+        Date.parse(`${point.date}T00:00:00Z`)) /
+        86400000,
+    );
+    return days === 0 ? "Today" : `${days}d`;
+  };
+  const formatHoverLabel = (point) => {
+    if (view === "monthly") {
+      const [year, month] = point.date.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(Date.UTC(year, month - 1, 1)));
+    }
+    if (view === "yearly") return point.date;
+    return toDisplayDate(point.date) || point.date;
+  };
+  const fmt = (value) => Number(value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  const hoveredPoint = hoveredIndex == null ? null : points[hoveredIndex];
+  const tooltipWidth = 176;
+  const tooltipHeight = 58;
+  const hoveredX = hoveredPoint ? x(hoveredIndex) : 0;
+  const hoveredY = hoveredPoint ? y(hoveredPoint.value) : 0;
+  const tooltipX = Math.min(
+    Math.max(hoveredX - tooltipWidth / 2, pad.left + 4),
+    width - pad.right - tooltipWidth - 4,
+  );
+  const tooltipY =
+    hoveredY - tooltipHeight - 14 < pad.top
+      ? hoveredY + 14
+      : hoveredY - tooltipHeight - 14;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+      role="img"
+      aria-label="SPC capability trend"
+      onMouseLeave={() => setHoveredIndex(null)}
+      style={{ display: "block", minWidth: 680 }}
+    >
+      <rect
+        x={pad.left}
+        y={pad.top}
+        width={plotWidth}
+        height={Math.max(0, targetY - pad.top)}
+        fill="#EFF8F2"
+      />
+      <rect
+        x={pad.left}
+        y={targetY}
+        width={plotWidth}
+        height={pad.top + plotHeight - targetY}
+        fill="#FFF5F3"
+      />
+      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const value = max - ratio * (max - min);
+        const yy = pad.top + ratio * plotHeight;
+        return (
+          <g key={ratio}>
+            <line
+              x1={pad.left}
+              y1={yy}
+              x2={pad.left + plotWidth}
+              y2={yy}
+              stroke="#E3E8F0"
+              strokeDasharray="3 4"
+            />
+            <text x={pad.left - 12} y={yy + 4} textAnchor="end" fontSize="12" fill="#8A96AC">
+              {fmt(value)}
+            </text>
+          </g>
+        );
+      })}
+      <line
+        x1={pad.left}
+        y1={targetY}
+        x2={pad.left + plotWidth}
+        y2={targetY}
+        stroke="#D18A00"
+        strokeWidth="2.5"
+        strokeDasharray="9 5"
+      />
+      <text x={pad.left + 8} y={targetY - 9} fontSize="13" fontWeight="700" fill="#C98500">
+        Target {target.toFixed(2)}
+      </text>
+      <line
+        x1={pad.left}
+        y1={baselineY}
+        x2={pad.left + plotWidth}
+        y2={baselineY}
+        stroke="#98A3B7"
+        strokeWidth="1.6"
+        strokeDasharray="2 5"
+      />
+      <text
+        x={pad.left + plotWidth - 8}
+        y={baselineY - 7}
+        textAnchor="end"
+        fontSize="12"
+        fill="#8A96AC"
+      >
+        Baseline {baseline.toFixed(2)}
+      </text>
+      {points.length > 1 && (
+        <polyline
+          points={points.map((point, index) => `${x(index)},${y(point.value)}`).join(" ")}
+          fill="none"
+          stroke="#D18A00"
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+      {points.map((point, index) => {
+        const isLast = index === points.length - 1;
+        return (
+          <g key={`${point.date}-${index}`}>
+            <circle
+              cx={x(index)}
+              cy={y(point.value)}
+              r={hoveredIndex === index ? 6.5 : isLast ? 6 : 2.5}
+              fill="#D18A00"
+              stroke={hoveredIndex === index ? "#fff" : "none"}
+              strokeWidth={hoveredIndex === index ? 2 : 0}
+            />
+            <circle
+              cx={x(index)}
+              cy={y(point.value)}
+              r="12"
+              fill="transparent"
+              tabIndex="0"
+              aria-label={`${formatHoverLabel(point)}: ${Number(point.value).toFixed(3)}`}
+              style={{ cursor: "crosshair", outline: "none" }}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onFocus={() => setHoveredIndex(index)}
+              onBlur={() => setHoveredIndex(null)}
+            />
+            {(index % axisEvery === 0 || isLast) && (
+              <text
+                x={x(index)}
+                y={height - 15}
+                textAnchor={isLast ? "end" : index === 0 ? "start" : "middle"}
+                fontSize="12"
+                fill="#536079"
+              >
+                {formatAxisLabel(point)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+      {hoveredPoint && (
+        <g pointerEvents="none">
+          <line
+            x1={hoveredX}
+            y1={pad.top}
+            x2={hoveredX}
+            y2={pad.top + plotHeight}
+            stroke="#7C879B"
+            strokeWidth="1"
+            strokeDasharray="3 4"
+            opacity=".7"
+          />
+          <rect
+            x={tooltipX}
+            y={tooltipY}
+            width={tooltipWidth}
+            height={tooltipHeight}
+            rx="7"
+            fill="#1F2937"
+            opacity=".96"
+          />
+          <text
+            x={tooltipX + 12}
+            y={tooltipY + 21}
+            fontSize="12"
+            fontWeight="600"
+            fill="#CBD5E1"
+          >
+            {formatHoverLabel(hoveredPoint)}
+          </text>
+          <text
+            x={tooltipX + 12}
+            y={tooltipY + 43}
+            fontSize="15"
+            fontWeight="800"
+            fill="#FFFFFF"
+          >
+            {Number(hoveredPoint.value).toFixed(3)}
+          </text>
+        </g>
+      )}
+      <text
+        x={pad.left + plotWidth}
+        y={pad.top - 14}
+        textAnchor="middle"
+        fontSize="12"
+        fontWeight="700"
+        fill="#C98500"
+      >
+        Now
+      </text>
+    </svg>
+  );
+}
+
+function SPCCapabilityTrendModal({ selection, metric, date, shift, onClose }) {
+  const initialTo = date || todayInIST();
+  const [view, setView] = useState("daily");
+  const [points, setPoints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const trendWindow = spcTrendWindow(view, initialTo);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getSpcTrend({
+      from: trendWindow.from,
+      to: trendWindow.to,
+      shift,
+      ...selection,
+      metric,
+    })
+      .then((response) => {
+        if (!cancelled) setPoints(response?.points || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [metric, selection, shift, trendWindow.from, trendWindow.to]);
+
+  const chartPoints = aggregateSpcTrend(points, view);
+  const series = chartPoints.map((point) => Number(point.value));
+  const target = 1.33;
+  const current = series.at(-1) ?? null;
+  const baseline = series[0] ?? null;
+  const gap = current == null ? null : target - current;
+  const delta = current == null || baseline == null ? null : current - baseline;
+  const meetsTarget = current != null && current >= target;
+  const accent = meetsTarget ? C.gn : "#D18A00";
+
+  return (
+    <div
+      className="no-print"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        background: "rgba(15,23,42,.55)",
+      }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: "calc(100% - 40px)",
+          maxWidth: 1600,
+          maxHeight: "94vh",
+          overflow: "auto",
+          border: "1px solid " + C.bd,
+          borderRadius: 12,
+          background: C.cd,
+          boxShadow: "0 20px 60px rgba(0,0,0,.25)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 16,
+            padding: "20px 24px",
+            borderBottom: "1px solid " + C.bd,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                color: C.mu,
+                fontSize: 12,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: ".5px",
+              }}
+            >
+              Trend
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ color: C.tx, fontSize: 24, fontWeight: 750 }}>
+                {metric} — {selection.parameter}
+              </span>
+              {current != null && (
+                <>
+                  <span
+                    style={{
+                      padding: "3px 12px",
+                      borderRadius: 999,
+                      background: meetsTarget ? "#ECF8EF" : "#FFF6E8",
+                      color: accent,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {meetsTarget ? "On target" : "Watch"}
+                  </span>
+                  <span
+                    style={{
+                      padding: "3px 12px",
+                      borderRadius: 999,
+                      background: "#FFF8EC",
+                      color: "#C98500",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {gap > 0
+                      ? `gap ${gap.toFixed(2)} to target`
+                      : `${Math.abs(gap).toFixed(2)} above target`}
+                  </span>
+                </>
               )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close trend"
+            title="Close"
+            style={{
+              width: 38,
+              height: 38,
+              flex: "0 0 38px",
+              border: "1px solid " + C.bd,
+              borderRadius: 7,
+              background: C.c2,
+              color: C.mu,
+              cursor: "pointer",
+              fontSize: 25,
+              lineHeight: 1,
+            }}
+          >
+            {"×"}
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+            padding: "14px 24px",
+            borderBottom: "1px solid " + C.bd,
+          }}
+        >
+          <span
+            style={{
+              color: C.mu,
+              fontSize: 12,
+              fontWeight: 700,
+              textTransform: "uppercase",
+            }}
+          >
+            View
+          </span>
+          {[
+            ["daily", "Daily"],
+            ["monthly", "Monthly"],
+            ["yearly", "Yearly"],
+          ].map(([id, label]) => {
+            const active = view === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setView(id)}
+                style={{
+                  minWidth: 82,
+                  padding: "6px 16px",
+                  border: "1px solid " + (active ? C.bl : C.bd),
+                  borderRadius: 999,
+                  background: active ? "#EEF5FF" : C.c2,
+                  color: active ? C.bl : C.tx,
+                  fontFamily: "inherit",
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+          <span style={{ marginLeft: "auto", color: C.mu, fontSize: 12.5 }}>
+            {trendWindow.label}
+          </span>
+        </div>
+
+        <div style={{ padding: "18px 24px 22px", overflowX: "auto" }}>
+          {loading ? (
+            <QualityLoader minHeight={420} />
+          ) : error ? (
+            <div style={{ padding: 60, textAlign: "center", color: C.rd }}>
+              Trend fetch failed: {error.message || "Request failed"}
+            </div>
+          ) : !series.length ? (
+            <div style={{ padding: 60, textAlign: "center", color: C.mu }}>
+              No {metric} trend data for this date range.
+            </div>
+          ) : (
+            <>
+              <SPCCapabilityTrendChart
+                points={chartPoints}
+                target={target}
+                baseline={baseline}
+                view={view}
+                endDate={initialTo}
+              />
               <div
                 style={{
                   display: "flex",
-                  gap: 10,
-                  marginTop: 6,
-                  fontSize: 11.5,
-                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 22,
+                  flexWrap: "wrap",
+                  margin: "4px 0 18px",
+                  color: C.mu,
+                  fontSize: 12,
                 }}
               >
-                <span style={{ color: C.mu }}>
-                  Cp <b style={{ color: col }}>{w.cp ?? "—"}</b>
-                </span>
-                <span style={{ color: C.mu }}>
-                  Cpk <b style={{ color: col }}>{w.cpk ?? "—"}</b>
-                </span>
+                <TrendLegendItem color="#D18A00" label="Actual" />
+                <TrendLegendItem color="#D18A00" label="Target" dashed />
+                <TrendLegendItem color="#98A3B7" label="Baseline" dotted />
+                <TrendLegendItem color="#A9DAB5" label="Good zone" block />
               </div>
-            </div>
-          );
-        })}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+                  gap: 10,
+                }}
+              >
+                <TrendSummary label="Current" value={current.toFixed(2)} color={accent} />
+                <TrendSummary
+                  label="Target"
+                  value={target.toFixed(2)}
+                  note="higher is better"
+                  color="#D18A00"
+                />
+                <TrendSummary
+                  label="Vs baseline"
+                  value={`${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(3)}`}
+                  note={`from ${baseline.toFixed(3)}`}
+                  color={delta >= 0 ? C.gn : C.rd}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function LiveSPCDetail({ selection, date, shift, onBack }) {
+function TrendLegendItem({ color, label, dashed, dotted, block }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span
+        style={
+          block
+            ? { width: 14, height: 14, borderRadius: 2, background: color }
+            : {
+                width: 20,
+                height: 0,
+                borderTop: `2px ${dashed ? "dashed" : dotted ? "dotted" : "solid"} ${color}`,
+              }
+        }
+      />
+      {label}
+    </span>
+  );
+}
+
+function TrendSummary({ label, value, note, color }) {
+  return (
+    <div
+      style={{
+        minHeight: 74,
+        padding: "12px 16px",
+        border: "1px solid " + C.bd,
+        borderRadius: 8,
+        background: "#FAFBFD",
+      }}
+    >
+      <div
+        style={{
+          color: C.mu,
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: ".5px",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ color, fontSize: 23, fontWeight: 800, lineHeight: 1.2 }}>
+        {value}
+      </div>
+      {note && <div style={{ color: C.mu, fontSize: 12 }}>{note}</div>}
+    </div>
+  );
+}
+
+function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
   const [detail, setDetail] = useState(null);
+  const [trendMetric, setTrendMetric] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getSpcDetail({ date, shift, ...selection })
+    getSpcDetail({ date, from, to, shift, ...selection })
       .then((res) => {
         if (!cancelled) setDetail(res);
       })
@@ -15197,6 +16340,8 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
     };
   }, [
     date,
+    from,
+    to,
     shift,
     selection?.machine,
     selection?.recipe,
@@ -15219,6 +16364,8 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
   const cap = detail?.capability || {};
   const capCol = (v) =>
     v == null ? C.mu : v < 1 ? C.rd : v < 1.33 ? C.am : C.gn;
+  const snapshotDate = detail?.context?.snapshot_date;
+  const shiftSupported = detail?.context?.shift_supported;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div
@@ -15250,83 +16397,177 @@ function LiveSPCDetail({ selection, date, shift, onBack }) {
           </div>
           <div style={{ fontSize: 12, color: C.mu }}>
             {selection.machine + " · " + selection.recipe}
+            {from && to
+              ? ` · Average ${from} to ${to}`
+              : snapshotDate
+                ? ` · Snapshot ${snapshotDate}`
+                : ""}
+            {shiftSupported === false ? " · All shifts" : ""}
           </div>
         </div>
         <span style={{ marginLeft: "auto" }}>
           {loading ? (
-            "Fetching..."
+            <span style={{ fontSize: 11.5, color: C.mu, fontWeight: 700 }}>
+              Loading
+            </span>
           ) : (
-            <StatusPill
-              status={
-                cap.headline_status === "Critical"
-                  ? "Red"
-                  : cap.headline_status === "Warning"
-                    ? "Yellow"
-                    : cap.headline_status === "Healthy"
-                      ? "Green"
-                      : "Insufficient"
-              }
-            />
+            <StatusPill status={spcStatus(cap.headline_status).pill} />
           )}
         </span>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {["cp", "cpk", "pp", "ppk"].map((k) => {
-          const cell = cap[k] || {};
-          return (
-            <_SpcTile
-              key={k}
-              label={k.toUpperCase()}
-              val={loading ? "..." : (cell.value ?? "—")}
-              sub={cell.status || ""}
-              col={capCol(cell.value)}
-            />
-          );
-        })}
-        <_SpcTile
-          label="Sample"
-          val={loading ? "..." : (cap.sample_size ?? "—")}
-          sub="observations"
-          col={C.tx}
-        />
-      </div>
-      {detail?.insufficient ? (
-        <Card title="Insufficient Data" accent={C.am}>
-          <div style={{ fontSize: 13, color: C.md }}>
-            Sample size {detail.insufficient.sample_size ?? "—"} is below the
-            capability gate for live SPC charts.
+      {loading ? (
+        <QualityLoader minHeight={360} />
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["cp", "cpk", "pp", "ppk"].map((k) => {
+              const cell = cap[k] || {};
+              return (
+                <_SpcTile
+                  key={k}
+                  label={k.toUpperCase()}
+                  val={
+                    loading
+                      ? "..."
+                      : typeof cell.value === "number"
+                        ? cell.value.toFixed(2)
+                        : (cell.value ?? "—")
+                  }
+                  sub={cell.status || ""}
+                  col={capCol(cell.value)}
+                  onTrend={() => setTrendMetric(k[0].toUpperCase() + k.slice(1))}
+                />
+              );
+            })}
           </div>
-        </Card>
-      ) : null}
-      {detail?.x_chart && (
-        <LiveSpcChart
-          title="Interactive Process Control — X Chart with Nelson Rules"
-          chart={detail.x_chart}
-          accent={C.pp}
-        />
+          {detail?.insufficient ? (
+            <Card title="Insufficient Data" accent={C.am}>
+              <div style={{ fontSize: 13, color: C.md }}>
+                {detail.insufficient.reason
+                  ? detail.insufficient.reason[0].toUpperCase() +
+                    detail.insufficient.reason.slice(1) +
+                    "."
+                  : "No measurements available for this selection."}
+              </div>
+            </Card>
+          ) : null}
+          {detail?.x_chart && (
+            <LiveSpcChart
+              title="Interactive Process Control — X Chart with Nelson Rules"
+              chart={detail.x_chart}
+              accent={C.pp}
+            />
+          )}
+          {Array.isArray(detail?.alerts) && detail.alerts.length ? (
+            <LiveSpcAlerts alerts={detail.alerts} />
+          ) : null}
+          {detail?.r_chart && (
+            <LiveSpcChart
+              title="R Chart — subgroup range"
+              chart={detail.r_chart}
+              accent={C.pp}
+            />
+          )}
+          {detail?.histogram && <LiveHistogram histogram={detail.histogram} />}
+          {trendMetric && (
+            <SPCCapabilityTrendModal
+              selection={selection}
+              metric={trendMetric}
+              date={snapshotDate || date}
+              shift={shift}
+              onClose={() => setTrendMetric(null)}
+            />
+          )}
+        </>
       )}
-      {detail?.r_chart && (
-        <LiveSpcChart
-          title="R Chart — subgroup range"
-          chart={detail.r_chart}
-          accent={C.pp}
-        />
-      )}
-      {detail?.histogram && <LiveHistogram histogram={detail.histogram} />}
     </div>
   );
 }
 
-function SPCTab({ spcSel, setSpcSel, date, shift }) {
+function LiveSpcAlerts({ alerts }) {
+  const col = (severity) =>
+    severity === "Out of Control" ? C.rd : severity === "Warning" ? C.am : C.bl;
+  return (
+    <Card title="Nelson Rule Alert Feed" accent={C.pp}>
+      <div style={{ display: "grid", gap: 8 }}>
+        {alerts.slice(0, 12).map((a) => {
+          const color = col(a.severity);
+          return (
+            <div
+              key={a.alert_id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr auto",
+                gap: 10,
+                alignItems: "center",
+                padding: "9px 10px",
+                border: "1px solid " + color + "35",
+                borderRadius: 8,
+                background: color + "0D",
+              }}
+            >
+              <span
+                style={{
+                  minWidth: 34,
+                  textAlign: "center",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color,
+                }}
+              >
+                R{a.rule}
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: C.tx,
+                  }}
+                >
+                  {a.chart} chart · {a.severity}
+                </span>
+                <span style={{ display: "block", fontSize: 11.5, color: C.mu }}>
+                  Points {a.points?.first}
+                  {a.points?.last !== a.points?.first
+                    ? `-${a.points?.last}`
+                    : ""}{" "}
+                  · {a.time?.first || "time unavailable"}
+                  {a.time?.last && a.time.last !== a.time.first
+                    ? ` to ${a.time.last}`
+                    : ""}
+                </span>
+              </span>
+              <span style={{ fontSize: 11, color: C.mu, fontWeight: 700 }}>
+                {a.chart}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function SPCTab({ spcSel, setSpcSel, date, from, to, shift }) {
   return spcSel ? (
     <LiveSPCDetail
       selection={spcSel}
       date={date}
+      from={from}
+      to={to}
       shift={shift}
       onBack={() => setSpcSel(null)}
     />
   ) : (
-    <LiveSPCOverview date={date} shift={shift} onSelect={setSpcSel} />
+    <LiveSPCOverview
+      date={date}
+      from={from}
+      to={to}
+      shift={shift}
+      onSelect={setSpcSel}
+    />
   );
 }
 
@@ -15334,10 +16575,16 @@ export default function QualityDashboard({ plant, onBack }) {
   const [tab, setTab] = useState("process");
   const [openKpi, setOpenKpi] = useState(null);
   const [sub, setSub] = useState("");
-  const [tf, setTf] = useState("today");
+  const [tf, setTf] = useState("month");
   const [shift, setShift] = useState("All");
-  const [tfFrom, setTfFrom] = useState(QUALITY_DATA_DATE);
-  const [tfTo, setTfTo] = useState(QUALITY_DATA_DATE);
+  // Calendar-driven defaults in IST. Whatever the user picks in the dropdown
+  // (including months with no gold data — the cards will render NA) is what
+  // shows; we never pin to a hardcoded "data date". Default filter is the
+  // current calendar month.
+  const _defaultMonthRange = monthRangeFromKey(currentMonthKeyInIST());
+  const [tfFrom, setTfFrom] = useState(_defaultMonthRange.from);
+  const [tfTo, setTfTo] = useState(_defaultMonthRange.to);
+  const [tfMonth, setTfMonth] = useState(currentMonthKeyInIST());
   const [tyreType, setTyreType] = useState(
     isBanmorePlant(plant) ? "PCR" : "All",
   );
@@ -15346,12 +16593,25 @@ export default function QualityDashboard({ plant, onBack }) {
   // Live Process values from the Excel-backed backend (FRD §1). null until the
   // first fetch; {} on error keeps cards neutral instead of showing mock data.
   const [liveProcess, setLiveProcess] = useState(null);
+  const [processLoading, setProcessLoading] = useState(true);
   const [processSummary, setProcessSummary] = useState(null);
+  const processGranularity =
+    tf === "month" ? "MONTH" : tf === "year" ? "YEAR" : null;
+  const processDate = tf === "month" || tf === "year" ? tfFrom : tfTo;
+  // SPC is a single-day view only. Month and date-range controls are hidden
+  // while this tab is active, and all SPC API calls receive only `date`.
+  const spcFrom = null;
+  const spcTo = null;
 
   useEffect(() => {
     if (tab !== "process") return;
     let cancelled = false;
-    getProcessSummary({ date: tfTo, shift })
+    setProcessLoading(true);
+    getProcessSummary({
+      date: processDate,
+      shift,
+      granularity: processGranularity,
+    })
       .then((res) => {
         if (cancelled) return;
         setProcessSummary(res || null);
@@ -15367,11 +16627,14 @@ export default function QualityDashboard({ plant, onBack }) {
           setProcessSummary(null);
           setLiveProcess({});
         }
+      })
+      .finally(() => {
+        if (!cancelled) setProcessLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [tab, tfTo, shift]);
+  }, [tab, processDate, shift, processGranularity]);
 
   // Merge live overall values onto supported Process cards. KPI cards without
   // an API-backed value render as NA so the quality dashboard never shows dummy
@@ -15404,24 +16667,47 @@ export default function QualityDashboard({ plant, onBack }) {
           : complaintCards;
   const openObj = openKpi ? kpis.find((k) => k.id === openKpi) : null;
   const tabAccent = tab === "process" ? C.bl : tab === "product" ? C.tl : C.rd;
+  const bodyLoading = tab === "process" && processLoading;
 
   const toggle = (id) => {
     setOpenKpi(openKpi === id ? null : id);
     setSub("");
   };
-  const onHeaderPresetChange = (preset) => {
+  const onHeaderPresetChange = (payload) => {
+    // ProductionTimeRangeSelect passes `{ preset, from, to }` (object);
+    // accept either shape (string or object) so callers don't break.
+    const preset =
+      typeof payload === "string" ? payload : (payload?.preset ?? null);
+    const nextFrom = typeof payload === "object" ? (payload?.from ?? "") : "";
+    const nextTo = typeof payload === "object" ? (payload?.to ?? "") : "";
     setTf(preset);
     if (preset === "today") {
-      setTfFrom(QUALITY_DATA_DATE);
-      setTfTo(QUALITY_DATA_DATE);
+      const t = todayInIST();
+      setTfFrom(t);
+      setTfTo(t);
     } else if (preset === "month") {
-      setTfFrom(QUALITY_MONTH_FROM);
-      setTfTo(QUALITY_MONTH_TO);
+      // Current calendar month in IST, 1st → last day. UTC math is fine for
+      // day-count — every month has a stable number of days regardless of TZ.
+      const mk = currentMonthKeyInIST();
+      const [yStr, mStr] = mk.split("-");
+      const lastDay = new Date(
+        Date.UTC(Number(yStr), Number(mStr), 0),
+      ).getUTCDate();
+      const from = `${yStr}-${mStr}-01`;
+      const to = `${yStr}-${mStr}-${String(lastDay).padStart(2, "0")}`;
+      setTfFrom(from);
+      setTfTo(to);
+      setTfMonth(mk);
       setShift("All");
     } else if (preset === "year") {
-      setTfFrom("2026-01-01");
-      setTfTo("2026-12-31");
+      const r = currentYearRange();
+      setTfFrom(r.from);
+      setTfTo(r.to);
       setShift("All");
+    } else {
+      // Custom range (or null when the user opens the Date Range dialog).
+      if (nextFrom) setTfFrom(nextFrom);
+      if (nextTo) setTfTo(nextTo);
     }
   };
   const onHeaderFromChange = (value) => {
@@ -15434,253 +16720,260 @@ export default function QualityDashboard({ plant, onBack }) {
     setTfTo(value);
     setShift("All");
   };
+  const onHeaderDayChange = (value) => {
+    setTf("day");
+    setTfFrom(value);
+    setTfTo(value);
+  };
   const onHeaderShiftChange = (value) =>
     setShift(value === "all" ? "All" : String(value).toUpperCase());
+  const onHeaderMonthChange = (monthKey) => {
+    setTf("month");
+    const r = monthRangeFromKey(monthKey);
+    setTfFrom(r.from);
+    setTfTo(r.to);
+    setTfMonth(monthKey);
+    setShift("All");
+  };
+
+  // ── ProductionHeader wiring ──
+  // Map Quality's flat time-range state (tf, tfFrom, tfTo, tfMonth) to the
+  // shape ProductionHeader expects, and convert the shift label to lowercase.
+  const timeRangeForHeader = {
+    preset: typeof tf === "string" ? tf.toLowerCase() : null,
+    from: tfFrom,
+    to: tfTo,
+    month: tfMonth,
+  };
+  const headerShift = typeof shift === "string" ? shift.toLowerCase() : "all";
+  const onHeaderExport = () => {
+    // Quality uses the print-page path for export (matches the inline
+    // ExportButton behaviour). Production uses html2canvas; either way the
+    // user expects a PDF download.
+    try {
+      window.print?.();
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
+
+  // Sub-tab items rendered in the header's Row 2 (where dept tabs go on
+  // production). The active tab is the current Quality sub-section.
+  const subTabItems = [
+    { id: "process", label: "Process", accent: C.bl },
+    { id: "product", label: "Product", accent: C.tl, enabled: false },
+    {
+      id: "complaint",
+      label: "Customer Complaint",
+      accent: C.rd,
+      enabled: false,
+    },
+    { id: "spc", label: "SPC", accent: C.pp },
+  ];
+  const onSubTabChange = (id) => {
+    // SPC is a one-day view; any range carried in from Process falls back to
+    // Today when the user enters the tab.
+    if (id === "spc" && tf !== "today" && tf !== "day") {
+      onHeaderPresetChange("today");
+    }
+    setTab(id);
+    setOpenKpi(null);
+    setSub("");
+  };
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         minHeight: "100vh",
-        background: C.bg,
-        fontFamily: "'IBM Plex Sans',system-ui,sans-serif",
-        color: C.tx,
-        fontSize: 16,
+        backgroundColor: "background.default",
+        color: "text.primary",
+        fontFamily:
+          'Montserrat, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
       }}
     >
       <PrintStyles />
-      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
-      {/* Header */}
-      <div
-        style={{
-          background: C.cd,
-          borderBottom: "1px solid " + C.bd,
-          padding: "0 20px",
-          height: 64,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          boxShadow: "0 1px 4px rgba(0,0,0,.04)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <button
-            onClick={onBack}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: "1px solid " + C.bd,
-              background: C.c2,
-              color: C.mu,
-              fontSize: 18,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {"←"}
-          </button>
-          <img
-            src={LOGO}
-            alt="JK Tyre"
-            style={{
-              height: 28,
-              width: "auto",
-              objectFit: "contain",
-              display: "block",
-            }}
-          />
-          <div style={{ width: 1, height: 40, background: C.bd }} />
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>One Factory</div>
-            <div
-              style={{
-                fontSize: 11,
-                color: C.mu,
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                marginTop: 1,
-              }}
-            >
-              Quality Head Dashboard
-            </div>
-          </div>
-          <span
-            style={{
-              fontSize: 13,
-              color: C.tl,
-              fontWeight: 700,
-              background: C.tl + "18",
-              padding: "3px 10px",
-              borderRadius: 8,
-              marginLeft: 4,
-            }}
-          >
-            {plant ? plant.name.split(" ")[0].toUpperCase() : "BTP"}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <ProductionTimeRangeSelect
-            preset={tf}
-            onPresetChange={onHeaderPresetChange}
-            from={tfFrom}
-            to={tfTo}
-            onFromChange={onHeaderFromChange}
-            onToChange={onHeaderToChange}
-            shift={shift === "All" ? "all" : shift.toLowerCase()}
-            onShiftChange={onHeaderShiftChange}
-          />
-          <PcrOnlyBadge />
-          <ExportButton />
-          <SharedUserMenu user={QUALITY_USER} size={32} />
-        </div>
-      </div>
 
-      {/* Tab Navigation */}
-      <div
-        style={{
-          background: C.cd,
-          borderBottom: "1px solid " + C.bd,
-          padding: "0 16px",
-          display: "flex",
-          alignItems: "center",
-          position: "sticky",
-          top: 64,
-          zIndex: 99,
+      {/* Production-style top header — Row 1 brand + plant pill + avatar,
+          Row 2 dept tabs + tyre type + time range + export. The dept tabs
+          are wired to navigate between Banmore dashboards; Quality is the
+          active one. */}
+      <ProductionHeader
+        plant={plant}
+        timeRange={timeRangeForHeader}
+        onTimeRangeChange={(updater) => {
+          const next =
+            typeof updater === "function"
+              ? updater(timeRangeForHeader)
+              : updater;
+          // Map the production-shape update back into Quality's flat state.
+          // ProductionHeader's month-dropdown click sends
+          // { preset: "month", month: "2026-07" } — that hits this branch
+          // FIRST so the user's pick reaches onHeaderMonthChange (which sets
+          // tfFrom/tfTo/tfMonth from monthRangeFromKey) instead of
+          // onHeaderPresetChange (which would hard-reset to the as-of month).
+          if (next?.month !== undefined && next.preset === "month") {
+            onHeaderMonthChange(next.month);
+          } else if (next?.preset !== undefined) {
+            onHeaderPresetChange({
+              preset: next.preset,
+              from: next.from ?? "",
+              to: next.to ?? "",
+            });
+          } else if (next?.from) {
+            onHeaderFromChange(next.from);
+          } else if (next?.to) {
+            onHeaderToChange(next.to);
+          }
         }}
-      >
-        {[
-          { id: "process", n: "Process", i: "⚙" },
-          { id: "product", n: "Product", i: "◆" },
-          { id: "complaint", n: "Customer Complaint", i: "⚠" },
-          { id: "spc", n: "SPC", i: "∿" },
-        ].map((t) => {
-          const a = tab === t.id;
-          const tc =
-            t.id === "process"
-              ? C.bl
-              : t.id === "product"
-                ? C.tl
-                : t.id === "complaint"
-                  ? C.rd
-                  : C.pp;
-          return (
-            <button
-              key={t.id}
-              onClick={() => {
-                setTab(t.id);
-                setOpenKpi(null);
-                setSub("");
-              }}
-              style={{
-                padding: "12px 18px",
-                border: "none",
-                borderBottom: a ? "2px solid " + tc : "2px solid transparent",
-                background: "transparent",
-                fontSize: 14,
-                fontWeight: a ? 700 : 500,
-                color: a ? tc : C.mu,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              {t.n}
-            </button>
-          );
-        })}
-        <div style={{ flex: 1 }} />
-      </div>
+        shift={headerShift}
+        onShiftChange={onHeaderShiftChange}
+        onExport={onHeaderExport}
+        asOf={null}
+        lastUpdatedAt={null}
+        categoryTabs={subTabItems.map((t) => ({
+          id: t.id,
+          label: t.label,
+          enabled: t.enabled,
+        }))}
+        activeCategory={tab}
+        onCategoryChange={onSubTabChange}
+        tyreTypes={[]}
+        tyreType={tyreType}
+        onTyreTypeChange={setTyreType}
+        hiddenPresets={tab === "spc" ? ["month", "range"] : []}
+        singleDay={tab === "spc" ? processDate : null}
+        onSingleDayChange={tab === "spc" ? onHeaderDayChange : undefined}
+      />
 
       {/* Main content */}
-      <div
-        style={{
-          padding: "16px 20px 40px",
+      <Box
+        sx={{
+          px: { xs: 2, md: 3 },
+          py: 2,
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: 2,
         }}
       >
-        {/* KPI Grid */}
-        <TyreTypeBanner tt={tyreType} plant={plant} />
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-            gap: 8,
-          }}
-        >
-          {kpis.map((k) => (
-            <QKpiCard
-              key={k.id}
-              kpi={k}
-              isOpen={openKpi === k.id}
-              onToggle={() => k.drill && toggle(k.id)}
-              onTrend={setTrendKpi}
-              tyreType={tyreType}
-              plant={plant}
-            />
-          ))}
-        </div>
-
-        {/* SPC tab */}
-        {tab === "spc" && (
-          <SPCTab
-            spcSel={spcSel}
-            setSpcSel={setSpcSel}
-            date={tfTo}
-            shift={shift}
-          />
-        )}
-
-        {/* Drill panel */}
-        {openObj && (
-          <div style={{ animation: "fadeIn .2s ease" }}>
-            {tab === "process" && (
-              <ProcessDrillPanel
-                kpi={openObj}
-                sub={sub}
-                setSub={setSub}
-                date={tfTo}
-                shift={shift}
-                processSummary={processSummary}
-                onOpenSPC={(mc) => {
-                  setTab("spc");
-                  setSpcSel(mc);
-                  setOpenKpi(null);
-                  setSub("");
+        {bodyLoading ? (
+          <QualityLoader minHeight="calc(100vh - 220px)" />
+        ) : (
+          <>
+            <TyreTypeBanner tt={tyreType} plant={plant} />
+            {tab === "spc" ? (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <SPCTab
+                  spcSel={spcSel}
+                  setSpcSel={setSpcSel}
+                  date={processDate}
+                  from={spcFrom}
+                  to={spcTo}
+                  shift={shift}
+                />
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: {
+                    xs: "column",
+                    lg: openObj ? "row" : "column",
+                  },
+                  gap: 2,
+                  alignItems: "flex-start",
+                  width: "100%",
+                  transition: "all .3s ease",
                 }}
-              />
+              >
+                <Box
+                  sx={{
+                    display: "grid",
+                    gap: 2,
+                    width: openObj ? { xs: "100%", lg: "340px" } : "100%",
+                    flex: openObj ? "0 0 340px" : "1 1 auto",
+                    gridTemplateColumns: openObj
+                      ? "1fr"
+                      : {
+                          xs: "1fr",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                          md: "repeat(4, minmax(0, 1fr))",
+                        },
+                    transition: "all .3s ease",
+                  }}
+                >
+                  {kpis.map((k) => (
+                    <QKpiCard
+                      key={k.id}
+                      kpi={k}
+                      isOpen={openKpi === k.id}
+                      onToggle={() => k.drill && toggle(k.id)}
+                      onTrend={setTrendKpi}
+                      tyreType={tyreType}
+                      plant={plant}
+                    />
+                  ))}
+                </Box>
+
+                {openObj && (
+                  <Box
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      width: "100%",
+                      pt: { xs: 0, lg: 0 },
+                      animation: "fadeIn .3s ease",
+                    }}
+                  >
+                    {tab === "process" && (
+                      <ProcessDrillPanel
+                        kpi={openObj}
+                        sub={sub}
+                        setSub={setSub}
+                        date={processDate}
+                        shift={shift}
+                        granularity={processGranularity}
+                        processSummary={processSummary}
+                        onOpenSPC={(mc) => {
+                          setTab("spc");
+                          setSpcSel(mc);
+                          setOpenKpi(null);
+                          setSub("");
+                        }}
+                      />
+                    )}
+                    {tab === "product" && (
+                      <ProductDrillPanel
+                        kpi={openObj}
+                        sub={sub}
+                        setSub={setSub}
+                        tyreType={tyreType}
+                        plant={plant}
+                      />
+                    )}
+                    {tab === "complaint" && (
+                      <ComplaintDrillPanel
+                        kpi={openObj}
+                        sub={sub}
+                        setSub={setSub}
+                      />
+                    )}
+                  </Box>
+                )}
+              </Box>
             )}
-            {tab === "product" && (
-              <ProductDrillPanel
-                kpi={openObj}
-                sub={sub}
-                setSub={setSub}
-                tyreType={tyreType}
-                plant={plant}
-              />
-            )}
-            {tab === "complaint" && (
-              <ComplaintDrillPanel kpi={openObj} sub={sub} setSub={setSub} />
-            )}
-          </div>
+          </>
         )}
-      </div>
+      </Box>
       {trendKpi && trendKpi.trendApi && (
         <LiveProcessTrendPanel
           kpi={trendKpi}
           onClose={() => setTrendKpi(null)}
           dateFrom={tfFrom}
-          dateTo={tfTo}
+          dateTo={processGranularity ? processDate : tfTo}
           shift={shift}
+          granularity={processGranularity}
         />
       )}
-    </div>
+    </Box>
   );
 }

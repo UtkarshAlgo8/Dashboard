@@ -2,11 +2,11 @@ import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
+import { goldSource } from "../queries/gold-source.js";
 import {
   plantDepartmentPredicate,
   normalizePlantId,
   plantScope,
-  plantSqlTable,
   excludeUnknownKpiPredicate,
   normalizeGranularity,
   DEFAULT_GRANULARITY,
@@ -26,17 +26,24 @@ function isoToYmd(iso) {
 }
 
 /**
- * SQL fragment restricting the date column to the selected [from, to] window
- * (either bound optional). Empty string when no window is given, so the caller
+ * Resolve the selected [from, to] window (either bound optional) to
+ * YYYYMMDD keys, for both the SQL clamp below and goldSource's table
+ * resolution.
+ */
+function windowKeys(from, to) {
+  return { fromKey: isoToYmd(from), toKey: isoToYmd(to) };
+}
+
+/**
+ * SQL fragment restricting the date column to [fromKey, toKey] (either
+ * bound optional). Empty string when no window is given, so the caller
  * falls back to "latest overall". Lets the OEE endpoints track the chosen
  * month instead of always showing the newest row.
  */
-function dateWindowSql(from, to) {
-  const f = isoToYmd(from);
-  const t = isoToYmd(to);
+function dateWindowSql(fromKey, toKey) {
   const parts = [];
-  if (f) parts.push(`${DATE_YYYYMMDD} >= '${f}'`);
-  if (t) parts.push(`${DATE_YYYYMMDD} <= '${t}'`);
+  if (fromKey) parts.push(`${DATE_YYYYMMDD} >= '${fromKey}'`);
+  if (toKey) parts.push(`${DATE_YYYYMMDD} <= '${toKey}'`);
   return parts.length ? ` AND ${parts.join(" AND ")}` : "";
 }
 
@@ -87,7 +94,9 @@ export async function getSummary(req, res, next) {
   const key = buildCacheKey(`/plants/${req.params.plantId}/summary`, req.query);
   // Scope the headline figures to the selected window (from/to) so the plant
   // card tracks the chosen month; absent → latest overall.
-  const windowSql = dateWindowSql(req.query.from, req.query.to);
+  const { fromKey, toKey } = windowKeys(req.query.from, req.query.to);
+  const windowSql = dateWindowSql(fromKey, toKey);
+  const table = goldSource({ plantId: req.plantId, fromKey, toKey });
   try {
     const data = await cached(key, async () => {
       // Real KPI names (realdata.md §9): the plain "OEE" is gone — Banmore
@@ -104,7 +113,7 @@ export async function getSummary(req, res, next) {
                    PARTITION BY kpi_name
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
-          FROM ${plantSqlTable(req.plantId)}
+          FROM ${table}
           WHERE ${coreFilter(req.plantId)}
             AND (machine IS NULL OR machine = 'nan')
             AND kpi_name IN (
@@ -140,7 +149,7 @@ export async function getSummary(req, res, next) {
                  ROW_NUMBER() OVER (
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
-          FROM ${plantSqlTable(req.plantId)}
+          FROM ${table}
           WHERE ${coreFilter(req.plantId)}
             AND kpi_name = ${escapeLiteral("OEE_p")}
             AND ${emptyColumnPredicate("machine")}
@@ -174,7 +183,7 @@ export async function getAsOf(req, res, next) {
     const data = await cached(key, async () => {
       const sql = `
         SELECT MAX(${DATE_YYYYMMDD}) AS d
-        FROM ${plantSqlTable(req.plantId)}
+        FROM ${goldSource({ plantId: req.plantId, fromKey: null, toKey: null })}
         WHERE ${coreFilter(req.plantId)} AND kpi_name = 'Production'
       `.trim();
       const rows = await runQuery(sql);
@@ -222,7 +231,9 @@ export async function getSectionOee(req, res, next) {
     to,
   });
   // Scope to the selected window so the rings track the chosen month.
-  const windowSql = dateWindowSql(from, to);
+  const { fromKey, toKey } = windowKeys(from, to);
+  const windowSql = dateWindowSql(fromKey, toKey);
+  const table = goldSource({ plantId: req.plantId, fromKey, toKey });
   try {
     const data = await cached(key, async () => {
       // changes.md §2: the left section column shows each section's OVERALL
@@ -243,7 +254,7 @@ export async function getSectionOee(req, res, next) {
                    PARTITION BY section, kpi_name
                    ORDER BY ${DATE_YYYYMMDD} DESC
                  ) AS rn
-          FROM ${plantSqlTable(req.plantId)}
+          FROM ${table}
           WHERE ${coreFilter(req.plantId)}
             AND kpi_name IN (${kpiList})
             AND ${emptyColumnPredicate("machine")}

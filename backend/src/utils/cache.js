@@ -38,6 +38,8 @@ export const CACHE_TTL = {
   AS_OF: 15 * 60 * 1000,
   STATIC_LOOKUPS: 30 * 60 * 1000,
   QUALITY_PROCESS: 5 * 60 * 1000,
+  ENGINEERING_RELIABILITY: 5 * 60 * 1000,
+  INVENTORY_MASTER: 5 * 60 * 1000,
 };
 
 const stats = {

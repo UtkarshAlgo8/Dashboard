@@ -214,6 +214,313 @@ export function toInventory(rows) {
   return { groups, history };
 }
 
+// CTP inventory master — KPI → FE mapping per docs/Inventory_Mapping_Final.xlsx
+// (validated against gold, category = 'Inventory').
+//
+// Gold carries one row per (section, product_type, itemcode, tyre_type,
+// kpi_name):
+//   drill_down_level 1 (cards):      Total_Inventory, MHE_Count
+//   drill_down_level 2 (breakdowns): Ready_To_Use, Held, Expired, Part_Use,
+//     About_To_Expire, Daily_Consumption, Oldest_Blocked_Lot_Days
+// Total_Inventory = Ready_To_Use + Part_Use + About_To_Expire + Expired +
+// Held, so the five status KPIs partition the stock. Real lots (lot_id,
+// mhe_code, production_date) are not KPI values, so the master payload
+// consumed by `frontend/src/lib/ctpInventory.js#buildCtpInventoryModel`
+// gets one synthetic lot per (item, status) carrying that status's qty,
+// and `data_limits` says which facets are real vs synthesised.
+
+const CTP_SECTION_ACCENT = {
+  Mixing: "ac",
+  Stock: "tl",
+  "Tyre Building": "bl",
+};
+
+// status_master — the five gold status KPIs. `label` is the status chip,
+// `column` the grid column header (mapping sheet "KPI to FE card").
+// Only Ready_To_Use is `usable`: Days cover = Ready_To_Use /
+// Daily_Consumption. Part_Use / About_To_Expire have no column in the
+// mapping yet; they stay as columns so the grid still sums to Total.
+const CTP_STATUS_MASTER = [
+  { key: "READY", label: "Ready to Use", column: "Usable", color: "gn", source_field: "status", source_value: "Ready to Use", gold_metric: "Ready_To_Use", usable: true, blocked: false },
+  { key: "PART", label: "Part Use", column: "Part use", color: "bl", source_field: "status", source_value: "Part Use", gold_metric: "Part_Use", usable: false, blocked: false },
+  { key: "ATE", label: "About to Expire", column: "About to expire", color: "am", source_field: "status", source_value: "About_To_Expire", gold_metric: "About_To_Expire", usable: false, blocked: false },
+  { key: "EXP", label: "Banned to Use", column: "Banned", color: "rd", source_field: "status", source_value: "Expired", gold_metric: "Expired", usable: false, blocked: true },
+  { key: "HOLD", label: "Hold", column: "Hold", color: "pp", source_field: "status", source_value: "Held", gold_metric: "Held", usable: false, blocked: true },
+];
+
+// insight_cards — config for the four insight tiles at the top of the
+// page. Same shape as the mock so the page renders identical tiles.
+const CTP_INSIGHT_CARDS = [
+  { id: "short_cover", title: "Categories Under 1 Day Cover", type: "cover_below", threshold_days: 1, color: "rd" },
+  { id: "on_hold", title: "On Hold", type: "status_qty", status: "HOLD", color: "pp" },
+  { id: "expired", title: "Banned to Use", type: "status_qty", status: "EXP", color: "rd" },
+  { id: "oldest_blocked", title: "Oldest Blocked Lot", type: "oldest_blocked", warn_days: 3, color: "am" },
+];
+
+const CTP_TABLE = { default_sort: { key: "READY", dir: "desc" }, top_n: 10 };
+
+const CTP_UOM_DISPLAY = { MTR: "m", KG: "kg", NOS: "nos" };
+
+const CTP_METRICS = [
+  { kpi_name: "Total_Inventory", ui_expr: "SUM(lots.quantity)", grain: "lot", gold: "Total_Inventory" },
+  { kpi_name: "MHE_Count", ui_expr: "COUNT(DISTINCT lots.mhe_code)", grain: "lot", gold: "MHE_Count" },
+  { kpi_name: "Days_Cover", ui_expr: "SUM(quantity WHERE status.usable) / SUM(items.daily_consumption)", grain: "item|product_type", gold: "Ready_To_Use / Daily_Consumption" },
+  { kpi_name: "Oldest_Blocked_Lot", ui_expr: "MAX(age_days WHERE status.blocked)", gold: "MAX(Oldest_Blocked_Lot_Days)" },
+];
+
+const CTP_GOLD_METRIC_REFERENCE = [
+  { kpi_name: "Total_Inventory", drill_down_level: 1, gold_expr: "Ready_To_Use + Part_Use + About_To_Expire + Expired + Held" },
+  { kpi_name: "MHE_Count", drill_down_level: 1, gold_expr: "COUNT(DISTINCT mhe_code)" },
+  { kpi_name: "Ready_To_Use", drill_down_level: 2, gold_expr: "qty with status Ready To Use" },
+  { kpi_name: "Held", drill_down_level: 2, gold_expr: "qty on hold" },
+  { kpi_name: "Expired", drill_down_level: 2, gold_expr: "qty expired (banned to use)" },
+  { kpi_name: "Part_Use", drill_down_level: 2, gold_expr: "qty in partially consumed MHEs" },
+  { kpi_name: "About_To_Expire", drill_down_level: 2, gold_expr: "qty about to expire" },
+  { kpi_name: "Daily_Consumption", drill_down_level: 2, gold_expr: "daily consumption rate" },
+  { kpi_name: "Oldest_Blocked_Lot_Days", drill_down_level: 2, gold_expr: "age of oldest blocked lot, days" },
+];
+
+const IST_OFFSET_MIN = 5 * 60 + 30;
+
+/**
+ * YYYYMMDD key for a row date — UTC-relative to the IST offset already
+ * applied in sql-date.js. We avoid the offset here (the column is already
+ * an ISO date) and just emit YYYYMMDD for sorting.
+ */
+function yyyymmdd(dateStr) {
+  const k = dateKey(dateStr);
+  return k || null;
+}
+
+/**
+ * Format `YYYYMMDD` as `YYYY-MM-DDTHH:mm:ss+05:30` (Asia/Kolkata), the
+ * shape `as_of` carries in the bundled mock.
+ */
+function asOfIst(yyyymmddStr) {
+  if (!yyyymmddStr || yyyymmddStr.length !== 8) return null;
+  return `${yyyymmddStr.slice(0, 4)}-${yyyymmddStr.slice(4, 6)}-${yyyymmddStr.slice(6, 8)}T06:00:00+05:30`;
+}
+
+/** Status key → gold kpi_name holding that status's quantity. */
+const CTP_STATUS_KPI = Object.fromEntries(
+  CTP_STATUS_MASTER.map((s) => [s.key, s.gold_metric]),
+);
+
+const CTP_TOTAL_KPI = "Total_Inventory";
+const CTP_MHE_KPI = "MHE_Count";
+const CTP_CONSUMPTION_KPI = "Daily_Consumption";
+const CTP_OLDEST_BLOCKED_KPI = "Oldest_Blocked_Lot_Days";
+
+/** Card KPIs, read at drill_down_level 1; every other KPI is level 2. */
+export const CTP_CARD_KPIS = [CTP_TOTAL_KPI, CTP_MHE_KPI];
+
+/** Every kpi_name the CTP inventory master reads. */
+export const CTP_INVENTORY_KPIS = [
+  ...CTP_CARD_KPIS,
+  ...Object.values(CTP_STATUS_KPI),
+  CTP_CONSUMPTION_KPI,
+  CTP_OLDEST_BLOCKED_KPI,
+];
+
+/**
+ * Collapse gold rows to one entry per item, holding the value of each
+ * inventory KPI. A repeated (item, kpi) keeps its latest date — values
+ * are never summed, since inventory is a level, not a flow.
+ */
+function ctpItemsFromRows(rows) {
+  const items = new Map();
+  let maxDate = "";
+  for (const r of rows) {
+    if (!CTP_INVENTORY_KPIS.includes(r.kpi_name)) continue;
+    const sec = denan(r.section);
+    const pt = productType(r.product_type);
+    const code = denan(r.itemcode);
+    const k = dateKey(r.date);
+    if (!sec || !pt || !code || !k) continue;
+    if (k > maxDate) maxDate = k;
+    const tt = denan(r.tyre_type) || "";
+    const key = `${sec}|${pt}|${code}|${tt}`;
+    let it = items.get(key);
+    if (!it) {
+      it = {
+        section: sec,
+        sub_section: subSection(r.sub_section) || "",
+        product_type: pt,
+        itemcode: code,
+        tyre_type: tt,
+        unit: "",
+        kpis: {},
+      };
+      items.set(key, it);
+    }
+    if (!it.unit) it.unit = unit(r.unit_of_measurement) || "";
+    const prev = it.kpis[r.kpi_name];
+    if (!prev || k > prev.date) {
+      it.kpis[r.kpi_name] = { date: k, value: numOrNull(r.actual_value) ?? 0 };
+    }
+  }
+  return { items: [...items.values()], maxDate };
+}
+
+function kpiValue(it, kpiName) {
+  return it.kpis[kpiName]?.value ?? 0;
+}
+
+/** One synthetic lot per status with a positive quantity. */
+function ctpLotsForItem(it, date) {
+  const age = numOrNull(it.kpis[CTP_OLDEST_BLOCKED_KPI]?.value);
+  return CTP_STATUS_MASTER.filter((s) => kpiValue(it, s.gold_metric) > 0).map(
+    (s) => ({
+      lot_id: `SYN-${it.itemcode}-${s.key}-${date || "00000000"}`,
+      status: s.key,
+      mhe_code: null,
+      production_date: null,
+      // Oldest_Blocked_Lot_Days is per item; only blocked lots carry it.
+      age_days: s.blocked ? age : null,
+      expiry_date: null,
+      quantity: kpiValue(it, s.gold_metric),
+    }),
+  );
+}
+
+/**
+ * Build the CTP inventory master payload from gold rows.
+ *
+ * Pure: no network, no clock. Rows collapse to one entry per item; each
+ * item gets one synthetic lot per status (Ready_To_Use → READY, Part_Use
+ * → PART, About_To_Expire → ATE, Expired → EXP, Held → HOLD), its
+ * Daily_Consumption as daily_consumption, and Oldest_Blocked_Lot_Days as
+ * the age of its blocked lots. Sections absent from the input are omitted.
+ *
+ * @param {Array<object>} rows - gold rows with category='Inventory' and
+ *   kpi_name in CTP_INVENTORY_KPIS. Expected columns: date, section,
+ *   sub_section, product_type, itemcode, tyre_type, unit_of_measurement,
+ *   kpi_name, actual_value (one latest-dated row per series).
+ * @returns {object} master payload matching the contract in
+ *   `frontend/src/lib/ctpInventory.js#buildCtpInventoryModel`.
+ */
+export function toCtpInventoryMaster(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const { items, maxDate } = ctpItemsFromRows(list);
+
+  // Nest: section → product_type → item.
+  const sectionMap = new Map();
+  for (const it of items) {
+    if (!sectionMap.has(it.section)) sectionMap.set(it.section, new Map());
+    const ptMap = sectionMap.get(it.section);
+    if (!ptMap.has(it.product_type)) {
+      ptMap.set(it.product_type, {
+        name: it.product_type,
+        sub_section: it.sub_section,
+        tyre_type: it.tyre_type,
+        uom: it.unit,
+        items: [],
+      });
+    }
+    const ptEntry = ptMap.get(it.product_type);
+    // Prefer a non-empty uom on the product_type when the first row was empty.
+    if (!ptEntry.uom && it.unit) ptEntry.uom = it.unit;
+    ptEntry.items.push(it);
+  }
+
+  // Emit sections in stable order: Mixing, Stock, Tyre Building (the only
+  // three the page knows about) — any other section appears at the end in
+  // case ETL ever adds one. Each section's accent comes from the same map
+  // the mock uses.
+  const SECTION_ORDER = ["Mixing", "Stock", "Tyre Building"];
+  const sectionNames = [
+    ...SECTION_ORDER.filter((s) => sectionMap.has(s)),
+    ...[...sectionMap.keys()].filter((s) => !SECTION_ORDER.includes(s)).sort(),
+  ];
+
+  let totalLots = 0;
+  let totalGold = 0;
+  let totalMhe = 0;
+  let mismatched = 0;
+
+  const sections = sectionNames.map((secName) => {
+    const ptMap = sectionMap.get(secName);
+    const productTypes = [...ptMap.keys()].sort().map((ptName) => {
+      const pt = ptMap.get(ptName);
+      const ptItems = pt.items
+        .sort(
+          (a, b) =>
+            a.itemcode.localeCompare(b.itemcode) ||
+            a.tyre_type.localeCompare(b.tyre_type),
+        )
+        .map((it) => {
+          const lots = ctpLotsForItem(it, maxDate);
+          const lotQty = lots.reduce((a, l) => a + l.quantity, 0);
+          const goldTotal = kpiValue(it, CTP_TOTAL_KPI);
+          totalLots += lots.length;
+          totalGold += goldTotal;
+          totalMhe += kpiValue(it, CTP_MHE_KPI);
+          if (it.kpis[CTP_TOTAL_KPI] && Math.abs(goldTotal - lotQty) > 1e-6) {
+            mismatched += 1;
+          }
+          return {
+            item_code: it.itemcode,
+            uom: it.unit,
+            tyre_type: it.tyre_type,
+            daily_consumption: kpiValue(it, CTP_CONSUMPTION_KPI),
+            lots,
+          };
+        });
+      return {
+        name: pt.name,
+        source_name: pt.name,
+        tyre_type: pt.tyre_type,
+        sub_section: pt.sub_section,
+        uom: pt.uom,
+        shelf_life_days: 0,
+        mapping_source: "gold.ctp_gold",
+        gold_kpi_groups: ["inventory_stock"],
+        items: ptItems,
+      };
+    });
+    return {
+      name: secName,
+      source_codes: [secName],
+      accent: CTP_SECTION_ACCENT[secName] || "tl",
+      product_types: productTypes,
+    };
+  });
+
+  return {
+    schema_version: "1.0.0",
+    plant: "Chennai",
+    plant_id: "chennai",
+    function: "Production",
+    navigation: "Inventory",
+    as_of: asOfIst(maxDate),
+    data_origin: "gold.ctp_gold per-status Inventory KPIs; lots synthesised per (item, status) — see data_limits",
+    data_limits: {
+      sections_populated: sections.map((s) => s.name),
+      sections_absent: SECTION_ORDER.filter((s) => !sectionMap.has(s)),
+      lot_synthesis: "one lot per (item, status) from the per-status KPIs",
+      // MHE_Count is per item with no mhe codes, so the page's
+      // COUNT(DISTINCT mhe_code) cannot be reproduced; total is below.
+      mhe_count: "validation.expected_mhe_count only",
+      oldest_blocked_age: CTP_OLDEST_BLOCKED_KPI,
+      daily_consumption: CTP_CONSUMPTION_KPI,
+      items_total_mismatch: mismatched,
+    },
+    status_master: CTP_STATUS_MASTER,
+    metrics: CTP_METRICS,
+    gold_metric_reference: CTP_GOLD_METRIC_REFERENCE,
+    insight_cards: CTP_INSIGHT_CARDS,
+    table: CTP_TABLE,
+    uom_display: CTP_UOM_DISPLAY,
+    validation: {
+      expected_total_inventory: totalGold,
+      expected_mhe_count: totalMhe,
+      lots: totalLots,
+      items: items.length,
+    },
+    sections,
+  };
+}
+
 /**
  * Parse the `drill_down_attribute` column into a real array of child KPI
  * names. The real data stores a Python-style SINGLE-quoted list

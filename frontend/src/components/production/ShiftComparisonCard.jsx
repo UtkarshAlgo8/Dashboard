@@ -29,6 +29,7 @@ function useShiftBands({
   category,
   section,
   subSection,
+  tyreType = null,
   isRange,
   date,
   from,
@@ -40,6 +41,7 @@ function useShiftBands({
     section,
     category,
     ...(subSection ? { subSection } : {}),
+    ...(tyreType ? { tyreType } : {}),
     ...buildDatePayload(isRange ? { from, to } : { date }),
     extraKpis,
     parentFilters: {},
@@ -133,6 +135,7 @@ function useDayProduction({
   plantId = "banmore",
   section,
   subSection = null,
+  tyreType = null,
   productType = null,
   unit = null,
   isRange,
@@ -146,6 +149,7 @@ function useDayProduction({
     context: {
       section,
       ...(subSection ? { sub_section: subSection } : {}),
+      ...(tyreType ? { tyre_type: tyreType } : {}),
       ...(productType ? { product_type: productType } : {}),
       ...(unit ? { unit_of_measurement: unit } : {}),
       granularity: "DAY",
@@ -178,17 +182,30 @@ function useDayProduction({
   // table can carry duplicate DAY roll-ups at different drill_down_level
   // values; the dashboard's own snapshot mode picks one — we mirror that by
   // taking the most recent row in the response (server orders DESC).
-  const match = rows.find(
+  const matches = rows.filter(
     (r) =>
       r.granularity === "DAY" &&
       (!r.section || r.section === section) &&
       (!productType || r.product_type === productType) &&
       (!unit || canonicalUnit(r.unit_of_measurement) === canonicalUnit(unit)),
   );
-  return {
-    value: match ? numOrNull(match.actual_value) : null,
-    isLoading,
-  };
+  const match = matches[0];
+  // CTP stores the day once per trench and tyre line (Curing 2026-10-06:
+  // 3 PCR + 3 TBR rows), so the first row was one trench of one line. Sum
+  // that newest day's rows, as the shift stems beside it already do.
+  const value =
+    plantId === "chennai" && match
+      ? sumDayRows(matches, dateKey(match.date))
+      : match
+        ? numOrNull(match.actual_value)
+        : null;
+  return { value, isLoading };
+}
+
+function sumDayRows(rows, dayKey) {
+  return rows
+    .filter((r) => dateKey(r.date) === dayKey)
+    .reduce((sum, r) => sum + (numOrNull(r.actual_value) ?? 0), 0);
 }
 
 /**
@@ -201,6 +218,8 @@ export default function ShiftComparisonCard({
   plantId = "banmore",
   section = "Curing",
   subSection = null,
+  // The header's tyre line (null / "All" = both lines).
+  tyreType = null,
   productType = null,
   unit = null,
   machine = null,
@@ -220,7 +239,17 @@ export default function ShiftComparisonCard({
     { gran: "SHIFT C", label: "Shift C" },
   ];
 
-  const bandArgs = { plantId, section, subSection, isRange, date, from, to };
+  const lineTyreType = tyreType && tyreType !== "All" ? tyreType : null;
+  const bandArgs = {
+    plantId,
+    section,
+    subSection,
+    tyreType: lineTyreType,
+    isRange,
+    date,
+    from,
+    to,
+  };
   const prodArgs = {
     ...bandArgs,
     category: "Productivity",
@@ -233,6 +262,11 @@ export default function ShiftComparisonCard({
     category: "Quality",
   });
 
+  // CTP TBM/Curing read the plain Production rows pinned to the product,
+  // the same series as the card (see selectSeries in kpi-transformer.js).
+  const readsPlainProduction =
+    plantId === "chennai" && Boolean(AGGREGATE_PRODUCT[section]);
+
   // Day-granularity Production row for the Today preset — rendered as the
   // first lollipop on the Production chart so users can eyeball that
   // Day == Shift A + Shift B + Shift C. Disabled for Month/Range presets.
@@ -240,14 +274,17 @@ export default function ShiftComparisonCard({
     plantId,
     section,
     subSection,
-    productType,
+    tyreType: lineTyreType,
+    productType: readsPlainProduction
+      ? (productType ?? AGGREGATE_PRODUCT[section])
+      : productType,
     unit,
     isRange,
     date,
     from,
     to,
     kpiName:
-      section === "TBM" || section === "Curing"
+      (section === "TBM" || section === "Curing") && !readsPlainProduction
         ? "Production_product"
         : "Production",
   });
@@ -300,6 +337,10 @@ export default function ShiftComparisonCard({
   const prodRowsFor = (i) =>
     (() => {
       const band = prodBands[i] ?? [];
+      if (readsPlainProduction) {
+        const plain = pickProdRows(band, "Production", productPin);
+        if (plain.length > 0) return plain;
+      }
       const primary = pickProdRows(band, prodKpi, productPin);
       const isAggregatePin =
         productPin != null && productPin === AGGREGATE_PRODUCT[section];
@@ -335,7 +376,10 @@ export default function ShiftComparisonCard({
 
   const prodUnit = canonicalUnit(unit);
   const prodByShift = shifts.map((_, i) => {
-    const v = readShift(prodRowsFor(i), prodKpi);
+    // Read the KPI the rows were picked from — the plain-Production paths
+    // return Production rows, which a Production_product filter would drop.
+    const rows = prodRowsFor(i);
+    const v = readShift(rows, rows[0]?.kpi_name ?? prodKpi);
     return isKg(prodUnit) ? kgToTonnes(v) : v;
   });
 

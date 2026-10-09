@@ -45,6 +45,15 @@ export function emptyColumnPredicate(column) {
   return `(${column} IS NULL OR LOWER(${column}) = 'nan' OR LOWER(${column}) = 'null' OR ${column} = '')`;
 }
 
+/**
+ * SQL fragment: does `column` hold a REAL value? The negation of
+ * `emptyColumnPredicate`, safe against NULL because `IS NULL` short-circuits
+ * the OR chain before any LOWER() comparison can yield NULL.
+ */
+export function nonEmptyColumnPredicate(column) {
+  return `NOT ${emptyColumnPredicate(column)}`;
+}
+
 /* ----------------------------------------------------------------- *
  * Plant / department                                                *
  * ----------------------------------------------------------------- */
@@ -54,6 +63,42 @@ export function emptyColumnPredicate(column) {
 // data; we compare case-insensitively (UPPER(plant) = 'BANMORE').
 export const PLANT_BANMORE = "BANMORE";
 export const PLANT_CHENNAI = "CHENNAI";
+// gold.ctp_gold stores the OEE family (OEE_* / Availability_* /
+// Performance_* / Quality_* and the OEE-loss reasons) under plant = 'CTP',
+// while every other Chennai row uses 'CHENNAI'. Matching only 'CHENNAI'
+// blanked every CTP OEE card.
+export const PLANT_CTP = "CTP";
+
+// The KPIs Chennai reads from plant = 'CTP' instead of 'CHENNAI'. The loss
+// reasons are ALSO stored under 'CHENNAI', as an older copy with several
+// conflicting values per machine-day and without Setup & Change / Preventive
+// Maintenance. Reading both would double Total Downtime, so each KPI comes
+// from exactly one plant code: this family from 'CTP', the rest from
+// 'CHENNAI'. 'CTP' also holds Energy rows, which this list keeps out.
+export const CTP_OEE_KPIS = [
+  "OEE_o",
+  "OEE_s",
+  "OEE_m",
+  "OEE_p",
+  "Availability_o",
+  "Availability_s",
+  "Availability_m",
+  "Performance_o",
+  "Performance_s",
+  "Performance_m",
+  "Quality_o",
+  "Quality_s",
+  "Quality_m",
+  "Breakdown",
+  "No Schedule",
+  "Power Failure",
+  "Preventive Maintenance",
+  "Setup & Change",
+  "Operations/Material/Manpower",
+];
+const CTP_OEE_KPIS_SQL = CTP_OEE_KPIS.map(
+  (k) => `'${k.replaceAll("'", "''")}'`,
+).join(", ");
 
 /* ----------------------------------------------------------------- *
  * Tyre type                                                          *
@@ -88,10 +133,18 @@ const PLANT_SCOPES = {
     tyreType: "PCR",
     tyreTypes: TYRE_TYPES_SINGLE_LINE,
     sqlTable: null,
+    // Present (as null) so plantScope() falls back to
+    // config.upstream.dailySqlTable, mirroring how `sqlTable: null` above
+    // falls back to config.upstream.sqlTable. Chennai has no daily
+    // counterpart — its scope below omits this key entirely rather than
+    // setting it to null, so it never resolves to a daily table.
+    dailySqlTable: null,
   },
   chennai: {
     id: "chennai",
     code: PLANT_CHENNAI,
+    // Plant code the CTP_OEE_KPIS are stored under.
+    oeeCode: PLANT_CTP,
     name: "Chennai Tyre Plant",
     // Default selection, not a fixed filter — CTP runs PCR and TBR, so it
     // opens unfiltered and the user narrows from `tyreTypes`.
@@ -134,11 +187,24 @@ export function plantScope(value = "banmore") {
   return {
     ...scope,
     sqlTable: scope.sqlTable ?? config.upstream.sqlTable,
+    // Only plants that declare the key at all (Banmore, as null) fall back
+    // to config.upstream.dailySqlTable. Chennai has no `dailySqlTable` key
+    // in its scope (no daily counterpart) and stays null/no-op — `??` alone
+    // can't express that distinction since Chennai's key would also be
+    // `undefined` if merely omitted without this guard.
+    dailySqlTable: Object.hasOwn(scope, "dailySqlTable")
+      ? scope.dailySqlTable ?? config.upstream.dailySqlTable
+      : null,
   };
 }
 
 export function plantSqlTable(value = "banmore") {
   return plantScope(value).sqlTable;
+}
+
+/** Rolling daily-table FROM target for a plant, or null if it has none. */
+export function plantDailySqlTable(value = "banmore") {
+  return plantScope(value).dailySqlTable;
 }
 
 /** Tyre-type options offered for a plant, first entry = default. */
@@ -153,6 +219,11 @@ export function plantTyreTypes(value = "banmore") {
  * A line selection also keeps the shared-compound rows (tyre_type =
  * 'Both'): Mixing is recorded entirely as 'Both' at CTP, so a strict
  * equality match would blank that section for every non-"All" choice.
+ *
+ * It likewise keeps rows with no tyre_type at all: CTP's OEE family is
+ * recorded per machine/section with tyre_type empty (Banmore tags the same
+ * rows 'PCR'), so a strict match would blank OEE on any PCR/TBR pick. No
+ * other production row is untagged in either plant's gold table.
  */
 export function tyreTypePredicate(value, column = "tyre_type") {
   if (value == null) return null;
@@ -163,7 +234,7 @@ export function tyreTypePredicate(value, column = "tyre_type") {
   const spellings = [trimmed, TYRE_TYPE_SHARED]
     .map((s) => `'${s.toUpperCase().replaceAll("'", "''")}'`)
     .join(", ");
-  return `UPPER(${column}) IN (${spellings})`;
+  return `(UPPER(${column}) IN (${spellings}) OR ${emptyColumnPredicate(column)})`;
 }
 
 // realdata.md §2: the ONLY department. Real data has both "Production"
@@ -172,9 +243,19 @@ export function tyreTypePredicate(value, column = "tyre_type") {
 // lives) is excluded automatically by this filter.
 export const DEPARTMENT_PRODUCTION = "production";
 
-/** SQL predicate fragment: plant filter (case-insensitive). Always applied. */
+/**
+ * SQL predicate fragment: plant filter (case-insensitive). Always applied.
+ * A plant with an `oeeCode` reads CTP_OEE_KPIS from that code only and
+ * every other KPI from its own code only — see CTP_OEE_KPIS.
+ */
 export function plantPredicate(column = "plant", plantId = "banmore") {
-  return `UPPER(${column}) = '${plantScope(plantId).code}'`;
+  const { code, oeeCode } = plantScope(plantId);
+  const own = `UPPER(${column}) = '${code}'`;
+  if (!oeeCode) return own;
+  return (
+    `((${own} AND kpi_name NOT IN (${CTP_OEE_KPIS_SQL})) ` +
+    `OR (UPPER(${column}) = '${oeeCode}' AND kpi_name IN (${CTP_OEE_KPIS_SQL})))`
+  );
 }
 
 /** SQL predicate fragment: department filter (case-insensitive). */

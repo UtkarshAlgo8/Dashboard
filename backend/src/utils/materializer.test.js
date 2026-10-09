@@ -269,6 +269,40 @@ describe("materializer.lookupDrillAggregate", () => {
     assert.equal(out, null);
   });
 
+  test("skips machine-less rows under a machine-grouped lens", () => {
+    // CTP's gold table carries Production_m rows with no machine (SQL NULL
+    // and the "nan"/"null" sentinels). A machine lens must not show them.
+    seedBanmore([
+      row({ machine: "0201", kpi_name: "Production_m", actual_value: 100 }),
+      row({ machine: null, kpi_name: "Production_m", actual_value: 40 }),
+      row({ machine: "nan", kpi_name: "Production_m", actual_value: 30 }),
+      row({ machine: "null", kpi_name: "Production_m", actual_value: 20 }),
+    ]);
+    const out = lookupDrillAggregate({
+      plantId: "banmore",
+      context: { section: "Mixing", category: "Productivity", granularity: "DAY" },
+      kpiName: "Production_m",
+      groupBy: ["machine"],
+    });
+    assert.equal(out.length, 1);
+    assert.equal(out[0].machine, "0201");
+    assert.equal(out[0].actual_value, 100);
+  });
+
+  test("keeps machine-less rows when the lens does not group by machine", () => {
+    seedBanmore([
+      row({ machine: null, itemcode: "MS149", kpi_name: "Production_sku", actual_value: 40 }),
+    ]);
+    const out = lookupDrillAggregate({
+      plantId: "banmore",
+      context: { section: "Mixing", category: "Productivity", granularity: "DAY" },
+      kpiName: "Production_sku",
+      groupBy: ["itemcode"],
+    });
+    assert.equal(out.length, 1);
+    assert.equal(out[0].actual_value, 40);
+  });
+
   test("only sums rows with the requested kpi_name", () => {
     seedBanmore([
       row({ machine: "0201", kpi_name: "Production_m", actual_value: 100 }),
@@ -309,6 +343,7 @@ describe("materializer.stats", () => {
   test("reports zero plants when nothing is materialized", () => {
     const s = materializerStats();
     assert.equal(s.enabled, true);
+    assert.deepEqual(s.configuredPlants, ["banmore"]);
     assert.deepEqual(s.plants, []);
   });
 

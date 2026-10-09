@@ -8,6 +8,7 @@ import {
   getSpcFilterOptions,
   getSpcWidgets,
   getSpcDetail,
+  getSpcTrend,
   getHistogramObservations,
   getPointObservations,
 } from "../controllers/spc.controller.js";
@@ -18,5 +19,6 @@ router.get("/summary", getSpcSummary);
 router.get("/filter-options", getSpcFilterOptions);
 router.get("/widgets", getSpcWidgets);
 router.get("/detail", getSpcDetail);
+router.get("/trend", getSpcTrend);
 router.get("/histogram-observations", getHistogramObservations);
 router.get("/point-observations", getPointObservations);

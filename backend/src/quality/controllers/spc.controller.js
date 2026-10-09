@@ -1,56 +1,314 @@
 /**
- * Quality SPC controllers (Backend FRD §2–§13).
+ * Quality SPC controllers.
  *
- * Same shape as the Process controllers: resolve snapshot → build SQL →
- * runQuery → transform → JSON, TTL-cached, with the context object echoed
- * (§0.9). Every SPC request resolves to the latest snapshot ≤ the requested
- * date and echoes `snapshot_date` (§2.1).
+ * Each request resolves a gold capability snapshot, pulls the gold baseline
+ * limits, pulls the combo's silver readings, and hands all three
+ * to the transformer. Everything is TTL-cached and echoes its context (§0.9).
+ *
+ * The date filter drives GOLD only (which capability snapshot). Silver is
+ * the combo's whole history — see silver.queries.js for why. The shift
+ * selector drives both: gold granularity (Day | Shift A/B/C) and the silver
+ * clock hours (A 07–15, B 15–23, C 23–07) on every date.
  */
 import { cached, buildCacheKey } from "../../utils/cache.js";
 import { runQuery } from "../datasource/index.js";
 import {
   spcSnapshotQuery,
-  spcSummaryRowsQuery,
+  spcCapabilityRowsQuery,
   spcMachinesQuery,
   spcRecipesQuery,
   spcProductTypesQuery,
-  spcWidgetsRowsQuery,
   spcDetailRowsQuery,
+  spcCapabilityTrendQuery,
+  spcCapabilityRangeQuery,
+  spcDetailRangeQuery,
+  spcLimitsQuery,
+  spcGranularity,
+  METRICS,
 } from "../queries/spc.queries.js";
+import {
+  silverMonthsQuery,
+  silverPointsQuery,
+  silverBoardQuery,
+} from "../queries/silver.queries.js";
 import {
   toSpcSummary,
   toSpcFilterOptions,
   toSpcWidgets,
   toSpcDetail,
 } from "../transformers/spc.transformers.js";
-import { parsePlotData, groupCombos } from "../spc/engine.js";
+import {
+  resolveSilver,
+  sourceForMachine,
+  SILVER_SOURCES,
+  paramsForSource,
+} from "../spc/mapping.js";
+import {
+  pickBaseline,
+  subgroups,
+  toNumber,
+  validateLimits,
+  statusForValue,
+  parseKpiName,
+  buildDistribution,
+  normalizeTime,
+  SUBGROUP_SIZE,
+} from "../spc/engine.js";
 
 function badRequest(res, message) {
   res.status(400).json({ error: { code: "VALIDATION_ERROR", message } });
 }
 
-/** Latest snapshot date ≤ requested date, or null if the family is empty. */
-async function resolveSnapshot(date) {
-  const rows = await runQuery(spcSnapshotQuery(date));
-  return rows[0]?.snapshot_date ?? null;
+function hasQueryValue(query, key) {
+  return Object.prototype.hasOwnProperty.call(query, key) && query[key] != null;
 }
 
-/** GET /quality/spc/summary  ?date= [&machine=] */
+/** Latest capability date ≤ requested date for this granularity, or null. */
+async function resolveSnapshot(date, granularity) {
+  const rows = await runQuery(spcSnapshotQuery(date, granularity));
+  const raw = rows[0]?.snapshot_date ?? null;
+  return raw ? String(raw).slice(0, 10) : null;
+}
+
+/**
+ * Grade averaged capability rows. The range queries return no status — it is
+ * published per day and a month's average has none — so each row is graded
+ * from its own averaged value, in the same bands gold uses.
+ */
+function gradeRangeRows(rows) {
+  return rows.map((r) => ({
+    ...r,
+    status: statusForValue(parseKpiName(r.kpi_name).metric, r.actual_value),
+  }));
+}
+
+/**
+ * Baseline UCL/LCL index: `MACHINE|||Parameter` → {ucl, lcl, baseline_date}.
+ *
+ * One query for every machine in scope, then the newest baseline on or
+ * before the chart date is chosen per machine+parameter in JS (see
+ * pickBaseline — SQL QUALIFY is not portable to the alasql source).
+ */
+async function loadLimitsIndex({ machine, parameter, isoDate }) {
+  const rows = await runQuery(spcLimitsQuery({ machine, parameter }));
+  const byKey = new Map();
+  for (const r of rows) {
+    const { parameter: param } = splitLimitName(r.kpi_name);
+    if (!param) continue;
+    const key = `${String(r.machine).toUpperCase()}|||${param}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(r);
+  }
+  const index = new Map();
+  for (const [key, group] of byKey) {
+    const picked = pickBaseline(group, isoDate);
+    const entry = { ucl: null, lcl: null, baseline_date: picked.baseline_date, on_or_before: picked.on_or_before };
+    for (const r of picked.rows) {
+      const { bound } = splitLimitName(r.kpi_name);
+      if (bound === "UCL") entry.ucl = r.actual_value;
+      if (bound === "LCL") entry.lcl = r.actual_value;
+    }
+    index.set(key, entry);
+  }
+  return index;
+}
+
+/** "Belt 1 Length UCL" → { parameter: "Belt 1 Length", bound: "UCL" }. */
+function splitLimitName(kpiName) {
+  const s = String(kpiName ?? "").trim();
+  const i = s.lastIndexOf(" ");
+  if (i === -1) return { parameter: null, bound: null };
+  const bound = s.slice(i + 1).toUpperCase();
+  if (bound !== "UCL" && bound !== "LCL") return { parameter: null, bound: null };
+  return { parameter: s.slice(0, i).trim(), bound };
+}
+
+/**
+ * Subgroup-mean series for every combo on the board, from ONE silver query
+ * per table rather than one per widget (~100 widgets would otherwise be
+ * ~100 Athena scans).
+ *
+ * All parameters of a machine are columns of the same measurement row (one
+ * tyre = one row), so "5 consecutive rows" is the natural subgroup for all
+ * of them simultaneously — the board query groups once and averages each
+ * parameter column within that grouping.
+ *
+ * The query returns an already-thinned series (a month of untouched
+ * subgroups for one table exceeds the upstream response ceiling and the
+ * whole board comes back empty), plus the true per-parameter totals.
+ *
+ * @returns {Map<string, {means:number[], times:string[], readings:number,
+ *          subgroups_total:number}>} keyed `MACHINE|||recipe|||Parameter`
+ */
+async function loadBoardSeries({ machine, recipe, shift }) {
+  const sources = machine
+    ? [sourceForMachine(machine)].filter(Boolean)
+    : SILVER_SOURCES;
+  const index = new Map();
+  const results = await Promise.all(
+    sources.map(async (src) => {
+      const params = paramsForSource(src);
+      try {
+        // Cached per table (raw rows, so the redis driver can serialise
+        // them) and shared by every headline filter of the same scope: the
+        // whole-history scan takes 10–30 s per table.
+        const key = buildCacheKey("/quality/spc/silver-board", {
+          table: src.table,
+          machine: machine ?? "All",
+          recipe: recipe ?? "All",
+          shift: shift ?? "All",
+        });
+        const rows = await cached(
+          key,
+          () =>
+            runQuery(
+              silverBoardQuery(src, params, {
+                machine,
+                recipe,
+                shift,
+                size: SUBGROUP_SIZE,
+                points: BOARD_SPARK_POINTS,
+              }),
+            ),
+          SILVER_CACHE_TTL_MS,
+        );
+        return { src, params, rows };
+      } catch (err) {
+        // One unavailable silver table must not blank the whole board; the
+        // affected widgets fall back to "no silver measurements". Log it:
+        // silently swallowed, an upstream failure is indistinguishable from
+        // a combo with no history, and the board just looks like no data.
+        console.warn(`[spc] board series ${src.table}: ${err.message}`);
+        return { src, params, rows: [] };
+      }
+    }),
+  );
+  for (const { params, rows } of results) {
+    for (const row of rows) {
+      for (const [parameter, p] of Object.entries(params)) {
+        const v = toNumber(row[p.valueColumn]);
+        if (v == null) continue;
+        const key = `${String(row.machine).toUpperCase()}|||${row.recipe}|||${parameter}`;
+        let series = index.get(key);
+        if (!series) {
+          // Counts are history-wide and identical on every row of the group,
+          // so they are read once, from the first row that creates it.
+          const total = toNumber(row[`n_${p.valueColumn}`]) ?? 0;
+          series = {
+            means: [],
+            times: [],
+            subgroups_total: total,
+            readings: total * SUBGROUP_SIZE,
+          };
+          index.set(key, series);
+        }
+        series.means.push(Math.round(v * 1e4) / 1e4);
+        series.times.push(normalizeTime(row.event_time));
+      }
+    }
+  }
+  return index;
+}
+
+/** Points kept in a widget sparkline. The detail chart is never thinned. */
+const BOARD_SPARK_POINTS = 60;
+
+/**
+ * TTL for whole-history silver reads. They take 10–30 s cold, and a few
+ * minutes of staleness only delays the newest points; the default
+ * CACHE_TTL_MS (30 s) re-ran the board scan on nearly every page open.
+ */
+const SILVER_CACHE_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * Month partitions read at once for one combo's history. Keeps the upstream
+ * from being hit with a dozen parallel scans per chart open.
+ */
+const SILVER_MONTH_CONCURRENCY = 4;
+
+/**
+ * Every silver reading for one chart (machine × recipe × parameter, shift
+ * hours applied), oldest first.
+ *
+ * Read one month partition per upstream call: the largest combos hold
+ * ~120k readings, over the data API's response ceiling as one call, while
+ * the largest single month (~40k readings) fits. Cached, so the detail chart
+ * and its point / histogram drill-downs see the same readings in the same
+ * order — subgroup N on the chart is subgroup N in the drill-down.
+ *
+ * A failed month fails the whole read (→ []): a history with a silent hole
+ * would shift every later subgroup index.
+ *
+ * @returns {Promise<Array<{event_time:*, value:*, setpoint?:*}>>}
+ */
+async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
+  const key = buildCacheKey("/quality/spc/silver-readings", {
+    machine,
+    recipe,
+    parameter,
+    shift: shift ?? "All",
+  });
+  try {
+    // A failure throws out of cached() unstored, so the next open retries.
+    return await cached(
+      key,
+      async () => {
+        const scope = { machine, recipe, shift };
+        const months = await runQuery(silverMonthsQuery(src, scope));
+        const chunks = [];
+        for (let i = 0; i < months.length; i += SILVER_MONTH_CONCURRENCY) {
+          const batch = months.slice(i, i + SILVER_MONTH_CONCURRENCY);
+          chunks.push(
+            ...(await Promise.all(
+              batch.map((m) =>
+                runQuery(
+                  silverPointsQuery(src, {
+                    ...scope,
+                    year: Number(m.year),
+                    month: Number(m.month),
+                  }),
+                ),
+              ),
+            )),
+          );
+        }
+        return chunks.flat();
+      },
+      SILVER_CACHE_TTL_MS,
+    );
+  } catch (err) {
+    console.warn(`[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.message}`);
+    return [];
+  }
+}
+
+/** What the silver dots cover, echoed in place of the old date window. */
+function silverScope(shift) {
+  return { dates: "all", shift: shift ?? "All" };
+}
+
+/** GET /quality/spc/summary  ?date= [&shift= &machine=] */
 export async function getSpcSummary(req, res, next) {
   try {
-    const { date, machine, plant } = req.query;
+    const { date, machine, plant, shift } = req.query;
+    const granularity = spcGranularity(shift);
     const key = buildCacheKey("/quality/spc/summary", req.query);
     const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date);
+      const snapshot = await resolveSnapshot(date, granularity);
       if (!snapshot) return { snapshot: null, summary: null };
-      const rows = await runQuery(spcSummaryRowsQuery({ snapshot, machine }));
+      const rows = await runQuery(
+        spcCapabilityRowsQuery({ snapshot, granularity, machine }),
+      );
       return { snapshot, summary: toSpcSummary(rows) };
     });
     if (!body.snapshot) {
-      return res.json({ context: { plant, snapshot_date: null }, total_parameters: 0 });
+      return res.json({
+        context: { plant, snapshot_date: null, granularity },
+        total_parameters: 0,
+      });
     }
     res.json({
-      context: { plant, snapshot_date: body.snapshot },
+      context: { plant, snapshot_date: body.snapshot, granularity },
       ...body.summary,
     });
   } catch (err) {
@@ -58,45 +316,71 @@ export async function getSpcSummary(req, res, next) {
   }
 }
 
-/** GET /quality/spc/filter-options  ?date= */
+/** GET /quality/spc/filter-options  ?date= [&shift= &machine=] */
 export async function getSpcFilterOptions(req, res, next) {
   try {
-    const { date, plant } = req.query;
+    const { date, plant, shift, machine } = req.query;
+    const granularity = spcGranularity(shift);
     const key = buildCacheKey("/quality/spc/filter-options", req.query);
     const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date);
+      const snapshot = await resolveSnapshot(date, granularity);
       if (!snapshot) return null;
       const [machines, recipes, productTypes] = await Promise.all([
-        runQuery(spcMachinesQuery({ snapshot })),
-        runQuery(spcRecipesQuery({ snapshot })),
-        runQuery(spcProductTypesQuery({ snapshot })),
+        runQuery(spcMachinesQuery({ snapshot, granularity })),
+        runQuery(spcRecipesQuery({ snapshot, granularity, machine })),
+        runQuery(spcProductTypesQuery({ snapshot, granularity })),
       ]);
-      return { snapshot, options: toSpcFilterOptions({ machines, recipes, productTypes }) };
+      return {
+        snapshot,
+        options: toSpcFilterOptions({ machines, recipes, productTypes }),
+      };
     });
     if (!body) {
       return res.json({
-        context: { plant, snapshot_date: null },
+        context: { plant, snapshot_date: null, granularity },
         machines: [],
         recipes: [],
         product_types: [],
       });
     }
-    res.json({ context: { plant, snapshot_date: body.snapshot }, ...body.options });
+    res.json({
+      context: { plant, snapshot_date: body.snapshot, granularity },
+      ...body.options,
+    });
   } catch (err) {
     next(err);
   }
 }
 
-/** GET /quality/spc/widgets  ?date= [&machine= &recipe= &headline_status=] */
+/**
+ * GET /quality/spc/widgets  ?date= [&shift= &machine= &recipe= &headline_status=]
+ * Or, for a whole-range view (month/year): ?from= &to= instead of &date=.
+ * `from`/`to` average gold capability over the range; the snapshot still
+ * resolves to the latest one on or before `to`. Neither moves the chart
+ * points: those are the combo's whole silver history (shift hours applied).
+ */
 export async function getSpcWidgets(req, res, next) {
   try {
-    const { date, machine, recipe, headline_status: headline, plant } = req.query;
+    const { date, from, to, machine, recipe, headline_status: headline, plant, shift } = req.query;
+    const granularity = spcGranularity(shift);
     const key = buildCacheKey("/quality/spc/widgets", req.query);
     const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date);
+      const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const rows = await runQuery(spcWidgetsRowsQuery({ snapshot, machine, recipe }));
-      let { count, widgets } = toSpcWidgets(rows);
+      // Month / date-range views average the days in the range; a single-day
+      // view reads that day's published rows.
+      const capabilityRows =
+        from && to
+          ? runQuery(
+              spcCapabilityRangeQuery({ from, to, granularity, machine, recipe }),
+            ).then(gradeRangeRows)
+          : runQuery(spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe }));
+      const [rows, limitsIndex, seriesIndex] = await Promise.all([
+        capabilityRows,
+        loadLimitsIndex({ machine, isoDate: snapshot }),
+        loadBoardSeries({ machine, recipe, shift }),
+      ]);
+      let { count, widgets } = toSpcWidgets(rows, { limitsIndex, seriesIndex });
       if (headline) {
         widgets = widgets.filter((w) => w.headline_status === headline);
         count = widgets.length;
@@ -105,7 +389,7 @@ export async function getSpcWidgets(req, res, next) {
     });
     if (!body.snapshot) {
       return res.json({
-        context: { plant, snapshot_date: null, machine, recipe },
+        context: { plant, snapshot_date: null, machine, recipe, granularity },
         count: 0,
         widgets: [],
       });
@@ -116,6 +400,9 @@ export async function getSpcWidgets(req, res, next) {
         snapshot_date: body.snapshot,
         machine,
         recipe,
+        granularity,
+        shift: shift ?? "All",
+        silver_scope: silverScope(shift),
         ...(headline ? { headline_status: headline } : {}),
       },
       count: body.count,
@@ -126,38 +413,81 @@ export async function getSpcWidgets(req, res, next) {
   }
 }
 
-/** GET /quality/spc/detail  ?date= &machine= &recipe= &parameter= [&shift=] */
+/**
+ * GET /quality/spc/detail  ?date= &machine= &recipe= &parameter= [&shift=]
+ * Or, for a whole-range view (month/year): ?from= &to= instead of &date=.
+ * See getSpcWidgets for the from/to vs date semantics.
+ */
 export async function getSpcDetail(req, res, next) {
   try {
-    const { date, machine, recipe, parameter, shift, plant } = req.query;
-    if (!machine || !recipe || !parameter) {
+    const { date, from, to, machine, recipe, parameter, shift, plant } = req.query;
+    if (
+      !hasQueryValue(req.query, "machine") ||
+      !hasQueryValue(req.query, "recipe") ||
+      !hasQueryValue(req.query, "parameter")
+    ) {
       return badRequest(res, "`machine`, `recipe`, and `parameter` are required.");
     }
+    const granularity = spcGranularity(shift);
     const key = buildCacheKey("/quality/spc/detail", req.query);
     const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date);
+      const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
       if (!snapshot) return { snapshot: null };
-      const rows = await runQuery(
-        spcDetailRowsQuery({ snapshot, machine, recipe, parameter }),
-      );
-      return { snapshot, detail: toSpcDetail(rows, { snapshot }) };
+      const src = resolveSilver(machine, parameter);
+      const capabilityRows =
+        from && to
+          ? runQuery(
+              spcDetailRangeQuery({ from, to, granularity, machine, recipe, parameter }),
+            ).then(gradeRangeRows)
+          : runQuery(
+              spcDetailRowsQuery({ snapshot, granularity, machine, recipe, parameter }),
+            );
+      const [rows, limitsIndex, points] = await Promise.all([
+        capabilityRows,
+        loadLimitsIndex({ machine, parameter, isoDate: snapshot }),
+        src
+          ? loadSilverReadings({ src, machine, recipe, parameter, shift })
+          : Promise.resolve([]),
+      ]);
+      const limitsEntry = limitsIndex.get(`${String(machine).toUpperCase()}|||${parameter}`);
+      const detail = toSpcDetail(rows, {
+        points,
+        limits: {
+          ...validateLimits(limitsEntry?.ucl, limitsEntry?.lcl),
+          baseline_date: limitsEntry?.baseline_date ?? null,
+          baseline_on_or_before: limitsEntry?.on_or_before ?? null,
+        },
+        snapshot,
+        scope: silverScope(shift),
+        selection: { machine, recipe, parameter },
+      });
+      return { snapshot, detail };
     });
     if (!body.snapshot) {
       return res.json({
-        context: { plant, machine, recipe, parameter, snapshot_date: null, shift_supported: false },
+        context: {
+          plant,
+          machine,
+          recipe,
+          parameter,
+          snapshot_date: null,
+          granularity,
+          shift_supported: true,
+        },
       });
     }
     res.json({
-      // `shift` and `date` are accepted-and-echoed context; no SPC row carries
-      // shift yet, so shift_supported:false (§4).
       context: {
         plant,
         machine,
         recipe,
         parameter,
         shift: shift ?? "All",
+        granularity,
         snapshot_date: body.snapshot,
-        shift_supported: false,
+        silver_scope: silverScope(shift),
+        // Shift narrows both the gold granularity and the silver clock hours.
+        shift_supported: true,
       },
       ...body.detail,
     });
@@ -166,38 +496,111 @@ export async function getSpcDetail(req, res, next) {
   }
 }
 
+/** GET /quality/spc/trend ?from=&to=&machine=&recipe=&parameter=&metric= */
+export async function getSpcTrend(req, res, next) {
+  try {
+    const { from, to, machine, recipe, parameter, metric, shift, plant } =
+      req.query;
+    if (
+      !from ||
+      !to ||
+      !hasQueryValue(req.query, "machine") ||
+      !hasQueryValue(req.query, "recipe") ||
+      !hasQueryValue(req.query, "parameter") ||
+      !METRICS.includes(metric)
+    ) {
+      return badRequest(
+        res,
+        "`from`, `to`, `machine`, `recipe`, `parameter`, and a valid `metric` are required.",
+      );
+    }
+    if (from > to) return badRequest(res, "`from` must not be after `to`.");
+
+    const granularity = spcGranularity(shift);
+    const key = buildCacheKey("/quality/spc/trend", req.query);
+    const rows = await cached(key, () =>
+      runQuery(
+        spcCapabilityTrendQuery({
+          from,
+          to,
+          granularity,
+          machine,
+          recipe,
+          parameter,
+          metric,
+        }),
+      ),
+    );
+    const points = rows
+      .map((row) => ({
+        date: String(row.date ?? "").slice(0, 10),
+        value: toNumber(row.actual_value),
+        status: row.status ?? null,
+      }))
+      .filter((point) => point.date && point.value != null);
+
+    res.json({
+      context: {
+        plant,
+        from,
+        to,
+        granularity,
+        shift: shift ?? "All",
+        machine,
+        recipe,
+        parameter,
+        metric,
+      },
+      points,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * GET /quality/spc/histogram-observations  ?...combo... &bin_index=
- * v1 contract (§8): individual readings are not stored, so returns the bin's
- * bounds + count with observations_available:false. Shape is final.
+ * Individual readings ARE available in silver now, so a bin click returns
+ * the actual readings that fell in it, not just the bin's bounds.
  */
 export async function getHistogramObservations(req, res, next) {
   try {
-    const { machine, recipe, parameter, date } = req.query;
+    const { machine, recipe, parameter, date, shift } = req.query;
     const binIndex = Number.parseInt(req.query.bin_index, 10);
-    if (!machine || !recipe || !parameter || !Number.isFinite(binIndex)) {
+    if (
+      !hasQueryValue(req.query, "machine") ||
+      !hasQueryValue(req.query, "recipe") ||
+      !hasQueryValue(req.query, "parameter") ||
+      !Number.isFinite(binIndex)
+    ) {
       return badRequest(res, "`machine`, `recipe`, `parameter`, `bin_index` are required.");
     }
-    const snapshot = await resolveSnapshot(date);
-    const rows = snapshot
-      ? await runQuery(spcDetailRowsQuery({ snapshot, machine, recipe, parameter }))
-      : [];
-    const combo = [...groupCombos(rows).values()][0];
-    const h = parsePlotData(combo?.plotRow?.plot_data)?.histogram ?? {};
-    const centers = Array.isArray(h.bin_centers) ? h.bin_centers : [];
-    const counts = Array.isArray(h.counts) ? h.counts : [];
-    const width = centers.length >= 2 ? centers[1] - centers[0] : 0;
-    const center = centers[binIndex];
-    if (center == null) {
+    const granularity = spcGranularity(shift);
+    const snapshot = await resolveSnapshot(date, granularity);
+    const src = resolveSilver(machine, parameter);
+    if (!snapshot || !src) {
       return res.json({ observations_available: false, bin: null });
     }
+    const points = await loadSilverReadings({ src, machine, recipe, parameter, shift });
+    const values = points.map((p) => toNumber(p.value)).filter((v) => v != null);
+    if (values.length === 0) {
+      return res.json({ observations_available: false, bin: null });
+    }
+    const dist = buildDistribution(values, {});
+    const bin = dist.bins[binIndex];
+    if (!bin) return res.json({ observations_available: false, bin: null });
+    const inBin = points
+      .map((p) => ({ time: normalizeTime(p.event_time), value: toNumber(p.value) }))
+      .filter(
+        (p) =>
+          p.value != null &&
+          p.value >= bin.from &&
+          (binIndex === dist.bins.length - 1 ? p.value <= bin.to : p.value < bin.to),
+      );
     res.json({
-      observations_available: false,
-      bin: {
-        from: Math.round((center - width / 2) * 1e4) / 1e4,
-        to: Math.round((center + width / 2) * 1e4) / 1e4,
-        count: counts[binIndex] ?? 0,
-      },
+      observations_available: true,
+      bin: { from: bin.from, to: bin.to, count: bin.count },
+      observations: inBin,
     });
   } catch (err) {
     next(err);
@@ -206,32 +609,48 @@ export async function getHistogramObservations(req, res, next) {
 
 /**
  * GET /quality/spc/point-observations  ?...combo... &chart=X|R &point_index=
- * v1 contract (§12.4): subgroup composition is not stored, so returns the
- * point's own facts with observations_available:false.
+ * A point is a subgroup mean, so its composition is now knowable: return the
+ * individual readings that made it.
  */
 export async function getPointObservations(req, res, next) {
   try {
-    const { machine, recipe, parameter, date } = req.query;
-    const chart = (req.query.chart ?? "X").toUpperCase() === "R" ? "r_chart" : "x_chart";
+    const { machine, recipe, parameter, date, shift } = req.query;
+    const chart = (req.query.chart ?? "X").toUpperCase() === "R" ? "R" : "X";
     const pointIndex = Number.parseInt(req.query.point_index, 10);
-    if (!machine || !recipe || !parameter || !Number.isFinite(pointIndex)) {
+    if (
+      !hasQueryValue(req.query, "machine") ||
+      !hasQueryValue(req.query, "recipe") ||
+      !hasQueryValue(req.query, "parameter") ||
+      !Number.isFinite(pointIndex)
+    ) {
       return badRequest(res, "`machine`, `recipe`, `parameter`, `point_index` are required.");
     }
-    const snapshot = await resolveSnapshot(date);
-    const rows = snapshot
-      ? await runQuery(spcDetailRowsQuery({ snapshot, machine, recipe, parameter }))
-      : [];
-    const combo = [...groupCombos(rows).values()][0];
-    const c = parsePlotData(combo?.plotRow?.plot_data)?.[chart] ?? {};
-    const values = Array.isArray(c.values) ? c.values : [];
-    const times = Array.isArray(c.time) ? c.time : [];
-    const value = values[pointIndex - 1];
-    if (value == null) {
+    const granularity = spcGranularity(shift);
+    const snapshot = await resolveSnapshot(date, granularity);
+    const src = resolveSilver(machine, parameter);
+    if (!snapshot || !src) {
       return res.json({ observations_available: false, point: null });
     }
+    const rows = await loadSilverReadings({ src, machine, recipe, parameter, shift });
+    const clean = rows
+      .map((p) => ({ event_time: p.event_time, value: toNumber(p.value) }))
+      .filter((p) => p.value != null);
+    const sg = subgroups(clean, SUBGROUP_SIZE);
+    const i = pointIndex - 1;
+    if (i < 0 || i >= sg.means.length) {
+      return res.json({ observations_available: false, point: null });
+    }
+    const members = clean.slice(i * SUBGROUP_SIZE, i * SUBGROUP_SIZE + SUBGROUP_SIZE);
     res.json({
-      observations_available: false,
-      point: { index: pointIndex, value, time: times[pointIndex - 1] ?? null },
+      observations_available: true,
+      point: {
+        index: pointIndex,
+        chart,
+        value: chart === "R" ? sg.ranges[i] : sg.means[i],
+        time: sg.times[i],
+        subgroup_size: SUBGROUP_SIZE,
+      },
+      observations: members.map((m) => ({ time: normalizeTime(m.event_time), value: m.value })),
     });
   } catch (err) {
     next(err);

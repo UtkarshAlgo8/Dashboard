@@ -29,11 +29,11 @@
 import { config } from "../config.js";
 import {
   plantDepartmentPredicate,
-  plantSqlTable,
   normalizeGranularity,
   allowedGranularities,
   excludeUnknownKpiPredicate,
   emptyColumnPredicate,
+  nonEmptyColumnPredicate,
   canonicalizeProductType,
   canonicalizeSubSection,
   canonicalDimensionPredicate,
@@ -41,7 +41,14 @@ import {
   unitPredicate,
   tyreTypePredicate,
   TYRE_TYPE_ALL,
+  normalizePlantId,
 } from "../utils/normalize.js";
+import { goldSource } from "./gold-source.js";
+import { DATE_YYYYMMDD, isoToYyyymmdd } from "./sql-date.js";
+
+// Re-exported so existing importers (e.g. static.controller.js) keep
+// working unchanged now that the definitions live in sql-date.js.
+export { DATE_YYYYMMDD, isoToYyyymmdd };
 
 export const ALLOWED_CONTEXT_KEYS = new Set([
   // plant + department are NO LONGER accepted from the caller — they are
@@ -242,25 +249,6 @@ const CONTEXT_ALLOW_LISTS = {
 };
 
 /**
- * SQL expression that normalizes the `date` column to a sortable,
- * comparable YYYYMMDD string REGARDLESS of stored type/format. The live
- * gold_dummy stores `date` as a real DATE type; older/CSV-backed envs
- * store it as a STRING in ISO `yyyy-mm-dd` or `DD-MM-YYYY`. We:
- *   1. CAST to VARCHAR first — SUBSTRING needs VARCHAR, and a DATE casts
- *      to ISO "yyyy-mm-dd"; a string passes through unchanged.
- *   2. Detect the format by dash position rather than assuming one:
- *        ISO         "2026-04-01" → dash at char 5 → YYYY MM DD inline
- *        DD-MM-YYYY  "01-04-2026" → dash at char 3 → reorder to YYYYMMDD
- * Engine-agnostic (Athena / DuckDB / Trino). No year/month/day column
- * predicate (those trigger upstream partition-path lookups that fail).
- */
-const DATE_STR = "CAST(date AS VARCHAR)";
-export const DATE_YYYYMMDD =
-  `(CASE WHEN SUBSTRING(${DATE_STR}, 5, 1) = '-' ` +
-  `THEN SUBSTRING(${DATE_STR}, 1, 4) || SUBSTRING(${DATE_STR}, 6, 2) || SUBSTRING(${DATE_STR}, 9, 2) ` +
-  `ELSE SUBSTRING(${DATE_STR}, 7, 4) || SUBSTRING(${DATE_STR}, 4, 2) || SUBSTRING(${DATE_STR}, 1, 2) END)`;
-
-/**
  * The gold table's 23 columns, in order. Listed explicitly because the
  * de-duplication below wraps the scan in a sub-query with a ROW_NUMBER()
  * helper column — selecting `*` from that sub-query would leak the helper
@@ -296,12 +284,17 @@ const GOLD_COLUMNS = [
  * The subset of GOLD_COLUMNS a kpi-data row actually needs to reach the UI.
  *
  * The dashboard reads raw rows, so every column in the projection is shipped
- * once per row over the wire. Seven of them are never read by any frontend
- * consumer — `record_id`, `plant`, `department` and `tyre_type` are pins the
- * client already knows (it sent them), and `production_ids` / `previous_values`
- * / `plot_data` are the heavy blob columns (plot_data alone backs the SPC
+ * once per row over the wire. Six of them are never read by any frontend
+ * consumer — `record_id`, `plant` and `department` are pins the client
+ * already knows (it sent them), and `production_ids` / `previous_values` /
+ * `plot_data` are the heavy blob columns (plot_data alone backs the SPC
  * widget board, which queries the table directly via spc.queries.js and never
  * goes through this endpoint).
+ *
+ * `tyre_type` must stay: under "All" no tyre pin is sent, and CTP stores the
+ * same trench once per line (PCR Trench1 + TBR Trench1). The client's leaf
+ * dedupe keys on tyre_type, so without it the TBR copy of each trench was
+ * dropped — Curing 2026-10-06 showed 14,251 against a true 16,898.
  *
  * Dropping them from the OUTER select only. The inner de-duplication sub-query
  * still scans the full GOLD_COLUMNS list because DEDUPE_PARTITION partitions on
@@ -312,6 +305,7 @@ const OUTPUT_COLUMNS = [
   "date",
   "section",
   "sub_section",
+  "tyre_type",
   "machine",
   "product_type",
   "itemcode",
@@ -402,11 +396,6 @@ const DEDUPE_PARTITION = [
   "remarks",
   "status",
 ];
-
-/** ISO yyyy-mm-dd → YYYYMMDD digit string for comparison literals. */
-function isoToYyyymmdd(iso) {
-  return iso.replaceAll("-", "");
-}
 
 export class QueryValidationError extends Error {
   constructor(message) {
@@ -603,7 +592,7 @@ export function resolveGranularity(rawValue, isRangeMode = false) {
  * One cheap grouped query replaces N per-card lookups.
  */
 export function buildLatestDateQuery({ plantId = "banmore" } = {}) {
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const table = goldSource({ plantId, fromKey: null, toKey: null });
   const where = [
     plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
@@ -616,6 +605,42 @@ export function buildLatestDateQuery({ plantId = "banmore" } = {}) {
   return (
     `SELECT section, kpi_name, MAX(${DATE_YYYYMMDD}) AS latest_date ` +
     `FROM ${table} WHERE ${where} GROUP BY section, kpi_name`
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The machines each section records production on — the Technical
+ * dashboard's machine picker. Read from `Production_m`, whose machine column
+ * carries the production machine names (VMI1MAXX, GTIC1, …). OEE and
+ * downtime rows key TBM machines by a different, numeric id with no mapping
+ * to these names, so they are deliberately not mixed in.
+ *
+ * `sinceIso` bounds the scan to recently active machines: an unbounded
+ * DISTINCT over the whole gold table takes ~18 s cold, long enough to trip
+ * the 30 s upstream timeout when it runs alongside the startup warm-up.
+ */
+export function buildSectionMachinesQuery({
+  plantId = "banmore",
+  sinceIso,
+} = {}) {
+  if (typeof sinceIso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(sinceIso)) {
+    throw new QueryValidationError("sinceIso must be a yyyy-mm-dd date");
+  }
+  const fromKey = isoToYyyymmdd(sinceIso);
+  const table = goldSource({ plantId, fromKey, toKey: null });
+  const where = [
+    plantDepartmentPredicate(plantId),
+    `${DATE_YYYYMMDD} >= '${fromKey}'`,
+    inScopeSectionPredicate(),
+    "kpi_name = 'Production_m'",
+    "machine IS NOT NULL",
+    "machine NOT IN ('', 'nan', 'null')",
+  ].join(" AND ");
+  return (
+    `SELECT DISTINCT section, machine FROM ${table} WHERE ${where} ` +
+    `ORDER BY section, machine`
   )
     .replace(/\s+/g, " ")
     .trim();
@@ -636,7 +661,7 @@ export function buildLatestDateQuery({ plantId = "banmore" } = {}) {
  * labels the day rather than rendering the artefact.
  */
 export function buildShiftCoverageQuery({ plantId = "banmore" } = {}) {
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const table = goldSource({ plantId, fromKey: null, toKey: null });
   const where = [
     plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
@@ -680,6 +705,26 @@ function previousCalendarMonth(anchorIso) {
   return { from, to: end.toISOString().slice(0, 10) };
 }
 
+function daysInUtcMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function shiftIsoMonthsClamped(iso, months) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const firstOfMonth = new Date(Date.UTC(year, month - 1 + months, 1));
+  const targetYear = firstOfMonth.getUTCFullYear();
+  const targetMonth = firstOfMonth.getUTCMonth() + 1;
+  const targetDay = Math.min(day, daysInUtcMonth(targetYear, targetMonth));
+  return new Date(Date.UTC(targetYear, targetMonth - 1, targetDay)).toISOString().slice(0, 10);
+}
+
+function previousMonthSameSpan(from, to) {
+  return {
+    from: shiftIsoMonthsClamped(from, -1),
+    to: shiftIsoMonthsClamped(to, -1),
+  };
+}
+
 /** True when [from,to] is exactly the 1st → last day of one calendar month. */
 function isFullCalendarMonth(from, to) {
   if (!from || !to) return false;
@@ -712,6 +757,12 @@ export function previousWindow(timeScope, granularity) {
   // MONTH/YEAR rows are point-dated snapshots: step the anchor back one whole
   // period rather than subtracting days.
   if (granularity === "MONTH") {
+    if (timeScope.mode === "RANGE" && timeScope.from && timeScope.to) {
+      if (isFullCalendarMonth(timeScope.from, timeScope.to)) {
+        return previousCalendarMonth(timeScope.from);
+      }
+      return previousMonthSameSpan(timeScope.from, timeScope.to);
+    }
     const anchor = timeScope.date ?? timeScope.from;
     if (!anchor) return null;
     // Snapshot rows are dated the 1st, so a whole-month window is safe for
@@ -742,6 +793,19 @@ export function previousWindow(timeScope, granularity) {
     from: shiftIsoDays(timeScope.from, -n),
     to: shiftIsoDays(timeScope.from, -1),
   };
+}
+
+export function previousWindowGranularity(timeScope, granularity) {
+  if (
+    granularity === "MONTH" &&
+    timeScope.mode === "RANGE" &&
+    timeScope.from &&
+    timeScope.to &&
+    !isFullCalendarMonth(timeScope.from, timeScope.to)
+  ) {
+    return "DAY";
+  }
+  return granularity;
 }
 
 /* ---------- Public builder ---------- */
@@ -943,7 +1007,23 @@ function buildScopeWhere({
     where.push(`${key} = ${escapeLiteral(value)}`);
   }
 
-  return where;
+  return { where, timeScope };
+}
+
+/**
+ * Resolved date scope (from resolveDatePredicate) → {fromKey, toKey}
+ * YYYYMMDD digit strings for goldSource's window resolution. Either side
+ * is null when that bound is open-ended.
+ */
+function timeScopeWindow(timeScope) {
+  if (timeScope.mode === "SINGLE_DAY") {
+    const key = timeScope.date ? isoToYyyymmdd(timeScope.date) : null;
+    return { fromKey: key, toKey: key };
+  }
+  return {
+    fromKey: timeScope.from ? isoToYyyymmdd(timeScope.from) : null,
+    toKey: timeScope.to ? isoToYyyymmdd(timeScope.to) : null,
+  };
 }
 
 /**
@@ -980,7 +1060,7 @@ export function buildFetchQuery({
   // null/omitted → every landing-level kpi_name, the pre-existing behaviour.
   landingKpis = null,
 } = {}) {
-  const where = buildScopeWhere({
+  const { where, timeScope } = buildScopeWhere({
     plantId,
     context,
     parentFilters,
@@ -988,6 +1068,7 @@ export function buildFetchQuery({
     from,
     to,
   });
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
 
   // 4. Drill shape. Null/undefined → landing only. Array → return BOTH
   //    landing rows AND drill children so the grid always has cards while
@@ -1080,7 +1161,7 @@ export function buildFetchQuery({
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
 
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const table = goldSource({ plantId, fromKey, toKey });
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   // Athena (Trino) has no `* EXCLUDE(...)` syntax and serializes a DATE
   // column to an ISO yyyy-mm-dd string natively, so a plain `SELECT *`
@@ -1234,7 +1315,7 @@ export function buildDrillAggregateQuery({
     }
   }
 
-  const where = buildScopeWhere({
+  const { where, timeScope } = buildScopeWhere({
     plantId,
     context,
     parentFilters,
@@ -1244,9 +1325,19 @@ export function buildDrillAggregateQuery({
   });
   where.push(`kpi_name = ${escapeLiteral(safeKpi)}`);
 
+  // A machine-grouped lens is machine data: rows that carry no machine
+  // (SQL NULL or the "nan"/"null"/"" sentinels) would collapse into one
+  // anonymous bucket and render as a "—" row whose total belongs to no
+  // machine on the floor. CTP's gold table has such rows; drop them at
+  // source so the page window, the row count and the totals all agree.
+  if (cols.includes("machine")) {
+    where.push(nonEmptyColumnPredicate("machine"));
+  }
+
   const lim = Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 100;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
+  const table = goldSource({ plantId, fromKey, toKey });
   const dateCol =
     config.upstream.engine === "databricks"
       ? "CAST(date AS VARCHAR) AS date"
@@ -1372,7 +1463,8 @@ export function buildProductOptionsQuery({
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 1000;
   const productType = cleanedColumn("product_type");
   const unit = cleanedColumn("unit_of_measurement");
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
+  const table = goldSource({ plantId, fromKey, toKey });
 
   return (
     `SELECT DISTINCT ${productType} AS product_type, ${unit} AS unit_of_measurement ` +
@@ -1387,6 +1479,7 @@ export function buildShiftComparisonQuery({
   plantId = "banmore",
   section,
   subSection = null,
+  tyreType = null,
   category,
   date,
   from,
@@ -1416,7 +1509,16 @@ export function buildShiftComparisonQuery({
     plantDepartmentPredicate(plantId),
     excludeUnknownKpiPredicate(),
     `section = ${escapeLiteral(safeSection)}`,
-    `category = ${escapeLiteral(safeCategory)}`,
+    // CTP (gold.ctp_gold) stores Scrap-family rows under category='Scrap'
+    // while Banmore (gold.gold) stores them under category='Quality'. The
+    // frontend always sends 'Quality' for Scrap/Rework shift charts; on CTP
+    // we widen the predicate to also pick up the Scrap-category rows so
+    // the chart reflects the actual gold vocabulary instead of always
+    // returning empty. Rework rows still don't exist at CTP — that's a
+    // data-side gap, not a filter mismatch.
+    normalizePlantId(plantId) === "chennai" && safeCategory === "Quality"
+      ? `(category = ${escapeLiteral("Quality")} OR category = ${escapeLiteral("Scrap")})`
+      : `category = ${escapeLiteral(safeCategory)}`,
     "granularity IN ('SHIFT A', 'SHIFT B', 'SHIFT C')",
   ];
 
@@ -1440,12 +1542,26 @@ export function buildShiftComparisonQuery({
     where.push(canonicalDimensionPredicate("sub_section", safeSubSection));
   }
 
-  const { parts: dateParts } = dateWhereParts({ date, from, to });
+  // Same tyre-line scope as the cards, so the shift box under a PCR/TBR pick
+  // no longer shows both lines' production.
+  if (tyreType != null) {
+    const safeTyreType = safeStringValue(tyreType, "tyreType");
+    if (!ALLOWED_TYRE_TYPES.has(safeTyreType)) {
+      throw new QueryValidationError(
+        `Invalid tyreType: ${safeTyreType}. Allowed: ${[...ALLOWED_TYRE_TYPES].join(", ")}`,
+      );
+    }
+    const predicate = tyreTypePredicate(safeTyreType);
+    if (predicate) where.push(predicate);
+  }
+
+  const { parts: dateParts, timeScope } = dateWhereParts({ date, from, to });
   where.push(...dateParts);
 
   const lim =
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 10000;
-  const table = plantSqlTable(plantId) || config.upstream.sqlTable || "gold.gold";
+  const { fromKey, toKey } = timeScopeWindow(timeScope);
+  const table = goldSource({ plantId, fromKey, toKey });
   const dateCol =
     config.upstream.engine === "databricks"
       ? "CAST(date AS VARCHAR) AS date"

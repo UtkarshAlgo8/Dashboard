@@ -7,6 +7,12 @@ export const BanmoreProduction = lazy(
   () => import("@/pages/BanmoreProduction.jsx"),
 );
 export const BanmoreQuality = lazy(() => import("@/pages/BanmoreQuality.jsx"));
+export const BanmoreEngineering = lazy(
+  () => import("@/pages/BanmoreEngineering.jsx"),
+);
+export const BanmoreTechnical = lazy(
+  () => import("@/pages/BanmoreTechnical.jsx"),
+);
 
 export function LazyRoute({ Page }) {
   return (

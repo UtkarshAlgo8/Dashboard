@@ -21,7 +21,7 @@ import client from "@/api/client.js";
 import { dateKey, snapshotLatest } from "@/lib/drillDate.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { parseDrillAttribute } from "@/lib/kpi-transformer.js";
-import { denanDimension } from "@/lib/dashboardRowScopes.js";
+import { denanDimension, hasMachine } from "@/lib/dashboardRowScopes.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 
@@ -76,6 +76,8 @@ function OeeDrillPanel({
   // and Curing leave it blank), so without this the Stock drill lists every
   // sub-section's machines regardless of which tab is active.
   subSection = null,
+  // The header's tyre line (null = both) for the date-wise leaf fetch.
+  tyreType = null,
   rawRows,
   mode = "snapshot",
   granularity = "DAY",
@@ -130,7 +132,7 @@ function OeeDrillPanel({
         }
       }
       if (OEE_CORE_KPIS.has(r.kpi_name)) return true;
-      return Boolean(r.machine && r.machine !== "nan");
+      return hasMachine(r);
     });
     if (cardDate) {
       // C3/C6: pinned to the card's day — no "latest date" resolution at all.
@@ -258,8 +260,7 @@ function OeeDrillPanel({
             (!trench ||
               selectedTredge == null ||
               r.sub_section === selectedTredge) &&
-            r.machine &&
-            r.machine !== "nan",
+            hasMachine(r),
         )
         .map((r) => r.machine),
     );
@@ -408,6 +409,7 @@ function OeeDrillPanel({
           section: sectionName,
           category: "Productivity",
           granularity: "DAY",
+          ...(tyreType ? { tyre_type: tyreType } : {}),
         },
         from,
         to,
@@ -418,7 +420,7 @@ function OeeDrillPanel({
       }
     : null;
 
-  const { data: dayLeafData } = usePolledQuery(
+  const { data: dayLeafData, isLoading: dayLeafLoading } = usePolledQuery(
     () =>
       dayLeafPayload
         ? client
@@ -679,6 +681,8 @@ function OeeDrillPanel({
                     onSelectSubCategory={setSubCategory}
                     rows={subRows}
                     rowsByDate={subRowsByDate}
+                    rowsLoading={isLoading}
+                    rowsByDateLoading={needsDayLeafRows && dayLeafLoading}
                     accentTier={selectedTier}
                   />
                 )}

@@ -26,6 +26,8 @@ import { router as adminRouter } from "./routes/admin.js";
 import { router as chatRouter } from "./routes/chat.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
+import { router as qualityRouter } from "./quality/routes/quality.routes.js";
+import { router as engineeringReliabilityRouter } from "./engineering/routes/reliability.routes.js";
 
 // Auth slice — see backend/src/middlewares/auth.middleware.js
 import authRouter from "./routes/auth.js";
@@ -100,6 +102,7 @@ app.use("/api/v1/admin", gate, adminRouter);
 // JK Agent chatbot — proxies the JK KPI Assistant service.
 //   /api/v1/chat                                          → send a query
 //   /api/v1/chat/download/:resultId                       → full result JSON
+//   /api/v1/chat/report/:reportId/pdf                     → report PDF (binary)
 app.use("/api/v1/chat", gate, chatRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
@@ -107,6 +110,11 @@ app.use("/api/v1/chat", gate, chatRouter);
 //   /api/v1/quality/spc/{summary,filter-options,widgets,detail,*-observations}
 app.use("/api/v1/quality/process", gate, qualityProcessRouter);
 app.use("/api/v1/quality/spc", gate, qualitySpcRouter);
+app.use("/api/v1/quality", gate, qualityRouter);
+
+// Engineering Head dashboard (additive; separate data family — spec 16/17).
+//   /api/v1/engineering/reliability/{summary,kpi-children,kpi-history,latest-date,loss-tree}
+app.use("/api/v1/engineering/reliability", gate, engineeringReliabilityRouter);
 
 app.use(notFound);
 app.use(errorHandler);

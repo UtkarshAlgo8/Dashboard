@@ -30,6 +30,58 @@ export class UpstreamError extends Error {
   }
 }
 
+function parseBodyEnvelope(payload) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    typeof payload.body === "string"
+  ) {
+    try {
+      return JSON.parse(payload.body);
+    } catch {
+      throw new UpstreamError("Upstream `body` field was not valid JSON", {
+        type: "UPSTREAM_INVALID_JSON",
+        status: 502,
+      });
+    }
+  }
+  return payload;
+}
+
+function unwrapRowsEnvelope(payload) {
+  let current = parseBodyEnvelope(payload);
+  const seen = new Set();
+
+  while (current && typeof current === "object" && !Array.isArray(current)) {
+    if (seen.has(current)) break;
+    seen.add(current);
+
+    if (Array.isArray(current.rows)) return current;
+    if (Array.isArray(current.data)) {
+      return { ...current, rows: current.data };
+    }
+    if (Array.isArray(current.result)) {
+      return { ...current, rows: current.result };
+    }
+    if (Array.isArray(current.results)) {
+      return { ...current, rows: current.results };
+    }
+
+    const nested =
+      current.data ??
+      current.result ??
+      current.results ??
+      current.payload ??
+      current.response;
+
+    if (!nested || nested === current) break;
+    current = parseBodyEnvelope(nested);
+  }
+
+  if (Array.isArray(current)) return { rows: current };
+  return current;
+}
+
 /**
  * Run one read query against the upstream.
  *
@@ -96,21 +148,15 @@ export async function runQuery(sql) {
     });
   }
 
-  // Some integrations nest the real payload inside `body` (Lambda proxy
-  // integration default). Unwrap if present.
-  if (
-    payload &&
-    typeof payload === "object" &&
-    typeof payload.body === "string"
-  ) {
-    try {
-      payload = JSON.parse(payload.body);
-    } catch {
-      throw new UpstreamError("Upstream `body` field was not valid JSON", {
-        type: "UPSTREAM_INVALID_JSON",
-        status: 502,
-      });
-    }
+  // Some integrations nest the real payload inside `body`, `data`, `result`,
+  // or similar envelopes. Unwrap before inspecting status / rows.
+  payload = unwrapRowsEnvelope(payload);
+
+  if (response.status >= 400) {
+    throw new UpstreamError(payload?.message ?? "Upstream error", {
+      type: payload?.type ?? "UPSTREAM_ERROR",
+      status: response.status,
+    });
   }
 
   if (payload?.status === "ERROR") {
@@ -120,10 +166,7 @@ export async function runQuery(sql) {
     });
   }
 
-  const rawRows =
-    payload?.rows ??
-    payload?.data ??
-    (Array.isArray(payload) ? payload : null);
+  const rawRows = payload?.rows ?? (Array.isArray(payload) ? payload : null);
 
   if (!Array.isArray(rawRows)) {
     throw new UpstreamError(
@@ -151,3 +194,5 @@ export async function runQuery(sql) {
 
   return rawRows;
 }
+
+export const _test = { unwrapRowsEnvelope };

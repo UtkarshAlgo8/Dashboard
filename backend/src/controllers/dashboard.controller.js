@@ -8,21 +8,32 @@ import {
 import {
   normalizePlantId,
   plantDepartmentPredicate,
-  plantSqlTable,
   canonicalizeSubSection,
 } from "../utils/normalize.js";
+import { goldSource } from "../queries/gold-source.js";
 import {
   buildDrillAggregateQuery,
   buildFetchQuery,
   buildLatestDateQuery,
   buildProductOptionsQuery,
+  buildSectionMachinesQuery,
   buildShiftComparisonQuery,
   buildShiftCoverageQuery,
+  previousWindowGranularity,
   previousWindow,
   resolveDatePredicate,
   resolveGranularity,
   QueryValidationError,
 } from "../queries/dashboard-query.js";
+
+// The machine picker lists machines with production in this many days.
+const MACHINE_LOOKBACK_DAYS = 90;
+
+function isoDaysAgo(days) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * POST /api/v1/dashboard/kpi-data — universal dashboard KPI + drill fetch.
@@ -171,9 +182,17 @@ export async function postFetch(req, res, next) {
           : null;
 
       if (window) {
+        const baselineGranularity = previousWindowGranularity(
+          timeScope,
+          granularity,
+        );
+        const baselineContext = {
+          ...context,
+          granularity: baselineGranularity,
+        };
         const baselineSql = buildFetchQuery({
           plantId,
-          context,
+          context: baselineContext,
           ...window,
           drillKpis,
           landingKpis,
@@ -183,15 +202,17 @@ export async function postFetch(req, res, next) {
           drillOnly,
         });
         const baselineRows = await cached(
-          buildCacheKey("/dashboard/kpi-data:baseline", { context, plantId, window, drillKpis, landingKpis, parentFilters, limit: effectiveLimit, offset, drillOnly }),
+          buildCacheKey("/dashboard/kpi-data:baseline", { context: baselineContext, plantId, window, drillKpis, landingKpis, parentFilters, limit: effectiveLimit, offset, drillOnly }),
           () => runQuery(baselineSql),
           CACHE_TTL.KPI_ROWS,
         );
         payload.baseline = baselineRows.slice(0, effectiveLimit);
         payload.baselineWindow = window;
+        payload.baselineGranularity = baselineGranularity;
       } else {
         payload.baseline = null;
         payload.baselineWindow = null;
+        payload.baselineGranularity = null;
       }
     }
 
@@ -329,6 +350,7 @@ export async function postShiftComparison(req, res, next) {
     const {
       section,
       subSection = null,
+      tyreType = null,
       category,
       date,
       from,
@@ -342,6 +364,7 @@ export async function postShiftComparison(req, res, next) {
       plantId,
       section,
       subSection,
+      tyreType,
       category,
       date,
       from,
@@ -354,6 +377,7 @@ export async function postShiftComparison(req, res, next) {
         plantId,
         section,
         subSection,
+        tyreType,
         category,
         date,
         from,
@@ -446,22 +470,36 @@ export async function getAnchors(req, res, next) {
 export async function getVocab(req, res, next) {
   try {
     const plantId = normalizePlantId(req.query.plantId) ?? "banmore";
-    const vocab = await cached(`dashboard:vocab:${plantId}`, async () => {
+    // v2: `machines` added — a new key so a cached v1 payload (no machines)
+    // is never served to a client that expects them.
+    const vocab = await cached(`dashboard:vocab:v2:${plantId}`, async () => {
       const grab = (sql) =>
         runQuery(sql).then((rows) => rows.map((r) => Object.values(r)[0]));
-      const table = plantSqlTable(plantId);
+      const table = goldSource({ plantId, fromKey: null, toKey: null });
       const scope = plantDepartmentPredicate(plantId);
       const present = (col) =>
         `${col} IS NOT NULL AND ${col} != 'nan' AND ${col} != 'null' AND ${col} != ''`;
 
-      const [sections, categories, granularities, tyreTypes, subSectionRows] =
-        await Promise.all([
+      const [
+        sections,
+        categories,
+        granularities,
+        tyreTypes,
+        subSectionRows,
+        machineRows,
+      ] = await Promise.all([
           grab(`SELECT DISTINCT section FROM ${table} WHERE ${scope} AND ${present("section")} ORDER BY section`),
           grab(`SELECT DISTINCT category FROM ${table} WHERE ${scope} AND ${present("category")} ORDER BY category`),
           grab(`SELECT DISTINCT granularity FROM ${table} WHERE ${scope} AND ${present("granularity")} ORDER BY granularity`),
           grab(`SELECT DISTINCT tyre_type FROM ${table} WHERE ${scope} AND ${present("tyre_type")} ORDER BY tyre_type`),
           runQuery(
             `SELECT DISTINCT section, sub_section FROM ${table} WHERE ${scope} AND ${present("section")} AND ${present("sub_section")} ORDER BY section, sub_section`,
+          ),
+          runQuery(
+            buildSectionMachinesQuery({
+              plantId,
+              sinceIso: isoDaysAgo(MACHINE_LOOKBACK_DAYS),
+            }),
           ),
         ]);
 
@@ -472,7 +510,20 @@ export async function getVocab(req, res, next) {
         if (!list.includes(sub)) list.push(sub);
       }
 
-      return { sections, categories, granularities, tyreTypes, subSections };
+      // { [section]: machine[] } — production machines per section.
+      const machines = {};
+      for (const row of machineRows) {
+        (machines[row.section] ??= []).push(row.machine);
+      }
+
+      return {
+        sections,
+        categories,
+        granularities,
+        tyreTypes,
+        subSections,
+        machines,
+      };
     }, CACHE_TTL.STATIC_LOOKUPS);
     res.json({ data: vocab });
   } catch (err) {
