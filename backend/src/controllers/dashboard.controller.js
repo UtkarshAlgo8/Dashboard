@@ -14,6 +14,7 @@ import { goldSource } from "../queries/gold-source.js";
 import {
   buildDrillAggregateQuery,
   buildFetchQuery,
+  isCtpTotalDowntimeRequest,
   buildLatestDateQuery,
   buildProductOptionsQuery,
   buildSectionMachinesQuery,
@@ -137,17 +138,17 @@ export async function postFetch(req, res, next) {
     // outside range, or materializer disabled). On a hit, we still go
     // through the cache to preserve the existing 2-min TTL semantics
     // for any other reader and to avoid a refetch on the next call.
-    const matRows = drillOnly
-      ? lookupDrill(req.body)
-      : lookupLanding(req.body);
+    // The materializer holds deduped level-1/2 rows, not the raw stored
+    // total. It cannot answer this SUM, even when its window is warm.
+    const matRows = isCtpTotalDowntimeRequest(req.body)
+      ? null
+      : drillOnly
+        ? lookupDrill(req.body)
+        : lookupLanding(req.body);
     const rows =
       matRows != null
         ? matRows
-        : await cached(
-            cacheKey,
-            () => runQuery(sql),
-            CACHE_TTL.KPI_ROWS,
-          );
+        : await cached(cacheKey, () => runQuery(sql), CACHE_TTL.KPI_ROWS);
 
     // C10: we asked for one row beyond the cap. If it came back, the result is
     // incomplete — trim the probe row and flag it so the UI can refuse to show

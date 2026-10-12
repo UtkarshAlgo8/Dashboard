@@ -810,6 +810,21 @@ export function previousWindowGranularity(timeScope, granularity) {
 
 /* ---------- Public builder ---------- */
 
+/** The CTP Production tile reads the stored total, not deduped reason rows. */
+export function isCtpTotalDowntimeRequest({
+  plantId,
+  drillOnly,
+  drillKpis,
+} = {}) {
+  return (
+    normalizePlantId(plantId) === "chennai" &&
+    drillOnly === true &&
+    Array.isArray(drillKpis) &&
+    drillKpis.length === 1 &&
+    drillKpis[0] === "Total_Downtime"
+  );
+}
+
 /**
  * The scope predicates every dashboard read shares: the always-on core
  * filters, the context picker stack, the date + granularity window, and the
@@ -824,6 +839,8 @@ export function previousWindowGranularity(timeScope, granularity) {
  * @returns {string[]} WHERE predicates, to be joined with AND
  */
 function buildScopeWhere({
+  corePredicate = null,
+  strictDimensions = false,
   plantId = "banmore",
   context = {},
   parentFilters = {},
@@ -845,7 +862,7 @@ function buildScopeWhere({
   //    the Quality department (SPC), and the stray UNKNOWN kpi_name can
   //    never reach the dashboard. Plant is matched uppercase, department
   //    lowercase — case-insensitive against the real data's casing.
-  where.push(plantDepartmentPredicate(plantId));
+  where.push(corePredicate ?? plantDepartmentPredicate(plantId));
   where.push(excludeUnknownKpiPredicate());
 
   // 1. Context filters. Keys outside ALLOWED_CONTEXT_KEYS are
@@ -936,7 +953,11 @@ function buildScopeWhere({
         key === "product_type" || key === "sub_section"
           ? canonicalDimensionPredicate(key, canonValue)
           : `${key} = ${escapeLiteral(canonValue)}`;
-      const lenient = `(${matchClause} OR ${emptyColumnPredicate(key)}${extra})`;
+      // Stored equipment totals must not borrow unassigned/section-wide
+      // rows when the user selected a section or sub-section.
+      const lenient = strictDimensions
+        ? matchClause
+        : `(${matchClause} OR ${emptyColumnPredicate(key)}${extra})`;
 
       // new_change.md C4 — the lenient predicate above is correct for
       // section-level rows (it keeps OEE and other product-agnostic KPIs alive
@@ -1060,15 +1081,57 @@ export function buildFetchQuery({
   // null/omitted → every landing-level kpi_name, the pre-existing behaviour.
   landingKpis = null,
 } = {}) {
+  const directDowntime = isCtpTotalDowntimeRequest({
+    plantId,
+    drillOnly,
+    drillKpis,
+  });
+  let scopeContext = context;
+  if (directDowntime && context && typeof context === "object") {
+    // Equipment minutes do not belong to a Production product, unit or tab.
+    scopeContext = { ...context };
+    delete scopeContext.product_type;
+    delete scopeContext.unit_of_measurement;
+    delete scopeContext.category;
+    const gran = normalizeGranularity(context.granularity);
+    scopeContext.granularity = gran?.startsWith("SHIFT") ? gran : "DAY";
+  }
   const { where, timeScope } = buildScopeWhere({
     plantId,
-    context,
+    context: scopeContext,
     parentFilters,
     date,
     from,
     to,
+    // Match the stored-total SQL: plant CTP, without a department restriction.
+    corePredicate: directDowntime ? "UPPER(plant) = 'CTP'" : null,
+    strictDimensions: directDowntime,
   });
   const { fromKey, toKey } = timeScopeWindow(timeScope);
+
+  if (directDowntime) {
+    where.push("kpi_name = 'Total_Downtime'");
+    const lim =
+      Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
+    const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
+    const dateCol =
+      config.upstream.engine === "databricks"
+        ? "CAST(date AS VARCHAR)"
+        : "date";
+    const page = off > 0 ? `OFFSET ${off} LIMIT ${lim}` : `LIMIT ${lim}`;
+    // Aggregate BEFORE paging and without ROW_NUMBER/MAX deduplication. The
+    // headline and sparkline must include every actual_value, just like SUM
+    // in the supplied query; machine/reason row caps cannot truncate it.
+    return (
+      `SELECT ${dateCol} AS date, section, granularity, ` +
+      "'Total_Downtime' AS kpi_name, 'min' AS unit_of_measurement, " +
+      `SUM(actual_value) AS actual_value FROM ${goldSource({ plantId, fromKey, toKey })} ` +
+      `WHERE ${where.join(" AND ")} GROUP BY ${dateCol}, section, granularity ` +
+      `ORDER BY date DESC, section, granularity ${page}`
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+  }
 
   // 4. Drill shape. Null/undefined → landing only. Array → return BOTH
   //    landing rows AND drill children so the grid always has cards while
