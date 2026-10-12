@@ -207,22 +207,28 @@ test("CTP TBM Green Tyre all-line view keeps PCR and TBR rows distinct", () => {
     plantId: "chennai",
     tyreType: null,
   }).find((k) => k.id === "prod");
-  const pcrCard = toKpiGrid(rows.filter((r) => r.tyre_type === "PCR"), {
-    section: "TBM",
-    category: "P",
-    granularity: "DAY",
-    mode: "snapshot",
-    plantId: "chennai",
-    tyreType: "PCR",
-  }).find((k) => k.id === "prod");
-  const tbrCard = toKpiGrid(rows.filter((r) => r.tyre_type === "TBR"), {
-    section: "TBM",
-    category: "P",
-    granularity: "DAY",
-    mode: "snapshot",
-    plantId: "chennai",
-    tyreType: "TBR",
-  }).find((k) => k.id === "prod");
+  const pcrCard = toKpiGrid(
+    rows.filter((r) => r.tyre_type === "PCR"),
+    {
+      section: "TBM",
+      category: "P",
+      granularity: "DAY",
+      mode: "snapshot",
+      plantId: "chennai",
+      tyreType: "PCR",
+    },
+  ).find((k) => k.id === "prod");
+  const tbrCard = toKpiGrid(
+    rows.filter((r) => r.tyre_type === "TBR"),
+    {
+      section: "TBM",
+      category: "P",
+      granularity: "DAY",
+      mode: "snapshot",
+      plantId: "chennai",
+      tyreType: "TBR",
+    },
+  ).find((k) => k.id === "prod");
 
   assert.equal(allCard.value, 15311);
   assert.equal(pcrCard.value, 11906);

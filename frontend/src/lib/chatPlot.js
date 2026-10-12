@@ -44,7 +44,9 @@ function buildPieOptions({ x, y, group_by: groupKey }, rows, theme) {
     title: { text: null },
     credits: { enabled: false },
     colors: pickPalette(theme),
-    tooltip: { pointFormat: "{series.name}: <b>{point.y}</b> ({point.percentage:.1f}%)" },
+    tooltip: {
+      pointFormat: "{series.name}: <b>{point.y}</b> ({point.percentage:.1f}%)",
+    },
     series: [
       {
         name: y,
@@ -55,7 +57,11 @@ function buildPieOptions({ x, y, group_by: groupKey }, rows, theme) {
   };
 }
 
-function buildCartesianOptions({ chart_type: chartType, x, y, group_by: groupKey }, rows, theme) {
+function buildCartesianOptions(
+  { chart_type: chartType, x, y, group_by: groupKey },
+  rows,
+  theme,
+) {
   const palette = pickPalette(theme);
   const seriesType = chartType === "bar" ? "column" : "line";
   const categories = Array.from(
@@ -67,8 +73,13 @@ function buildCartesianOptions({ chart_type: chartType, x, y, group_by: groupKey
     : [null];
 
   const series = groups.map((group, i) => {
-    const matching = group === null ? rows : rows.filter((row) => String(row[groupKey]) === group);
-    const byX = new Map(matching.map((row) => [String(row[x]), toNumber(row[y])]));
+    const matching =
+      group === null
+        ? rows
+        : rows.filter((row) => String(row[groupKey]) === group);
+    const byX = new Map(
+      matching.map((row) => [String(row[x]), toNumber(row[y])]),
+    );
     return {
       name: group ?? y,
       type: seriesType,

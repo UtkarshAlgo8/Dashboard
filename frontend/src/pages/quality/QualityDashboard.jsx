@@ -8,13 +8,7 @@
  * the shared asset.
  */
 import { useState, useRef, useEffect, Fragment } from "react";
-import {
-  Box,
-  Stack,
-  Tooltip,
-  Typography,
-  IconButton,
-} from "@mui/material";
+import { Box, Stack, Tooltip, Typography, IconButton } from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import jkLogo from "@/assets/jk-logo.png";
 import JKLoader from "@/components/JKLoader.jsx";
@@ -4245,94 +4239,94 @@ function DTable({ cols, rows, onRowClick, isRowClickable }) {
               typeof onRowClick === "function" &&
               (typeof isRowClickable !== "function" || isRowClickable(row));
             return (
-            <tr
-              key={ri}
-              onClick={clickable ? () => onRowClick(row) : undefined}
-              style={{
-                background: ri % 2 === 0 ? C.cd : C.rowAlt,
-                transition: "background .15s ease",
-                cursor: clickable ? "pointer" : "default",
-              }}
-              onMouseEnter={(event) => {
-                if (clickable) event.currentTarget.style.background = C.aL;
-              }}
-              onMouseLeave={(event) => {
-                if (clickable)
-                  event.currentTarget.style.background =
-                    ri % 2 === 0 ? C.cd : C.rowAlt;
-              }}
-            >
-              {row.map((cell, ci) => {
-                const isS =
-                  typeof cell === "string" &&
-                  [
-                    "OK",
-                    "High",
-                    "Low",
-                    "Alert",
-                    "Below",
-                    "Monitor",
-                    "Escalate",
-                    "Open",
-                    "Closed",
-                    "Scrapped",
-                    "Electrical",
-                    "Mechanical",
-                    "Instrumentation",
-                  ].includes(cell);
-                const stC = isS
-                  ? ["OK", "Closed"].includes(cell)
-                    ? C.gn
-                    : [
-                          "High",
-                          "Low",
-                          "Scrapped",
-                          "Escalate",
-                          "Below",
-                          "Open",
-                        ].includes(cell)
-                      ? C.rd
+              <tr
+                key={ri}
+                onClick={clickable ? () => onRowClick(row) : undefined}
+                style={{
+                  background: ri % 2 === 0 ? C.cd : C.rowAlt,
+                  transition: "background .15s ease",
+                  cursor: clickable ? "pointer" : "default",
+                }}
+                onMouseEnter={(event) => {
+                  if (clickable) event.currentTarget.style.background = C.aL;
+                }}
+                onMouseLeave={(event) => {
+                  if (clickable)
+                    event.currentTarget.style.background =
+                      ri % 2 === 0 ? C.cd : C.rowAlt;
+                }}
+              >
+                {row.map((cell, ci) => {
+                  const isS =
+                    typeof cell === "string" &&
+                    [
+                      "OK",
+                      "High",
+                      "Low",
+                      "Alert",
+                      "Below",
+                      "Monitor",
+                      "Escalate",
+                      "Open",
+                      "Closed",
+                      "Scrapped",
+                      "Electrical",
+                      "Mechanical",
+                      "Instrumentation",
+                    ].includes(cell);
+                  const stC = isS
+                    ? ["OK", "Closed"].includes(cell)
+                      ? C.gn
                       : [
-                            "Electrical",
-                            "Mechanical",
-                            "Instrumentation",
+                            "High",
+                            "Low",
+                            "Scrapped",
+                            "Escalate",
+                            "Below",
+                            "Open",
                           ].includes(cell)
-                        ? C.bl
-                        : C.am
-                  : null;
-                return (
-                  <td
-                    key={ci}
-                    style={{
-                      padding: "8px 10px",
-                      borderBottom: "1px solid " + C.bd,
-                      borderRight:
-                        ci === row.length - 1 ? "none" : "1px solid " + C.bd,
-                      textAlign: "center",
-                      color: stC || C.tx,
-                      fontWeight: ci === 0 || stC ? 600 : 400,
-                    }}
-                  >
-                    {isS ? (
-                      <span
-                        style={{
-                          padding: "2px 6px",
-                          borderRadius: 999,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          background: (stC || C.am) + "18",
-                          color: stC || C.am,
-                        }}
-                      >
-                        {cell}
-                      </span>
-                    ) : (
-                      cell
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
+                        ? C.rd
+                        : [
+                              "Electrical",
+                              "Mechanical",
+                              "Instrumentation",
+                            ].includes(cell)
+                          ? C.bl
+                          : C.am
+                    : null;
+                  return (
+                    <td
+                      key={ci}
+                      style={{
+                        padding: "8px 10px",
+                        borderBottom: "1px solid " + C.bd,
+                        borderRight:
+                          ci === row.length - 1 ? "none" : "1px solid " + C.bd,
+                        textAlign: "center",
+                        color: stC || C.tx,
+                        fontWeight: ci === 0 || stC ? 600 : 400,
+                      }}
+                    >
+                      {isS ? (
+                        <span
+                          style={{
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            background: (stC || C.am) + "18",
+                            color: stC || C.am,
+                          }}
+                        >
+                          {cell}
+                        </span>
+                      ) : (
+                        cell
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
             );
           })}
         </tbody>
@@ -7557,13 +7551,37 @@ function ProcessDrillPanel({
 // rows exist in gold today; the remaining canonical cards intentionally render
 // an explicit empty state rather than legacy mock numbers.
 const PRODUCT_KPIS = [
-  { id: "overallYield", n: "Overall Production Yield", sourceKpi: "Overall_Production_Yield" },
-  { id: "tyresTested", n: "Uniformity Tyres Tested", sourceKpi: "Overall_Uniformity_Production" },
-  { id: "mtmsYield", n: "MTMS Uniformity Yield", sourceKpi: "Mtms_Uniformity_Yield" },
-  { id: "tuoYield", n: "TUO Uniformity Yield", sourceKpi: "Tuo_Uniformity_Yield" },
+  {
+    id: "overallYield",
+    n: "Overall Production Yield",
+    sourceKpi: "Overall_Production_Yield",
+  },
+  {
+    id: "tyresTested",
+    n: "Uniformity Tyres Tested",
+    sourceKpi: "Overall_Uniformity_Production",
+  },
+  {
+    id: "mtmsYield",
+    n: "MTMS Uniformity Yield",
+    sourceKpi: "Mtms_Uniformity_Yield",
+  },
+  {
+    id: "tuoYield",
+    n: "TUO Uniformity Yield",
+    sourceKpi: "Tuo_Uniformity_Yield",
+  },
   { id: "zfYield", n: "ZF Uniformity Yield", sourceKpi: "Zf_Uniformity_Yield" },
-  { id: "zfBalancing", n: "ZF Balancing Yield", sourceKpi: "Zf_Balancing_Yield_o" },
-  { id: "dbmBalancing", n: "DBM Balancing Yield", sourceKpi: "Dbm_Balancing_Yield" },
+  {
+    id: "zfBalancing",
+    n: "ZF Balancing Yield",
+    sourceKpi: "Zf_Balancing_Yield_o",
+  },
+  {
+    id: "dbmBalancing",
+    n: "DBM Balancing Yield",
+    sourceKpi: "Dbm_Balancing_Yield",
+  },
   { id: "insp", n: "Inspector Rating" },
   { id: "gtw", n: "GT Weight Variation" },
   { id: "eg", n: "E-Grade Count" },
@@ -11834,7 +11852,8 @@ function LiveSpcChart({ title, chart, accent }) {
             fill="transparent"
             style={{ cursor: "crosshair" }}
             onMouseMove={(e) => {
-              const box = e.currentTarget.ownerSVGElement.getBoundingClientRect();
+              const box =
+                e.currentTarget.ownerSVGElement.getBoundingClientRect();
               const svgX = ((e.clientX - box.left) / box.width) * W;
               const step = values.length <= 1 ? 1 : pw / (values.length - 1);
               const i = Math.round((svgX - padL) / step);
@@ -12686,7 +12705,9 @@ function spcTrendWindow(view, to) {
   }
   const end = new Date(`${to}T00:00:00Z`);
   if (view === "monthly") {
-    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1));
+    const start = new Date(
+      Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1),
+    );
     return {
       from: start.toISOString().slice(0, 10),
       to,
@@ -12704,7 +12725,8 @@ function aggregateSpcTrend(points, view) {
   if (view === "daily") return points;
   const groups = new Map();
   for (const point of points) {
-    const key = view === "monthly" ? point.date.slice(0, 7) : point.date.slice(0, 4);
+    const key =
+      view === "monthly" ? point.date.slice(0, 7) : point.date.slice(0, 4);
     const group = groups.get(key) || { date: key, total: 0, count: 0 };
     group.total += Number(point.value);
     group.count += 1;
@@ -12740,9 +12762,10 @@ function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
   const formatAxisLabel = (point) => {
     if (view === "monthly") {
       const [year, month] = point.date.split("-").map(Number);
-      return new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(
-        new Date(Date.UTC(year, month - 1, 1)),
-      );
+      return new Intl.DateTimeFormat("en", {
+        month: "short",
+        timeZone: "UTC",
+      }).format(new Date(Date.UTC(year, month - 1, 1)));
     }
     if (view === "yearly") return point.date;
     const days = Math.round(
@@ -12764,7 +12787,8 @@ function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
     if (view === "yearly") return point.date;
     return toDisplayDate(point.date) || point.date;
   };
-  const fmt = (value) => Number(value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  const fmt = (value) =>
+    Number(value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
   const hoveredPoint = hoveredIndex == null ? null : points[hoveredIndex];
   const tooltipWidth = 176;
   const tooltipHeight = 58;
@@ -12815,7 +12839,13 @@ function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
               stroke="#E3E8F0"
               strokeDasharray="3 4"
             />
-            <text x={pad.left - 12} y={yy + 4} textAnchor="end" fontSize="12" fill="#8A96AC">
+            <text
+              x={pad.left - 12}
+              y={yy + 4}
+              textAnchor="end"
+              fontSize="12"
+              fill="#8A96AC"
+            >
               {fmt(value)}
             </text>
           </g>
@@ -12830,7 +12860,13 @@ function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
         strokeWidth="2.5"
         strokeDasharray="9 5"
       />
-      <text x={pad.left + 8} y={targetY - 9} fontSize="13" fontWeight="700" fill="#C98500">
+      <text
+        x={pad.left + 8}
+        y={targetY - 9}
+        fontSize="13"
+        fontWeight="700"
+        fill="#C98500"
+      >
         Target {target.toFixed(2)}
       </text>
       <line
@@ -12853,7 +12889,9 @@ function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
       </text>
       {points.length > 1 && (
         <polyline
-          points={points.map((point, index) => `${x(index)},${y(point.value)}`).join(" ")}
+          points={points
+            .map((point, index) => `${x(index)},${y(point.value)}`)
+            .join(" ")}
           fill="none"
           stroke="#D18A00"
           strokeWidth="3"
@@ -13055,7 +13093,14 @@ function SPCCapabilityTrendModal({ selection, metric, date, shift, onClose }) {
             >
               Trend
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
               <span style={{ color: C.tx, fontSize: 24, fontWeight: 750 }}>
                 {metric} — {selection.parameter}
               </span>
@@ -13208,7 +13253,11 @@ function SPCCapabilityTrendModal({ selection, metric, date, shift, onClose }) {
                   gap: 10,
                 }}
               >
-                <TrendSummary label="Current" value={current.toFixed(2)} color={accent} />
+                <TrendSummary
+                  label="Current"
+                  value={current.toFixed(2)}
+                  color={accent}
+                />
                 <TrendSummary
                   label="Target"
                   value={target.toFixed(2)}
@@ -13398,7 +13447,9 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
                   }
                   sub={cell.status || ""}
                   col={capCol(cell.value)}
-                  onTrend={() => setTrendMetric(k[0].toUpperCase() + k.slice(1))}
+                  onTrend={() =>
+                    setTrendMetric(k[0].toUpperCase() + k.slice(1))
+                  }
                 />
               );
             })}
@@ -13806,7 +13857,7 @@ function QualityDashboard({ plant, onBack }) {
         if (cancelled) return;
         setProductSummary(
           productResult.status === "fulfilled"
-            ? (productResult.value || { values: {} })
+            ? productResult.value || { values: {} }
             : { values: {} },
         );
         setCuringScrapRows(

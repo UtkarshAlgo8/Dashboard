@@ -1076,7 +1076,8 @@ function MultiSeriesTrendModal({
       if (isMonthly && machineView) {
         rows = rows.filter(
           (r) =>
-            hasMachine(r) && (!allowedMachines || allowedMachines.has(r.machine)),
+            hasMachine(r) &&
+            (!allowedMachines || allowedMachines.has(r.machine)),
         );
       } else if (isMonthly) {
         // Prefer section rollups so an overall chart does not double-count

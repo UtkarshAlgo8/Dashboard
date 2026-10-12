@@ -8,7 +8,12 @@ import { useEffect, useState } from "react";
 import { getEngineeringLossTree } from "@/api/engineering.js";
 import { getReliabilitySummary } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import { Card, C, ReliabilityDrillPanel, LOSS_TREE_LEVELS } from "./reliabilityShared.jsx";
+import {
+  Card,
+  C,
+  ReliabilityDrillPanel,
+  LOSS_TREE_LEVELS,
+} from "./reliabilityShared.jsx";
 import { LossTreePie } from "./reliabilityPanels.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
 import { periodRequestParams } from "@/lib/engineeringPeriod.js";
@@ -32,7 +37,10 @@ function EngineeringOverviewSection({ period, periodLabel }) {
     setLossError(null);
     setSelectedCategory(null);
     getEngineeringLossTree(periodRequestParams(period))
-      .then((res) => !cancelled && setLossRows(Array.isArray(res?.rows) ? res.rows : []))
+      .then(
+        (res) =>
+          !cancelled && setLossRows(Array.isArray(res?.rows) ? res.rows : []),
+      )
       .catch((err) => !cancelled && setLossError(err))
       .finally(() => !cancelled && setLossLoading(false));
     return () => {
@@ -60,7 +68,12 @@ function EngineeringOverviewSection({ period, periodLabel }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Card accent={C.rd}>
-        <LossTreePie rows={lossRows} loading={lossLoading} error={lossError} onSlice={setSelectedCategory} />
+        <LossTreePie
+          rows={lossRows}
+          loading={lossLoading}
+          error={lossError}
+          onSlice={setSelectedCategory}
+        />
         {selectedCategory && (
           <div style={{ marginTop: 12 }}>
             <ReliabilityDrillPanel
@@ -78,7 +91,9 @@ function EngineeringOverviewSection({ period, periodLabel }) {
       </Card>
 
       {summaryError && (
-        <div style={{ color: C.rd, fontSize: 13 }}>Summary fetch failed: {summaryError.message}</div>
+        <div style={{ color: C.rd, fontSize: 13 }}>
+          Summary fetch failed: {summaryError.message}
+        </div>
       )}
       <ReliabilityCardsGrid
         values={summaryValues}

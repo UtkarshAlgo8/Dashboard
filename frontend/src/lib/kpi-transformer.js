@@ -2167,10 +2167,7 @@ export function toKpiGrid(
           { ...narrowOpts, granularity: comparisonGranularity },
           comparisonGranularity,
         );
-        trend = spikePct(
-          value,
-          baselineValue,
-        );
+        trend = spikePct(value, baselineValue);
         if (trend != null) {
           trendValueRaw = value - baselineValue;
           trendBaseline = formatBaselineWindow(baselineWindow, granularity);
@@ -2197,11 +2194,10 @@ export function toKpiGrid(
           const baselineVal =
             isTotalDowntime && baselineRows
               ? (() => {
-                  const { rows: bRows } = selectSeries(
-                    baselineGroups,
-                    kpiDef,
-                    { ...narrowOpts, downtimeByReason: null },
-                  );
+                  const { rows: bRows } = selectSeries(baselineGroups, kpiDef, {
+                    ...narrowOpts,
+                    downtimeByReason: null,
+                  });
                   const dayRows = atGranularity(bRows, granularity).filter(
                     (r) => isoDate(r.date) === prevDayIso(currentIso),
                   );

@@ -97,7 +97,16 @@ export function AnalysisModal({
             >
               {eyebrow}
             </div>
-            <div style={{ fontSize: 19, fontWeight: 700, color: C.tx, marginTop: 2 }}>{title}</div>
+            <div
+              style={{
+                fontSize: 19,
+                fontWeight: 700,
+                color: C.tx,
+                marginTop: 2,
+              }}
+            >
+              {title}
+            </div>
           </div>
           {headerExtra}
           <CardDownloadButton
@@ -244,7 +253,11 @@ export function Block({ title, note, children }) {
       )}
       {children}
       {note && (
-        <div style={{ fontSize: 11.5, color: C.mu, marginTop: 8, lineHeight: 1.5 }}>{note}</div>
+        <div
+          style={{ fontSize: 11.5, color: C.mu, marginTop: 8, lineHeight: 1.5 }}
+        >
+          {note}
+        </div>
       )}
     </div>
   );
@@ -253,7 +266,15 @@ export function Block({ title, note, children }) {
 /** The mock's small caption under a chart. */
 export function ChartCaption({ children }) {
   return (
-    <div style={{ fontSize: 11.5, color: C.mu, textAlign: "center", lineHeight: 1.5, marginTop: 6 }}>
+    <div
+      style={{
+        fontSize: 11.5,
+        color: C.mu,
+        textAlign: "center",
+        lineHeight: 1.5,
+        marginTop: 6,
+      }}
+    >
       {children}
     </div>
   );
@@ -283,11 +304,22 @@ export function HBarChart({ items, unit, target, higherIsBetter, decimals }) {
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: "auto" }}>
       {items.map((it, i) => {
         const y0 = padT + i * rowH;
-        const ok = target == null ? null : higherIsBetter ? it.value >= target : it.value <= target;
+        const ok =
+          target == null
+            ? null
+            : higherIsBetter
+              ? it.value >= target
+              : it.value <= target;
         const col = ok == null ? C.bl : ok ? C.gn : C.rd;
         return (
           <g key={it.label}>
-            <text x={padL - 8} y={y0 + rowH / 2 + 4} fontSize="11.5" fill={C.tx} textAnchor="end">
+            <text
+              x={padL - 8}
+              y={y0 + rowH / 2 + 4}
+              fontSize="11.5"
+              fill={C.tx}
+              textAnchor="end"
+            >
               {it.label}
             </text>
             <rect
@@ -319,7 +351,13 @@ export function HBarChart({ items, unit, target, higherIsBetter, decimals }) {
                 strokeDasharray="3 2"
               />
             )}
-            <text x={x(it.value) + 6} y={y0 + rowH / 2 + 4} fontSize="11" fontWeight="700" fill={C.tx}>
+            <text
+              x={x(it.value) + 6}
+              y={y0 + rowH / 2 + 4}
+              fontSize="11"
+              fontWeight="700"
+              fill={C.tx}
+            >
               {fmtNum(it.value, dp(it.value))}
             </text>
           </g>

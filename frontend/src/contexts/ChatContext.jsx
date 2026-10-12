@@ -235,15 +235,17 @@ export function ChatProvider({ children }) {
           // so there `download_available` alone is the gate.
           downloadAvailable: Boolean(
             response.download_available &&
-              response.result_id &&
-              (servedIntent !== "query" || response.is_large_result),
+            response.result_id &&
+            (servedIntent !== "query" || response.is_large_result),
           ),
           rowCount: response.row_count ?? null,
           // Only `plot` charts. The upstream carries `plot_spec` forward
           // across turns in a session, so without this an `analyze` or
           // `report` answer re-renders the previous question's chart.
           wantsPlot: Boolean(
-            servedIntent === "plot" && response.wants_plot && response.plot_spec,
+            servedIntent === "plot" &&
+            response.wants_plot &&
+            response.plot_spec,
           ),
           plotSpec: response.plot_spec ?? null,
           reportId: response.report_id ?? null,

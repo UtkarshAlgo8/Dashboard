@@ -1,4 +1,11 @@
-import { Box, List, ListItemButton, Paper, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  List,
+  ListItemButton,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
 
 /**
  * The slash-command palette that opens when the user types "/" in the
@@ -78,7 +85,9 @@ export default function JkAgentCommandMenu({
                 "&.Mui-selected:hover": { bgcolor: "action.selected" },
               }}
             >
-              <Icon sx={{ fontSize: 18, color: "primary.main", flexShrink: 0 }} />
+              <Icon
+                sx={{ fontSize: 18, color: "primary.main", flexShrink: 0 }}
+              />
               <Stack direction="column" sx={{ minWidth: 0 }}>
                 <Typography
                   variant="body2"

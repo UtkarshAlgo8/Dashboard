@@ -19,7 +19,13 @@ import {
 } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
-import { C, DTable, GradeChip, fmtMinHrs, fmtNum } from "./reliabilityShared.jsx";
+import {
+  C,
+  DTable,
+  GradeChip,
+  fmtMinHrs,
+  fmtNum,
+} from "./reliabilityShared.jsx";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
@@ -28,7 +34,15 @@ const PIE_COLORS = [C.rd, C.bl, C.pp, C.gn, C.am, C.ac, C.mu];
 /** Small outline info-dot, top-right of the Loss Tree header (visual reference only). */
 function InfoDot() {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={C.mu} strokeWidth="1.6" style={{ flexShrink: 0 }}>
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={C.mu}
+      strokeWidth="1.6"
+      style={{ flexShrink: 0 }}
+    >
       <circle cx="12" cy="12" r="9.5" />
       <line x1="12" y1="11" x2="12" y2="16.5" strokeLinecap="round" />
       <circle cx="12" cy="7.7" r="0.9" fill={C.mu} stroke="none" />
@@ -52,7 +66,10 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
       })),
     [rows],
   );
-  const total = useMemo(() => data.reduce((sum, d) => sum + (d.y || 0), 0), [data]);
+  const total = useMemo(
+    () => data.reduce((sum, d) => sum + (d.y || 0), 0),
+    [data],
+  );
   const pieRef = useRef(null);
   const exportRows = data.map((d) => ({
     Category: d.name,
@@ -66,7 +83,9 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
       title: { text: null },
       credits: { enabled: false },
       accessibility: { enabled: false },
-      tooltip: { pointFormat: "<b>{point.y:,.0f} min</b> ({point.percentage:.1f}%)" },
+      tooltip: {
+        pointFormat: "<b>{point.y:,.0f} min</b> ({point.percentage:.1f}%)",
+      },
       plotOptions: {
         pie: {
           allowPointSelect: true,
@@ -76,7 +95,12 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
             enabled: true,
             format: "{point.percentage:.1f}%",
             distance: -32,
-            style: { fontSize: "12px", fontWeight: "700", color: "#fff", textOutline: "none" },
+            style: {
+              fontSize: "12px",
+              fontWeight: "700",
+              color: "#fff",
+              textOutline: "none",
+            },
           },
           point: {
             events: {
@@ -94,14 +118,31 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
 
   let body;
   if (error) {
-    body = <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>Loss Tree fetch failed: {error.message}</div>;
+    body = (
+      <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
+        Loss Tree fetch failed: {error.message}
+      </div>
+    );
   } else if (loading) {
     body = <JKLoader message="Loading loss tree" />;
   } else if (!rows || rows.length === 0) {
-    body = <div style={{ padding: 30, textAlign: "center", color: C.mu, fontSize: 13 }}>No loss data for this period.</div>;
+    body = (
+      <div
+        style={{ padding: 30, textAlign: "center", color: C.mu, fontSize: 13 }}
+      >
+        No loss data for this period.
+      </div>
+    );
   } else {
     body = (
-      <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 28,
+          flexWrap: "wrap",
+        }}
+      >
         <div style={{ flex: "0 0 260px", width: 260 }}>
           <HighchartsReact highcharts={Highcharts} options={options} />
         </div>
@@ -115,19 +156,39 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "11px 2px",
-                borderBottom: i < data.length - 1 ? "1px solid " + C.bd : "none",
+                borderBottom:
+                  i < data.length - 1 ? "1px solid " + C.bd : "none",
                 cursor: "pointer",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 13.5, color: C.tx, fontWeight: 500 }}>{d.name}</span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: d.color,
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontSize: 13.5, color: C.tx, fontWeight: 500 }}>
+                  {d.name}
+                </span>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>
                   {fmtNum(total ? (d.y / total) * 100 : 0, 1)}%
                 </div>
-                <div style={{ fontSize: 12, color: C.mu }}>{fmtNum(d.y)} min</div>
+                <div style={{ fontSize: 12, color: C.mu }}>
+                  {fmtNum(d.y)} min
+                </div>
               </div>
             </div>
           ))}
@@ -138,7 +199,14 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
 
   return (
     <div ref={pieRef}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
         <div
           style={{
             fontSize: 14.5,
@@ -162,12 +230,24 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
         </div>
       </div>
       {!loading && !error && rows && rows.length > 0 && (
-        <div style={{ fontSize: 12.5, color: C.mu, lineHeight: 1.5, marginTop: 4, marginBottom: 16, maxWidth: 640 }}>
-          Total lost time {fmtNum(total)} min. One taxonomy shared with Production, so Engineering downtime and
-          Production availability loss reconcile. Click a slice to drill into it.
+        <div
+          style={{
+            fontSize: 12.5,
+            color: C.mu,
+            lineHeight: 1.5,
+            marginTop: 4,
+            marginBottom: 16,
+            maxWidth: 640,
+          }}
+        >
+          Total lost time {fmtNum(total)} min. One taxonomy shared with
+          Production, so Engineering downtime and Production availability loss
+          reconcile. Click a slice to drill into it.
         </div>
       )}
-      {(loading || error || !rows || rows.length === 0) && <div style={{ marginTop: 8 }} />}
+      {(loading || error || !rows || rows.length === 0) && (
+        <div style={{ marginTop: 8 }} />
+      )}
       {body}
     </div>
   );
@@ -199,8 +279,14 @@ export function ZeroBreakdownPanel() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      getReliabilityLatestDate({ kpiName: "ZeroBreakdownMachines_Section", granularity: "DAY" }),
-      getReliabilityLatestDate({ kpiName: "DaysWithoutBreakdown_m", granularity: "DAY" }),
+      getReliabilityLatestDate({
+        kpiName: "ZeroBreakdownMachines_Section",
+        granularity: "DAY",
+      }),
+      getReliabilityLatestDate({
+        kpiName: "DaysWithoutBreakdown_m",
+        granularity: "DAY",
+      }),
     ])
       .then(([sec, mac]) => {
         if (cancelled) return;
@@ -229,7 +315,11 @@ export function ZeroBreakdownPanel() {
       // so summing them is the same arithmetic the tiles claim to show.
       agg: "sum",
     })
-      .then((res) => !cancelled && setSectionRows(Array.isArray(res?.rows) ? res.rows : []))
+      .then(
+        (res) =>
+          !cancelled &&
+          setSectionRows(Array.isArray(res?.rows) ? res.rows : []),
+      )
       .catch((err) => !cancelled && setError(err));
     return () => {
       cancelled = true;
@@ -249,7 +339,11 @@ export function ZeroBreakdownPanel() {
       sort: "DaysWithoutBreakdown_m",
       order: "desc",
     })
-      .then((res) => !cancelled && setMachineRows(Array.isArray(res?.rows) ? res.rows : []))
+      .then(
+        (res) =>
+          !cancelled &&
+          setMachineRows(Array.isArray(res?.rows) ? res.rows : []),
+      )
       .catch((err) => !cancelled && setError(err))
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -257,7 +351,10 @@ export function ZeroBreakdownPanel() {
     };
   }, [machineDate, selectedSection]);
 
-  const total = sectionRows.reduce((s, r) => s + (r.ZeroBreakdownMachines_Section ?? 0), 0);
+  const total = sectionRows.reduce(
+    (s, r) => s + (r.ZeroBreakdownMachines_Section ?? 0),
+    0,
+  );
 
   const lastBreakdownDate = (days) => {
     if (days == null || !machineDate) return "—";
@@ -269,18 +366,38 @@ export function ZeroBreakdownPanel() {
   const columns = [
     { key: "machine", label: "Machine" },
     { key: "section", label: "Section" },
-    { key: "status", label: "Category", render: (r) => <GradeChip grade={r.status} /> },
-    { key: "DaysWithoutBreakdown_m", label: "Days without breakdown", align: "right", render: (r) => fmtNum(r.DaysWithoutBreakdown_m) },
-    { key: "lastBreakdown", label: "Last breakdown", align: "right", render: (r) => lastBreakdownDate(r.DaysWithoutBreakdown_m) },
+    {
+      key: "status",
+      label: "Category",
+      render: (r) => <GradeChip grade={r.status} />,
+    },
+    {
+      key: "DaysWithoutBreakdown_m",
+      label: "Days without breakdown",
+      align: "right",
+      render: (r) => fmtNum(r.DaysWithoutBreakdown_m),
+    },
+    {
+      key: "lastBreakdown",
+      label: "Last breakdown",
+      align: "right",
+      render: (r) => lastBreakdownDate(r.DaysWithoutBreakdown_m),
+    },
   ];
 
   if (error) {
-    return <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>Zero Breakdown fetch failed: {error.message}</div>;
+    return (
+      <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
+        Zero Breakdown fetch failed: {error.message}
+      </div>
+    );
   }
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+      <div
+        style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}
+      >
         <button
           onClick={() => setSelectedSection(null)}
           style={{
@@ -303,7 +420,8 @@ export function ZeroBreakdownPanel() {
             style={{
               padding: "8px 14px",
               borderRadius: 8,
-              border: "1px solid " + (selectedSection === r.section ? C.bl : C.bd),
+              border:
+                "1px solid " + (selectedSection === r.section ? C.bl : C.bd),
               background: selectedSection === r.section ? C.bl + "10" : C.c2,
               color: selectedSection === r.section ? C.bl : C.tx,
               fontSize: 12,
@@ -317,7 +435,8 @@ export function ZeroBreakdownPanel() {
       </div>
       {sectionDate && machineDate && sectionDate !== machineDate && (
         <div style={{ fontSize: 11, color: C.mu, marginBottom: 8 }}>
-          Section tiles as of {sectionDate}; machine table as of {machineDate} (latest available per KPI).
+          Section tiles as of {sectionDate}; machine table as of {machineDate}{" "}
+          (latest available per KPI).
         </div>
       )}
       {loading ? (
@@ -348,7 +467,10 @@ export function useZeroBreakdownTotal() {
 
   useEffect(() => {
     let cancelled = false;
-    getReliabilityLatestDate({ kpiName: "ZeroBreakdownMachines_Section", granularity: "DAY" })
+    getReliabilityLatestDate({
+      kpiName: "ZeroBreakdownMachines_Section",
+      granularity: "DAY",
+    })
       .then((res) => {
         if (cancelled || !res?.date) return;
         setAsOf(res.date);
@@ -365,7 +487,9 @@ export function useZeroBreakdownTotal() {
       .then((res) => {
         if (cancelled || !res) return;
         const rows = Array.isArray(res.rows) ? res.rows : [];
-        setTotal(rows.reduce((s, r) => s + (r.ZeroBreakdownMachines_Section ?? 0), 0));
+        setTotal(
+          rows.reduce((s, r) => s + (r.ZeroBreakdownMachines_Section ?? 0), 0),
+        );
       })
       .catch(() => {
         /* card falls back to "—" */
@@ -394,7 +518,11 @@ const GRADE_WEIGHT = { A: 3, B: 2, C: 1, D: 1, Unmapped: 1 };
  *   cannot come from the rows on screen without silently turning it into a
  *   share of the top ten. Without the total the column reads "—".
  */
-export function TopMachineBreakdownsPanel({ date, granularity, totalMinutes = null }) {
+export function TopMachineBreakdownsPanel({
+  date,
+  granularity,
+  totalMinutes = null,
+}) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -411,7 +539,10 @@ export function TopMachineBreakdownsPanel({ date, granularity, totalMinutes = nu
       order: "desc",
       limit: 10,
     })
-      .then((res) => !cancelled && setRows(Array.isArray(res?.rows) ? res.rows : []))
+      .then(
+        (res) =>
+          !cancelled && setRows(Array.isArray(res?.rows) ? res.rows : []),
+      )
       .catch((err) => !cancelled && setError(err))
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -422,8 +553,17 @@ export function TopMachineBreakdownsPanel({ date, granularity, totalMinutes = nu
   const columns = [
     { key: "machine", label: "Machine" },
     { key: "section", label: "Section" },
-    { key: "status", label: "Category", render: (r) => <GradeChip grade={r.status} /> },
-    { key: "BreakdownMin_m", label: "Downtime", align: "right", render: (r) => fmtMinHrs(r.BreakdownMin_m) },
+    {
+      key: "status",
+      label: "Category",
+      render: (r) => <GradeChip grade={r.status} />,
+    },
+    {
+      key: "BreakdownMin_m",
+      label: "Downtime",
+      align: "right",
+      render: (r) => fmtMinHrs(r.BreakdownMin_m),
+    },
     {
       key: "share",
       label: "Share",
@@ -436,23 +576,51 @@ export function TopMachineBreakdownsPanel({ date, granularity, totalMinutes = nu
     },
     // Spec KPI 6: the machine-level counter, never the summed failure rows —
     // those overcount on seven machines (0206 reads 78 instead of 70).
-    { key: "BreakdownOcc_m", label: "Occurrences", align: "right", render: (r) => fmtNum(r.BreakdownOcc_m) },
-    { key: "MTTR_m", label: "MTTR", align: "right", render: (r) => fmtMinHrs(r.MTTR_m) },
-    { key: "MTBF_m", label: "MTBF", align: "right", render: (r) => fmtMinHrs(r.MTBF_m) },
+    {
+      key: "BreakdownOcc_m",
+      label: "Occurrences",
+      align: "right",
+      render: (r) => fmtNum(r.BreakdownOcc_m),
+    },
+    {
+      key: "MTTR_m",
+      label: "MTTR",
+      align: "right",
+      render: (r) => fmtMinHrs(r.MTTR_m),
+    },
+    {
+      key: "MTBF_m",
+      label: "MTBF",
+      align: "right",
+      render: (r) => fmtMinHrs(r.MTBF_m),
+    },
     {
       key: "weighted",
       label: "Weighted",
       align: "right",
       sortValue: (r) => (r.BreakdownMin_m ?? 0) * (GRADE_WEIGHT[r.status] ?? 1),
-      render: (r) => fmtNum((r.BreakdownMin_m ?? 0) * (GRADE_WEIGHT[r.status] ?? 1)),
+      render: (r) =>
+        fmtNum((r.BreakdownMin_m ?? 0) * (GRADE_WEIGHT[r.status] ?? 1)),
     },
   ];
 
   if (error) {
-    return <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>Top Machine Breakdowns fetch failed: {error.message}</div>;
+    return (
+      <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
+        Top Machine Breakdowns fetch failed: {error.message}
+      </div>
+    );
   }
   if (loading) {
     return <JKLoader message="Loading" />;
   }
-  return <DTable columns={columns} rows={rows} getRowKey={(r) => r.machine} emptyMessage="No breakdowns recorded in this period." downloadName="engineering-top-machine-breakdowns" />;
+  return (
+    <DTable
+      columns={columns}
+      rows={rows}
+      getRowKey={(r) => r.machine}
+      emptyMessage="No breakdowns recorded in this period."
+      downloadName="engineering-top-machine-breakdowns"
+    />
+  );
 }

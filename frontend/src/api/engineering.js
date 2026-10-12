@@ -56,7 +56,12 @@ function withScope(params = {}) {
  * MTTR) in one round trip.
  * @returns {Promise<{context:object, values:Record<string,number|null>}>}
  */
-export function getReliabilitySummary({ date, from, to, granularity = "MONTH" }) {
+export function getReliabilitySummary({
+  date,
+  from,
+  to,
+  granularity = "MONTH",
+}) {
   // A single `date` reads the published `_Overall` row at `granularity` —
   // this is the path every period the UI offers takes, including a whole
   // month (its MONTH row IS the rollup).
@@ -113,7 +118,9 @@ export function getReliabilityKpiChildren({
     limit,
     agg,
   });
-  return cachedEngineeringGet(`/engineering/reliability/kpi-children?${params}`);
+  return cachedEngineeringGet(
+    `/engineering/reliability/kpi-children?${params}`,
+  );
 }
 
 /**
@@ -174,7 +181,12 @@ export function getReliabilityLatestDate({
  * status/section rows.
  * @returns {Promise<{context:object, group_by:string, rows:object[]}>}
  */
-export function getEngineeringLossTree({ date, from, to, granularity = "MONTH" }) {
+export function getEngineeringLossTree({
+  date,
+  from,
+  to,
+  granularity = "MONTH",
+}) {
   // As with the summary: `date` + `granularity` reads published rows (a
   // month included). `from`/`to` sum the DAY rows of an arbitrary range —
   // valid here without recomputation, since lost time is additive.

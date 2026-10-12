@@ -51,8 +51,7 @@ function SubDrill({
   const canToggleView = component !== "quality";
   const view = canToggleView ? detailView : "reason";
   const detailRows = view === "date" ? rowsByDate : rows;
-  const detailLoading =
-    view === "date" ? rowsByDateLoading : rowsLoading;
+  const detailLoading = view === "date" ? rowsByDateLoading : rowsLoading;
   // Accent follows the selected cell's status tier (green/amber/red) so
   // the drill box highlight matches the highlighted cell. Falls back to
   // the per-component colour if no tier is supplied.
