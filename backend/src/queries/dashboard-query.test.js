@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import {
   buildDrillAggregateQuery,
   buildFetchQuery,
+  isCtpTotalDowntimeRequest,
   buildLatestDateQuery,
   buildSectionMachinesQuery,
   buildShiftComparisonQuery,
@@ -26,6 +27,110 @@ import {
 import { normalizeUnit, unitPredicate } from "../utils/normalize.js";
 
 const CURING = { section: "Curing", granularity: "DAY" };
+
+const storedDowntimeRequest = (over = {}) => ({
+  plantId: "ctp",
+  context: CURING,
+  from: "2026-10-01",
+  to: "2026-10-06",
+  drillOnly: true,
+  drillKpis: ["Total_Downtime"],
+  ...over,
+});
+
+test("CTP stored downtime aggregates raw values before pagination, without dedupe or department filtering", () => {
+  const sql = buildFetchQuery(
+    storedDowntimeRequest({ limit: 100, offset: 100 }),
+  );
+  assert.ok(sql.includes("SUM(actual_value) AS actual_value"));
+  assert.ok(sql.includes("UPPER(plant) = 'CTP'"));
+  assert.ok(sql.includes("kpi_name = 'Total_Downtime'"));
+  assert.ok(sql.includes("granularity = 'DAY'"));
+  assert.ok(sql.includes("GROUP BY"));
+  assert.ok(sql.endsWith("OFFSET 100 LIMIT 100"));
+  assert.ok(!sql.includes("ROW_NUMBER"));
+  assert.ok(!sql.includes("__dedupe_rn"));
+  assert.ok(!sql.includes("LOWER(department)"));
+  assert.ok(!sql.includes("drill_down_level"));
+});
+
+test("CTP stored downtime honours dates/sub-section/tyre/shift but not product or Production units", () => {
+  const sql = stripGoldSourceUnion(
+    buildFetchQuery(
+      storedDowntimeRequest({
+        date: "2026-09-01",
+        context: {
+          section: "Curing",
+          sub_section: "Trench1",
+          tyre_type: "PCR",
+          granularity: "SHIFT B",
+          category: "Productivity",
+          product_type: "Cured Tyre",
+          unit_of_measurement: "NOS",
+        },
+      }),
+    ),
+  );
+  assert.ok(sql.includes("section = 'Curing'"));
+  assert.ok(sql.includes("trench1"));
+  assert.ok(sql.includes("'PCR'"));
+  assert.ok(sql.includes("granularity = 'SHIFT B'"));
+  assert.ok(sql.includes("'20261001'"));
+  assert.ok(sql.includes("'20261006'"));
+  assert.ok(!sql.includes("'20260901'"));
+  assert.ok(!sql.includes("Cured Tyre"));
+  assert.ok(!sql.includes("'NOS'"));
+  assert.ok(!sql.includes("category ="));
+  assert.ok(!sql.includes("section IS NULL"));
+  assert.ok(!sql.includes("sub_section IS NULL"));
+});
+
+test("CTP stored downtime month requests read DAY, never DAY + MONTH together", () => {
+  const sql = buildFetchQuery(
+    storedDowntimeRequest({ context: { ...CURING, granularity: "MONTH" } }),
+  );
+  assert.ok(sql.includes("granularity = 'DAY'"));
+  assert.ok(!sql.includes("granularity = 'MONTH'"));
+});
+
+test("stored-total SQL and materializer bypass apply only to the dedicated CTP request", () => {
+  assert.equal(isCtpTotalDowntimeRequest(storedDowntimeRequest()), true);
+  assert.equal(
+    isCtpTotalDowntimeRequest(storedDowntimeRequest({ plantId: "chennai" })),
+    true,
+  );
+  for (const over of [
+    { plantId: "banmore" },
+    { drillOnly: false },
+    { drillKpis: ["Breakdown"] },
+    { drillKpis: ["Total_Downtime", "Breakdown"] },
+  ]) {
+    const request = storedDowntimeRequest(over);
+    assert.equal(isCtpTotalDowntimeRequest(request), false);
+    assert.ok(buildFetchQuery(request).includes("__dedupe_rn"));
+  }
+});
+
+test("CTP stored-total requests retain context and date validation", () => {
+  assert.throws(
+    () => buildFetchQuery(storedDowntimeRequest({ context: null })),
+    QueryValidationError,
+  );
+  assert.throws(
+    () =>
+      buildFetchQuery(
+        storedDowntimeRequest({ context: { unexpected: "pin" } }),
+      ),
+    QueryValidationError,
+  );
+  assert.throws(
+    () =>
+      buildFetchQuery(
+        storedDowntimeRequest({ from: "2026-10-06", to: "2026-10-01" }),
+      ),
+    QueryValidationError,
+  );
+});
 
 /**
  * goldSource() embeds its OWN date predicates inside a UNION ALL table

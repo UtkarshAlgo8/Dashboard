@@ -7,6 +7,10 @@
  * "Downtime" kpi is removed entirely; its purpose is served by
  * these six reasons summed.
  *
+ * CTP Production's tile now reads the stored `Total_Downtime` SUM via
+ * ctpDowntime.js. The taxonomy here still backs reason drills/plots and
+ * the legacy/Technical reason-based calculations.
+ *
  * "Total Downtime" is a frontend virtual concept (Q-DT-01). The
  * kpi-data endpoint accepts these six names in one `drillKpis`
  * array; the frontend sums them per date for the tile value and
@@ -21,7 +25,7 @@ export const DOWNTIME_REASONS = [
   "Operations/Material/Manpower",
 ];
 
-// Virtual kpi_name for the new "Total Downtime" tile. Frontend-only;
+// Virtual display name for the "Total Downtime" tile. Frontend-only;
 // the backend never sees this string (we expand it to the six
 // reasons before posting).
 export const TOTAL_DOWNTIME_NAME = "TotalDowntime";

@@ -27,6 +27,7 @@ import {
 } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
+import { ctpDowntimePayload } from "@/lib/ctpDowntime.js";
 import { getAnchors } from "@/api/dashboard.js";
 import client from "@/api/client.js";
 
@@ -472,6 +473,16 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
       }
     : null;
 
+  const totalDowntimePayload = includesTotalDowntime
+    ? ctpDowntimePayload({
+        plantId,
+        category: state.category,
+        context: buildContext(state),
+        dates: buildDatePayload(state),
+        withBaseline: needsBaseline(state),
+      })
+    : null;
+
   // Never fetch without a resolved date window: a single day (Today) OR a
   // from/to range (Month/Year/custom). On first mount the window is null
   // until the page settles the as-of anchor + preset — gating here stops the
@@ -582,6 +593,22 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     },
   );
 
+  const {
+    data: totalDowntimeData,
+    isLoading: totalDowntimeLoading,
+    error: totalDowntimeError,
+  } = usePolledQuery(
+    () =>
+      totalDowntimePayload
+        ? fetchCachedDashboard(totalDowntimePayload)
+        : Promise.resolve(null),
+    {
+      enabled: hasDateRange && Boolean(totalDowntimePayload),
+      interval: 0,
+      deps: [JSON.stringify(totalDowntimePayload)],
+    },
+  );
+
   // new_change.md C6/C14: each KPI's own newest DAY date + the sections whose
   // latest day is still in progress. Fetched once and memoized in the api
   // module, so mounting this hook costs no extra request.
@@ -627,7 +654,9 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // new_change.md C10: either fetch hitting the row cap makes the totals on
   // screen incomplete — surface it rather than showing a partial sum as final.
   const truncated =
-    Boolean(landingData?.truncated) || Boolean(drillData?.truncated);
+    Boolean(landingData?.truncated) ||
+    Boolean(drillData?.truncated) ||
+    Boolean(totalDowntimeData?.truncated);
   // LANDING-only loading. Treat "waiting for the date window" as loading too,
   // so the grid shows a skeleton (not an empty "no data" state) while the range
   // resolves and the gated landing fetch has not run yet.
@@ -638,7 +667,10 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // put a full-body loader over content that never changed. Drill-only
   // progress belongs to `isDrillLoading` below, which the panel renders in
   // place.
-  const isLoading = !hasDateRange || landingLoading;
+  const isLoading =
+    !hasDateRange ||
+    landingLoading ||
+    (Boolean(totalDowntimePayload) && totalDowntimeLoading);
   // Drill-only loading flag so drill panels can render a skeleton while
   // their fetch is in flight, without confusing it with landing reload.
   // CR-11: the Total Downtime drill has no drillPayload of its own (see
@@ -648,7 +680,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const isDrillLoading = skipDrillFetch
     ? Boolean(downtimePayload) && downtimeLoading
     : Boolean(drillPayload) && drillLoading;
-  const error = landingError || drillError || null;
+  const error = landingError || drillError || totalDowntimeError || null;
 
   // When the latest landing data actually arrived from the backend, stamped
   // on the envelope by the fetcher (see fetchDashboard). Derived purely from
@@ -659,7 +691,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   // data is the dedicated reason fetch still has a Total Downtime tile.
   const kpis = useMemo(
     () =>
-      data || downtimeRows
+      data || downtimeRows || totalDowntimeData?.rows
         ? toKpiGrid(data ?? [], {
             section: sectionIdToName(state.section),
             category: state.category.toUpperCase(),
@@ -700,11 +732,16 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
             truncated,
             // CR-11 / Q-DT-01: the ONLY feed for the Total Downtime tile.
             downtimeRows,
+            totalDowntimeRows: totalDowntimeData?.rows ?? null,
+            baselineTotalDowntimeRows: totalDowntimeData?.baseline ?? null,
+            totalDowntimeBaselineWindow:
+              totalDowntimeData?.baselineWindow ?? null,
           })
         : [],
     [
       data,
       downtimeRows,
+      totalDowntimeData,
       state.section,
       state.category,
       state.granularity,
@@ -720,6 +757,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
       partialDays,
       landingData?.baseline,
       landingData?.baselineWindow,
+      landingData?.baselineGranularity,
       truncated,
     ],
   );

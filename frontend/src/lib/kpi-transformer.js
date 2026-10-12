@@ -24,6 +24,10 @@ import {
 import { toDisplayDate } from "./dateFormat.js";
 import { isProductAgnosticKpi } from "./dashboardRowScopes.js";
 import {
+  CTP_TOTAL_DOWNTIME_KPI,
+  usesCtpProductionDowntime,
+} from "./ctpDowntime.js";
+import {
   DOWNTIME_REASONS,
   CARD_DOWNTIME_REASONS,
   TOTAL_DOWNTIME_NAME,
@@ -1294,7 +1298,9 @@ function selectSeries(
   let name = kpiDef.name;
   let groupDesc = groups.get(name) ?? [];
 
-  // CR-11 / Q-DT-01: TotalDowntime is a virtual kpi_name. Synthesise
+  // TotalDowntime is a display/virtual name. CTP Production reads the
+  // stored Total_Downtime; legacy and Technical cards synthesise reasons.
+  // CR-11 / Q-DT-01: Synthesise
   // per-date rows by summing the 6 OEE-availability-loss reason leaves,
   // read ONLY from `downtimeByReason` — the dedicated DAY fetch, indexed
   // by toKpiGrid. Never from `groups`: a reason/OEE drill puts a second
@@ -1309,6 +1315,20 @@ function selectSeries(
   // the "—" placeholder even though the chart (which doesn't gate on
   // granularity) renders correctly.
   if (name === TOTAL_DOWNTIME_NAME) {
+    if (kpiDef.directTotal) {
+      // CTP Production reads the stored total independently of the reasons.
+      // Do not dedupe, infer missing totals from reasons, or average machines.
+      const gran = normGran(granularity).startsWith("SHIFT")
+        ? granularity
+        : "DAY";
+      return {
+        name,
+        rows: atGranularity(
+          sumRowsPerPeriod(groups.get(CTP_TOTAL_DOWNTIME_KPI) ?? []),
+          gran,
+        ),
+      };
+    }
     if (!downtimeByReason) return { name: TOTAL_DOWNTIME_NAME, rows: [] };
     const perDate = new Map();
     const granularityCount = new Map();
@@ -1775,7 +1795,11 @@ function baselineAggregate(baselineGroups, kpiDef, narrowOpts, granularity) {
     ...narrowOpts,
     downtimeByReason: null,
   });
-  const values = atGranularity(rows, granularity)
+  const baselineGran =
+    kpiDef.directTotal && !normGran(granularity).startsWith("SHIFT")
+      ? "DAY"
+      : granularity;
+  const values = atGranularity(rows, baselineGran)
     .map((r) => numberOrNull(r.actual_value))
     .filter((v) => v !== null);
   if (values.length === 0) return null;
@@ -1842,9 +1866,13 @@ export function toKpiGrid(
     // reason rows mixed into a MONTH landing set moved the panels' "latest
     // date" onto a day with no landing rows (blank OEE drill), while a
     // reason-drill fetch returned the SAME leaves a second time and the
-    // tile summed both copies (2x). This is the ONLY feed for the
-    // TotalDowntime tile — see selectSeries.
+    // tile summed both copies (2x). This feeds the legacy TotalDowntime
+    // and Technical reason cards; CTP Production uses totalDowntimeRows.
     downtimeRows = null,
+    // CTP Production's stored-total feed, separate from reason drills.
+    totalDowntimeRows = null,
+    baselineTotalDowntimeRows = null,
+    totalDowntimeBaselineWindow = null,
     // The cards to build, in order. Defaults to the Production allow-list
     // for (section, category); the Technical dashboard passes its own
     // single-reason downtime cards here.
@@ -1857,7 +1885,9 @@ export function toKpiGrid(
   const hasLandingRows = Array.isArray(rows) && rows.length > 0;
   const hasDowntimeRows =
     Array.isArray(downtimeRows) && downtimeRows.length > 0;
-  if (!hasLandingRows && !hasDowntimeRows) return [];
+  const hasTotalDowntimeRows =
+    Array.isArray(totalDowntimeRows) && totalDowntimeRows.length > 0;
+  if (!hasLandingRows && !hasDowntimeRows && !hasTotalDowntimeRows) return [];
 
   // Two execution modes:
   //   "snapshot"  — use the LATEST row at `granularity` and take
@@ -1873,8 +1903,16 @@ export function toKpiGrid(
   const isSnapshot = mode === "snapshot";
 
   // Get allowed KPI names for this (section, category) combo only.
-  const allowedKpis = kpiDefs ?? ALLOWED_KPIS[section]?.[category] ?? [];
+  const directDowntime =
+    !kpiDefs && usesCtpProductionDowntime(plantId, category);
+  const allowedKpis = (kpiDefs ?? ALLOWED_KPIS[section]?.[category] ?? []).map(
+    (kpi) =>
+      directDowntime && kpi.name === TOTAL_DOWNTIME_NAME
+        ? { ...kpi, directTotal: true }
+        : kpi,
+  );
   const allowedNames = new Set(allowedKpis.map((k) => k.name));
+  if (directDowntime) allowedNames.add(CTP_TOTAL_DOWNTIME_KPI);
   // CR-11 / Q-DT-01: the 6 reason leaves are deliberately NOT allow-listed
   // here. They arrive via `downtimeRows`, not `rows` — and any copy of them
   // that IS in `rows` (a reason drill, or the OEE drill, whose targets
@@ -1911,7 +1949,17 @@ export function toKpiGrid(
   // section/KPI-name narrowing here. Plant-level KPIs (e.g. Absenteeism,
   // spec §6) come back with section="nan"; they bypass the section check.
   const groupOpts = { section, allowedNames, plantLevelNames };
-  const groups = buildKpiGroups(rows, groupOpts);
+  // Only the dedicated feed supplies stored totals; opening a drill must
+  // never append a second copy to the headline.
+  const groups = buildKpiGroups(
+    directDowntime
+      ? [
+          ...(rows ?? []).filter((r) => r.kpi_name !== CTP_TOTAL_DOWNTIME_KPI),
+          ...(totalDowntimeRows ?? []),
+        ]
+      : rows,
+    groupOpts,
+  );
   // CR-11: scope the dedicated reason rows to this section the same way
   // buildKpiGroups scopes `rows`, then index them by reason kpi_name.
   const downtimeByReason = new Map();
@@ -1941,8 +1989,16 @@ export function toKpiGrid(
   if (groups.size === 0 && downtimeByReason.size === 0) return [];
   // C16: the baseline rows go through the SAME grouping + narrowing, so the
   // only difference between the two windows is the date.
-  const baselineGroups = Array.isArray(baselineRows)
-    ? buildKpiGroups(baselineRows, groupOpts)
+  const baselineFeed = directDowntime
+    ? [
+        ...(baselineRows ?? []).filter(
+          (r) => r.kpi_name !== CTP_TOTAL_DOWNTIME_KPI,
+        ),
+        ...(baselineTotalDowntimeRows ?? []),
+      ]
+    : baselineRows;
+  const baselineGroups = Array.isArray(baselineFeed)
+    ? buildKpiGroups(baselineFeed, groupOpts)
     : null;
   const narrowOpts = {
     section,
@@ -1980,6 +2036,9 @@ export function toKpiGrid(
   // Production, Downtime, Plan Compliance). A KPI with no data for the
   // current view gets a placeholder card, so the grid never reflows.
   for (const kpiDef of allowedKpis) {
+    const comparisonWindow = kpiDef.directTotal
+      ? totalDowntimeBaselineWindow
+      : baselineWindow;
     // Narrow to the ONE pinned series this card renders (kpi_name,
     // product_type, unit_of_measurement) — the same function the baseline
     // window goes through, so only the date differs between them (C16).
@@ -2081,6 +2140,8 @@ export function toKpiGrid(
       const windowIsCardPeriod =
         normGran(granularity) === "MONTH" || normGran(granularity) === "YEAR";
 
+      // CTP's direct total carries no fleet divisor: its headline/spark are
+      // sums. The legacy reason-based cards below retain their averaging.
       // CR-11: the reason rows are PER MACHINE, and machines break down
       // CONCURRENTLY — two presses down for the same hour contribute 120
       // machine-minutes but only 60 minutes of elapsed time. Summing them
@@ -2100,7 +2161,8 @@ export function toKpiGrid(
           const v = numberOrNull(r.actual_value);
           if (v == null) continue;
           total += v;
-          if (r.machines) for (const m of r.machines) fleet.add(m);
+          if (!kpiDef.directTotal && r.machines)
+            for (const m of r.machines) fleet.add(m);
         }
         // Never divide by zero: with no machine attribution the sum is the
         // best available figure, and `scope` stays null so the card makes no
@@ -2170,7 +2232,7 @@ export function toKpiGrid(
         trend = spikePct(value, baselineValue);
         if (trend != null) {
           trendValueRaw = value - baselineValue;
-          trendBaseline = formatBaselineWindow(baselineWindow, granularity);
+          trendBaseline = formatBaselineWindow(comparisonWindow, granularity);
         }
       } else {
         // Day-wise comparison: prefer the exact previous calendar day, but
@@ -2192,7 +2254,7 @@ export function toKpiGrid(
           // (or D-1's same shift). Total Downtime has its own baseline path
           // because the value was divided by the contributing fleet.
           const baselineVal =
-            isTotalDowntime && baselineRows
+            isTotalDowntime && !kpiDef.directTotal && baselineRows
               ? (() => {
                   const { rows: bRows } = selectSeries(baselineGroups, kpiDef, {
                     ...narrowOpts,
@@ -2378,7 +2440,7 @@ export function toKpiGrid(
       // concurrency argument as the snapshot path applies — divide the
       // machine-minutes by the machines that contributed, giving what a
       // typical machine lost across the range.
-      if (isTotalDowntimeAgg) {
+      if (isTotalDowntimeAgg && !kpiDef.directTotal) {
         const fleet = new Set();
         for (const r of dailyRows) {
           if (r.machines) for (const m of r.machines) fleet.add(m);
@@ -2412,7 +2474,9 @@ export function toKpiGrid(
     );
     const trend = spikePct(value, baselineValue);
     const trendBaseline =
-      trend != null ? formatBaselineWindow(baselineWindow, granularity) : null;
+      trend != null
+        ? formatBaselineWindow(comparisonWindow, granularity)
+        : null;
     const trendValueRaw = trend != null ? value - baselineValue : null;
 
     const latest = dailyRows[0];
