@@ -118,7 +118,13 @@ const MAX_BARS = 15;
  *   card opens MTBF, the MTTR card opens MTTR, and neither switches to the
  *   other. Only VIEW BY is a control here.
  */
-function MtbfMttrChartModal({ open, onClose, date, granularity, measure: measureId }) {
+function MtbfMttrChartModal({
+  open,
+  onClose,
+  date,
+  granularity,
+  measure: measureId,
+}) {
   // Section leads — the spec lists it first, and it is the view that answers
   // "where is the problem".
   const [viewId, setViewId] = useState("section");
@@ -147,7 +153,10 @@ function MtbfMttrChartModal({ open, onClose, date, granularity, measure: measure
       granularity,
       groupBy: "machine",
     })
-      .then((res) => !cancelled && setRows(Array.isArray(res?.rows) ? res.rows : []))
+      .then(
+        (res) =>
+          !cancelled && setRows(Array.isArray(res?.rows) ? res.rows : []),
+      )
       .catch((err) => !cancelled && setError(err))
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -163,7 +172,10 @@ function MtbfMttrChartModal({ open, onClose, date, granularity, measure: measure
         .filter((r) => r[measure.machineKpi] != null)
         .sort((a, b) => b[measure.machineKpi] - a[measure.machineKpi])
         .slice(0, MAX_BARS)
-        .map((r) => ({ label: r.machine ?? "—", value: r[measure.machineKpi] / 60 }));
+        .map((r) => ({
+          label: r.machine ?? "—",
+          value: r[measure.machineKpi] / 60,
+        }));
     }
 
     // Pool the components per section, then divide ONCE — see the header
@@ -180,13 +192,18 @@ function MtbfMttrChartModal({ open, onClose, date, granularity, measure: measure
       bucket.denominator += r[measure.denominator] ?? 0;
       pooled.set(key, bucket);
     }
-    return [...pooled.entries()]
-      // A section with no breakdown has a zero denominator: its rate is
-      // undefined, not zero, so it is left out rather than drawn at the
-      // bottom of the chart (the spec's "gaps are not zeros" rule).
-      .filter(([, b]) => b.denominator > 0)
-      .map(([label, b]) => ({ label, value: b.numerator / b.denominator / 60 }))
-      .sort((a, b) => b.value - a.value);
+    return (
+      [...pooled.entries()]
+        // A section with no breakdown has a zero denominator: its rate is
+        // undefined, not zero, so it is left out rather than drawn at the
+        // bottom of the chart (the spec's "gaps are not zeros" rule).
+        .filter(([, b]) => b.denominator > 0)
+        .map(([label, b]) => ({
+          label,
+          value: b.numerator / b.denominator / 60,
+        }))
+        .sort((a, b) => b.value - a.value)
+    );
   }, [rows, isSection, measure]);
 
   return (
@@ -201,7 +218,12 @@ function MtbfMttrChartModal({ open, onClose, date, granularity, measure: measure
       <ControlRow last>
         <ControlLabel>View by</ControlLabel>
         {VIEWS_BY.map((v) => (
-          <Chip key={v.id} on={viewId === v.id} color={C.pp} onClick={() => setViewId(v.id)}>
+          <Chip
+            key={v.id}
+            on={viewId === v.id}
+            color={C.pp}
+            onClick={() => setViewId(v.id)}
+          >
             {v.label}
           </Chip>
         ))}
@@ -215,7 +237,9 @@ function MtbfMttrChartModal({ open, onClose, date, granularity, measure: measure
         ) : loading ? (
           <JKLoader message={`Loading ${measure.label}`} />
         ) : bars.length === 0 ? (
-          <div style={{ padding: 8, color: C.mu, fontSize: 13, lineHeight: 1.6 }}>
+          <div
+            style={{ padding: 8, color: C.mu, fontSize: 13, lineHeight: 1.6 }}
+          >
             No {measure.label} rows published for this period.
           </div>
         ) : (
@@ -228,9 +252,10 @@ function MtbfMttrChartModal({ open, onClose, date, granularity, measure: measure
             />
             {isSection && (
               <ChartCaption>
-                Pooled per section from {measure.numerator} ÷ {measure.denominator} across that
-                section&apos;s machines — summed first, divided once, which reproduces the
-                engine&apos;s published section figures exactly.
+                Pooled per section from {measure.numerator} ÷{" "}
+                {measure.denominator} across that section&apos;s machines —
+                summed first, divided once, which reproduces the engine&apos;s
+                published section figures exactly.
               </ChartCaption>
             )}
           </>

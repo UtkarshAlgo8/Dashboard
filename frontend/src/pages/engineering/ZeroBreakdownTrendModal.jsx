@@ -38,8 +38,20 @@ import {
 import { TARGETS } from "./reliabilityTargets.js";
 
 const RANGES = {
-  daily: { id: "daily", label: "Daily", granularity: "DAY", back: 29, unit: "day" },
-  monthly: { id: "monthly", label: "Monthly", granularity: "MONTH", back: 11, unit: "month" },
+  daily: {
+    id: "daily",
+    label: "Daily",
+    granularity: "DAY",
+    back: 29,
+    unit: "day",
+  },
+  monthly: {
+    id: "monthly",
+    label: "Monthly",
+    granularity: "MONTH",
+    back: 11,
+    unit: "month",
+  },
 };
 
 /** Start of the window, `back` days or months before `asOf`. */
@@ -82,7 +94,9 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
           const key = String(p.date).slice(0, 10);
           perPeriod.set(key, (perPeriod.get(key) ?? 0) + p.value);
         }
-        setPoints([...perPeriod.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+        setPoints(
+          [...perPeriod.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+        );
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -90,7 +104,8 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
     };
   }, [open, asOf, range]);
 
-  const pct = total == null ? null : Math.min(150, Math.max(0, (total / target) * 100));
+  const pct =
+    total == null ? null : Math.min(150, Math.max(0, (total / target) * 100));
   const onTarget = pct != null && pct >= 100;
   // The tick sits where the target falls on a bar scaled to whichever of the
   // two is larger — the mock's rule, so the target never runs off the end.
@@ -108,7 +123,11 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
       <ControlRow last>
         <ControlLabel>Time range</ControlLabel>
         {Object.values(RANGES).map((r) => (
-          <Chip key={r.id} on={rangeId === r.id} onClick={() => setRangeId(r.id)}>
+          <Chip
+            key={r.id}
+            on={rangeId === r.id}
+            onClick={() => setRangeId(r.id)}
+          >
             {r.label}
           </Chip>
         ))}
@@ -126,7 +145,9 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
           }}
         >
           <span style={{ fontWeight: 600 }}>0</span>
-          <span style={{ fontWeight: 700, color: C.am }}>Target: {target} machines</span>
+          <span style={{ fontWeight: 700, color: C.am }}>
+            Target: {target} machines
+          </span>
         </div>
         <div
           style={{
@@ -151,7 +172,14 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
               transition: "width .4s",
             }}
           >
-            <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 700,
+                color: "#fff",
+                whiteSpace: "nowrap",
+              }}
+            >
               {total == null ? "—" : `${fmtNum(total)} machines`}
             </span>
           </div>
@@ -212,7 +240,9 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
           </div>
         ) : (
           <TrendChart
-            labels={points.map(([key]) => (range.unit === "day" ? key.slice(5) : key.slice(0, 7)))}
+            labels={points.map(([key]) =>
+              range.unit === "day" ? key.slice(5) : key.slice(0, 7),
+            )}
             values={points.map(([, value]) => value)}
             unit=""
             target={target}

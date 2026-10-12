@@ -539,7 +539,14 @@ function BanmoreProduction() {
       false,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeRange, shiftKey, windowAnchor, selectedSingleDay, asOfLoading, anchorsLoading]);
+  }, [
+    timeRange,
+    shiftKey,
+    windowAnchor,
+    selectedSingleDay,
+    asOfLoading,
+    anchorsLoading,
+  ]);
 
   const { from, to } = presetToDateRange(timeRange, windowAnchor);
   const shiftComparisonSingleDay =

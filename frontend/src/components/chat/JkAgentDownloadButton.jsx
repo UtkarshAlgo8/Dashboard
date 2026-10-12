@@ -62,7 +62,13 @@ export default function JkAgentDownloadButton({ resultId, rowCount }) {
               <DownloadRoundedIcon sx={{ fontSize: 16 }} />
             )
           }
-          sx={{ mt: 1, mr: 1, fontSize: "0.75rem", textTransform: "none", py: 0.25 }}
+          sx={{
+            mt: 1,
+            mr: 1,
+            fontSize: "0.75rem",
+            textTransform: "none",
+            py: 0.25,
+          }}
         >
           {label}
         </Button>

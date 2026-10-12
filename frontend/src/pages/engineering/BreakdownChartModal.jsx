@@ -106,12 +106,17 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
       running += r.value;
       return total ? (running / total) * 100 : 0;
     });
-    const longest = rows.reduce((n, r) => Math.max(n, truncate(r.label).length), 0);
+    const longest = rows.reduce(
+      (n, r) => Math.max(n, truncate(r.label).length),
+      0,
+    );
     // Upright labels are as tall as their text is long, so the room they need
     // is a property of the data: machine codes ask for ~70px, a failure
     // phrase for ~220px.
     const upright = longest > 8;
-    const labelRoom = upright ? Math.min(240, Math.max(90, longest * 6.2 + 30)) : 70;
+    const labelRoom = upright
+      ? Math.min(240, Math.max(90, longest * 6.2 + 30))
+      : 70;
     return {
       chart: {
         type: "column",
@@ -202,7 +207,9 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
           return (
             `<b>${row.label}</b><br/>` +
             `${measureLabel}: <b>${fmtNum(row.value)}</b><br/>` +
-            (row.pct == null ? "" : `Breakdown %: <b>${fmtNum(row.pct, 2)}%</b><br/>`) +
+            (row.pct == null
+              ? ""
+              : `Breakdown %: <b>${fmtNum(row.pct, 2)}%</b><br/>`) +
             `Share of scope: <b>${fmtNum(row.share, 1)}%</b><br/>` +
             `Cumulative: <b>${fmtNum(cumulative[idx], 1)}%</b>`
           );
@@ -216,7 +223,12 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
           pointPadding: 0.06,
           dataLabels: {
             enabled: true,
-            style: { fontSize: "11px", fontWeight: "700", color: C.tx, textOutline: "none" },
+            style: {
+              fontSize: "11px",
+              fontWeight: "700",
+              color: C.tx,
+              textOutline: "none",
+            },
             formatter: function () {
               return fmtNum(this.y);
             },
@@ -262,9 +274,15 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
   const [machine, setMachine] = useState("");
 
   const [machineRows, setMachineRows] = useState([]);
-  const [machineState, setMachineState] = useState({ loading: true, error: null });
+  const [machineState, setMachineState] = useState({
+    loading: true,
+    error: null,
+  });
   const [failureRows, setFailureRows] = useState([]);
-  const [failureState, setFailureState] = useState({ loading: false, error: null });
+  const [failureState, setFailureState] = useState({
+    loading: false,
+    error: null,
+  });
 
   // The machine lens AND the machine-filter options come from one fetch of
   // the machine-level pair; it is also the scope total the shares run on.
@@ -282,7 +300,9 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
         setMachineRows(Array.isArray(res?.rows) ? res.rows : []);
         setMachineState({ loading: false, error: null });
       })
-      .catch((err) => !cancelled && setMachineState({ loading: false, error: err }));
+      .catch(
+        (err) => !cancelled && setMachineState({ loading: false, error: err }),
+      );
     return () => {
       cancelled = true;
     };
@@ -309,7 +329,9 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
         setFailureRows(Array.isArray(res?.rows) ? res.rows : []);
         setFailureState({ loading: false, error: null });
       })
-      .catch((err) => !cancelled && setFailureState({ loading: false, error: err }));
+      .catch(
+        (err) => !cancelled && setFailureState({ loading: false, error: err }),
+      );
     return () => {
       cancelled = true;
     };
@@ -354,7 +376,11 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
       [
         ...new Set(
           machineRows
-            .filter((r) => (!category || r.status === category) && (!section || r.section === section))
+            .filter(
+              (r) =>
+                (!category || r.status === category) &&
+                (!section || r.section === section),
+            )
             .map((r) => r.machine)
             .filter((m) => m != null && m !== ""),
         ),
@@ -378,7 +404,11 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
       minutes += r.BreakdownMin_m ?? 0;
       occurrences += r.BreakdownOcc_m ?? 0;
     }
-    return { minutes, occurrences, machines: scopeRows.filter((r) => r.BreakdownMin_m > 0).length };
+    return {
+      minutes,
+      occurrences,
+      machines: scopeRows.filter((r) => r.BreakdownMin_m > 0).length,
+    };
   }, [scopeRows]);
 
   const measureKey = MEASURES.find((m) => m.id === measure).key;
@@ -414,10 +444,16 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
       .sort((a, b) => b.value - a.value);
 
     const total = ranked.reduce((s, r) => s + r.value, 0);
-    return ranked.map((r) => ({ ...r, share: total ? (r.value / total) * 100 : 0 }));
+    return ranked.map((r) => ({
+      ...r,
+      share: total ? (r.value / total) * 100 : 0,
+    }));
   }, [viewBy, scopeRows, failureRows, measureKey, machine]);
 
-  const measureTotal = useMemo(() => allRows.reduce((s, r) => s + r.value, 0), [allRows]);
+  const measureTotal = useMemo(
+    () => allRows.reduce((s, r) => s + r.value, 0),
+    [allRows],
+  );
 
   const barRows = useMemo(() => allRows.slice(0, maxBars), [allRows, maxBars]);
 
@@ -425,7 +461,9 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
   // the figure the pooled "Other" bar would have shown.
   const plottedShare = useMemo(
     () =>
-      measureTotal ? (barRows.reduce((s, r) => s + r.value, 0) / measureTotal) * 100 : 0,
+      measureTotal
+        ? (barRows.reduce((s, r) => s + r.value, 0) / measureTotal) * 100
+        : 0,
     [barRows, measureTotal],
   );
 
@@ -443,7 +481,8 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     return allRows.length;
   }, [allRows, measureTotal]);
 
-  const loading = machineState.loading || (viewBy === "failure" && failureState.loading);
+  const loading =
+    machineState.loading || (viewBy === "failure" && failureState.loading);
   const error = machineState.error || failureState.error;
   const groupLabel = viewBy === "machine" ? "Machine" : "Failure";
   const activeMeasure = MEASURES.find((m) => m.id === measure);
@@ -453,11 +492,25 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     ...(viewBy === "machine"
       ? [
           { key: "section", label: "Section", render: (r) => r.section ?? "—" },
-          { key: "status", label: "Category", render: (r) => <GradeChip grade={r.status} /> },
+          {
+            key: "status",
+            label: "Category",
+            render: (r) => <GradeChip grade={r.status} />,
+          },
         ]
       : []),
-    { key: "minutes", label: "Downtime (min)", align: "right", render: (r) => fmtNum(r.minutes) },
-    { key: "occurrences", label: "Occurrences", align: "right", render: (r) => fmtNum(r.occurrences) },
+    {
+      key: "minutes",
+      label: "Downtime (min)",
+      align: "right",
+      render: (r) => fmtNum(r.minutes),
+    },
+    {
+      key: "occurrences",
+      label: "Occurrences",
+      align: "right",
+      render: (r) => fmtNum(r.occurrences),
+    },
     {
       key: "pct",
       label: "Breakdown %",
@@ -466,7 +519,12 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
       // its own, and the UI does not make one up.
       render: (r) => (r.pct == null ? "—" : fmtNum(r.pct, 2) + "%"),
     },
-    { key: "share", label: "Share of scope", align: "right", render: (r) => fmtNum(r.share, 1) + "%" },
+    {
+      key: "share",
+      label: "Share of scope",
+      align: "right",
+      render: (r) => fmtNum(r.share, 1) + "%",
+    },
   ];
 
   return (
@@ -486,7 +544,11 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
         <span style={{ width: 12 }} />
         <ControlLabel gutter={false}>Measure</ControlLabel>
         {MEASURES.map((m) => (
-          <Chip key={m.id} on={measure === m.id} onClick={() => setMeasure(m.id)}>
+          <Chip
+            key={m.id}
+            on={measure === m.id}
+            onClick={() => setMeasure(m.id)}
+          >
             {m.label}
           </Chip>
         ))}
@@ -556,9 +618,12 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
           <ScopeBanner>
             <b style={{ color: C.tx }}>Scope: </b>
             {category || "All categories"} · {section || "all sections"} ·{" "}
-            {machine ? `machine ${machine}` : `${fmtNum(scope.machines)} machines with a breakdown`} —{" "}
-            <b style={{ color: C.tx }}>{fmtNum(scope.minutes)} min</b> over{" "}
-            <b style={{ color: C.tx }}>{fmtNum(scope.occurrences)}</b> breakdowns.{" "}
+            {machine
+              ? `machine ${machine}`
+              : `${fmtNum(scope.machines)} machines with a breakdown`}{" "}
+            — <b style={{ color: C.tx }}>{fmtNum(scope.minutes)} min</b> over{" "}
+            <b style={{ color: C.tx }}>{fmtNum(scope.occurrences)}</b>{" "}
+            breakdowns.{" "}
             {allRows.length === 0
               ? "Nothing recorded in this scope."
               : `${fmtNum(rowsTo80)} of ${fmtNum(allRows.length)} ${
@@ -575,8 +640,8 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
                 barsTo80={rowsTo80}
               />
               <ChartCaption>
-                Bars = {activeMeasure.label.toLowerCase()} (additive) · amber line = cumulative % of
-                scope
+                Bars = {activeMeasure.label.toLowerCase()} (additive) · amber
+                line = cumulative % of scope
                 {viewBy === "machine" || machine
                   ? " · small figure = that row's own Breakdown %"
                   : ""}

@@ -78,7 +78,8 @@ function BanmoreEngineering() {
   });
 
   useEffect(() => {
-    if (kpisError && !isLiveTab) toast.error("Could not load Engineering dashboard");
+    if (kpisError && !isLiveTab)
+      toast.error("Could not load Engineering dashboard");
   }, [kpisError, isLiveTab, toast]);
 
   // The selected reporting period: one `date` plus the `granularity` that
@@ -154,10 +155,16 @@ function BanmoreEngineering() {
           </Box>
         )}
         {activeTab === "overall" && (
-          <EngineeringOverviewSection period={period} periodLabel={periodLabel} />
+          <EngineeringOverviewSection
+            period={period}
+            periodLabel={periodLabel}
+          />
         )}
         {activeTab === "reliability" && (
-          <EngineeringReliabilitySection period={period} periodLabel={periodLabel} />
+          <EngineeringReliabilitySection
+            period={period}
+            periodLabel={periodLabel}
+          />
         )}
         {!isLiveTab && (
           <EngineeringKpiGrid

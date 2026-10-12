@@ -218,9 +218,10 @@ function TimeRangeSelect({
               "& .MuiOutlinedInput-notchedOutline": {
                 border: "0 !important",
               },
-              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                border: "0 !important",
-              },
+              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+                {
+                  border: "0 !important",
+                },
               "& .MuiInputBase-input": {
                 py: 0,
                 px: 2,

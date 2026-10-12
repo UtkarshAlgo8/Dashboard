@@ -94,7 +94,12 @@ function getMockResponse(userMessage = "", intent = "query") {
       row_count: 16,
       download_available: true,
       wants_plot: true,
-      plot_spec: { chart_type: "line", x: "date", y: "actual_value", group_by: null },
+      plot_spec: {
+        chart_type: "line",
+        x: "date",
+        y: "actual_value",
+        group_by: null,
+      },
     };
   }
   if (intent === "report") {
@@ -106,7 +111,12 @@ function getMockResponse(userMessage = "", intent = "query") {
     };
   }
   if (intent === "analyze") {
-    return { ...base, result_id: "mock-result-analyze", row_count: 42, download_available: true };
+    return {
+      ...base,
+      result_id: "mock-result-analyze",
+      row_count: 42,
+      download_available: true,
+    };
   }
   return base;
 }

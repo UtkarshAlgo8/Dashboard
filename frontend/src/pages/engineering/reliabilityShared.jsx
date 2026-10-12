@@ -62,8 +62,18 @@ export function todayInIST() {
 // Spelled out rather than via Intl: en-GB renders September as "Sept", and
 // the label should read the same everywhere regardless of the host's ICU data.
 const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 /** "2026-09-14" -> "14 Sep 2026". Returns the input unchanged if unparseable. */
@@ -262,7 +272,8 @@ export function Breadcrumb({ path, onNav }) {
               cursor: onNav && i < path.length - 1 ? "pointer" : "default",
               color: i === path.length - 1 ? C.tx : C.mu,
               fontWeight: i === path.length - 1 ? 700 : 400,
-              textDecoration: onNav && i < path.length - 1 ? "underline" : "none",
+              textDecoration:
+                onNav && i < path.length - 1 ? "underline" : "none",
             }}
           >
             {p}
@@ -322,7 +333,9 @@ export function DTable({
 
   if (!rows || rows.length === 0) {
     return (
-      <div style={{ padding: 16, textAlign: "center", color: C.mu, fontSize: 13 }}>
+      <div
+        style={{ padding: 16, textAlign: "center", color: C.mu, fontSize: 13 }}
+      >
         {emptyMessage || "No data for this scope."}
       </div>
     );
@@ -333,97 +346,123 @@ export function DTable({
 
   return (
     <div>
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
-      <CardDownloadButton
-        cardRef={tableRef}
-        headers={exported.headers}
-        rows={exported.rows}
-        filename={toFileSlug(downloadName)}
-        sx={{ width: 26, height: 26, borderRadius: 1 }}
-      />
-    </div>
-    <div
-      ref={tableRef}
-      style={{
-        overflowX: "auto",
-        border: "1px solid " + C.bd,
-        borderRadius: 10,
-        maxHeight: 360,
-      }}
-    >
-      <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
-        <thead>
-          <tr>
-            {columns.map((col, i) => {
-              const active = sc === i;
+      <div
+        style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}
+      >
+        <CardDownloadButton
+          cardRef={tableRef}
+          headers={exported.headers}
+          rows={exported.rows}
+          filename={toFileSlug(downloadName)}
+          sx={{ width: 26, height: 26, borderRadius: 1 }}
+        />
+      </div>
+      <div
+        ref={tableRef}
+        style={{
+          overflowX: "auto",
+          border: "1px solid " + C.bd,
+          borderRadius: 10,
+          maxHeight: 360,
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            fontSize: 13,
+          }}
+        >
+          <thead>
+            <tr>
+              {columns.map((col, i) => {
+                const active = sc === i;
+                return (
+                  <th
+                    key={col.key || i}
+                    onClick={() => onH(i)}
+                    title="Click to sort"
+                    style={{
+                      textAlign: col.align || "center",
+                      padding: "8px 10px",
+                      background: C.thBg,
+                      color: active ? C.bl : C.tx,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: ".6px",
+                      borderBottom: "2px solid " + C.bd,
+                      borderRight:
+                        i === columns.length - 1 ? "none" : "1px solid " + C.bd,
+                      fontSize: 11,
+                      cursor: "pointer",
+                      userSelect: "none",
+                      whiteSpace: "nowrap",
+                      position: "sticky",
+                      top: 0,
+                    }}
+                  >
+                    {col.label}
+                    <span
+                      style={{
+                        marginLeft: 4,
+                        fontSize: 9,
+                        opacity: active ? 1 : 0.3,
+                      }}
+                    >
+                      {active ? (sd === "asc" ? "▲" : "▼") : "⇅"}
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {disp.map((row, ri) => {
+              const rowKey = getRowKey ? getRowKey(row, ri) : ri;
+              const selected =
+                selectedRowKey != null && rowKey === selectedRowKey;
               return (
-                <th
-                  key={col.key || i}
-                  onClick={() => onH(i)}
-                  title="Click to sort"
+                <tr
+                  key={rowKey}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
                   style={{
-                    textAlign: col.align || "center",
-                    padding: "8px 10px",
-                    background: C.thBg,
-                    color: active ? C.bl : C.tx,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: ".6px",
-                    borderBottom: "2px solid " + C.bd,
-                    borderRight: i === columns.length - 1 ? "none" : "1px solid " + C.bd,
-                    fontSize: 11,
-                    cursor: "pointer",
-                    userSelect: "none",
-                    whiteSpace: "nowrap",
-                    position: "sticky",
-                    top: 0,
+                    background: selected
+                      ? C.aL
+                      : ri % 2 === 0
+                        ? C.cd
+                        : C.rowAlt,
+                    cursor: onRowClick ? "pointer" : "default",
+                    boxShadow: selected ? `inset 3px 0 0 ${C.ac}` : undefined,
                   }}
                 >
-                  {col.label}
-                  <span style={{ marginLeft: 4, fontSize: 9, opacity: active ? 1 : 0.3 }}>
-                    {active ? (sd === "asc" ? "▲" : "▼") : "⇅"}
-                  </span>
-                </th>
+                  {columns.map((col, ci) => (
+                    <td
+                      key={col.key || ci}
+                      style={{
+                        padding: "8px 10px",
+                        borderBottom: "1px solid " + C.bd,
+                        borderRight:
+                          ci === columns.length - 1
+                            ? "none"
+                            : "1px solid " + C.bd,
+                        textAlign: col.align || "center",
+                        color: C.tx,
+                        fontWeight: ci === 0 ? 600 : 400,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {col.render
+                        ? col.render(row, rows)
+                        : (row[col.key] ?? "—")}
+                    </td>
+                  ))}
+                </tr>
               );
             })}
-          </tr>
-        </thead>
-        <tbody>
-          {disp.map((row, ri) => {
-            const rowKey = getRowKey ? getRowKey(row, ri) : ri;
-            const selected = selectedRowKey != null && rowKey === selectedRowKey;
-            return (
-            <tr
-              key={rowKey}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              style={{
-                background: selected ? C.aL : ri % 2 === 0 ? C.cd : C.rowAlt,
-                cursor: onRowClick ? "pointer" : "default",
-                boxShadow: selected ? `inset 3px 0 0 ${C.ac}` : undefined,
-              }}
-            >
-              {columns.map((col, ci) => (
-                <td
-                  key={col.key || ci}
-                  style={{
-                    padding: "8px 10px",
-                    borderBottom: "1px solid " + C.bd,
-                    borderRight: ci === columns.length - 1 ? "none" : "1px solid " + C.bd,
-                    textAlign: col.align || "center",
-                    color: C.tx,
-                    fontWeight: ci === 0 ? 600 : 400,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {col.render ? col.render(row, rows) : (row[col.key] ?? "—")}
-                </td>
-              ))}
-            </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -493,7 +532,12 @@ function shareColumn(valueKey, label = "Share") {
  */
 function breakdownLevel(groupBy, groupLabel, pctKpi, minKpi, machinesKpi) {
   const columns = [
-    { key: pctKpi, label: "Breakdown %", align: "right", render: (r) => fmtNum(r[pctKpi], 2) + "%" },
+    {
+      key: pctKpi,
+      label: "Breakdown %",
+      align: "right",
+      render: (r) => fmtNum(r[pctKpi], 2) + "%",
+    },
     {
       key: minKpi,
       label: "Downtime",
@@ -544,12 +588,37 @@ function dateWise(level) {
 }
 
 export const BREAKDOWN_LEVELS = [
-  breakdownLevel("status", "Machine Category", "Breakdown_Pct_Grade", "BreakdownMin_Grade", "BreakdownMachines_Grade"),
-  breakdownLevel("section", "Section", "Breakdown_Pct_Grade_Section", "BreakdownMin_Grade_Section", "BreakdownMachines_Grade_Section"),
+  breakdownLevel(
+    "status",
+    "Machine Category",
+    "Breakdown_Pct_Grade",
+    "BreakdownMin_Grade",
+    "BreakdownMachines_Grade",
+  ),
+  breakdownLevel(
+    "section",
+    "Section",
+    "Breakdown_Pct_Grade_Section",
+    "BreakdownMin_Grade_Section",
+    "BreakdownMachines_Grade_Section",
+  ),
   breakdownLevel("machine", "Machine", "Breakdown_Pct_m", "BreakdownMin_m"),
-  { ...breakdownLevel("sub_section", "Discipline", "Breakdown_Pct_m_Discipline", "BreakdownMin_m_Discipline"), padTo: DISCIPLINES },
+  {
+    ...breakdownLevel(
+      "sub_section",
+      "Discipline",
+      "Breakdown_Pct_m_Discipline",
+      "BreakdownMin_m_Discipline",
+    ),
+    padTo: DISCIPLINES,
+  },
   dateWise(
-    breakdownLevel("remarks", "Failure", "Breakdown_Pct_m_Failure", "BreakdownMin_m_Failure"),
+    breakdownLevel(
+      "remarks",
+      "Failure",
+      "Breakdown_Pct_m_Failure",
+      "BreakdownMin_m_Failure",
+    ),
   ),
 ];
 
@@ -572,9 +641,22 @@ export const BREAKDOWN_LEVELS = [
  *             at machine grain only (confirmed against gold.gold: 2,690 MONTH
  *             rows). No grade, section or discipline equivalent exists.
  */
-function rateLevel(groupBy, groupLabel, kpiName, label, { minutesKpi, occKpi, operatingKpi } = {}) {
+function rateLevel(
+  groupBy,
+  groupLabel,
+  kpiName,
+  label,
+  { minutesKpi, occKpi, operatingKpi } = {},
+) {
   const kpiNames = [kpiName];
-  const columns = [{ key: kpiName, label, align: "right", render: (r) => fmtMinHrs(r[kpiName]) }];
+  const columns = [
+    {
+      key: kpiName,
+      label,
+      align: "right",
+      render: (r) => fmtMinHrs(r[kpiName]),
+    },
+  ];
   if (occKpi) {
     kpiNames.push(occKpi);
     columns.push({
@@ -669,21 +751,46 @@ export const MTTR_LEVELS = [
 
 function lossLevel(groupBy, groupLabel, timeKpi, occKpi) {
   const columns = [
-    { key: timeKpi, label: "Lost Time", align: "right", render: (r) => fmtMinHrs(r[timeKpi]) },
+    {
+      key: timeKpi,
+      label: "Lost Time",
+      align: "right",
+      render: (r) => fmtMinHrs(r[timeKpi]),
+    },
   ];
   if (occKpi) {
-    columns.push({ key: occKpi, label: "Occurrences", align: "right", render: (r) => fmtNum(r[occKpi]) });
+    columns.push({
+      key: occKpi,
+      label: "Occurrences",
+      align: "right",
+      render: (r) => fmtNum(r[occKpi]),
+    });
   }
   // Lost time is a plain total, so its share of the level is the spec's
   // "share" column at Loss Tree levels 2-4.
   columns.push(shareColumn(timeKpi));
-  return { groupBy, groupLabel, kpiNames: occKpi ? [timeKpi, occKpi] : [timeKpi], columns };
+  return {
+    groupBy,
+    groupLabel,
+    kpiNames: occKpi ? [timeKpi, occKpi] : [timeKpi],
+    columns,
+  };
 }
 
 export const LOSS_TREE_LEVELS = [
-  lossLevel("sub_section", "Discipline / Loss Type", "LostTime_LossType", "Occurrences_LossType"),
+  lossLevel(
+    "sub_section",
+    "Discipline / Loss Type",
+    "LostTime_LossType",
+    "Occurrences_LossType",
+  ),
   lossLevel("machine", "Machine", "LostTime_Loss_m", null),
-  lossLevel("remarks", "Failure", "LostTime_Loss_Failure", "Occurrences_Loss_Failure"),
+  lossLevel(
+    "remarks",
+    "Failure",
+    "LostTime_Loss_Failure",
+    "Occurrences_Loss_Failure",
+  ),
 ];
 
 /**
@@ -768,7 +875,10 @@ function DrillLevelTable({
   const dims = level.groupBy.split(",");
   const groupColumns = dims.map((dim, i) => ({
     key: dim,
-    label: dim === "status" ? "Machine Category" : (level.groupLabels?.[i] ?? level.groupLabel),
+    label:
+      dim === "status"
+        ? "Machine Category"
+        : (level.groupLabels?.[i] ?? level.groupLabel),
     render: (r) => {
       if (dim === "status") return <GradeChip grade={r[dim]} />;
       if (dim === "date") return r.date ? formatDayLabel(r.date) : "—";
@@ -802,7 +912,9 @@ function DrillLevelTable({
   // click still re-sorts from here.
   const orderedRows = useMemo(() => {
     if (!dims.includes("date")) return shownRows;
-    return [...shownRows].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return [...shownRows].sort((a, b) =>
+      String(a.date).localeCompare(String(b.date)),
+    );
   }, [shownRows, level.groupBy]);
 
   return (
@@ -837,7 +949,9 @@ function DrillLevelTable({
         />
       )}
       {level.note && !error && !loading && (
-        <div style={{ fontSize: 11.5, color: C.mu, lineHeight: 1.5, marginTop: 6 }}>
+        <div
+          style={{ fontSize: 11.5, color: C.mu, lineHeight: 1.5, marginTop: 6 }}
+        >
           {level.note}
         </div>
       )}
@@ -879,7 +993,11 @@ export function ReliabilityDrillPanel({
   // level — it is what keeps that parent row highlighted once the child
   // table is on screen. The root level has no parent, hence null.
   const seed = () => [
-    { filters: initialFilters, crumbs: initialLabel ? [initialLabel] : [], picked: null },
+    {
+      filters: initialFilters,
+      crumbs: initialLabel ? [initialLabel] : [],
+      picked: null,
+    },
   ];
   const [history, setHistory] = useState(seed);
 
@@ -897,14 +1015,25 @@ export function ReliabilityDrillPanel({
     // seed() not seed — a bare function reaching setState is read as an
     // updater, and this is a plain replacement.
     setHistory(seed());
-  }, [levels, date, granularity, range?.from, range?.to, initialFiltersKey, initialLabel]);
+  }, [
+    levels,
+    date,
+    granularity,
+    range?.from,
+    range?.to,
+    initialFiltersKey,
+    initialLabel,
+  ]);
 
   const deepest = history[history.length - 1];
   const path = [rootLabel, ...deepest.crumbs];
 
   return (
     <div>
-      <Breadcrumb path={path} onNav={(i) => setHistory((h) => h.slice(0, i + 1))} />
+      <Breadcrumb
+        path={path}
+        onNav={(i) => setHistory((h) => h.slice(0, i + 1))}
+      />
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {history.map((entry, i) => {
           const level = levels[i];
@@ -920,7 +1049,9 @@ export function ReliabilityDrillPanel({
               range={range}
               agg={agg}
               filters={entry.filters}
-              caption={scope ? `${level.groupLabel} · ${scope}` : level.groupLabel}
+              caption={
+                scope ? `${level.groupLabel} · ${scope}` : level.groupLabel
+              }
               // Highlight the row this table was drilled through, if any.
               selectedRowKey={history[i + 1]?.picked}
               autoScroll={i > 0 && i === history.length - 1}
@@ -958,19 +1089,35 @@ export function ReliabilityDrillPanel({
  */
 export function TrendChart({ labels, values, unit, target }) {
   const options = useMemo(() => {
-    const cleaned = values.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null));
+    const cleaned = values.map((v) =>
+      typeof v === "number" && Number.isFinite(v) ? v : null,
+    );
     return {
-      chart: { type: "line", height: 260, spacing: [16, 12, 12, 8], backgroundColor: "transparent" },
+      chart: {
+        type: "line",
+        height: 260,
+        spacing: [16, 12, 12, 8],
+        backgroundColor: "transparent",
+      },
       title: { text: null },
       credits: { enabled: false },
       accessibility: { enabled: false },
       legend: { enabled: false },
-      xAxis: { categories: labels, gridLineWidth: 1, gridLineColor: C.bd, lineColor: C.bd },
+      xAxis: {
+        categories: labels,
+        gridLineWidth: 1,
+        gridLineColor: C.bd,
+        lineColor: C.bd,
+      },
       yAxis: {
         title: { text: null },
         gridLineWidth: 1,
         gridLineColor: C.bd,
-        labels: { formatter: function () { return unit ? `${this.value}${unit}` : this.value; } },
+        labels: {
+          formatter: function () {
+            return unit ? `${this.value}${unit}` : this.value;
+          },
+        },
         // A target above every plotted value is outside the axis extremes,
         // and Highcharts then draws nothing at all — the line vanishes with
         // no warning. Breakdown % runs 1.07-2.17 against a 3.0 target, so
@@ -998,7 +1145,11 @@ export function TrendChart({ labels, values, unit, target }) {
       },
       tooltip: { valueSuffix: unit ? ` ${unit}` : "" },
       plotOptions: {
-        line: { color: C.bl, lineWidth: 2.5, marker: { enabled: true, radius: 3.5 } },
+        line: {
+          color: C.bl,
+          lineWidth: 2.5,
+          marker: { enabled: true, radius: 3.5 },
+        },
       },
       series: [{ name: "Actual", data: cleaned }],
     };

@@ -91,6 +91,9 @@ test("zeroStockItemRows: an item code on two tyre types appears once", () => {
       ],
     },
   ]);
-  const rows = zeroStockItemRows(m, { ...emptyCtpFilter(), sec: "Tyre Building" });
+  const rows = zeroStockItemRows(m, {
+    ...emptyCtpFilter(),
+    sec: "Tyre Building",
+  });
   assert.equal(rows.length, 1);
 });

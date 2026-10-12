@@ -26,7 +26,9 @@ const opts = {
 };
 
 const productionCard = (rows, extra = {}) =>
-  toKpiGrid(rows, { ...opts, ...extra }).find((k) => k.rawName === "Production");
+  toKpiGrid(rows, { ...opts, ...extra }).find(
+    (k) => k.rawName === "Production",
+  );
 
 test("headline reads the pinned day when it has a row", () => {
   const rows = [row("2026-10-01", 500), row("2026-09-30", 400)];

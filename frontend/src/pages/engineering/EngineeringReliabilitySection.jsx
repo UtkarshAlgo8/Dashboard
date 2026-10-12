@@ -17,7 +17,11 @@ function EngineeringReliabilitySection({ period, periodLabel }) {
   // rule, and avoids a setState-in-effect cascading render.
   const params = periodRequestParams(period);
   const requestKey = `${params.date}|${params.from}|${params.to}|${params.granularity}`;
-  const [result, setResult] = useState({ key: null, values: null, error: null });
+  const [result, setResult] = useState({
+    key: null,
+    values: null,
+    error: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -25,10 +29,16 @@ function EngineeringReliabilitySection({ period, periodLabel }) {
       .then(
         (res) =>
           !cancelled &&
-          setResult({ key: requestKey, values: res?.values ?? null, error: null }),
+          setResult({
+            key: requestKey,
+            values: res?.values ?? null,
+            error: null,
+          }),
       )
       .catch(
-        (err) => !cancelled && setResult({ key: requestKey, values: null, error: err }),
+        (err) =>
+          !cancelled &&
+          setResult({ key: requestKey, values: null, error: err }),
       );
     return () => {
       cancelled = true;
