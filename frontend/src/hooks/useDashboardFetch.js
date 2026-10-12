@@ -656,7 +656,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const truncated =
     Boolean(landingData?.truncated) ||
     Boolean(drillData?.truncated) ||
-    Boolean(totalDowntimeData?.truncated);
+    (Boolean(totalDowntimePayload) && Boolean(totalDowntimeData?.truncated));
   // LANDING-only loading. Treat "waiting for the date window" as loading too,
   // so the grid shows a skeleton (not an empty "no data" state) while the range
   // resolves and the gated landing fetch has not run yet.
@@ -680,7 +680,13 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const isDrillLoading = skipDrillFetch
     ? Boolean(downtimePayload) && downtimeLoading
     : Boolean(drillPayload) && drillLoading;
-  const error = landingError || drillError || totalDowntimeError || null;
+  // A disabled query retains its last error/data. Do not leak Production's
+  // stored-total status into another category after switching tabs.
+  const error =
+    landingError ||
+    drillError ||
+    (totalDowntimePayload ? totalDowntimeError : null) ||
+    null;
 
   // When the latest landing data actually arrived from the backend, stamped
   // on the envelope by the fetcher (see fetchDashboard). Derived purely from
