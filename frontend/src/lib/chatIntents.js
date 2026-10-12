@@ -1,6 +1,7 @@
 import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import QueryStatsRoundedIcon from "@mui/icons-material/QueryStatsRounded";
 
 /**
  * The JK Agent intent selector.
@@ -18,7 +19,7 @@ import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
  *
  * TODO(traceability): no FRS/US id exists for the intent selector yet.
  *
- * @typedef {"query" | "plot" | "analyze" | "report"} ChatIntent
+ * @typedef {"query" | "plot" | "analyze" | "report" | "spc"} ChatIntent
  */
 
 export const DEFAULT_INTENT = "query";
@@ -50,6 +51,13 @@ export const CHAT_INTENTS = Object.freeze([
     label: "Report",
     description: "Generate a downloadable PDF report",
     Icon: DescriptionRoundedIcon,
+  },
+  {
+    value: "spc",
+    command: "/spc",
+    label: "SPC",
+    description: "Statistical process control analysis",
+    Icon: QueryStatsRoundedIcon,
   },
 ]);
 

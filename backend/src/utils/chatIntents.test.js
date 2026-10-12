@@ -12,7 +12,7 @@ import {
 } from "./chatIntents.js";
 
 test("accepts every intent the upstream declares", () => {
-  for (const intent of ["query", "plot", "analyze", "report"]) {
+  for (const intent of ["query", "plot", "analyze", "report", "spc"]) {
     assert.equal(isChatIntent(intent), true, `${intent} should be valid`);
   }
   assert.deepEqual([...CHAT_INTENTS].sort(), [
@@ -20,6 +20,7 @@ test("accepts every intent the upstream declares", () => {
     "plot",
     "query",
     "report",
+    "spc",
   ]);
 });
 

@@ -13,8 +13,8 @@ import {
  * POST /api/v1/chat — proxies a query to the JK KPI Assistant.
  * Returns the upstream ChatResponse as `{ data: ... }`.
  *
- * `intent` is optional and defaults to "query"; anything outside the four
- * known values is rejected here rather than forwarded, so a typo surfaces
+ * `intent` is optional and defaults to "query"; anything outside the known
+ * values is rejected here rather than forwarded, so a typo surfaces
  * as a readable 400 instead of the upstream's 422 validation envelope.
  */
 export async function postChat(req, res, next) {
