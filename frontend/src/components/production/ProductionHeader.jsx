@@ -10,6 +10,7 @@ import {
   useTheme,
 } from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
 import NavTabs from "./NavTabs.jsx";
@@ -67,6 +68,7 @@ function ProductionHeader({
   hiddenPresets = [],
   singleDay = null,
   onSingleDayChange,
+  showSpcAlertIcon = false,
 }) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -244,7 +246,31 @@ function ProductionHeader({
             </Typography>
           )}
 
-          <UserMenu user={MOCK_USER} size={34} />
+          <Stack direction="row" alignItems="center" spacing={1}>
+            {showSpcAlertIcon && (
+              <Tooltip title="SPC alerts">
+                <Box
+                  component="span"
+                  role="img"
+                  aria-label="SPC alerts"
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    color: "error.dark",
+                    backgroundColor: "rgba(215, 0, 20, 0.08)",
+                    border: "1px solid rgba(215, 0, 20, 0.22)",
+                  }}
+                >
+                  <ReportProblemOutlinedIcon sx={{ fontSize: 21 }} />
+                </Box>
+              </Tooltip>
+            )}
+            <UserMenu user={MOCK_USER} size={34} />
+          </Stack>
         </Stack>
       </Box>
 

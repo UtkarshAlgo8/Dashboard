@@ -8,7 +8,15 @@
  * the shared asset.
  */
 import { useState, useRef, useEffect, Fragment } from "react";
-import { Box, Stack, Tooltip, Typography, IconButton } from "@mui/material";
+import {
+  Box,
+  Stack,
+  Tooltip,
+  Typography,
+  IconButton,
+  MenuItem,
+  Select,
+} from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import jkLogo from "@/assets/jk-logo.png";
 import JKLoader from "@/components/JKLoader.jsx";
@@ -16,6 +24,7 @@ import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.j
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import NavTabs from "@/components/production/NavTabs.jsx";
 import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
+import DataTable from "@/components/tables/DataTable.jsx";
 import { toDrillRows, toKpiGrid } from "@/lib/kpi-transformer.js";
 import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
@@ -13499,67 +13508,144 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
 }
 
 function LiveSpcAlerts({ alerts }) {
-  const col = (severity) =>
+  const [severityFilter, setSeverityFilter] = useState("All");
+  const allAlerts = Array.isArray(alerts) ? alerts : [];
+  const severityColor = (severity) =>
     severity === "Out of Control" ? C.rd : severity === "Warning" ? C.am : C.bl;
+  const severityOptions = [...new Set(allAlerts.map((alert) => alert.severity))]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const order = { "Out of Control": 0, Warning: 1, "Run/Trend": 2 };
+      return (order[a] ?? 9) - (order[b] ?? 9);
+    });
+  const rows = allAlerts
+    .filter(
+      (alert) => severityFilter === "All" || alert.severity === severityFilter,
+    )
+    .map((alert) => ({
+      ...alert,
+      pointsLabel:
+        alert.points?.first == null
+          ? "—"
+          : alert.points.first === alert.points.last
+            ? String(alert.points.first)
+            : `${alert.points.first}–${alert.points.last}`,
+      firstTime: alert.time?.first || "",
+      lastTime: alert.time?.last || alert.time?.first || "",
+    }))
+    .sort((a, b) => b.firstTime.localeCompare(a.firstTime));
+  const columns = [
+    {
+      key: "rule",
+      label: "Rule",
+      align: "left",
+      minWidth: 72,
+      value: (row) => `R${row.rule}`,
+      sortValue: (row) => row.rule,
+      filterable: false,
+      render: (row) => (
+        <Box
+          component="span"
+          sx={{ color: severityColor(row.severity), fontWeight: 800 }}
+        >
+          R{row.rule}
+        </Box>
+      ),
+    },
+    {
+      key: "chart",
+      label: "Chart",
+      align: "left",
+      minWidth: 84,
+      filterable: false,
+    },
+    {
+      key: "severity",
+      label: "Severity",
+      align: "left",
+      minWidth: 150,
+      render: (row) => {
+        const color = severityColor(row.severity);
+        return (
+          <Box
+            component="span"
+            sx={{
+              display: "inline-block",
+              px: 1,
+              py: 0.35,
+              borderRadius: 1,
+              bgcolor: `${color}14`,
+              color,
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {row.severity}
+          </Box>
+        );
+      },
+    },
+    {
+      key: "pointsLabel",
+      label: "Points",
+      align: "left",
+      minWidth: 100,
+      filterable: false,
+    },
+    {
+      key: "firstTime",
+      label: "First time",
+      align: "left",
+      minWidth: 190,
+      sortValue: (row) => Date.parse(row.firstTime) || 0,
+      filterable: false,
+    },
+    {
+      key: "lastTime",
+      label: "Last time",
+      align: "left",
+      minWidth: 190,
+      sortValue: (row) => Date.parse(row.lastTime) || 0,
+      filterable: false,
+    },
+  ];
+
+  const severityFilterControl = (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Typography
+        sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}
+      >
+        Severity
+      </Typography>
+      <Select
+        size="small"
+        value={severityFilter}
+        onChange={(event) => setSeverityFilter(event.target.value)}
+        inputProps={{ "aria-label": "Filter alerts by severity" }}
+        sx={{ minWidth: 150, height: 36, fontSize: 13 }}
+      >
+        <MenuItem value="All">All severities</MenuItem>
+        {severityOptions.map((severity) => (
+          <MenuItem key={severity} value={severity}>
+            {severity}
+          </MenuItem>
+        ))}
+      </Select>
+    </Stack>
+  );
+
   return (
-    <Card title="Nelson Rule Alert Feed" accent={C.pp}>
-      <div style={{ display: "grid", gap: 8 }}>
-        {alerts.slice(0, 12).map((a) => {
-          const color = col(a.severity);
-          return (
-            <div
-              key={a.alert_id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "auto 1fr auto",
-                gap: 10,
-                alignItems: "center",
-                padding: "9px 10px",
-                border: "1px solid " + color + "35",
-                borderRadius: 8,
-                background: color + "0D",
-              }}
-            >
-              <span
-                style={{
-                  minWidth: 34,
-                  textAlign: "center",
-                  fontSize: 11,
-                  fontWeight: 800,
-                  color,
-                }}
-              >
-                R{a.rule}
-              </span>
-              <span style={{ minWidth: 0 }}>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    color: C.tx,
-                  }}
-                >
-                  {a.chart} chart · {a.severity}
-                </span>
-                <span style={{ display: "block", fontSize: 11.5, color: C.mu }}>
-                  Points {a.points?.first}
-                  {a.points?.last !== a.points?.first
-                    ? `-${a.points?.last}`
-                    : ""}{" "}
-                  · {a.time?.first || "time unavailable"}
-                  {a.time?.last && a.time.last !== a.time.first
-                    ? ` to ${a.time.last}`
-                    : ""}
-                </span>
-              </span>
-              <span style={{ fontSize: 11, color: C.mu, fontWeight: 700 }}>
-                {a.chart}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+    <Card title={`Nelson Rule Alerts (${rows.length})`} accent={C.pp}>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowKey={(row) => row.alert_id}
+        searchPlaceholder="Search alerts"
+        emptyMessage="No alerts match this filter."
+        maxHeight={400}
+        stickyHeader
+        toolbarRight={severityFilterControl}
+      />
     </Card>
   );
 }
@@ -14175,6 +14261,7 @@ function QualityDashboard({ plant, onBack }) {
         hiddenPresets={tab === "spc" ? ["month", "range"] : []}
         singleDay={tab === "spc" ? processDate : null}
         onSingleDayChange={tab === "spc" ? onHeaderDayChange : undefined}
+        showSpcAlertIcon={tab === "spc"}
       />
 
       {/* Main content */}
