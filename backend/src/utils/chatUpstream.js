@@ -7,7 +7,7 @@ import { config } from "../config.js";
  * Upstream contract (confirmed via its live /openapi.json):
  *   POST {url}/api/v1/chat
  *     body: { session_id: string, intent?: ChatIntent, query: string }
- *       `intent` is one of query|plot|analyze|report — see chatIntents.js
+ *       `intent` is one of query|plot|analyze|report|spc — see chatIntents.js
  *       for why the American spelling of "analyze" is load-bearing. The
  *       upstream defaults it to "query" when omitted, so older clients
  *       keep working unchanged.
