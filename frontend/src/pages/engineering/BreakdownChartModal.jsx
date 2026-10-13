@@ -60,6 +60,10 @@ import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C, DTable, GradeChip, fmtNum } from "./reliabilityShared.jsx";
 import {
+  reliabilityTrendRequest,
+  useReliabilityTrendRange,
+} from "./reliabilityTrendRange.jsx";
+import {
   AnalysisModal,
   ChartCaption,
   Chip,
@@ -264,9 +268,18 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
 }
 
 /**
- * @param {{ date: string, granularity: string, initialViewBy?: string, maxBars?: number }} props
+ * @param {{ date: string, granularity: string, from?: string, to?: string,
+ *   aggregate?: boolean, initialViewBy?: string, maxBars?: number }} props
  */
-function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
+function ParetoView({
+  date,
+  granularity,
+  from,
+  to,
+  aggregate = false,
+  initialViewBy,
+  maxBars = MAX_BARS,
+}) {
   const [viewBy, setViewBy] = useState(initialViewBy ?? "machine");
   const [measure, setMeasure] = useState("downtime");
   const [category, setCategory] = useState("");
@@ -283,6 +296,12 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     loading: false,
     error: null,
   });
+  const machineKpis = aggregate
+    ? MACHINE_KPIS.filter((name) => name !== "Breakdown_Pct_m")
+    : MACHINE_KPIS;
+  const failureKpis = aggregate
+    ? FAILURE_KPIS.filter((name) => name !== "Breakdown_Pct_m_Failure")
+    : FAILURE_KPIS;
 
   // The machine lens AND the machine-filter options come from one fetch of
   // the machine-level pair; it is also the scope total the shares run on.
@@ -290,10 +309,13 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     let cancelled = false;
     setMachineState({ loading: true, error: null });
     getReliabilityKpiChildren({
-      kpiNames: MACHINE_KPIS,
+      kpiNames: machineKpis,
       date,
+      from,
+      to,
       granularity,
       groupBy: "machine",
+      agg: aggregate ? "sum" : undefined,
     })
       .then((res) => {
         if (cancelled) return;
@@ -306,7 +328,7 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     return () => {
       cancelled = true;
     };
-  }, [date, granularity]);
+  }, [date, from, to, granularity, aggregate, machineKpis.join(",")]);
 
   // "Filter first, then group": all three filters go to the engine, which is
   // the only place a failure row knows its machine's category and section.
@@ -315,8 +337,10 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     let cancelled = false;
     setFailureState({ loading: true, error: null });
     getReliabilityKpiChildren({
-      kpiNames: FAILURE_KPIS,
+      kpiNames: failureKpis,
       date,
+      from,
+      to,
       granularity,
       groupBy: "remarks",
       agg: "sum",
@@ -335,7 +359,18 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
     return () => {
       cancelled = true;
     };
-  }, [viewBy, date, granularity, category, section, machine]);
+  }, [
+    viewBy,
+    date,
+    from,
+    to,
+    granularity,
+    aggregate,
+    failureKpis.join(","),
+    category,
+    section,
+    machine,
+  ]);
 
   // Every option list is cut by the filters above it, so no combination can
   // select an empty scope.
@@ -642,7 +677,7 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
               <ChartCaption>
                 Bars = {activeMeasure.label.toLowerCase()} (additive) · amber
                 line = cumulative % of scope
-                {viewBy === "machine" || machine
+                {!aggregate && (viewBy === "machine" || machine)
                   ? " · small figure = that row's own Breakdown %"
                   : ""}
                 {allRows.length > maxBars &&
@@ -676,28 +711,41 @@ function ParetoView({ date, granularity, initialViewBy, maxBars = MAX_BARS }) {
  * The modal behind the Breakdown trend icon: one Pareto, three filters.
  *
  * @param {{ open: boolean, onClose: () => void, date: string, granularity: string,
- *           title?: string, initialViewBy?: string, maxBars?: number }} props
+ *           asOf?: string, title?: string, initialViewBy?: string, maxBars?: number }} props
  */
 function BreakdownChartModal({
   open,
   onClose,
   date,
   granularity,
+  asOf,
   title = "Breakdown",
   initialViewBy,
   maxBars,
 }) {
+  const trend = useReliabilityTrendRange({ open });
+  const request = reliabilityTrendRequest({
+    preset: trend.preset,
+    from: trend.from,
+    to: trend.to,
+    asOf: asOf ?? date,
+  });
+
   return (
     <AnalysisModal
       open={open}
       onClose={onClose}
       eyebrow="Pareto Analysis"
       title={title}
+      headerExtra={trend.control}
       maxWidth={1000}
     >
       <ParetoView
-        date={date}
-        granularity={granularity}
+        date={request.date}
+        from={request.from}
+        to={request.to}
+        granularity={request.granularity}
+        aggregate={request.aggregate}
         initialViewBy={initialViewBy}
         maxBars={maxBars}
       />

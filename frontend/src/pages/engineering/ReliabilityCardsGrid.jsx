@@ -14,7 +14,8 @@
  *   Zero Breakdown Machines  → daily line of the clean-run count
  *   Top Machine Breakdowns   → Pareto of BreakdownMin_m by machine, top 10
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getReliabilityLatestDate } from "@/api/engineering.js";
 import {
   Card,
   ChevronIcon,
@@ -151,6 +152,27 @@ function ReliabilityCardsGrid({
   // (`expanded`) and still open the inline drill panels.
   const [trendCard, setTrendCard] = useState(null);
   const zeroBreakdown = useZeroBreakdownTotal();
+  const [trendAsOf, setTrendAsOf] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getReliabilityLatestDate({
+      kpiNames: [
+        "Breakdown_Pct_Overall",
+        "BreakdownMin_Overall",
+        "MTBF_Overall",
+        "MTTR_Overall",
+      ],
+      granularity: "DAY",
+    })
+      .then((res) => !cancelled && setTrendAsOf(res?.date ?? null))
+      .catch(() => !cancelled && setTrendAsOf(null));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const trendAnchor = trendAsOf ?? date;
 
   const toggle = (id) => setExpanded((e) => (e === id ? null : id));
   const closeTrend = () => setTrendCard(null);
@@ -280,6 +302,7 @@ function ReliabilityCardsGrid({
         onClose={closeTrend}
         date={date}
         granularity={granularity}
+        asOf={trendAnchor}
       />
 
       {/* Spec KPI 7: "Pareto (bar + cum. line) | machine | downtime (min) |
@@ -290,6 +313,7 @@ function ReliabilityCardsGrid({
         onClose={closeTrend}
         date={date}
         granularity={granularity}
+        asOf={trendAnchor}
         title="Top Machine Breakdowns"
         initialViewBy="machine"
         maxBars={10}
@@ -302,6 +326,7 @@ function ReliabilityCardsGrid({
         onClose={closeTrend}
         date={date}
         granularity={granularity}
+        asOf={trendAnchor}
         measure={trendCard === "mttr" ? "mttr" : "mtbf"}
       />
 
@@ -309,7 +334,7 @@ function ReliabilityCardsGrid({
         open={trendCard === "zeroBreakdown"}
         onClose={closeTrend}
         total={zeroBreakdown.total}
-        asOf={zeroBreakdown.asOf}
+        asOf={zeroBreakdown.asOf ?? trendAnchor}
       />
     </div>
   );

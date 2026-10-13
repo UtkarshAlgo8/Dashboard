@@ -29,62 +29,37 @@ import { getReliabilityKpiHistory } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C, TrendChart, fmtNum } from "./reliabilityShared.jsx";
 import {
-  AnalysisModal,
-  Block,
-  Chip,
-  ControlLabel,
-  ControlRow,
-} from "./reliabilityChrome.jsx";
+  reliabilityTrendHistory,
+  useReliabilityTrendRange,
+} from "./reliabilityTrendRange.jsx";
+import { AnalysisModal, Block } from "./reliabilityChrome.jsx";
 import { TARGETS } from "./reliabilityTargets.js";
-
-const RANGES = {
-  daily: {
-    id: "daily",
-    label: "Daily",
-    granularity: "DAY",
-    back: 29,
-    unit: "day",
-  },
-  monthly: {
-    id: "monthly",
-    label: "Monthly",
-    granularity: "MONTH",
-    back: 11,
-    unit: "month",
-  },
-};
-
-/** Start of the window, `back` days or months before `asOf`. */
-function windowStart(asOf, range) {
-  const d = new Date(asOf + "T00:00:00Z");
-  if (range.unit === "day") d.setUTCDate(d.getUTCDate() - range.back);
-  else {
-    d.setUTCDate(1);
-    d.setUTCMonth(d.getUTCMonth() - range.back);
-  }
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * @param {{ open: boolean, onClose: () => void, total: number|null, asOf: string|null }} props
  */
 function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
-  const [rangeId, setRangeId] = useState("daily");
   const [points, setPoints] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const range = RANGES[rangeId];
+  const trend = useReliabilityTrendRange({ open });
+  const history = reliabilityTrendHistory({
+    preset: trend.preset,
+    from: trend.from,
+    to: trend.to,
+    asOf,
+  });
   const target = TARGETS.zeroBreakdownMachines;
 
   useEffect(() => {
-    if (!open || !asOf) return;
+    if (!open || !asOf || !history.from || !history.to) return;
     let cancelled = false;
     setLoading(true);
+    setPoints([]);
     getReliabilityKpiHistory({
       kpiName: "ZeroBreakdownMachines_Section",
-      dateFrom: windowStart(asOf, range),
-      dateTo: asOf,
-      granularity: range.granularity,
+      dateFrom: history.from,
+      dateTo: history.to,
+      granularity: history.granularity,
     })
       .then((hist) => {
         if (cancelled) return;
@@ -102,14 +77,21 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
     return () => {
       cancelled = true;
     };
-  }, [open, asOf, range]);
+  }, [open, asOf, history.from, history.to, history.granularity]);
 
+  const selectedTotal = points.length ? points[points.length - 1][1] : total;
+  const selectedAsOf = points.length ? points[points.length - 1][0] : asOf;
   const pct =
-    total == null ? null : Math.min(150, Math.max(0, (total / target) * 100));
+    selectedTotal == null
+      ? null
+      : Math.min(150, Math.max(0, (selectedTotal / target) * 100));
   const onTarget = pct != null && pct >= 100;
   // The tick sits where the target falls on a bar scaled to whichever of the
   // two is larger — the mock's rule, so the target never runs off the end.
-  const tickPct = Math.min(100, (target / Math.max(total ?? 0, target)) * 100);
+  const tickPct = Math.min(
+    100,
+    (target / Math.max(selectedTotal ?? 0, target)) * 100,
+  );
 
   return (
     <AnalysisModal
@@ -117,23 +99,13 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
       onClose={onClose}
       eyebrow="KPI Trend Analysis"
       title="Zero Breakdown Machines"
+      headerExtra={trend.control}
       maxWidth={740}
       align="center"
     >
-      <ControlRow last>
-        <ControlLabel>Time range</ControlLabel>
-        {Object.values(RANGES).map((r) => (
-          <Chip
-            key={r.id}
-            on={rangeId === r.id}
-            onClick={() => setRangeId(r.id)}
-          >
-            {r.label}
-          </Chip>
-        ))}
-      </ControlRow>
-
-      <Block title={`Progress to Target${asOf ? ` — as of ${asOf}` : ""}`}>
+      <Block
+        title={`Progress to Target${selectedAsOf ? ` — as of ${selectedAsOf}` : ""}`}
+      >
         <div
           style={{
             display: "flex",
@@ -180,7 +152,9 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
                 whiteSpace: "nowrap",
               }}
             >
-              {total == null ? "—" : `${fmtNum(total)} machines`}
+              {selectedTotal == null
+                ? "—"
+                : `${fmtNum(selectedTotal)} machines`}
             </span>
           </div>
           <div
@@ -236,12 +210,18 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
           <JKLoader message="Loading trajectory" />
         ) : points.length === 0 ? (
           <div style={{ padding: 12, color: C.mu, fontSize: 13 }}>
-            No {range.label.toLowerCase()} rows in this window.
+            No{" "}
+            {trend.preset === "today"
+              ? "daily"
+              : trend.preset === "month"
+                ? "monthly"
+                : "date range"}{" "}
+            rows in this window.
           </div>
         ) : (
           <TrendChart
             labels={points.map(([key]) =>
-              range.unit === "day" ? key.slice(5) : key.slice(0, 7),
+              history.granularity === "DAY" ? key.slice(5) : key.slice(0, 7),
             )}
             values={points.map(([, value]) => value)}
             unit=""

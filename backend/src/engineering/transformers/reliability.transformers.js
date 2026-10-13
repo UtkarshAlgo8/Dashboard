@@ -151,6 +151,13 @@ export function toLossTree(rows, { kpiNames, groupBy }) {
       (r) => r[groupBy] === group && r.kpi_name === kpiNames[0],
     );
     out.drill_down = parseDrillDown(anchorRow?.drill_down_attribute);
+    // Summed range queries still need the display dimensions used by the
+    // machine/section filters. Keep the first stable dimension values from
+    // the anchor row without changing the arithmetic of the summed KPIs.
+    for (const dim of CARRY_FORWARD_DIMS) {
+      if (dim === groupBy) continue;
+      if (anchorRow && anchorRow[dim] != null) out[dim] = anchorRow[dim];
+    }
     return out;
   });
   return { group_by: groupBy, rows: outRows };
