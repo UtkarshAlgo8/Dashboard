@@ -6,9 +6,9 @@
  * docs/plant_operations_dashboard_CTP_Technical_Amended_Inventory 1.html.
  *
  * Filter model: { tt, st:[statusKey], sec:"All"|section, pt:{sec:[..]}, item:{sec:[..]} }
- * An empty list means "no restriction". Every figure on the page is
- * derived from the same filtered lot rows, so summary, insight cards,
- * drill and section tables reconcile.
+ * An empty list means "no restriction". Stock quantities use filtered
+ * lot rows; MHE_Count uses its item-level KPI and intentionally ignores the
+ * status filter because Gold does not split that KPI by stock status.
  */
 
 /**
@@ -18,6 +18,13 @@
  * @param {object} raw - Inventory master payload
  * @returns {object} indexed model
  */
+function itemMheCount(item) {
+  const goldCount = Number(item?.mhe_count);
+  if (item?.mhe_count != null && Number.isFinite(goldCount)) return goldCount;
+  return new Set((item?.lots ?? []).map((lot) => lot?.mhe_code).filter(Boolean))
+    .size;
+}
+
 export function buildCtpInventoryModel(raw) {
   const statuses = raw.status_master;
   const stByKey = {};
@@ -44,6 +51,7 @@ export function buildCtpInventoryModel(raw) {
           tt: it.tyre_type,
           uom: it.uom,
           cons: Number(it.daily_consumption) || 0,
+          mhe: itemMheCount(it),
         });
         it.lots.forEach((l) =>
           facts.push({
@@ -79,6 +87,13 @@ export function buildCtpInventoryModel(raw) {
     uomShort: (u) => uomDisplay[u] || String(u || "").toLowerCase(),
     facts,
     itemList,
+    unassignedMheRows: (raw.mhe_unassigned_rows ?? []).map((row) => ({
+      sec: row.section,
+      pt: row.product_type,
+      item: row.itemcode,
+      tt: row.tyre_type,
+      mhe: Number(row.mhe_count) || 0,
+    })),
     ptMeta,
   };
 }
@@ -125,6 +140,30 @@ export function passesCtpFilter(f, r, skip = {}, foc = focusedSections(f)) {
   return true;
 }
 
+function mheCountsByItem(m, f = null) {
+  const counts = new Map();
+  for (const item of m.itemList) {
+    if (f && !passesCtpFilter(f, item, { st: true })) continue;
+    counts.set(item.item, (counts.get(item.item) ?? 0) + item.mhe);
+  }
+  return counts;
+}
+
+/** MHE counts follow inventory scope but ignore status-only filters. */
+export function sumCtpUnassignedMheCounts(m, f = null) {
+  return m.unassignedMheRows
+    .filter((row) => !f || passesCtpFilter(f, row, { st: true }))
+    .reduce((sum, row) => sum + row.mhe, 0);
+}
+
+export function sumCtpMheCounts(m, f = null) {
+  const itemTotal = [...mheCountsByItem(m, f).values()].reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  return itemTotal + sumCtpUnassignedMheCounts(m, f);
+}
+
 /**
  * @returns {object[]} lot facts that pass the filter
  */
@@ -134,7 +173,8 @@ export function selectCtpLots(m, f, skip) {
 }
 
 /**
- * Total_Inventory = SUM(quantity) · MHE_Count = COUNT(DISTINCT mhe_code).
+ * Lot-row summary for stock quantity/count. `mhe` is a legacy fixture-only
+ * distinct-code count; the Gold-backed headline uses sumCtpMheCounts.
  *
  * @returns {{ qty: number, mhe: number, lots: number }}
  */
@@ -219,12 +259,14 @@ export function coverTone(days) {
 }
 
 /**
- * One row per item: qty per status, distinct MHE, oldest lot age.
+ * One row per item: qty per status, Gold MHE_Count (fixture code fallback),
+ * and oldest lot age.
  *
  * @returns {object[]}
  */
-export function aggregateByItem(m, rows) {
+export function aggregateByItem(m, rows, f = null) {
   const o = {};
+  const mheCounts = mheCountsByItem(m, f);
   rows.forEach((r) => {
     let a = o[r.item];
     if (!a) {
@@ -250,7 +292,10 @@ export function aggregateByItem(m, rows) {
     a.maxAge = Math.max(a.maxAge, r.age);
     a.lots += 1;
   });
-  return Object.values(o).map((a) => ({ ...a, mhe: a.mheSet.size }));
+  return Object.values(o).map((a) => ({
+    ...a,
+    mhe: mheCounts.get(a.item) ?? a.mheSet.size,
+  }));
 }
 
 /**
@@ -280,6 +325,7 @@ export function sectionHasNoStock(m, sec) {
  */
 export function zeroStockItemRows(m, f) {
   const o = {};
+  const mheCounts = mheCountsByItem(m, f);
   m.itemList.forEach((it) => {
     if (o[it.item] || !passesCtpFilter(f, it, { st: true })) return;
     const st = {};
@@ -293,7 +339,7 @@ export function zeroStockItemRows(m, f) {
       uom: it.uom,
       qty: 0,
       st,
-      mhe: 0,
+      mhe: mheCounts.get(it.item) ?? it.mhe ?? 0,
       maxAge: 0,
       lots: 0,
     };
@@ -327,14 +373,14 @@ function coverBelowCard(m, f, cfg) {
   };
 }
 
-function statusQtyCard(m, rows, cfg) {
+function statusQtyCard(m, rows, cfg, f) {
   const r = rows.filter((x) => x.st === cfg.status);
   const s = summarizeCtpLots(r);
   return {
     value: s.qty,
-    sub: `${s.lots} lots · ${s.mhe} MHE`,
+    sub: `${s.lots} ${s.lots === 1 ? "lot" : "lots"}`,
     isBad: s.qty > 0,
-    drill: aggregateByItem(m, r).map((a) => ({
+    drill: aggregateByItem(m, r, f).map((a) => ({
       item: a.item,
       qty: a.qty,
       uom: a.uom,
@@ -342,14 +388,14 @@ function statusQtyCard(m, rows, cfg) {
   };
 }
 
-function oldestBlockedCard(m, rows, cfg) {
+function oldestBlockedCard(m, rows, cfg, f) {
   const r = rows.filter((x) => m.blocked.has(x.st));
   const top = r.reduce((a, x) => (!a || x.age > a.age ? x : a), null);
   return {
     value: top ? top.age : null,
     sub: top ? `${top.item} · ${m.stByKey[top.st].label}` : "no blocked lots",
     isBad: Boolean(top) && top.age > cfg.warn_days,
-    drill: aggregateByItem(m, r)
+    drill: aggregateByItem(m, r, f)
       .sort((a, b) => b.maxAge - a.maxAge)
       .map((a) => ({ item: a.item, qty: a.qty, uom: a.uom, age: a.maxAge })),
   };
@@ -362,8 +408,8 @@ function oldestBlockedCard(m, rows, cfg) {
  */
 export function computeInsightCard(m, f, rows, cfg) {
   if (cfg.type === "cover_below") return coverBelowCard(m, f, cfg);
-  if (cfg.type === "status_qty") return statusQtyCard(m, rows, cfg);
-  if (cfg.type === "oldest_blocked") return oldestBlockedCard(m, rows, cfg);
+  if (cfg.type === "status_qty") return statusQtyCard(m, rows, cfg, f);
+  if (cfg.type === "oldest_blocked") return oldestBlockedCard(m, rows, cfg, f);
   return null;
 }
 

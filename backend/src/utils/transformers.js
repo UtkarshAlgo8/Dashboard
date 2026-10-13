@@ -263,7 +263,7 @@ const CTP_UOM_DISPLAY = { MTR: "m", KG: "kg", NOS: "nos" };
 
 const CTP_METRICS = [
   { kpi_name: "Total_Inventory", ui_expr: "SUM(lots.quantity)", grain: "lot", gold: "Total_Inventory" },
-  { kpi_name: "MHE_Count", ui_expr: "COUNT(DISTINCT lots.mhe_code)", grain: "lot", gold: "MHE_Count" },
+  { kpi_name: "MHE_Count", ui_expr: "SUM(item.mhe_count)", grain: "item", gold: "MHE_Count" },
   { kpi_name: "Days_Cover", ui_expr: "SUM(quantity WHERE status.usable) / SUM(items.daily_consumption)", grain: "item|product_type", gold: "Ready_To_Use / Daily_Consumption" },
   { kpi_name: "Oldest_Blocked_Lot", ui_expr: "MAX(age_days WHERE status.blocked)", gold: "MAX(Oldest_Blocked_Lot_Days)" },
 ];
@@ -323,12 +323,37 @@ export const CTP_INVENTORY_KPIS = [
 ];
 
 /**
- * Collapse gold rows to one entry per item, holding the value of each
- * inventory KPI. A repeated (item, kpi) keeps its latest date — values
- * are never summed, since inventory is a level, not a flow.
+ * Collapse gold rows to one entry per item. Inventory levels keep their
+ * latest value per source series; MHE_Count is summed across its latest
+ * machine/unit series because Gold supplies those disjoint counts per item.
  */
+function ctpMheSeriesKey(row) {
+  return JSON.stringify([
+    row.section ?? null,
+    row.sub_section ?? null,
+    row.product_type ?? null,
+    row.itemcode ?? null,
+    row.tyre_type ?? null,
+    row.machine ?? null,
+    row.unit_of_measurement ?? null,
+  ]);
+}
+
+function keepLatestMheSeries(series, row, date) {
+  const key = ctpMheSeriesKey(row);
+  const previous = series.get(key);
+  if (!previous || date > previous.date) {
+    series.set(key, {
+      date,
+      row,
+      value: numOrNull(row.actual_value) ?? 0,
+    });
+  }
+}
+
 function ctpItemsFromRows(rows) {
   const items = new Map();
+  const unassignedMheSeries = new Map();
   let maxDate = "";
   for (const r of rows) {
     if (!CTP_INVENTORY_KPIS.includes(r.kpi_name)) continue;
@@ -336,8 +361,13 @@ function ctpItemsFromRows(rows) {
     const pt = productType(r.product_type);
     const code = denan(r.itemcode);
     const k = dateKey(r.date);
-    if (!sec || !pt || !code || !k) continue;
+    if (!k) continue;
     if (k > maxDate) maxDate = k;
+    if (r.kpi_name === CTP_MHE_KPI && (!sec || !pt || !code)) {
+      keepLatestMheSeries(unassignedMheSeries, r, k);
+      continue;
+    }
+    if (!sec || !pt || !code) continue;
     const tt = denan(r.tyre_type) || "";
     const key = `${sec}|${pt}|${code}|${tt}`;
     let it = items.get(key);
@@ -350,19 +380,37 @@ function ctpItemsFromRows(rows) {
         tyre_type: tt,
         unit: "",
         kpis: {},
+        mheSeries: new Map(),
       };
       items.set(key, it);
     }
     if (!it.unit) it.unit = unit(r.unit_of_measurement) || "";
+    if (r.kpi_name === CTP_MHE_KPI) {
+      keepLatestMheSeries(it.mheSeries, r, k);
+      continue;
+    }
     const prev = it.kpis[r.kpi_name];
     if (!prev || k > prev.date) {
       it.kpis[r.kpi_name] = { date: k, value: numOrNull(r.actual_value) ?? 0 };
     }
   }
-  return { items: [...items.values()], maxDate };
+  for (const it of items.values()) {
+    it.mheCount = [...it.mheSeries.values()].reduce((sum, row) => sum + row.value, 0);
+  }
+  const unassignedMheRows = [...unassignedMheSeries.values()]
+    .filter((entry) => entry.value !== 0)
+    .map(({ row, value }) => ({
+      section: denan(row.section),
+      product_type: productType(row.product_type),
+      itemcode: denan(row.itemcode),
+      tyre_type: denan(row.tyre_type),
+      mhe_count: value,
+    }));
+  return { items: [...items.values()], maxDate, unassignedMheRows };
 }
 
 function kpiValue(it, kpiName) {
+  if (kpiName === CTP_MHE_KPI) return it.mheCount ?? 0;
   return it.kpis[kpiName]?.value ?? 0;
 }
 
@@ -394,14 +442,15 @@ function ctpLotsForItem(it, date) {
  *
  * @param {Array<object>} rows - gold rows with category='Inventory' and
  *   kpi_name in CTP_INVENTORY_KPIS. Expected columns: date, section,
- *   sub_section, product_type, itemcode, tyre_type, unit_of_measurement,
- *   kpi_name, actual_value (one latest-dated row per series).
+ *   sub_section, product_type, itemcode, tyre_type, machine,
+ *   unit_of_measurement, kpi_name, actual_value (latest-dated row per source
+ *   series; MHE_Count has a separate machine/unit series per item).
  * @returns {object} master payload matching the contract in
  *   `frontend/src/lib/ctpInventory.js#buildCtpInventoryModel`.
  */
 export function toCtpInventoryMaster(rows) {
   const list = Array.isArray(rows) ? rows : [];
-  const { items, maxDate } = ctpItemsFromRows(list);
+  const { items, maxDate, unassignedMheRows } = ctpItemsFromRows(list);
 
   // Nest: section → product_type → item.
   const sectionMap = new Map();
@@ -435,7 +484,10 @@ export function toCtpInventoryMaster(rows) {
 
   let totalLots = 0;
   let totalGold = 0;
-  let totalMhe = 0;
+  let totalMhe = unassignedMheRows.reduce(
+    (sum, row) => sum + row.mhe_count,
+    0,
+  );
   let mismatched = 0;
 
   const sections = sectionNames.map((secName) => {
@@ -463,6 +515,7 @@ export function toCtpInventoryMaster(rows) {
             uom: it.unit,
             tyre_type: it.tyre_type,
             daily_consumption: kpiValue(it, CTP_CONSUMPTION_KPI),
+            mhe_count: kpiValue(it, CTP_MHE_KPI),
             lots,
           };
         });
@@ -493,14 +546,13 @@ export function toCtpInventoryMaster(rows) {
     function: "Production",
     navigation: "Inventory",
     as_of: asOfIst(maxDate),
-    data_origin: "gold.ctp_gold per-status Inventory KPIs; lots synthesised per (item, status) — see data_limits",
+    data_origin: "gold.ctp_gold Inventory KPIs including per-item MHE_Count; lots synthesised per (item, status) — see data_limits",
     data_limits: {
       sections_populated: sections.map((s) => s.name),
       sections_absent: SECTION_ORDER.filter((s) => !sectionMap.has(s)),
       lot_synthesis: "one lot per (item, status) from the per-status KPIs",
-      // MHE_Count is per item with no mhe codes, so the page's
-      // COUNT(DISTINCT mhe_code) cannot be reproduced; total is below.
-      mhe_count: "validation.expected_mhe_count only",
+      // Gold supplies the count, but not the MHE identities or status split.
+      mhe_count: "per-item Gold counts; unmapped counts remain headline-only; raw MHE codes and status-specific counts unavailable",
       oldest_blocked_age: CTP_OLDEST_BLOCKED_KPI,
       daily_consumption: CTP_CONSUMPTION_KPI,
       items_total_mismatch: mismatched,
@@ -511,6 +563,9 @@ export function toCtpInventoryMaster(rows) {
     insight_cards: CTP_INSIGHT_CARDS,
     table: CTP_TABLE,
     uom_display: CTP_UOM_DISPLAY,
+    // Unassigned Gold counts contribute to the headline total but have no
+    // item row; the UI annotates this rather than inventing an item code.
+    mhe_unassigned_rows: unassignedMheRows,
     validation: {
       expected_total_inventory: totalGold,
       expected_mhe_count: totalMhe,
