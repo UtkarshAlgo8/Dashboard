@@ -20,6 +20,10 @@ import {
 import JKLoader from "@/components/JKLoader.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import {
+  topMachineBreakdownRequest,
+  topMachineBreakdownRows,
+} from "./topMachineBreakdowns.js";
+import {
   C,
   DTable,
   GradeChip,
@@ -502,54 +506,49 @@ export function useZeroBreakdownTotal() {
   return { total, asOf };
 }
 
-const GRADE_WEIGHT = { A: 3, B: 2, C: 1, D: 1, Unmapped: 1 };
-
-/**
- * Top Machine Breakdowns — flat top-10 ranked table, no further drill.
- * `Weighted` = downtime × grade weight, computed client-side only (never
- * server-side) per the KPI spec's UI-calculates-only rule.
- */
-/**
- * @param {{ date: string, granularity: string, totalMinutes?: number|null }} props
- *   `totalMinutes` is the period's plant-wide `BreakdownMin_Overall`, handed
- *   down from the summary the card grid already fetched. The spec's Share
- *   column is a machine's share of PLANT breakdown ("2.4% of plant
- *   breakdown"), and this table is capped at ten rows — so the denominator
- *   cannot come from the rows on screen without silently turning it into a
- *   share of the top ten. Without the total the column reads "—".
- */
-export function TopMachineBreakdownsPanel({
-  date,
-  granularity,
-  totalMinutes = null,
-}) {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+/** Fetch the ranked list once for both the headline card and expanded table. */
+export function useTopMachineBreakdowns(period, enabled) {
+  const requestKey = `${period.kind}|${period.date}|${period.granularity}|${period.from ?? ""}|${period.to ?? ""}`;
+  const [result, setResult] = useState({ key: null, rows: [], error: null });
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
-    setLoading(true);
-    getReliabilityKpiChildren({
-      kpiNames: ["BreakdownMin_m", "MTTR_m", "MTBF_m", "BreakdownOcc_m"],
-      date,
-      granularity,
-      groupBy: "machine",
-      sort: "BreakdownMin_m",
-      order: "desc",
-      limit: 10,
-    })
-      .then(
-        (res) =>
-          !cancelled && setRows(Array.isArray(res?.rows) ? res.rows : []),
-      )
-      .catch((err) => !cancelled && setError(err))
-      .finally(() => !cancelled && setLoading(false));
+    getReliabilityKpiChildren(topMachineBreakdownRequest(period))
+      .then((res) => {
+        if (cancelled) return;
+        setResult({
+          key: requestKey,
+          rows: topMachineBreakdownRows(res?.rows, period.kind === "range"),
+          error: null,
+        });
+      })
+      .catch(
+        (error) =>
+          !cancelled && setResult({ key: requestKey, rows: [], error }),
+      );
     return () => {
       cancelled = true;
     };
-  }, [date, granularity]);
+    // The period object is re-created per render; requestKey is its identity.
+  }, [requestKey, enabled]);
 
+  return result.key === requestKey
+    ? { rows: result.rows, error: result.error, loading: false }
+    : { rows: [], error: null, loading: true };
+}
+
+/**
+ * Top Machine Breakdowns — flat top-10 ranked table, no further drill.
+ * `totalMinutes` is the plant-wide `BreakdownMin_Overall`: Share is a
+ * percentage of the whole plant, not just of the ten listed machines.
+ */
+export function TopMachineBreakdownsPanel({
+  rows,
+  loading,
+  error,
+  totalMinutes = null,
+}) {
   const columns = [
     { key: "machine", label: "Machine" },
     { key: "section", label: "Section" },
@@ -593,14 +592,6 @@ export function TopMachineBreakdownsPanel({
       label: "MTBF",
       align: "right",
       render: (r) => fmtMinHrs(r.MTBF_m),
-    },
-    {
-      key: "weighted",
-      label: "Weighted",
-      align: "right",
-      sortValue: (r) => (r.BreakdownMin_m ?? 0) * (GRADE_WEIGHT[r.status] ?? 1),
-      render: (r) =>
-        fmtNum((r.BreakdownMin_m ?? 0) * (GRADE_WEIGHT[r.status] ?? 1)),
     },
   ];
 
