@@ -80,7 +80,7 @@ function CtpSectionPanel({ m, f, sec, onProductTypesChange, onItemsChange }) {
   const noStock = sectionHasNoStock(m, sec.name);
   const itemRows = noStock
     ? zeroStockItemRows(m, fs)
-    : aggregateByItem(m, selectCtpLots(m, fs));
+    : aggregateByItem(m, selectCtpLots(m, fs), fs);
   let rows = itemRows.map((a) => ({
     ...a,
     cover: cv[a.item] ? cv[a.item].days : null,

@@ -7,7 +7,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toKpiChildren } from "./transformers/reliability.transformers.js";
+import {
+  toKpiChildren,
+  toLossTree,
+} from "./transformers/reliability.transformers.js";
 import { kpiChildrenQuery } from "./queries/reliability.queries.js";
 
 const KPIS = ["Breakdown_Pct_m_Failure", "BreakdownMin_m_Failure"];
@@ -129,4 +132,31 @@ test("toKpiChildren: a row missing part of the key is dropped, not blank-grouped
 test("toKpiChildren: no rows for the scope yields an empty table, not a throw", () => {
   const out = toKpiChildren([], { kpiNames: KPIS, groupBy: "remarks,date" });
   assert.deepEqual(out, { group_by: "remarks,date", rows: [] });
+});
+
+test("toLossTree: summed range rows retain machine display dimensions", () => {
+  const out = toLossTree(
+    [
+      row("DUMP MILL", "2026-08-04", "BreakdownMin_m", 50),
+      {
+        ...row("DUMP MILL", "2026-08-05", "BreakdownOcc_m", 2),
+        machine: "0201",
+        status: "A",
+        section: "Mixing",
+      },
+      {
+        ...row("DUMP MILL", "2026-08-05", "BreakdownMin_m", 30),
+        machine: "0201",
+        status: "A",
+        section: "Mixing",
+      },
+    ],
+    { kpiNames: ["BreakdownMin_m", "BreakdownOcc_m"], groupBy: "machine" },
+  );
+
+  assert.equal(out.rows.length, 1);
+  assert.equal(out.rows[0].BreakdownMin_m, 80);
+  assert.equal(out.rows[0].BreakdownOcc_m, 2);
+  assert.equal(out.rows[0].section, "Mixing");
+  assert.equal(out.rows[0].status, "A");
 });

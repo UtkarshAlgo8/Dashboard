@@ -38,7 +38,8 @@ export function getInventory({ plantId, from = null, to = null }) {
  *   - `false`: hits the backend endpoint, which reads the latest DAY
  *     snapshot of the per-status Inventory KPIs from `gold.ctp_gold`
  *     (docs/Inventory_Mapping_Final.xlsx). Lots are synthesised one per
- *     (item, status); MHE codes are absent — see `data_limits`.
+ *     (item, status); MHE identities are absent, but Gold MHE_Count is
+ *     preserved per item (with unmapped counts retained for the headline).
  *
  * @param {object} [params]
  * @param {string} [params.plantId="chennai"]

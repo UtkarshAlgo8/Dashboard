@@ -62,6 +62,10 @@ import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C } from "./reliabilityShared.jsx";
 import {
+  reliabilityTrendRequest,
+  useReliabilityTrendRange,
+} from "./reliabilityTrendRange.jsx";
+import {
   AnalysisModal,
   Block,
   ChartCaption,
@@ -114,7 +118,7 @@ const MAX_BARS = 15;
 
 /**
  * @param {{ open: boolean, onClose: () => void, date: string, granularity: string,
- *           measure: "mtbf"|"mttr" }} props - one panel per measure: the MTBF
+ *           asOf?: string, measure: "mtbf"|"mttr" }} props - one panel per measure: the MTBF
  *   card opens MTBF, the MTTR card opens MTTR, and neither switches to the
  *   other. Only VIEW BY is a control here.
  */
@@ -123,6 +127,7 @@ function MtbfMttrChartModal({
   onClose,
   date,
   granularity,
+  asOf,
   measure: measureId,
 }) {
   // Section leads — the spec lists it first, and it is the view that answers
@@ -135,11 +140,19 @@ function MtbfMttrChartModal({
   const isSection = viewId === "section";
   const view = VIEWS_BY.find((v) => v.id === viewId) ?? VIEWS_BY[1];
   const measure = MEASURES.find((m) => m.id === measureId) ?? MEASURES[0];
+  const trend = useReliabilityTrendRange({ open });
+  const request = reliabilityTrendRequest({
+    preset: trend.preset,
+    from: trend.from,
+    to: trend.to,
+    asOf: asOf ?? date,
+  });
+  const isAggregate = request.aggregate;
 
   // Both views group by MACHINE. The Machine view plots the published rate
   // straight; the Section view pools those same rows by the `section` each
   // one carries.
-  const kpiNames = isSection ? POOL_KPIS : [measure.machineKpi];
+  const kpiNames = isSection || isAggregate ? POOL_KPIS : [measure.machineKpi];
   const kpiKey = kpiNames.join(",");
 
   useEffect(() => {
@@ -149,9 +162,12 @@ function MtbfMttrChartModal({
     setError(null);
     getReliabilityKpiChildren({
       kpiNames,
-      date,
-      granularity,
+      date: request.date,
+      from: request.from,
+      to: request.to,
+      granularity: request.granularity,
       groupBy: "machine",
+      agg: isAggregate ? "sum" : undefined,
     })
       .then(
         (res) =>
@@ -162,10 +178,18 @@ function MtbfMttrChartModal({
     return () => {
       cancelled = true;
     };
-  }, [open, date, granularity, kpiKey]);
+  }, [
+    open,
+    request.date,
+    request.from,
+    request.to,
+    request.granularity,
+    isAggregate,
+    kpiKey,
+  ]);
 
   const bars = useMemo(() => {
-    if (!isSection) {
+    if (!isSection && !isAggregate) {
       // Spec: "Sort by actual_value, plot. No calculation in the UI." The
       // only arithmetic is min → hrs, because the target is in hours.
       return rows
@@ -176,6 +200,31 @@ function MtbfMttrChartModal({
           label: r.machine ?? "—",
           value: r[measure.machineKpi] / 60,
         }));
+    }
+
+    if (!isSection && isAggregate) {
+      // An arbitrary window cannot sum published MTBF/MTTR rates. Pool the
+      // additive components per machine and divide once, exactly as the
+      // backend does for the plant summary.
+      const pooled = new Map();
+      for (const r of rows) {
+        if (!r.machine) continue;
+        const bucket = pooled.get(r.machine) ?? {
+          numerator: 0,
+          denominator: 0,
+        };
+        bucket.numerator += r[measure.numerator] ?? 0;
+        bucket.denominator += r[measure.denominator] ?? 0;
+        pooled.set(r.machine, bucket);
+      }
+      return [...pooled.entries()]
+        .filter(([, b]) => b.denominator > 0)
+        .map(([label, b]) => ({
+          label,
+          value: b.numerator / b.denominator / 60,
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, MAX_BARS);
     }
 
     // Pool the components per section, then divide ONCE — see the header
@@ -204,7 +253,7 @@ function MtbfMttrChartModal({
         }))
         .sort((a, b) => b.value - a.value)
     );
-  }, [rows, isSection, measure]);
+  }, [rows, isSection, isAggregate, measure]);
 
   return (
     <AnalysisModal
@@ -212,6 +261,7 @@ function MtbfMttrChartModal({
       onClose={onClose}
       eyebrow="KPI Trend Analysis"
       title={measure.title}
+      headerExtra={trend.control}
       maxWidth={740}
       align="center"
     >

@@ -106,10 +106,10 @@ export function ctpInventoryGranularity(raw) {
  *   - one granularity only (DAY for Today, MONTH for Month, SHIFT A/B/C
  *     for a shift) — grains are never summed together;
  *   - drill_down_level 1 for the card KPIs, 2 for the breakdowns;
- *   - inventory is a stock level (§8.5): each (section, product_type,
- *     tyre_type, kpi_name) series is read at its OWN latest date within
- *     [fromKey, toKey], since not every series is refreshed daily (e.g.
- *     Steel & Fabric Calender).
+ *   - inventory is a stock level (§8.5): each series is read at its OWN
+ *     latest date within [fromKey, toKey], since not every series is
+ *     refreshed daily. MHE_Count is partitioned down to item, machine and
+ *     unit because its rows contain separate counts at those dimensions.
  *
  * @param {object} input
  * @param {string} input.plantId - normalized plant id
@@ -131,13 +131,19 @@ export function ctpInventoryMasterSql({
   if (toKey) rangeClauses.push(`AND ${DATE_YYYYMMDD} <= '${toKey}'`);
   return `
           SELECT date, section, sub_section, product_type, itemcode, tyre_type,
-                 unit_of_measurement, kpi_name, actual_value
+                 machine, unit_of_measurement, kpi_name, actual_value
           FROM (
             SELECT CAST(date AS VARCHAR) AS date, section, sub_section, product_type,
-                   itemcode, tyre_type, unit_of_measurement, kpi_name, actual_value,
-                   date = MAX(date) OVER (
+                   itemcode, tyre_type, machine, unit_of_measurement, kpi_name,
+                   actual_value,
+                   CASE WHEN kpi_name = 'MHE_Count' THEN
+                     date = MAX(date) OVER (
+                       PARTITION BY section, sub_section, product_type, itemcode,
+                                    tyre_type, machine, unit_of_measurement, kpi_name
+                     )
+                   ELSE date = MAX(date) OVER (
                      PARTITION BY section, product_type, tyre_type, kpi_name
-                   ) AS is_latest
+                   ) END AS is_latest
             FROM ${table}
             WHERE ${plantPredicate("plant", plantId)}
               AND ${excludeUnknownKpiPredicate()}

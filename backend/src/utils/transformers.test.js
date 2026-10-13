@@ -112,7 +112,7 @@ test("toCtpInventoryMaster: Daily_Consumption and Oldest_Blocked_Lot_Days feed c
   assert.deepEqual(age, { READY: null, EXP: 6, HOLD: 6 });
 });
 
-test("toCtpInventoryMaster: Total_Inventory and MHE_Count feed validation, not lots", () => {
+test("toCtpInventoryMaster: Total_Inventory feeds validation and MHE_Count feeds the item", () => {
   const m = toCtpInventoryMaster([
     row({ kpi_name: "Total_Inventory", actual_value: 60 }),
     row({ kpi_name: "Ready_To_Use", actual_value: 60 }),
@@ -123,9 +123,38 @@ test("toCtpInventoryMaster: Total_Inventory and MHE_Count feed validation, not l
   ]);
   assert.equal(m.validation.expected_total_inventory, 90);
   assert.equal(m.validation.expected_mhe_count, 10);
+  assert.equal(firstItem(m).mhe_count, 7);
   assert.equal(m.validation.lots, 2);
   // IL-002: Total 30 vs statuses 25 → flagged.
   assert.equal(m.data_limits.items_total_mismatch, 1);
+});
+
+test("toCtpInventoryMaster: MHE_Count sums the latest machine/unit series per item", () => {
+  const m = toCtpInventoryMaster([
+    row({ date: "2026-07-10", kpi_name: "MHE_Count", machine: "MIXER-A", unit_of_measurement: "NOS", actual_value: 99 }),
+    row({ date: "2026-07-16", kpi_name: "MHE_Count", machine: "MIXER-A", unit_of_measurement: "NOS", actual_value: 2 }),
+    row({ date: "2026-07-10", kpi_name: "MHE_Count", machine: "MIXER-B", unit_of_measurement: "NOS", actual_value: 50 }),
+    row({ date: "2026-07-16", kpi_name: "MHE_Count", machine: "MIXER-B", unit_of_measurement: "NOS", actual_value: 3 }),
+    row({ date: "2026-07-16", kpi_name: "MHE_Count", machine: "MIXER-B", unit_of_measurement: "M", actual_value: 4 }),
+  ]);
+  assert.equal(firstItem(m).mhe_count, 9);
+  assert.equal(m.validation.expected_mhe_count, 9);
+});
+
+test("toCtpInventoryMaster: unmapped MHE_Count rows stay in headline data, not item rows", () => {
+  const m = toCtpInventoryMaster([
+    row({ kpi_name: "MHE_Count", actual_value: 7, machine: "CUTTER" }),
+    row({ date: "2026-07-10", kpi_name: "MHE_Count", itemcode: "", machine: "BELT", actual_value: 99 }),
+    row({ date: "2026-07-16", kpi_name: "MHE_Count", itemcode: "", machine: "BELT", actual_value: 2 }),
+    row({ kpi_name: "MHE_Count", product_type: "", itemcode: "ORPHAN-2", machine: "MIXER", actual_value: 3 }),
+  ]);
+
+  assert.equal(firstItem(m).mhe_count, 7);
+  assert.equal(m.validation.expected_mhe_count, 12);
+  assert.deepEqual(
+    m.mhe_unassigned_rows.map((r) => r.mhe_count).sort((a, b) => a - b),
+    [2, 3],
+  );
 });
 
 test("toCtpInventoryMaster: latest date wins for a repeated (item, kpi)", () => {

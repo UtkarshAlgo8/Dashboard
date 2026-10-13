@@ -21,6 +21,8 @@ import {
   qtyByStatus,
   selectCtpLots,
   summarizeCtpLots,
+  sumCtpMheCounts,
+  sumCtpUnassignedMheCounts,
 } from "@/lib/ctpInventory.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 
@@ -119,6 +121,8 @@ function CtpInventoryBody({ m, tyreType, shift, filter, setFilter }) {
   // One filtered row set feeds summary + cards; option counts skip their own dimension.
   const rows = selectCtpLots(m, f);
   const sum = summarizeCtpLots(rows);
+  const mheSum = sumCtpMheCounts(m, f);
+  const unassignedMheSum = sumCtpUnassignedMheCounts(m, f);
   const stQty = qtyByStatus(m, selectCtpLots(m, f, { st: true }));
   const secQty = qtyBy(selectCtpLots(m, f, { sec: true }), "sec");
   const allSecQty = Object.values(secQty).reduce((a, b) => a + b, 0);
@@ -251,8 +255,12 @@ function CtpInventoryBody({ m, tyreType, shift, filter, setFilter }) {
           </CtpSummaryTile>
           <CtpSummaryTile
             label="MHE"
-            value={fmt(sum.mhe)}
-            sub="Distinct MHE carrying the filtered lots"
+            value={fmt(mheSum)}
+            sub={
+              unassignedMheSum > 0
+                ? `${fmt(unassignedMheSum)} without item mapping · all statuses`
+                : "Gold MHE_Count · all statuses"
+            }
             color={theme.custom.brand.teal}
           />
         </Stack>
@@ -386,8 +394,8 @@ function CtpInventoryBody({ m, tyreType, shift, filter, setFilter }) {
         ))}
 
         <Typography sx={{ fontSize: 11.5, color: "text.disabled" }}>
-          Total Inventory = SUM(quantity) · MHE = COUNT(DISTINCT mhe_code) ·
-          same definitions as the Gold KPIs Total_Inventory / MHE_Count. Status,
+          Total Inventory = SUM(quantity) · MHE = Gold MHE_Count (status-independent;
+          headline may include counts without item mapping). Status,
           section, product type, item code and the header PCR/TBR filter all
           combine; Days cover ignores the status filter because Expired and On
           Hold stock cannot be issued.

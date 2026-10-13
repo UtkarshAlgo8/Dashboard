@@ -14,7 +14,8 @@
  *   Zero Breakdown Machines  → daily line of the clean-run count
  *   Top Machine Breakdowns   → Pareto of BreakdownMin_m by machine, top 10
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getReliabilityLatestDate } from "@/api/engineering.js";
 import {
   Card,
   ChevronIcon,
@@ -30,17 +31,22 @@ import {
 import {
   ZeroBreakdownPanel,
   TopMachineBreakdownsPanel,
+  useTopMachineBreakdowns,
   useZeroBreakdownTotal,
 } from "./reliabilityPanels.jsx";
 import BreakdownChartModal from "./BreakdownChartModal.jsx";
 import MtbfMttrChartModal from "./MtbfMttrChartModal.jsx";
 import ZeroBreakdownTrendModal from "./ZeroBreakdownTrendModal.jsx";
 
+const fmtHours = (minutes) =>
+  minutes == null ? "—" : `${fmtNum(minutes / 60, 1)} hrs`;
+
 function SummaryCard({
   label,
   value,
   unit,
   accent,
+  featured,
   onTrend,
   expanded,
   onToggle,
@@ -109,21 +115,74 @@ function SummaryCard({
           </span>
         </div>
       </div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: C.tx }}>
-        {value}
-        {unit && (
-          <span
+      {featured ? (
+        <>
+          <div
             style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: C.mu,
-              marginLeft: 4,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              minWidth: 0,
             }}
           >
-            {unit}
-          </span>
-        )}
-      </div>
+            <div
+              title={featured.machine ?? undefined}
+              style={{
+                fontSize: 24,
+                fontWeight: 700,
+                color: C.tx,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {featured.machine ?? "—"}
+            </div>
+            <div
+              style={{
+                flexShrink: 0,
+                textAlign: "right",
+                fontSize: 12,
+                fontWeight: 600,
+                color: C.md,
+                lineHeight: 1.4,
+              }}
+            >
+              <div>
+                Downtime{" "}
+                {featured.machine
+                  ? `${fmtNum(featured.BreakdownMin_m)} min`
+                  : "—"}
+              </div>
+              <div>
+                Occurrences{" "}
+                {featured.machine ? fmtNum(featured.BreakdownOcc_m) : "—"}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.mu }}>
+            MTBF {fmtHours(featured.MTBF_m)} · MTTR {fmtHours(featured.MTTR_m)}
+          </div>
+        </>
+      ) : (
+        <div style={{ fontSize: 24, fontWeight: 700, color: C.tx }}>
+          {value}
+          {unit && (
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: C.mu,
+                marginLeft: 4,
+              }}
+            >
+              {unit}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -138,19 +197,39 @@ function ReliabilityCardsGrid({
   includeTopMachines = false,
 }) {
   const { date, granularity } = period;
-  // Breakdown/MTBF/MTTR/Top-Machine drills and charts read ONE published row
-  // per section/machine; those rates cannot be summed across the days of an
-  // arbitrary window, so for a custom range they are withheld rather than
-  // shown for the window's first day only. Headline values are rebuilt
-  // server-side and stay correct.
+  // The generic Breakdown/MTBF/MTTR drills need one published period; the
+  // Top Machine card/table instead pool additive machine components across a
+  // custom window. Its trend icon retains the existing page-level range gate.
   const isRange = period.kind === "range";
-  const perRowCardIds = new Set(["breakdown", "mtbf", "mttr", "topMachines"]);
+  const perRowCardIds = new Set(["breakdown", "mtbf", "mttr"]);
   const [expanded, setExpanded] = useState(null);
   // Which card's trend icon is open, by card id — every card's icon opens a
   // different analysis, so one id covers all of them. Chevrons are separate
   // (`expanded`) and still open the inline drill panels.
   const [trendCard, setTrendCard] = useState(null);
   const zeroBreakdown = useZeroBreakdownTotal();
+  const topMachines = useTopMachineBreakdowns(period, includeTopMachines);
+  const [trendAsOf, setTrendAsOf] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getReliabilityLatestDate({
+      kpiNames: [
+        "Breakdown_Pct_Overall",
+        "BreakdownMin_Overall",
+        "MTBF_Overall",
+        "MTTR_Overall",
+      ],
+      granularity: "DAY",
+    })
+      .then((res) => !cancelled && setTrendAsOf(res?.date ?? null))
+      .catch(() => !cancelled && setTrendAsOf(null));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const trendAnchor = trendAsOf ?? date;
 
   const toggle = (id) => setExpanded((e) => (e === id ? null : id));
   const closeTrend = () => setTrendCard(null);
@@ -191,8 +270,7 @@ function ReliabilityCardsGrid({
       id: "topMachines",
       label: "Top Machine Breakdowns",
       accent: C.pp,
-      value: "Top 10",
-      unit: "",
+      featured: topMachines.rows[0] ?? {},
     });
   }
 
@@ -212,12 +290,13 @@ function ReliabilityCardsGrid({
             value={c.value}
             unit={c.unit}
             accent={c.accent}
+            featured={c.featured}
             expanded={expanded === c.id}
             onToggle={() => toggle(c.id)}
-            // Every Reliability card has an analysis behind its icon —
-            // except the per-row ones, which a custom range cannot serve.
+            // Keep the trend icon gated for custom ranges; the inline Top
+            // Machine table and card still cover the selected window.
             onTrend={
-              isRange && perRowCardIds.has(c.id)
+              isRange && (perRowCardIds.has(c.id) || c.id === "topMachines")
                 ? undefined
                 : () => setTrendCard(c.id)
             }
@@ -264,8 +343,9 @@ function ReliabilityCardsGrid({
                 {expanded === "zeroBreakdown" && <ZeroBreakdownPanel />}
                 {expanded === "topMachines" && (
                   <TopMachineBreakdownsPanel
-                    date={date}
-                    granularity={granularity}
+                    rows={topMachines.rows}
+                    loading={topMachines.loading}
+                    error={topMachines.error}
                     totalMinutes={values?.BreakdownMin_Overall}
                   />
                 )}
@@ -280,6 +360,7 @@ function ReliabilityCardsGrid({
         onClose={closeTrend}
         date={date}
         granularity={granularity}
+        asOf={trendAnchor}
       />
 
       {/* Spec KPI 7: "Pareto (bar + cum. line) | machine | downtime (min) |
@@ -290,6 +371,7 @@ function ReliabilityCardsGrid({
         onClose={closeTrend}
         date={date}
         granularity={granularity}
+        asOf={trendAnchor}
         title="Top Machine Breakdowns"
         initialViewBy="machine"
         maxBars={10}
@@ -302,6 +384,7 @@ function ReliabilityCardsGrid({
         onClose={closeTrend}
         date={date}
         granularity={granularity}
+        asOf={trendAnchor}
         measure={trendCard === "mttr" ? "mttr" : "mtbf"}
       />
 
@@ -309,7 +392,7 @@ function ReliabilityCardsGrid({
         open={trendCard === "zeroBreakdown"}
         onClose={closeTrend}
         total={zeroBreakdown.total}
-        asOf={zeroBreakdown.asOf}
+        asOf={zeroBreakdown.asOf ?? trendAnchor}
       />
     </div>
   );

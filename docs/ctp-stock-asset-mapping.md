@@ -149,24 +149,18 @@ via `GET /api/v1/plants/chennai/inventory/master` (see
 [backend/src/controllers/inventory.controller.js](../backend/src/controllers/inventory.controller.js)
 + [`toCtpInventoryMaster()`](../backend/src/utils/transformers.js)).
 
-**Coverage today** — Stock section only. Mixing and Tyre Building gain
-sections automatically once ETL writes Inventory_item rows for them; the
-transformer reads whatever the gold table carries.
+The endpoint transforms whichever sections and per-status Inventory KPIs
+are present in Gold; it is no longer limited to the legacy
+`Inventory` / `Inventory_item` rows.
 
-**Lot-level facets are synthesised** because the gold schema has no
-`lot_id`, `mhe_code`, `age_days`, `expiry_date` or per-row lot-status
-columns. Each Inventory_item row emits one synthetic READY lot carrying
-the item's full qty — so the page renders meaningful totals on the
-Stock section (real `actual_value`), while:
-
-- the MHE tile shows 0
-- the "Oldest Blocked Lot" card shows "—" (no age data)
-- status filter chips for HOLD / EXP / ATE / PART show 0 qty (only READY
-  is synthesised)
-- days-cover insight card stays blank (no daily-consumption data)
-
-The response carries `data_origin` and `data_limits` so callers can
-detect the synthetic-facet state without a hard-coded version check.
+**Lot-level identities are synthesised** because Gold does not provide
+`lot_id`, `mhe_code`, `production_date` or `expiry_date`. Status quantities,
+daily consumption, oldest-blocked age and MHE counts come from their Gold
+KPIs. `MHE_Count` is carried per item and drives the page summary and item
+column. Counts with missing item/product mapping remain in the headline only
+(and are called out in its subtitle); raw MHE identities and status-specific
+MHE counts are unavailable, so MHE intentionally ignores status-chip filters.
+The response carries `data_origin` and `data_limits` to describe these limits.
 
 `VITE_USE_MOCK_DATA=true` keeps the bundled fixture
 (`frontend/src/lib/ctpInventoryMaster.json`, 271 lots, 134 items)
@@ -182,7 +176,7 @@ validated mapping is `docs/Inventory_Mapping_Final.xlsx`;
 | kpi_name | drill_down_level | Page element |
 | --- | --- | --- |
 | `Total_Inventory` | 1 | Grid "Total" (= sum of the five statuses) |
-| `MHE_Count` | 1 | Validation total only — no tile yet |
+| `MHE_Count` | 1 | MHE summary + item table column; summed per item and independent of status filters |
 | `Ready_To_Use` | 2 | "Usable" column, "Ready to Use" chip |
 | `Held` | 2 | "Hold" column / chip, "On Hold" tile |
 | `Expired` | 2 | "Banned" column, "Banned to Use" chip / tile |
@@ -191,10 +185,11 @@ validated mapping is `docs/Inventory_Mapping_Final.xlsx`;
 | `Daily_Consumption` | 2 | Days cover = Ready_To_Use / Daily_Consumption |
 | `Oldest_Blocked_Lot_Days` | 2 | "Oldest blocked lot" tile (MAX) |
 
-Query: plant + `category = 'Inventory'` (not department), `granularity =
-'DAY'` only, and each (section, product_type, tyre_type, kpi_name) series
-at its own latest date — `Steel & Fabric Calender` last refreshed
-2026-08-21. Gaps per the sheet: Green Tyre, Tread and Sidewall have no gold
-rows; Carcass is all zero; Cured Tire and Precut Cap Strip have no data.
+Query: plant + `category = 'Inventory'` (not department), one selected
+granularity, and each series at its latest date within the selected window.
+`MHE_Count` uses item, machine and unit-of-measure dimensions before those
+counts are summed into the existing item rows. Gaps per the sheet: Green Tyre,
+Tread and Sidewall have no gold rows; Carcass is all zero; Cured Tire and
+Precut Cap Strip have no data.
 The sections above that cite `Inventory` / `Inventory_item` describe the
 2026-08-11 layout.

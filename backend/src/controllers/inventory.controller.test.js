@@ -36,12 +36,16 @@ test("ctpInventoryMasterSql: no longer asks for the retired Inventory / Inventor
   assert.ok(!/kpi_name IN \([^)]*'Inventory'[,)]/.test(sql));
 });
 
-test("ctpInventoryMasterSql: one grain only, each series at its own latest date", () => {
+test("ctpInventoryMasterSql: keeps latest inventory snapshots at each KPI grain", () => {
   const sql = ctpInventoryMasterSql(DAY_SQL);
   assert.match(sql, /UPPER\(granularity\) = 'DAY'/);
   assert.match(
     sql,
     /MAX\(date\) OVER \(\s*PARTITION BY section, product_type, tyre_type, kpi_name\s*\)/,
+  );
+  assert.match(
+    sql,
+    /MAX\(date\) OVER \(\s*PARTITION BY section, sub_section, product_type, itemcode,\s*tyre_type, machine, unit_of_measurement, kpi_name\s*\)/,
   );
   assert.match(sql, /WHERE is_latest/);
 });
