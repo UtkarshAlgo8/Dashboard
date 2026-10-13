@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ctpDowntimePayload } from "./ctpDowntime.js";
+import {
+  ctpDowntimePayload,
+  scopeCtpDowntimeReasonRows,
+  sumCtpDowntimeReasons,
+} from "./ctpDowntime.js";
 import { toKpiGrid } from "./kpi-transformer.js";
 import { toDowntimeReasonKpis } from "./technicalKpiSources.js";
 
@@ -26,6 +30,53 @@ const total = (rows, extra = {}, landing = []) =>
     totalDowntimeRows: rows,
     ...extra,
   }).find((k) => k.id === "downtime");
+
+test("CTP reason scope excludes unassigned dimensions and preserves shared-line rows", () => {
+  const rows = [
+    row(10, { sub_section: "Trench1", tyre_type: "PCR" }),
+    row(15, { sub_section: "Trench1", tyre_type: "Both" }),
+    row(20, { sub_section: "Trench1", tyre_type: "TBR" }),
+    row(25, { sub_section: null, tyre_type: "PCR" }),
+    row(30, { sub_section: "Trench2", tyre_type: "PCR" }),
+    row(35, { section: null, sub_section: "Trench1", tyre_type: "PCR" }),
+    row(40, { section: "TBM", sub_section: "Trench1", tyre_type: "PCR" }),
+  ];
+  const scoped = scopeCtpDowntimeReasonRows(rows, {
+    section: "Curing",
+    subSection: "Trench1",
+    tyreType: "PCR",
+  });
+  assert.deepEqual(scoped.map((r) => r.actual_value), [10, 15]);
+
+  const alias = scopeCtpDowntimeReasonRows(
+    [row(50, { sub_section: "Three Roll", tyre_type: "TBR" })],
+    { section: "Curing", subSection: "3 Roll", tyreType: "TBR" },
+  );
+  assert.deepEqual(alias.map((r) => r.actual_value), [50]);
+});
+
+test("CTP reason breakdown sums raw machine values and filters a selected machine", () => {
+  const rows = [
+    row(60, { machine: "A", kpi_name: "Breakdown" }),
+    row(30, { machine: "B", kpi_name: "Breakdown" }),
+    row(15, { machine: "A", kpi_name: "Setup & Change" }),
+    row(500, { machine: "A", granularity: "SHIFT A", kpi_name: "Breakdown" }),
+    row(900, { section: "TBM", machine: "A", kpi_name: "Breakdown" }),
+  ];
+  const totalRows = sumCtpDowntimeReasons(rows, {
+    section: "Curing",
+    granularity: "DAY",
+  });
+  assert.equal(totalRows.find((r) => r.reason === "Breakdown").sum, 90);
+  assert.equal(totalRows.find((r) => r.reason === "Setup & Change").sum, 15);
+
+  const machineRows = sumCtpDowntimeReasons(rows, {
+    section: "Curing",
+    granularity: "DAY",
+    selectedMachine: "A",
+  });
+  assert.equal(machineRows.find((r) => r.reason === "Breakdown").sum, 60);
+});
 
 test("CTP total request keeps section/sub-section/tyre and pins DAY or the selected shift", () => {
   for (const plantId of ["ctp", "chennai"]) {

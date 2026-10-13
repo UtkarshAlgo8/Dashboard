@@ -1161,7 +1161,10 @@ function DrillPanelRouter({
     case "downtime":
       return (
         <DowntimeDrillPanel
+          plantId={plantId}
           section={section}
+          subSection={subSection}
+          tyreType={tyreType}
           rawRows={downtimeRows}
           mode={mode}
           granularity={downtimeGranularity ?? "DAY"}

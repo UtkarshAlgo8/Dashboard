@@ -20,6 +20,11 @@ import DrillCloseButton from "@/components/drills/shared/DrillCloseButton.jsx";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 import { dateKey } from "@/lib/drillDate.js";
 import { hasMachine } from "@/lib/dashboardRowScopes.js";
+import {
+  scopeCtpDowntimeReasonRows,
+  sumCtpDowntimeReasons,
+  usesCtpProductionDowntime,
+} from "@/lib/ctpDowntime.js";
 
 const SECTION_NAME = {
   mix: "Mixing",
@@ -52,6 +57,9 @@ const SECTION_NAME = {
  */
 function DowntimeDrillPanel({
   section,
+  plantId = "banmore",
+  subSection = null,
+  tyreType = null,
   rawRows,
   rows: propsRows,
   granularity = "DAY",
@@ -65,30 +73,44 @@ function DowntimeDrillPanel({
   isLoading = false,
   onClose,
 }) {
+  const ctpProduction = usesCtpProductionDowntime(plantId, "P");
+  const sectionName = SECTION_NAME[section] ?? section;
   const rows = useMemo(() => {
     const base = Array.isArray(rawRows)
       ? rawRows
       : Array.isArray(propsRows)
         ? propsRows
         : [];
+    const scoped = ctpProduction
+      ? scopeCtpDowntimeReasonRows(base, {
+          section: sectionName,
+          subSection,
+          tyreType,
+        })
+      : base;
     if (cardDate) {
       const want = dateKey(cardDate);
-      return base.filter((r) => dateKey(r?.date) === want);
+      return scoped.filter((r) => dateKey(r?.date) === want);
     }
-    return base;
-  }, [rawRows, propsRows, cardDate]);
+    return scoped;
+  }, [
+    rawRows,
+    propsRows,
+    cardDate,
+    ctpProduction,
+    sectionName,
+    subSection,
+    tyreType,
+  ]);
   const theme = useTheme();
-  const sectionName = SECTION_NAME[section] ?? section;
   const cardRef = useRef(null);
   const [selectedReason, setSelectedReason] = useState(null);
-  // null = "All Machines" (fleet-average view). When set, sums become
-  // that machine's actual minutes — see reasonRows memo.
+  // null = "All Machines". CTP shows the raw fleet sum; other plants keep
+  // their prior fleet-average view. A selected machine always shows its sum.
   const [selectedMachine, setSelectedMachine] = useState(null);
 
-  // How many machines these sums span. Every figure in this panel is a FLEET
-  // total — 169 Curing presses add up to ~12,000 hours in a 720-hour month —
-  // so the header states the span rather than leaving the reader to compare
-  // it against one machine's month.
+  // Machines contributing to this scope. CTP shows summed machine-minutes;
+  // other plants retain their existing fleet-average calculation.
   const machineCount = useMemo(() => {
     if (!Array.isArray(rows)) return 0;
     const seen = new Set();
@@ -117,12 +139,17 @@ function DowntimeDrillPanel({
     return [...seen].sort((a, b) => a.localeCompare(b));
   }, [rows, sectionName, granularity]);
 
-  // Group the 6 reasons: sum per reason for the active window, tracking
-  // which machines reported EACH reason separately (GROUP BY kpi_name
-  // semantics) — different reasons can be reported by different subsets
-  // of the fleet, so they can't share one divisor.
+  // Group the 6 reasons over the active window. CTP shows each raw sum;
+  // other plants retain the existing per-reason fleet-average behavior.
   const reasonRows = useMemo(() => {
     if (!Array.isArray(rows)) return [];
+    if (ctpProduction) {
+      return sumCtpDowntimeReasons(rows, {
+        section: sectionName,
+        granularity,
+        selectedMachine,
+      });
+    }
     const byReason = new Map();
     const byReasonMachines = new Map();
     for (const r of rows) {
@@ -140,14 +167,8 @@ function DowntimeDrillPanel({
         byReasonMachines.set(r.kpi_name, machines);
       }
     }
-    // CR-11: fleet view — machines go down concurrently, so their minutes
-    // are machine-minutes, not elapsed time. Each reason divides by the
-    // machines that reported THAT specific reason, not one shared
-    // fleet-wide count (a reason reported by 3 machines must average over
-    // 3, not the whole section's fleet).
-    //
-    // Single-machine view — divide by 1. `byReason` already reflects just
-    // that machine's minutes after the row filter above.
+    // Legacy fleet view: reasons use their own contributing-machine divisor.
+    // A selected-machine view already contains only that machine's minutes.
     return DOWNTIME_REASONS.map((reason) => {
       const reasonMachineCount = byReasonMachines.get(reason)?.size ?? 0;
       const div = selectedMachine
@@ -158,7 +179,7 @@ function DowntimeDrillPanel({
       const sum = (byReason.get(reason) ?? 0) / div;
       return { reason, sum };
     }).sort((a, b) => b.sum - a.sum);
-  }, [rows, sectionName, granularity, selectedMachine]);
+  }, [rows, sectionName, granularity, selectedMachine, ctpProduction]);
 
   const totalDowntime = reasonRows.reduce((s, r) => s + r.sum, 0);
 
@@ -218,9 +239,14 @@ function DowntimeDrillPanel({
     },
     {
       key: "sum",
-      label: selectedMachine ? "Downtime (min)" : "Avg / machine (min)",
+      label: selectedMachine
+        ? "Downtime (min)"
+        : ctpProduction
+          ? "Total downtime (min)"
+          : "Avg / machine (min)",
       align: "right",
-      render: (r) => formatIndianNumber(Math.round(r.sum)),
+      render: (r) =>
+        formatIndianNumber(ctpProduction ? r.sum : Math.round(r.sum)),
     },
   ];
 
@@ -294,7 +320,9 @@ function DowntimeDrillPanel({
                 ? ["Date", "Machine", "Downtime (min)", "Shift"]
                 : selectedMachine
                   ? ["Reason", "Downtime (min)"]
-                  : ["Reason", "Avg / machine (min)"]
+                  : ctpProduction
+                    ? ["Reason", "Total downtime (min)"]
+                    : ["Reason", "Avg / machine (min)"]
             }
             filename={
               selectedReason
@@ -354,11 +382,15 @@ function DowntimeDrillPanel({
               </Typography>
               <Tooltip
                 title={
-                  selectedMachine
-                    ? `Total downtime recorded by ${selectedMachine} in this window.`
-                    : machineCount > 0
-                      ? `Machines go down at the same time, so their minutes cannot simply be added. Each reason below is averaged over the machines that reported THAT reason (see the count under each row) — this total is the sum of those per-reason fleet averages, spanning ${machineCount} machines in ${sectionName} overall.`
-                      : "Average downtime per machine for this window."
+                  ctpProduction
+                    ? selectedMachine
+                      ? `Total downtime recorded by ${selectedMachine} in this window.`
+                      : `Sum of the scoped reason values in ${sectionName}; simultaneous downtime on different machines adds together.`
+                    : selectedMachine
+                      ? `Total downtime recorded by ${selectedMachine} in this window.`
+                      : machineCount > 0
+                        ? `Machines go down at the same time, so their minutes cannot simply be added. Each reason below is averaged over the machines that reported THAT reason — this total is the sum of those per-reason fleet averages, spanning ${machineCount} machines in ${sectionName} overall.`
+                        : "Average downtime per machine for this window."
                 }
                 arrow
               >
@@ -370,9 +402,11 @@ function DowntimeDrillPanel({
                       color: "primary.main",
                     }}
                   >
-                    {formatIndianNumber(Math.round(totalDowntime))} min
+                    {formatIndianNumber(
+                      ctpProduction ? totalDowntime : Math.round(totalDowntime),
+                    )} min
                   </Typography>
-                  {!selectedMachine && machineCount > 0 && (
+                  {!selectedMachine && machineCount > 0 && !ctpProduction && (
                     <Typography
                       sx={{
                         fontSize: 11,
@@ -382,6 +416,18 @@ function DowntimeDrillPanel({
                       }}
                     >
                       sum of per-reason fleet averages
+                    </Typography>
+                  )}
+                  {!selectedMachine && machineCount > 0 && ctpProduction && (
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "text.secondary",
+                        mt: 0.25,
+                      }}
+                    >
+                      sum across machines
                     </Typography>
                   )}
                 </Stack>
