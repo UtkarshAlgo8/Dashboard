@@ -70,7 +70,10 @@ function canSend(user) {
 async function buildMail(reportDay) {
   const { values, sources, errors } = await getCuringMailValues(reportDay);
   const problems = [...errors];
-  if (!isPlantDayClosed(reportDay)) {
+  // TEMPORARY (2026-10-15): allow sending before the plant day closes, so the
+  // 14-Oct mail can go out now. Revert this commit to restore the check.
+  const TEMP_SKIP_PLANT_DAY_CHECK = true;
+  if (!TEMP_SKIP_PLANT_DAY_CHECK && !isPlantDayClosed(reportDay)) {
     problems.push(`Plant day ${reportDay} is not complete yet (it closes at 07:00 the next day).`);
   }
   const missing = MAIL_FIELDS.filter((f) => values[f.key] == null).map((f) => FIELD_LABELS[f.key]);
