@@ -45,7 +45,10 @@ function istIso(ms, days = 0) {
 
 /** Yesterday's plant day — the default report date. */
 function defaultReportDay() {
-  return istIso(Date.now(), -1);
+  // TEMPORARY (2026-10-15): report two days back (13-Oct) instead of
+  // yesterday. Revert this commit to restore -1.
+  const TEMP_REPORT_DAY_OFFSET = -2;
+  return istIso(Date.now(), TEMP_REPORT_DAY_OFFSET);
 }
 
 /** A plant day (07:00 → 07:00 IST) is complete once 07:00 the next day passes. */
