@@ -35,6 +35,10 @@ function KpiCard({
   const theme = useTheme();
   if (!kpi) return null;
 
+  // Heading-only card (temporarily disabled KPI): title and a dash, nothing
+  // clickable, no sparkline, progress bar, trend or action icons.
+  const disabled = Boolean(kpi.disabled);
+
   // Determine dynamic threshold tier: "green" | "amber" | "red"
   const tier = evaluateKpiTier(kpi);
   const cardTheme = getKpiCardTheme(theme, tier);
@@ -153,7 +157,7 @@ function KpiCard({
 
   return (
     <Box
-      onClick={() => onClick?.(kpi)}
+      onClick={disabled ? undefined : () => onClick?.(kpi)}
       sx={{
         position: "relative",
         containerType: "inline-size",
@@ -166,7 +170,7 @@ function KpiCard({
         boxShadow: isDrilling
           ? "0 4px 14px rgba(0,0,0,0.08)"
           : theme.custom.shadow,
-        cursor: kpi.drillable ? "pointer" : "default",
+        cursor: kpi.drillable && !disabled ? "pointer" : "default",
         transition: "all 0.15s ease",
         display: "flex",
         flexDirection: "column",
@@ -207,16 +211,18 @@ function KpiCard({
           </Typography>
         </Stack>
 
-        <Tooltip title="KPI Details & Calculation Info" arrow>
-          <InfoOutlinedIcon
-            sx={{
-              fontSize: 18,
-              color: "text.secondary",
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-          />
-        </Tooltip>
+        {!disabled && (
+          <Tooltip title="KPI Details & Calculation Info" arrow>
+            <InfoOutlinedIcon
+              sx={{
+                fontSize: 18,
+                color: "text.secondary",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            />
+          </Tooltip>
+        )}
       </Stack>
 
       {/* 2. Main Metric + Sparkline */}
@@ -246,7 +252,7 @@ function KpiCard({
             >
               {formattedVal}
             </Typography>
-            {subtitle && (
+            {subtitle && !disabled && (
               <Typography
                 sx={{
                   fontSize: 13,
@@ -370,7 +376,7 @@ function KpiCard({
       </Stack>
 
       {/* 3. Horizontal Target / Progress Bar with Gradient */}
-      {!isDrilling && !isDrilldown && (
+      {!disabled && !isDrilling && !isDrilldown && (
         <Box
           sx={{
             width: "100%",
@@ -394,7 +400,8 @@ function KpiCard({
       )}
 
       {/* Production vs Plan & Shortfall (SKU Plan Fulfillment) — Compact single-line row */}
-      {kpi.produced != null &&
+      {!disabled &&
+        kpi.produced != null &&
         kpi.planned != null &&
         !isDrilling &&
         !isDrilldown && (
@@ -480,77 +487,79 @@ function KpiCard({
         )}
 
       {/* 4. Footer: Trend Badge & Action Icons */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ mt: 0.5 }}
-      >
-        {/* Trend Indicator */}
-        <Stack direction="row" alignItems="center" spacing={0.5}>
-          {trendUp ? (
-            <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
-          ) : (
-            <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
-          )}
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: trendColor,
-            }}
-          >
-            {trendVal}
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: 12.5,
-              fontWeight: 500,
-              color: "text.secondary",
-            }}
-          >
-            {trendLabel}
-          </Typography>
-        </Stack>
-
-        {/* Action Drilldown & Table Icons */}
-        <Stack direction="row" alignItems="center" spacing={0.5}>
-          <Tooltip title="View Trend Analytics" arrow>
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onTrendOpen?.(kpi);
-              }}
+      {!disabled && (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mt: 0.5 }}
+        >
+          {/* Trend Indicator */}
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            {trendUp ? (
+              <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
+            ) : (
+              <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
+            )}
+            <Typography
               sx={{
-                p: 0.25,
-                color: "text.secondary",
-                "&:hover": { color: "primary.main" },
+                fontSize: 13,
+                fontWeight: 700,
+                color: trendColor,
               }}
             >
-              <ShowChartIcon sx={{ fontSize: 15 }} />
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="Drilldown Data Table" arrow>
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isDrilling) onCloseDrill?.();
-                else onClick?.(kpi);
-              }}
+              {trendVal}
+            </Typography>
+            <Typography
               sx={{
-                p: 0.25,
+                fontSize: 12.5,
+                fontWeight: 500,
                 color: "text.secondary",
-                "&:hover": { color: "primary.main" },
               }}
             >
-              <TableChartOutlinedIcon sx={{ fontSize: 15 }} />
-            </IconButton>
-          </Tooltip>
+              {trendLabel}
+            </Typography>
+          </Stack>
+
+          {/* Action Drilldown & Table Icons */}
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Tooltip title="View Trend Analytics" arrow>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTrendOpen?.(kpi);
+                }}
+                sx={{
+                  p: 0.25,
+                  color: "text.secondary",
+                  "&:hover": { color: "primary.main" },
+                }}
+              >
+                <ShowChartIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Drilldown Data Table" arrow>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isDrilling) onCloseDrill?.();
+                  else onClick?.(kpi);
+                }}
+                sx={{
+                  p: 0.25,
+                  color: "text.secondary",
+                  "&:hover": { color: "primary.main" },
+                }}
+              >
+                <TableChartOutlinedIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         </Stack>
-      </Stack>
+      )}
     </Box>
   );
 }
