@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
@@ -37,6 +37,7 @@ import { canonicalUnit } from "@/lib/kpi-transformer.js";
 import { canonicalizeProductType } from "@/lib/dashboardRowScopes.js";
 import client from "@/api/client.js";
 import { exportElementToPdf } from "@/lib/exportPdf.js";
+import { SKU_PLAN_KPI_ID, TEMP_DISABLE_SKU_PLAN } from "@/lib/tempFlags.js";
 import { displayUnit } from "@/lib/units.js";
 
 // Production drill types render ProductionDrillPanel, which owns its own
@@ -241,6 +242,32 @@ function BanmoreProduction() {
       staleTime: 2 * 60 * 1000,
     },
   );
+
+  // Banmore's Plant OEE IS the Curing section's OEE (the same value as the
+  // Curing ring) — no fallback to the whole-plant figure; no Curing data → "–".
+  // undefined leaves other plants on the card's usual OEE chain.
+  const plantOeeOverride = isBanmore
+    ? (sectionOeeData?.Curing?.oee ?? null)
+    : undefined;
+
+  // TEMPORARY: SKU Plan Fulfillment renders as a heading-only card (no value,
+  // trend or drill). Flip TEMP_DISABLE_SKU_PLAN in lib/tempFlags.js to undo.
+  const displayKpis = useMemo(() => {
+    if (!TEMP_DISABLE_SKU_PLAN || !isBanmore || !Array.isArray(kpis)) {
+      return kpis;
+    }
+    return kpis.map((k) =>
+      k.id === SKU_PLAN_KPI_ID
+        ? {
+            id: k.id,
+            name: "SKU Plan Fulfillment",
+            value: null,
+            drillable: false,
+            disabled: true,
+          }
+        : k,
+    );
+  }, [isBanmore, kpis]);
 
   // Section metadata (simplified names shown in subheader)
   const SECTION_TITLE = {
@@ -707,6 +734,7 @@ function BanmoreProduction() {
               <PlantSummaryCard
                 plant={plant}
                 summary={summary}
+                oeeOverride={plantOeeOverride}
                 loading={false}
               />
             </Stack>
@@ -919,7 +947,7 @@ function BanmoreProduction() {
                       }}
                     >
                       <KpiGrid
-                        kpis={kpis}
+                        kpis={displayKpis}
                         category={dashboard.category}
                         isLoading={false}
                         error={kpiError}

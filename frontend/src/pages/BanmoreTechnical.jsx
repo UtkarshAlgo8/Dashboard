@@ -32,6 +32,7 @@ import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { buildDatePayload, presetToDateRange } from "@/lib/timeRange.js";
 import { withNumericValues } from "@/lib/technicalDrills.js";
+import { TEMP_DISABLE_SKU_PLAN } from "@/lib/tempFlags.js";
 import {
   TECHNICAL_KPI_SOURCES,
   resolveTechnicalKpi,
@@ -526,7 +527,10 @@ function BanmoreTechnical() {
               rawRows={selectedMachine ? machineRows : drillFetch.rawRows}
               card={openDrillKpi}
               planCard={
-                productivity.kpis.find((item) => item.id === "comp") ?? null
+                TEMP_DISABLE_SKU_PLAN
+                  ? null
+                  : (productivity.kpis.find((item) => item.id === "comp") ??
+                    null)
               }
               downtimeRows={productivity.downtimeRows}
               downtimeGranularity={productivity.downtimeGranularity}

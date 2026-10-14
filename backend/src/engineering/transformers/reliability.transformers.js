@@ -241,3 +241,38 @@ export function toLatestDate(rows) {
   dates.sort().reverse();
   return { date: dates[0] ?? null, dates };
 }
+
+// A day counts as complete when at least this share of the busiest day's
+// machines have a row. The ETL publishes the running day incrementally, so
+// the newest date can hold a handful of machines (2026-10-14: 5 of ~216).
+const COMPLETE_DAY_RATIO = 0.9;
+
+/**
+ * Zero Breakdown Machines: count of distinct machines with
+ * DaysWithoutBreakdown_m above the threshold, per DAY, plus the as-of date —
+ * the newest day whose machine coverage is complete.
+ *
+ * @param {object[]} coverageRows  `date, machine_count` over all machines
+ * @param {object[]} overRows      `date, machine_count` over machines > threshold
+ */
+export function toZeroBreakdownCount(coverageRows, overRows) {
+  const iso = (r) => String(r.date).slice(0, 10);
+  const num = (r) => Number(r.machine_count ?? r.MACHINE_COUNT ?? 0);
+  const over = new Map((overRows ?? []).map((r) => [iso(r), num(r)]));
+  const coverage = (coverageRows ?? []).map((r) => ({
+    date: iso(r),
+    machines: num(r),
+  }));
+  const peak = Math.max(0, ...coverage.map((c) => c.machines));
+  const series = coverage
+    .map((c) => ({
+      date: c.date,
+      machines: c.machines,
+      count: over.get(c.date) ?? 0,
+      complete: c.machines >= peak * COMPLETE_DAY_RATIO,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const complete = series.filter((p) => p.complete);
+  const last = complete[complete.length - 1] ?? null;
+  return { date: last?.date ?? null, count: last?.count ?? null, series };
+}

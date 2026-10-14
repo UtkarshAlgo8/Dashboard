@@ -18,6 +18,7 @@ import {
   latestCompleteDateQuery,
   componentAggregateQuery,
   lossTreeRangeQuery,
+  daysWithoutBreakdownCountQuery,
 } from "../queries/reliability.queries.js";
 import {
   toKpiValueBatch,
@@ -26,6 +27,7 @@ import {
   toKpiHistory,
   toLatestDate,
   toAggregatedSummary,
+  toZeroBreakdownCount,
 } from "../transformers/reliability.transformers.js";
 
 function badRequest(res, message) {
@@ -351,6 +353,40 @@ export async function getLossTree(req, res, next) {
     );
 
     res.json({ context: contextOf(req.query, { granularity }), ...body });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Strictly greater than: a machine with exactly 30 days is not yet "zero
+// breakdown".
+const ZERO_BREAKDOWN_MIN_DAYS = 30;
+
+/**
+ * GET /engineering/reliability/zero-breakdown-count
+ *
+ * Zero Breakdown Machines card: distinct machines with
+ * DaysWithoutBreakdown_m > 30 on the last complete DAY, plus the per-day
+ * series. A running as-of figure, so it takes no period.
+ */
+export async function getZeroBreakdownCount(req, res, next) {
+  try {
+    const key = buildCacheKey("/engineering/reliability/zero-breakdown-count", {});
+    const body = await cached(
+      key,
+      async () => {
+        const [coverage, over] = await Promise.all([
+          runQuery(daysWithoutBreakdownCountQuery()),
+          runQuery(daysWithoutBreakdownCountQuery({ minDays: ZERO_BREAKDOWN_MIN_DAYS })),
+        ]);
+        return {
+          min_days: ZERO_BREAKDOWN_MIN_DAYS,
+          ...toZeroBreakdownCount(coverage, over),
+        };
+      },
+      CACHE_TTL.ENGINEERING_RELIABILITY,
+    );
+    res.json({ context: contextOf(req.query), ...body });
   } catch (err) {
     next(err);
   }

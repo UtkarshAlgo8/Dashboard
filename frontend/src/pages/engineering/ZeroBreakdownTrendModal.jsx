@@ -15,9 +15,9 @@
  * last 12 months.
  *
  * Data follows the KPI spec:
- *   - the count and the trajectory are `ZeroBreakdownMachines_Section`,
- *     summed across each period's (status, section) rows — rule 3b, "sum
- *     their rows for the unfiltered figure"; a count is additive.
+ *   - the count and the trajectory are the number of distinct machines with
+ *     `DaysWithoutBreakdown_m` > 30 (same definition as the card), per
+ *     complete DAY; Monthly takes each month's last complete day.
  *   - the target is the mock's ≥50, carried in reliabilityTargets.js. The
  *     spec publishes no `threshold_value` for this KPI.
  *   - the headline count stays at DAY grain to agree with the card, which is
@@ -25,7 +25,7 @@
  *     reliabilityPanels.jsx). Only the trajectory follows the range chips.
  */
 import { useEffect, useState } from "react";
-import { getReliabilityKpiHistory } from "@/api/engineering.js";
+import { getReliabilityZeroBreakdownCount } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C, TrendChart, fmtNum } from "./reliabilityShared.jsx";
 import {
@@ -55,24 +55,26 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
     let cancelled = false;
     setLoading(true);
     setPoints([]);
-    getReliabilityKpiHistory({
-      kpiName: "ZeroBreakdownMachines_Section",
-      dateFrom: history.from,
-      dateTo: history.to,
-      granularity: history.granularity,
-    })
-      .then((hist) => {
+    getReliabilityZeroBreakdownCount()
+      .then((res) => {
         if (cancelled) return;
-        const perPeriod = new Map();
-        for (const p of Array.isArray(hist?.points) ? hist.points : []) {
-          if (p.value == null) continue;
-          const key = String(p.date).slice(0, 10);
-          perPeriod.set(key, (perPeriod.get(key) ?? 0) + p.value);
-        }
-        setPoints(
-          [...perPeriod.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+        // Complete days only — the running day is published incrementally and
+        // would plot as a false drop to ~0.
+        const days = (Array.isArray(res?.series) ? res.series : []).filter(
+          (p) =>
+            p.complete && p.date >= history.from && p.date <= history.to,
         );
+        if (history.granularity === "DAY") {
+          setPoints(days.map((p) => [p.date, p.count]));
+          return;
+        }
+        // Monthly: the running counter's value on each month's last complete
+        // day (a count of machines is a snapshot, not additive across days).
+        const perMonth = new Map();
+        for (const p of days) perMonth.set(p.date.slice(0, 7) + "-01", p.count);
+        setPoints([...perMonth.entries()]);
       })
+      .catch(() => !cancelled && setPoints([]))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;

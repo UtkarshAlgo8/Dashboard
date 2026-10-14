@@ -10,6 +10,7 @@ import {
   getKpiHistory,
   getLatestDate,
   getLossTree,
+  getZeroBreakdownCount,
 } from "../controllers/reliability.controller.js";
 
 export const router = Router();
@@ -19,3 +20,4 @@ router.get("/kpi-children", getKpiChildren);
 router.get("/kpi-history", getKpiHistory);
 router.get("/latest-date", getLatestDate);
 router.get("/loss-tree", getLossTree);
+router.get("/zero-breakdown-count", getZeroBreakdownCount);

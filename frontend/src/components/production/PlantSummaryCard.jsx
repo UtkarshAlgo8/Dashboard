@@ -6,7 +6,7 @@ import JKLoader from "@/components/JKLoader.jsx";
  * Adobe XD Plant OEE card pinned at the bottom of the left sidebar.
  * Soft amber card background with gear icon and bold 92.0% metric.
  */
-function PlantSummaryCard({ plant, summary, loading = false }) {
+function PlantSummaryCard({ plant, summary, oeeOverride, loading = false }) {
   const theme = useTheme();
   if (!plant && !summary && !loading) return null;
 
@@ -30,8 +30,12 @@ function PlantSummaryCard({ plant, summary, loading = false }) {
     );
   }
 
+  // `oeeOverride` (even null) is the plant's OEE outright — no fallback to the
+  // plant/summary figures. Left undefined, the usual chain applies.
   const oeeNum = toNum(
-    summary?.oeeP?.value ?? plant?.oee ?? summary?.oee?.value,
+    oeeOverride !== undefined
+      ? oeeOverride
+      : (summary?.oeeP?.value ?? plant?.oee ?? summary?.oee?.value),
   );
   const oee = oeeNum == null ? null : Math.round(oeeNum * 10) / 10;
   const ftq = toNum(summary?.ftqPct);
