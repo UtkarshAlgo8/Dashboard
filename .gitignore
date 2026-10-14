@@ -33,6 +33,9 @@ backend/data/
 backend/data/*
 !backend/data/Quality_Dashboard_Gold_Layer_3Months.xlsx
 !backend/data/gold_mock.xlsx
+# TEMPORARY Curing KPI extract for the Scheduler Adherence mail
+# (copy of frontend/public/temp/curing-sku-fulfilment.json).
+!backend/data/curing-sku-fulfilment.json
 
 # Added by code-review-graph
 .code-review-graph/

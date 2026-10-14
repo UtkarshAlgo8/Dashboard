@@ -39,6 +39,14 @@ function asInt(key, fallback) {
   return n;
 }
 
+/** Comma-separated env var → trimmed, non-empty entries. */
+function listEnv(key) {
+  return (process.env[key] ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   port: asInt("PORT", 3001),
   frontendOrigin: optional("FRONTEND_ORIGIN", "http://136.112.107.154:3014"),
@@ -146,6 +154,37 @@ export const config = {
       path.join(projectRoot, "data", ".engineering_gold.cache.json"),
     ),
     sqlTable: optional("ENGINEERING_SQL_TABLE", "gold.gold"),
+  },
+  // Daily Infiniti Scheduler (Scheduler Adherence) mail — sent on demand from
+  // the dashboard navbar. See backend/src/mail/.
+  mail: {
+    from: optional("MAIL_FROM", ""),
+    smtp: {
+      host: optional("SMTP_HOST", ""),
+      port: asInt("SMTP_PORT", 587),
+      secure: optional("SMTP_SECURE", "false") === "true",
+      requireTLS: optional("SMTP_REQUIRE_TLS", "false") === "true",
+      user: optional("SMTP_USER", ""),
+      pass: optional("SMTP_PASS", ""),
+    },
+    to: listEnv("MAIL_TO"),
+    cc: listEnv("MAIL_CC"),
+    // Empty = any signed-in user may send.
+    sendRoles: listEnv("MAIL_SEND_ROLES"),
+    // TEMPORARY: gold does not carry the Curing_* SKU fulfilment KPIs yet.
+    // "snapshot" (default) reads only the static extract below and skips the
+    // gold query, which returns nothing for these KPIs today. "gold" reads
+    // gold first and falls back to the extract for any missing value.
+    kpiSource: optional("MAIL_KPI_SOURCE", "snapshot"), // "snapshot" | "gold"
+    // Backend copy of frontend/public/temp/curing-sku-fulfilment.json — kept
+    // in backend/ so the Docker image (built from backend/ only) has it.
+    snapshotPath: optional(
+      "MAIL_KPI_SNAPSHOT_PATH",
+      path.join(projectRoot, "data", "curing-sku-fulfilment.json"),
+    ),
+    // How long the 9 values for a report day are reused, so Send right after
+    // the pop-up opens does not read them again.
+    valuesTtlMs: asInt("MAIL_KPI_CACHE_TTL_MS", 5 * 60 * 1000),
   },
   cacheTtlMs: asInt("CACHE_TTL_MS", 30_000),
   // Cache backing store. "memory" (default) is a Map in this process and is

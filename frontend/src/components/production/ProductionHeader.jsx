@@ -15,6 +15,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
 import NavTabs from "./NavTabs.jsx";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
+import SendMailButton from "@/components/mail/SendMailButton.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import jkLogo from "@/assets/jk-logo.png";
 
@@ -269,6 +270,7 @@ function ProductionHeader({
                 </Box>
               </Tooltip>
             )}
+            <SendMailButton />
             <UserMenu user={MOCK_USER} size={34} />
           </Stack>
         </Stack>
