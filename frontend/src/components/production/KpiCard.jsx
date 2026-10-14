@@ -99,7 +99,10 @@ function KpiCard({
       kpiName.includes("plan")
     ) {
       progressPct = Math.min(100, Math.max(0, numVal));
-      formattedVal = `${Number.isInteger(numVal) ? numVal : numVal.toFixed(1)}%`;
+      formattedVal =
+        kpi.decimals != null
+          ? `${numVal.toFixed(kpi.decimals)}%`
+          : `${Number.isInteger(numVal) ? numVal : numVal.toFixed(1)}%`;
     } else {
       const target =
         typeof kpi.target === "number"
@@ -268,6 +271,7 @@ function KpiCard({
 
           {/* Badges / Annotations row (placed neatly below the metric value) */}
           {(Boolean(kpi.topMachine) ||
+            Boolean(kpi.note) ||
             Boolean(kpi.partialDay) ||
             Boolean(kpi.truncated) ||
             Boolean(kpi.asOfDate)) && (
@@ -277,6 +281,18 @@ function KpiCard({
               spacing={0.75}
               sx={{ mt: 0.25, flexWrap: "wrap", rowGap: 0.25 }}
             >
+              {kpi.note && (
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "text.secondary",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {kpi.note}
+                </Typography>
+              )}
               {kpi.asOfDate && (
                 <Tooltip
                   title="No data for the selected day yet, so this card shows the latest day available."
@@ -495,7 +511,12 @@ function KpiCard({
           sx={{ mt: 0.5 }}
         >
           {/* Trend Indicator */}
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.5}
+            sx={{ visibility: kpi.hideTrend ? "hidden" : "visible" }}
+          >
             {trendUp ? (
               <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
             ) : (
@@ -523,22 +544,24 @@ function KpiCard({
 
           {/* Action Drilldown & Table Icons */}
           <Stack direction="row" alignItems="center" spacing={0.5}>
-            <Tooltip title="View Trend Analytics" arrow>
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTrendOpen?.(kpi);
-                }}
-                sx={{
-                  p: 0.25,
-                  color: "text.secondary",
-                  "&:hover": { color: "primary.main" },
-                }}
-              >
-                <ShowChartIcon sx={{ fontSize: 15 }} />
-              </IconButton>
-            </Tooltip>
+            {!kpi.hideTrend && (
+              <Tooltip title="View Trend Analytics" arrow>
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTrendOpen?.(kpi);
+                  }}
+                  sx={{
+                    p: 0.25,
+                    color: "text.secondary",
+                    "&:hover": { color: "primary.main" },
+                  }}
+                >
+                  <ShowChartIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </Tooltip>
+            )}
 
             <Tooltip title="Drilldown Data Table" arrow>
               <IconButton

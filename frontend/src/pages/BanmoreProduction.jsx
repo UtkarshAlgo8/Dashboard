@@ -17,6 +17,10 @@ import DowntimeDrillPanel from "@/components/drills/downtime/DowntimeDrillPanel.
 import GenericTableDrillPanel from "@/components/drills/shared/GenericTableDrillPanel.jsx";
 import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
 import BudgetDrillPanel from "@/components/drills/shared/BudgetDrillPanel.jsx";
+import SkuFulfilmentDrillPanel from "@/components/drills/sku-fulfilment/SkuFulfilmentDrillPanel.jsx";
+import { useSkuFulfilment } from "@/hooks/useSkuFulfilment.js";
+import { resolveSkuFulfilmentView } from "@/lib/skuFulfilment.js";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import {
   getPlant,
@@ -249,25 +253,6 @@ function BanmoreProduction() {
   const plantOeeOverride = isBanmore
     ? (sectionOeeData?.Curing?.oee ?? null)
     : undefined;
-
-  // TEMPORARY: SKU Plan Fulfillment renders as a heading-only card (no value,
-  // trend or drill). Flip TEMP_DISABLE_SKU_PLAN in lib/tempFlags.js to undo.
-  const displayKpis = useMemo(() => {
-    if (!TEMP_DISABLE_SKU_PLAN || !isBanmore || !Array.isArray(kpis)) {
-      return kpis;
-    }
-    return kpis.map((k) =>
-      k.id === SKU_PLAN_KPI_ID
-        ? {
-            id: k.id,
-            name: "SKU Plan Fulfillment",
-            value: null,
-            drillable: false,
-            disabled: true,
-          }
-        : k,
-    );
-  }, [isBanmore, kpis]);
 
   // Section metadata (simplified names shown in subheader)
   const SECTION_TITLE = {
@@ -579,6 +564,85 @@ function BanmoreProduction() {
   const shiftComparisonSingleDay =
     selectedSingleDay ?? (timeRange.preset === "today" ? to : null);
 
+  // Curing SKU Fulfillment (SKU Fulfillment Page spec): the card and its drill
+  // read the *_SKU_Fulfilment_* KPI family via useSkuFulfilment.
+  const isCuringSkuFulfilment =
+    isBanmore && dashboard.section === "cur" && dashboard.category === "p";
+  const skuView = useMemo(
+    () =>
+      resolveSkuFulfilmentView({
+        granularity: dashboard.granularity,
+        singleDay: selectedSingleDay,
+        from,
+        to,
+      }),
+    [dashboard.granularity, selectedSingleDay, from, to],
+  );
+  const skuFulfilment = useSkuFulfilment({
+    enabled: isCuringSkuFulfilment,
+    plantId,
+    section: "Curing",
+    prefix: "Curing",
+    totalProductType: "Cured Tyre",
+    view: skuView,
+    productType: activeProductType,
+  });
+
+  // The SKU Plan Fulfillment card: Curing reads the SKU Fulfillment model;
+  // the other sections stay a heading-only card (TEMPORARY, until their plan
+  // feed is ready — flip TEMP_DISABLE_SKU_PLAN in lib/tempFlags.js to undo).
+  const displayKpis = useMemo(() => {
+    if (!isBanmore || !Array.isArray(kpis)) return kpis;
+    return kpis.map((k) => {
+      if (k.id !== SKU_PLAN_KPI_ID) return k;
+      if (isCuringSkuFulfilment) {
+        const main = skuFulfilment.model?.main;
+        const label =
+          main?.label ??
+          (skuView?.kind === "month"
+            ? "MTD SKU Fulfillment %"
+            : "Daily SKU Fulfillment %");
+        const productSuffix =
+          activeProductType && activeProductType !== "Cured Tyre"
+            ? ` · ${activeProductType === "Passenger Radial" ? "PCR" : activeProductType}`
+            : "";
+        const hasValue = main?.value != null;
+        return {
+          id: k.id,
+          name: `${label}${productSuffix}`,
+          value: main?.value ?? null,
+          decimals: 2,
+          produced: hasValue ? main.actual : null,
+          planned: hasValue ? main.schedule : null,
+          quantityUnit: "NOS",
+          note:
+            main?.note ??
+            (main?.asOf
+              ? `as of ${toDisplayDate(main.asOf.date)} · Shift ${main.asOf.shift}`
+              : null),
+          hideTrend: true,
+          drillable: Boolean(skuView),
+          drillType: "skuFulfilment",
+        };
+      }
+      if (!TEMP_DISABLE_SKU_PLAN) return k;
+      return {
+        id: k.id,
+        name: "SKU Plan Fulfillment",
+        value: null,
+        drillable: false,
+        disabled: true,
+      };
+    });
+  }, [
+    isBanmore,
+    kpis,
+    isCuringSkuFulfilment,
+    skuFulfilment.model,
+    skuView,
+    activeProductType,
+  ]);
+
   const onSectionSelect = (id) => {
     setOpenDrillKpiId(null);
     resetDrill();
@@ -648,7 +712,7 @@ function BanmoreProduction() {
   useEffect(() => {
     if (!openDrillKpiId) return;
     if (dashboard.drillSourceKpiId === openDrillKpiId) return;
-    const kpi = kpis.find((k) => k.id === openDrillKpiId && k.drillable);
+    const kpi = displayKpis.find((k) => k.id === openDrillKpiId && k.drillable);
     if (!kpi) return;
     const cardDate = kpi.resolvedDate ?? null;
     if (PROD_DRILL_TYPES.has(kpi.drillType)) {
@@ -656,7 +720,7 @@ function BanmoreProduction() {
     } else if (kpi.drillTargets) {
       drillInto(kpi.drillTargets, kpi.id, {}, cardDate);
     }
-  }, [openDrillKpiId, kpis, dashboard.drillSourceKpiId, drillInto]);
+  }, [openDrillKpiId, displayKpis, dashboard.drillSourceKpiId, drillInto]);
 
   return (
     <Box
@@ -990,7 +1054,7 @@ function BanmoreProduction() {
                     {/* Right Column: Drill Panel */}
                     {openDrillKpiId &&
                       (() => {
-                        const kpi = kpis.find(
+                        const kpi = displayKpis.find(
                           (k) => k.id === openDrillKpiId && k.drillable,
                         );
                         if (!kpi) return null;
@@ -1037,6 +1101,7 @@ function BanmoreProduction() {
                               unitPin={activeUnit}
                               mode={dashboard.mode}
                               isLoading={isDrillLoading}
+                              skuFulfilment={skuFulfilment}
                               onClose={handleCloseDrill}
                             />
                           </Box>
@@ -1128,6 +1193,7 @@ function DrillPanelRouter({
   unitPin,
   mode,
   isLoading,
+  skuFulfilment = null,
   onClose,
 }) {
   if (!kpi) return null;
@@ -1145,6 +1211,17 @@ function DrillPanelRouter({
   );
 
   switch (kpi.drillType) {
+    case "skuFulfilment":
+      return (
+        <SkuFulfilmentDrillPanel
+          sectionTitle={sectionName}
+          productType={prodSub}
+          model={skuFulfilment?.model ?? null}
+          isLoading={Boolean(skuFulfilment?.isLoading)}
+          error={skuFulfilment?.error ?? null}
+          onClose={onClose}
+        />
+      );
     case "mixOEE":
     case "curOEE":
       return (

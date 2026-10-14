@@ -9,3 +9,10 @@ export const TEMP_DISABLE_SKU_PLAN = true;
 
 /** The id of the SKU Plan Fulfillment (Plan_Compliance) KPI card. */
 export const SKU_PLAN_KPI_ID = "comp";
+
+// Curing SKU Fulfillment reads a static extract of the gold rows
+// (public/temp/curing-sku-fulfilment.json) until gold carries the
+// *_SKU_Fulfilment_* KPIs. Set to false to read live gold through
+// /dashboard/kpi-data instead, then delete the JSON and
+// api/skuFulfilmentSnapshot.js.
+export const TEMP_SKU_FULFILMENT_FROM_JSON = true;
