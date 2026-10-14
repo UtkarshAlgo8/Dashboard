@@ -381,12 +381,19 @@ function ctpItemsFromRows(rows) {
         unit: "",
         kpis: {},
         mheSeries: new Map(),
+        totalSeries: new Map(),
       };
       items.set(key, it);
     }
     if (!it.unit) it.unit = unit(r.unit_of_measurement) || "";
     if (r.kpi_name === CTP_MHE_KPI) {
       keepLatestMheSeries(it.mheSeries, r, k);
+      continue;
+    }
+    if (r.kpi_name === CTP_TOTAL_KPI && CTP_TOTAL_ONLY_SECTIONS.has(sec)) {
+      // Total-only sections: one gold row per machine for the same item —
+      // keep the latest of each distinct series and sum them below.
+      keepLatestMheSeries(it.totalSeries, r, k);
       continue;
     }
     const prev = it.kpis[r.kpi_name];
@@ -396,6 +403,13 @@ function ctpItemsFromRows(rows) {
   }
   for (const it of items.values()) {
     it.mheCount = [...it.mheSeries.values()].reduce((sum, row) => sum + row.value, 0);
+    if (it.totalSeries.size) {
+      const series = [...it.totalSeries.values()];
+      it.kpis[CTP_TOTAL_KPI] = {
+        date: series.reduce((d, row) => (row.date > d ? row.date : d), ""),
+        value: series.reduce((sum, row) => sum + row.value, 0),
+      };
+    }
   }
   const unassignedMheRows = [...unassignedMheSeries.values()]
     .filter((entry) => entry.value !== 0)
@@ -414,8 +428,32 @@ function kpiValue(it, kpiName) {
   return it.kpis[kpiName]?.value ?? 0;
 }
 
+/**
+ * Sections whose stock is read from Total_Inventory alone: gold has no
+ * per-status split for them, so each item gets one lot with status
+ * CTP_TOTAL_ONLY_STATUS (not part of status_master) and no fallback into
+ * Ready/Part/etc.
+ */
+const CTP_TOTAL_ONLY_SECTIONS = new Set(["Tyre Building"]);
+const CTP_TOTAL_ONLY_STATUS = "TOTAL";
+
 /** One synthetic lot per status with a positive quantity. */
 function ctpLotsForItem(it, date) {
+  if (CTP_TOTAL_ONLY_SECTIONS.has(it.section)) {
+    const qty = kpiValue(it, CTP_TOTAL_KPI);
+    if (!(qty > 0)) return [];
+    return [
+      {
+        lot_id: `SYN-${it.itemcode}-${CTP_TOTAL_ONLY_STATUS}-${date || "00000000"}`,
+        status: CTP_TOTAL_ONLY_STATUS,
+        mhe_code: null,
+        production_date: null,
+        age_days: null,
+        expiry_date: null,
+        quantity: qty,
+      },
+    ];
+  }
   const age = numOrNull(it.kpis[CTP_OLDEST_BLOCKED_KPI]?.value);
   return CTP_STATUS_MASTER.filter((s) => kpiValue(it, s.gold_metric) > 0).map(
     (s) => ({
@@ -507,7 +545,11 @@ export function toCtpInventoryMaster(rows) {
           totalLots += lots.length;
           totalGold += goldTotal;
           totalMhe += kpiValue(it, CTP_MHE_KPI);
-          if (it.kpis[CTP_TOTAL_KPI] && Math.abs(goldTotal - lotQty) > 1e-6) {
+          if (
+            !CTP_TOTAL_ONLY_SECTIONS.has(secName) &&
+            it.kpis[CTP_TOTAL_KPI] &&
+            Math.abs(goldTotal - lotQty) > 1e-6
+          ) {
             mismatched += 1;
           }
           return {
@@ -550,7 +592,7 @@ export function toCtpInventoryMaster(rows) {
     data_limits: {
       sections_populated: sections.map((s) => s.name),
       sections_absent: SECTION_ORDER.filter((s) => !sectionMap.has(s)),
-      lot_synthesis: "one lot per (item, status) from the per-status KPIs",
+      lot_synthesis: "one lot per (item, status) from the per-status KPIs; Tyre Building: one lot per item from Total_Inventory only",
       // Gold supplies the count, but not the MHE identities or status split.
       mhe_count: "per-item Gold counts; unmapped counts remain headline-only; raw MHE codes and status-specific counts unavailable",
       oldest_blocked_age: CTP_OLDEST_BLOCKED_KPI,

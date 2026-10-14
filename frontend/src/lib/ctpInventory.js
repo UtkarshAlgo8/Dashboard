@@ -287,7 +287,7 @@ export function aggregateByItem(m, rows, f = null) {
       o[r.item] = a;
     }
     a.qty += r.qty;
-    a.st[r.st] += r.qty;
+    a.st[r.st] = (a.st[r.st] || 0) + r.qty;
     if (r.mhe) a.mheSet.add(r.mhe);
     a.maxAge = Math.max(a.maxAge, r.age);
     a.lots += 1;
