@@ -243,13 +243,12 @@ function BanmoreProduction() {
     },
   );
 
-  // Plant OEE on the summary card is the Curing section's OEE — the same value
-  // as the Curing ring above it — not the whole-plant OEE_p. A missing Curing
-  // figure shows "–" rather than falling back to the plant number.
-  const plantSummary = useMemo(() => {
-    if (!isBanmore || !summary) return summary;
-    return { ...summary, oeeP: { value: sectionOeeData?.Curing?.oee ?? null } };
-  }, [isBanmore, summary, sectionOeeData]);
+  // Banmore's Plant OEE IS the Curing section's OEE (the same value as the
+  // Curing ring) — no fallback to the whole-plant figure; no Curing data → "–".
+  // undefined leaves other plants on the card's usual OEE chain.
+  const plantOeeOverride = isBanmore
+    ? (sectionOeeData?.Curing?.oee ?? null)
+    : undefined;
 
   // TEMPORARY: SKU Plan Fulfillment renders as a heading-only card (no value,
   // trend or drill). Flip TEMP_DISABLE_SKU_PLAN in lib/tempFlags.js to undo.
@@ -734,7 +733,8 @@ function BanmoreProduction() {
               </Box>
               <PlantSummaryCard
                 plant={plant}
-                summary={plantSummary}
+                summary={summary}
+                oeeOverride={plantOeeOverride}
                 loading={false}
               />
             </Stack>
