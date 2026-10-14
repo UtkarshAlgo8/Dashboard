@@ -272,3 +272,23 @@ export function latestCompleteDateQuery({ kpiNames, granularity }) {
     `GROUP BY date HAVING COUNT(DISTINCT kpi_name) = ${kpiNames.length}`
   );
 }
+
+/**
+ * Zero Breakdown Machines: per-DAY distinct machine counts of
+ * DaysWithoutBreakdown_m, either every machine that has a row (`minDays`
+ * omitted — the coverage used to spot a partially-published day) or only
+ * those strictly above `minDays` (the "zero breakdown" machines).
+ */
+export function daysWithoutBreakdownCountQuery({ minDays } = {}) {
+  const over =
+    minDays == null ? "" : `AND actual_value > ${Number(minDays)} `;
+  return (
+    `SELECT date, COUNT(DISTINCT machine) AS machine_count FROM ${TABLE()} ` +
+    `WHERE ${engineeringScopePredicate()} ` +
+    `AND kpi_name = 'DaysWithoutBreakdown_m' ` +
+    `AND granularity = 'DAY' ` +
+    `AND ${hasValuePredicate()} ` +
+    over +
+    `GROUP BY date`
+  );
+}

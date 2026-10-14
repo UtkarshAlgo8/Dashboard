@@ -15,7 +15,7 @@ import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import {
   getReliabilityKpiChildren,
-  getReliabilityLatestDate,
+  getReliabilityZeroBreakdownCount,
 } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
@@ -257,112 +257,106 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
   );
 }
 
+// A machine counts as "zero breakdown" once it has run MORE than this many
+// days since its last breakdown (DaysWithoutBreakdown_m, strictly greater).
+const ZERO_BREAKDOWN_MIN_DAYS = 30;
+
 /**
- * Zero Breakdown Machines — section tiles (DAY grain, latest available date
- * for ZeroBreakdownMachines_Section) + a per-machine table (DAY grain,
- * latest available date for DaysWithoutBreakdown_m — the two can differ,
- * see engineering/queries/reliability.queries.js latestDateQuery). "Last
- * Breakdown date" = the machine table's as-of date minus the day count.
+ * Count + as-of date for Zero Breakdown. The backend anchors on the last
+ * COMPLETE day: the ETL publishes the running day incrementally (2026-10-14
+ * held 5 of ~216 machine rows), so the newest date would count almost nothing.
+ */
+function getZeroBreakdownCount() {
+  return getReliabilityZeroBreakdownCount();
+}
+
+/** One row per machine with its days-without-breakdown, as of `date`. */
+function getDaysWithoutBreakdownRows(date) {
+  return getReliabilityKpiChildren({
+    kpiNames: ["DaysWithoutBreakdown_m"],
+    date,
+    granularity: "DAY",
+    groupBy: "machine",
+    sort: "DaysWithoutBreakdown_m",
+    order: "desc",
+  }).then((res) => (Array.isArray(res?.rows) ? res.rows : []));
+}
+
+/** Distinct machines whose days-without-breakdown exceeds the threshold. */
+function zeroBreakdownMachines(rows) {
+  const seen = new Set();
+  return rows.filter((r) => {
+    if (!(Number(r.DaysWithoutBreakdown_m) > ZERO_BREAKDOWN_MIN_DAYS)) {
+      return false;
+    }
+    if (seen.has(r.machine)) return false;
+    seen.add(r.machine);
+    return true;
+  });
+}
+
+/**
+ * Zero Breakdown Machines — machines with DaysWithoutBreakdown_m > 30, as of
+ * the last complete DAY. The section tiles are counted from those same
+ * machine rows, so tiles, table and card headline always agree.
+ * "Last breakdown date" = the as-of date minus the day count.
  *
  * Deliberately NOT wired to the page's selected period, unlike every other
- * card here. Both KPIs are running counters ("days since this machine last
- * broke"), so they answer "as of when?", not "during which month?" — and
- * the last-breakdown date is only derivable by subtracting a day count from
- * a DAY-grain as-of date. Both are published at MONTH grain too; reading
- * them there would silently change what the card means.
+ * card here: DaysWithoutBreakdown_m is a running counter ("days since this
+ * machine last broke"), so it answers "as of when?", not "during which
+ * month?", and the last-breakdown date is only derivable by subtracting a day
+ * count from a DAY-grain as-of date.
  */
 export function ZeroBreakdownPanel() {
-  const [sectionDate, setSectionDate] = useState(null);
-  const [machineDate, setMachineDate] = useState(null);
-  const [sectionRows, setSectionRows] = useState([]);
-  const [machineRows, setMachineRows] = useState([]);
+  const [asOf, setAsOf] = useState(null);
+  const [allRows, setAllRows] = useState([]);
   const [selectedSection, setSelectedSection] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getReliabilityLatestDate({
-        kpiName: "ZeroBreakdownMachines_Section",
-        granularity: "DAY",
-      }),
-      getReliabilityLatestDate({
-        kpiName: "DaysWithoutBreakdown_m",
-        granularity: "DAY",
-      }),
-    ])
-      .then(([sec, mac]) => {
+    getZeroBreakdownCount()
+      .then((res) => {
+        const date = res?.date ?? null;
         if (cancelled) return;
-        setSectionDate(sec?.date ?? null);
-        setMachineDate(mac?.date ?? null);
+        setAsOf(date);
+        if (!date) {
+          setLoading(false);
+          return;
+        }
+        return getDaysWithoutBreakdownRows(date).then((rows) => {
+          if (cancelled) return;
+          setAllRows(zeroBreakdownMachines(rows));
+          setLoading(false);
+        });
       })
-      .catch((err) => !cancelled && setError(err));
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err);
+        setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (!sectionDate) return;
-    let cancelled = false;
-    getReliabilityKpiChildren({
-      kpiNames: ["ZeroBreakdownMachines_Section"],
-      date: sectionDate,
-      granularity: "DAY",
-      groupBy: "section",
-      // SUM, not join: this KPI is published per (status, section), so a
-      // section spans up to five rows. The join transform keeps only the
-      // first of them, which silently dropped every machine outside a
-      // section's first-listed category — on 2026-09-17 that read 3 clean
-      // machines where the published rows add to 5. Counts are additive,
-      // so summing them is the same arithmetic the tiles claim to show.
-      agg: "sum",
-    })
-      .then(
-        (res) =>
-          !cancelled &&
-          setSectionRows(Array.isArray(res?.rows) ? res.rows : []),
-      )
-      .catch((err) => !cancelled && setError(err));
-    return () => {
-      cancelled = true;
-    };
-  }, [sectionDate]);
+  const sectionRows = [];
+  for (const r of allRows) {
+    const found = sectionRows.find((x) => x.section === r.section);
+    if (found) found.count += 1;
+    else sectionRows.push({ section: r.section, count: 1 });
+  }
+  sectionRows.sort((a, b) => b.count - a.count);
 
-  useEffect(() => {
-    if (!machineDate) return;
-    let cancelled = false;
-    setLoading(true);
-    getReliabilityKpiChildren({
-      kpiNames: ["DaysWithoutBreakdown_m"],
-      date: machineDate,
-      granularity: "DAY",
-      groupBy: "machine",
-      section: selectedSection || undefined,
-      sort: "DaysWithoutBreakdown_m",
-      order: "desc",
-    })
-      .then(
-        (res) =>
-          !cancelled &&
-          setMachineRows(Array.isArray(res?.rows) ? res.rows : []),
-      )
-      .catch((err) => !cancelled && setError(err))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [machineDate, selectedSection]);
-
-  const total = sectionRows.reduce(
-    (s, r) => s + (r.ZeroBreakdownMachines_Section ?? 0),
-    0,
-  );
+  const machineRows = selectedSection
+    ? allRows.filter((r) => r.section === selectedSection)
+    : allRows;
+  const total = allRows.length;
 
   const lastBreakdownDate = (days) => {
-    if (days == null || !machineDate) return "—";
-    const d = new Date(machineDate + "T00:00:00Z");
+    if (days == null || !asOf) return "—";
+    const d = new Date(asOf + "T00:00:00Z");
     d.setUTCDate(d.getUTCDate() - Number(days));
     return d.toISOString().slice(0, 10);
   };
@@ -433,16 +427,14 @@ export function ZeroBreakdownPanel() {
               cursor: "pointer",
             }}
           >
-            {r.section} · {fmtNum(r.ZeroBreakdownMachines_Section)}
+            {r.section} · {fmtNum(r.count)}
           </button>
         ))}
       </div>
-      {sectionDate && machineDate && sectionDate !== machineDate && (
-        <div style={{ fontSize: 11, color: C.mu, marginBottom: 8 }}>
-          Section tiles as of {sectionDate}; machine table as of {machineDate}{" "}
-          (latest available per KPI).
-        </div>
-      )}
+      <div style={{ fontSize: 11, color: C.mu, marginBottom: 8 }}>
+        Machines with more than {ZERO_BREAKDOWN_MIN_DAYS} days without a
+        breakdown{asOf ? `, as of ${asOf}` : ""}.
+      </div>
       {loading ? (
         <JKLoader message="Loading" />
       ) : (
@@ -459,11 +451,9 @@ export function ZeroBreakdownPanel() {
 }
 
 /**
- * Zero Breakdown card headline total: sum of ZeroBreakdownMachines_Section
- * across sections for its latest available DAY date — a running as-of
- * figure, independent of the selected report period (see ZeroBreakdownPanel). Cheap — the underlying
- * GET is shared (5 min in-module cache in api/engineering.js) with
- * `ZeroBreakdownPanel`'s own section-tile fetch when the card is expanded.
+ * Zero Breakdown card headline: count of distinct machines with
+ * DaysWithoutBreakdown_m > 30 on the last complete DAY — a running as-of
+ * figure, independent of the selected report period (see ZeroBreakdownPanel).
  */
 export function useZeroBreakdownTotal() {
   const [total, setTotal] = useState(null);
@@ -471,29 +461,11 @@ export function useZeroBreakdownTotal() {
 
   useEffect(() => {
     let cancelled = false;
-    getReliabilityLatestDate({
-      kpiName: "ZeroBreakdownMachines_Section",
-      granularity: "DAY",
-    })
+    getZeroBreakdownCount()
       .then((res) => {
         if (cancelled || !res?.date) return;
         setAsOf(res.date);
-        return getReliabilityKpiChildren({
-          kpiNames: ["ZeroBreakdownMachines_Section"],
-          date: res.date,
-          granularity: "DAY",
-          groupBy: "section",
-          // Same per-(status, section) publication as the panel above —
-          // summed, or the headline under-reports.
-          agg: "sum",
-        });
-      })
-      .then((res) => {
-        if (cancelled || !res) return;
-        const rows = Array.isArray(res.rows) ? res.rows : [];
-        setTotal(
-          rows.reduce((s, r) => s + (r.ZeroBreakdownMachines_Section ?? 0), 0),
-        );
+        setTotal(res.count);
       })
       .catch(() => {
         /* card falls back to "—" */

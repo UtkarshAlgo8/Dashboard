@@ -193,3 +193,14 @@ export function getEngineeringLossTree({
   const params = withScope({ date, date_from: from, date_to: to, granularity });
   return cachedEngineeringGet(`/engineering/reliability/loss-tree?${params}`);
 }
+
+/**
+ * Zero Breakdown Machines: distinct machines with DaysWithoutBreakdown_m > 30
+ * on the last complete DAY, plus the per-day series.
+ * @returns {Promise<{min_days:number, date:string|null, count:number|null, series:Array<{date:string, machines:number, count:number}>}>}
+ */
+export function getReliabilityZeroBreakdownCount() {
+  return cachedEngineeringGet(
+    `/engineering/reliability/zero-breakdown-count?${withScope()}`,
+  );
+}
