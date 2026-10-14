@@ -16,6 +16,9 @@ export function reportDayLabels(reportDay) {
 
 // Daily Schedule Fulfillment % for the other sections. Not automated yet, so
 // entered by hand — update these until they are read from gold.
+const AUTO_NOTE =
+  "Note: This is an auto-generated email from the Production Dashboard. Please do not reply to this email.";
+
 const MANUAL_FULFILMENT = "GT Building 81.90%, 4RC 70.06%, Mixing 44.85%";
 
 const NA = "not available";
@@ -100,7 +103,8 @@ export function renderSchedulerMail(values, reportDay) {
     `<colgroup><col style="width:32px"><col style="width:230px"><col style="width:420px"><col style="width:300px"></colgroup>` +
     `<thead><tr><th style="${head}">#</th><th style="${head}">KPI</th><th style="${head}">Definition</th><th style="${head}">BTP</th></tr></thead>` +
     `<tbody>${tableRows}</tbody></table>` +
-    `<p>Thanks,<br>Algo8</p></div>`;
+    `<p>Thanks,<br>Algo8</p>` +
+    `<p style="font-size:12px;color:#666;">${AUTO_NOTE}</p></div>`;
 
   const text = [
     "Dear Sir,",
@@ -111,6 +115,8 @@ export function renderSchedulerMail(values, reportDay) {
     "",
     "Thanks,",
     "Algo8",
+    "",
+    AUTO_NOTE,
   ].join("\n");
 
   return { subject, html, text };
