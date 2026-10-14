@@ -223,6 +223,10 @@ export async function postFetch(req, res, next) {
   }
 }
 
+// CTP only: Carcass is intermediate Tyre Building stock, not a product line,
+// so it is never offered as a product pill (gold still carries its rows).
+const HIDDEN_PRODUCT_OPTIONS = new Set(["carcass"]);
+
 export async function postProductOptions(req, res, next) {
   try {
     const {
@@ -255,11 +259,20 @@ export async function postProductOptions(req, res, next) {
       CACHE_TTL.PRODUCT_OPTIONS,
     );
 
+    const hidesCarcass = normalizePlantId(plantId) === "chennai";
     res.json({
-      data: rows.map((row) => ({
-        productType: row.product_type ?? null,
-        unit: row.unit_of_measurement ?? null,
-      })),
+      data: rows
+        .filter(
+          (row) =>
+            !hidesCarcass ||
+            !HIDDEN_PRODUCT_OPTIONS.has(
+              String(row.product_type ?? "").trim().toLowerCase(),
+            ),
+        )
+        .map((row) => ({
+          productType: row.product_type ?? null,
+          unit: row.unit_of_measurement ?? null,
+        })),
     });
   } catch (err) {
     if (err instanceof QueryValidationError) {

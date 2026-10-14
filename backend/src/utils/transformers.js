@@ -359,6 +359,7 @@ function ctpItemsFromRows(rows) {
     if (!CTP_INVENTORY_KPIS.includes(r.kpi_name)) continue;
     const sec = denan(r.section);
     const pt = productType(r.product_type);
+    if (CTP_HIDDEN_PRODUCT_TYPES[sec]?.has(pt)) continue;
     const code = denan(r.itemcode);
     const k = dateKey(r.date);
     if (!k) continue;
@@ -436,6 +437,9 @@ function kpiValue(it, kpiName) {
  */
 const CTP_TOTAL_ONLY_SECTIONS = new Set(["Tyre Building"]);
 const CTP_TOTAL_ONLY_STATUS = "TOTAL";
+
+/** Gold product types the CTP inventory page never lists, by section. */
+const CTP_HIDDEN_PRODUCT_TYPES = { "Tyre Building": new Set(["Carcass"]) };
 
 /** One synthetic lot per status with a positive quantity. */
 function ctpLotsForItem(it, date) {
