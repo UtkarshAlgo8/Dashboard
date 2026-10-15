@@ -171,6 +171,9 @@ export const config = {
     cc: listEnv("MAIL_CC"),
     // Empty = any signed-in user may send.
     sendRoles: listEnv("MAIL_SEND_ROLES"),
+    // Optional: domains a "custom" send may go to (e.g. algo8.ai,jkmail.com).
+    // Empty = any domain.
+    customAllowedDomains: listEnv("MAIL_CUSTOM_ALLOWED_DOMAINS").map((d) => d.toLowerCase()),
     // TEMPORARY: gold does not carry the Curing_* SKU fulfilment KPIs yet.
     // "snapshot" (default) reads only the static extract below and skips the
     // gold query, which returns nothing for these KPIs today. "gold" reads
