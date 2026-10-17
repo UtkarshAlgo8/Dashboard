@@ -16,7 +16,7 @@ export function reportDayLabels(reportDay) {
 }
 
 const AUTO_NOTE =
-  "Note: This is an auto-generated email from the Production Dashboard. Please do not reply to this email.";
+  "Note: This is an auto-generated email. Please do not reply to this email.";
 
 const NA = "not available";
 
