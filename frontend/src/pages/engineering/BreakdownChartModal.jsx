@@ -97,13 +97,25 @@ const MEASURES = [
 // why the tail is reported in the caption rather than pooled into a bar.
 const MAX_BARS = 15;
 
+// Shared fractions for the Pareto's two axes — see ParetoChart.
+const PARETO_STEPS = [0, 0.2, 0.4, 0.6, 0.8, 1];
+
+const axisTitleStyle = { fontSize: "12px", fontWeight: "700", color: C.md };
+const AXIS_TITLE_ROOM = 24;
+
 function truncate(text, max = 30) {
   const s = String(text ?? "—");
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
-/** Sorted bars + a cumulative % line over the same order (spec: Pareto). */
-function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
+/**
+ * Sorted bars + a cumulative % line over the same order (spec: Pareto).
+ *
+ * The bar axis runs 0 → the scope total and the % axis 0 → 100 on the same
+ * steps, so a bar's top and its cumulative point share one scale: the line
+ * starts on the top of the first bar and climbs by each bar's height.
+ */
+function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
   const options = useMemo(() => {
     let running = 0;
     const cumulative = rows.map((r) => {
@@ -124,8 +136,9 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
     return {
       chart: {
         type: "column",
-        height: 290 + labelRoom,
-        marginBottom: labelRoom,
+        // + room for the x-axis title under the category labels.
+        height: 290 + labelRoom + AXIS_TITLE_ROOM,
+        marginBottom: labelRoom + AXIS_TITLE_ROOM,
         backgroundColor: "transparent",
         spacing: [12, 8, 4, 8],
       },
@@ -135,6 +148,7 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
       legend: { enabled: false },
       xAxis: {
         categories: rows.map((r) => r.label),
+        title: { text: groupLabel, style: axisTitleStyle },
         lineColor: C.bd,
         tickLength: 0,
         labels: {
@@ -167,19 +181,33 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
       },
       yAxis: [
         {
-          title: { text: null },
+          title: { text: measureLabel, style: axisTitleStyle },
           gridLineColor: C.bd,
-          labels: { style: { fontSize: "11px", color: C.mu } },
+          ...(total
+            ? { tickPositions: PARETO_STEPS.map((f) => f * total) }
+            : {}),
+          labels: {
+            style: { fontSize: "11px", color: C.mu },
+            formatter: function () {
+              return fmtNum(this.value);
+            },
+          },
         },
         {
-          // The cumulative %'s scale carries the 80% marker and nothing else:
-          // no labels, no grid, no line. Highcharts draws no plot line on a
-          // `visible: false` axis, hence this shape rather than hiding it.
-          min: 0,
-          max: 100,
+          // The cumulative % axis: labelled, but no grid of its own — its
+          // steps sit on the bar axis's grid lines.
+          tickPositions: PARETO_STEPS.map((f) => f * 100),
           opposite: true,
-          title: { text: null },
-          labels: { enabled: false },
+          title: {
+            text: "Cumulative %",
+            style: { ...axisTitleStyle, color: C.am },
+          },
+          labels: {
+            style: { fontSize: "11px", color: C.am },
+            formatter: function () {
+              return this.value + "%";
+            },
+          },
           gridLineWidth: 0,
           lineWidth: 0,
           tickWidth: 0,
@@ -262,7 +290,7 @@ function ParetoChart({ rows, measureLabel, total, barsTo80 }) {
         },
       ],
     };
-  }, [rows, measureLabel, total, barsTo80]);
+  }, [rows, measureLabel, groupLabel, total, barsTo80]);
 
   return <HighchartsReact highcharts={Highcharts} options={options} />;
 }
@@ -671,6 +699,7 @@ function ParetoView({
               <ParetoChart
                 rows={barRows}
                 measureLabel={activeMeasure.label}
+                groupLabel={groupLabel}
                 total={measureTotal}
                 barsTo80={rowsTo80}
               />
@@ -723,7 +752,8 @@ function BreakdownChartModal({
   initialViewBy,
   maxBars,
 }) {
-  const trend = useReliabilityTrendRange({ open });
+  // No Daily view here: Monthly and a custom Date Range only.
+  const trend = useReliabilityTrendRange({ open, hiddenPresets: ["today"] });
   const request = reliabilityTrendRequest({
     preset: trend.preset,
     from: trend.from,

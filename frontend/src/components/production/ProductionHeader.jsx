@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   CircularProgress,
@@ -12,6 +12,7 @@ import {
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import CheckIcon from "@mui/icons-material/Check";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
 import NavTabs from "./NavTabs.jsx";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
@@ -37,6 +38,14 @@ const DEFAULT_CATEGORY_TABS = [
   { id: "d", label: "Delivery" },
   { id: "m", label: "Morale" },
 ];
+
+// The dashboard each plant route opens, named as the navbar shows it.
+const PAGE_TITLES = {
+  production: "Production",
+  quality: "Quality",
+  technical: "Technical",
+  engineering: "Engineering",
+};
 
 const DEFAULT_TYRE_TYPES = [
   { id: "all", label: "All" },
@@ -70,9 +79,14 @@ function ProductionHeader({
   singleDay = null,
   onSingleDayChange,
   showSpcAlertIcon = false,
+  // Overrides the page name the navbar derives from the route.
+  pageTitle = null,
 }) {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const currentPage =
+    pageTitle ?? PAGE_TITLES[pathname.split("/").filter(Boolean)[1]] ?? null;
   const [exportStatus, setExportStatus] = useState("idle");
   const resetTimer = useRef(null);
 
@@ -156,8 +170,11 @@ function ProductionHeader({
               display: "block",
             }}
           />
+          {/* The app name gives way below lg so the plant › page trail in
+              the centre column never squeezes it onto three lines. */}
           <Box
             sx={{
+              display: { xs: "none", lg: "block" },
               width: "1.5px",
               height: 22,
               backgroundColor: "error.main",
@@ -166,66 +183,99 @@ function ProductionHeader({
           />
           <Typography
             sx={{
+              display: { xs: "none", lg: "block" },
               fontSize: 16.5,
               fontWeight: 700,
               letterSpacing: "-0.2px",
               color: "text.primary",
               fontStyle: "italic",
+              whiteSpace: "nowrap",
             }}
           >
             One JK One Dashboard
           </Typography>
         </Stack>
 
-        {/* Center: active plant — highlighted pill, click to go back to
-            the plant map. */}
-        <Tooltip title="Change plant" arrow>
-          <Box
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate("/")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                navigate("/");
-              }
-            }}
-            sx={{
-              justifySelf: "center",
-              display: "flex",
-              alignItems: "center",
-              gap: 0.75,
-              px: 2,
-              py: 0.6,
-              borderRadius: 999,
-              border: 1,
-              borderColor: "primary.main",
-              backgroundColor: "primary.light",
-              color: "primary.main",
-              cursor: "pointer",
-              userSelect: "none",
-              transition: "background-color 120ms ease, box-shadow 120ms ease",
-              "&:hover": {
-                backgroundColor: theme.custom.brand.orangeRing,
-                boxShadow: theme.custom.shadow,
-              },
-            }}
-          >
-            <Typography
+        {/* Center: where the user is — the active plant (a pill, click to go
+            back to the plant map), then the dashboard open inside it. */}
+        <Stack
+          component="nav"
+          aria-label="Current location"
+          direction="row"
+          alignItems="center"
+          spacing={1}
+          sx={{ justifySelf: "center", minWidth: 0 }}
+        >
+          <Tooltip title="Change plant" arrow>
+            <Box
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate("/")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigate("/");
+                }
+              }}
               sx={{
-                fontSize: 14,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                lineHeight: 1.2,
+                justifySelf: "center",
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+                px: 2,
+                py: 0.6,
+                borderRadius: 999,
+                border: 1,
+                borderColor: "primary.main",
+                backgroundColor: "primary.light",
+                color: "primary.main",
+                cursor: "pointer",
+                userSelect: "none",
+                transition:
+                  "background-color 120ms ease, box-shadow 120ms ease",
+                "&:hover": {
+                  backgroundColor: theme.custom.brand.orangeRing,
+                  boxShadow: theme.custom.shadow,
+                },
               }}
             >
-              {plant?.name ?? "Select plant"}
-            </Typography>
-            <Typography sx={{ fontSize: 11, opacity: 0.8, lineHeight: 1 }}>
-              ▾
-            </Typography>
-          </Box>
-        </Tooltip>
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                  lineHeight: 1.2,
+                }}
+              >
+                {plant?.name ?? "Select plant"}
+              </Typography>
+              <Typography sx={{ fontSize: 11, opacity: 0.8, lineHeight: 1 }}>
+                ▾
+              </Typography>
+            </Box>
+          </Tooltip>
+          {currentPage && (
+            <>
+              <ChevronRightIcon
+                aria-hidden
+                sx={{ fontSize: 20, color: "text.disabled" }}
+              />
+              <Typography
+                component="h1"
+                aria-current="page"
+                sx={{
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "text.primary",
+                  whiteSpace: "nowrap",
+                  lineHeight: 1.2,
+                }}
+              >
+                {currentPage}
+              </Typography>
+            </>
+          )}
+        </Stack>
 
         {/* Right: Last Updated Timestamp + Profile Dropdown */}
         <Stack
