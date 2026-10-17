@@ -8,7 +8,7 @@ import TimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
  * Monthly are named by granularity, Yearly remains disabled until the gold
  * feed publishes yearly rows, and Date Range is an exact custom window.
  */
-export function useReliabilityTrendRange({ open }) {
+export function useReliabilityTrendRange({ open, hiddenPresets = [] }) {
   const [preset, setPreset] = useState("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -30,6 +30,7 @@ export function useReliabilityTrendRange({ open }) {
       preset={preset}
       variant="trend"
       presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
+      hiddenPresets={hiddenPresets}
       from={from}
       to={to}
       onPresetChange={(next) => {

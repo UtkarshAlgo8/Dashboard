@@ -70,6 +70,7 @@ function TimeRangeSelect({
         selectedMonthKey)
       : "Date Range";
   const monthDisabled = disabledPresets.includes("month");
+  const showTodayPreset = !hiddenPresets.includes("today");
   const showMonthPreset = !hiddenPresets.includes("month");
   const showRangePreset = !hiddenPresets.includes("range");
   const hasSingleDayPicker = typeof onSingleDayChange === "function";
@@ -164,33 +165,37 @@ function TimeRangeSelect({
           </Select>
         )}
         {/* 1. Today Pill */}
-        <Box
-          onClick={() => selectPreset("today")}
-          sx={{
-            ...pad,
-            m: preset === "today" ? "-1px" : 0,
-            zIndex: preset === "today" ? 1 : 0,
-            fontWeight: preset === "today" ? 600 : 500,
-            whiteSpace: "nowrap",
-            userSelect: "none",
-            borderRadius: 999,
-            cursor: "pointer",
-            border: 1,
-            borderColor: preset === "today" ? "primary.main" : "transparent",
-            backgroundColor:
-              preset === "today" ? theme.custom.pills.activeBg : "transparent",
-            color: preset === "today" ? "primary.main" : "text.primary",
-            transition: "all 0.15s ease",
-            "&:hover": {
+        {showTodayPreset && (
+          <Box
+            onClick={() => selectPreset("today")}
+            sx={{
+              ...pad,
+              m: preset === "today" ? "-1px" : 0,
+              zIndex: preset === "today" ? 1 : 0,
+              fontWeight: preset === "today" ? 600 : 500,
+              whiteSpace: "nowrap",
+              userSelect: "none",
+              borderRadius: 999,
+              cursor: "pointer",
+              border: 1,
+              borderColor: preset === "today" ? "primary.main" : "transparent",
               backgroundColor:
                 preset === "today"
                   ? theme.custom.pills.activeBg
-                  : theme.custom.surface.soft,
-            },
-          }}
-        >
-          {presetLabel("today", "Today")}
-        </Box>
+                  : "transparent",
+              color: preset === "today" ? "primary.main" : "text.primary",
+              transition: "all 0.15s ease",
+              "&:hover": {
+                backgroundColor:
+                  preset === "today"
+                    ? theme.custom.pills.activeBg
+                    : theme.custom.surface.soft,
+              },
+            }}
+          >
+            {presetLabel("today", "Today")}
+          </Box>
+        )}
 
         {hasSingleDayPicker && (
           <TextField
