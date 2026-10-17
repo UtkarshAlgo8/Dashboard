@@ -73,3 +73,31 @@ export function formatIndianInteger(value, fallback = "—") {
     maximumFractionDigits: 0,
   });
 }
+
+/**
+ * Compact a chart value for axis ticks and point labels:
+ * 1,398,916 → "1.4M", 1,250,000 → "1.25M", 864,146 → "864.1k", 950 → "950".
+ *
+ * @param {number} value
+ * @returns {string}
+ */
+export function formatCompactNumber(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  const abs = Math.abs(value);
+  const round = (n, places) => String(Number(n.toFixed(places)));
+  if (abs >= 1e6) return `${round(value / 1e6, 2)}M`;
+  if (abs >= 1e3) return `${round(value / 1e3, 1)}k`;
+  return round(value, 1);
+}
+
+/**
+ * A formatted value followed by its unit: "750k NOS", but "81.3%".
+ *
+ * @param {string} text
+ * @param {string|null|undefined} unit
+ * @returns {string}
+ */
+export function withUnit(text, unit) {
+  if (!unit) return text;
+  return unit === "%" ? `${text}%` : `${text} ${unit}`;
+}
