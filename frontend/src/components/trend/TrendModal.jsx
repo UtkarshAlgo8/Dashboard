@@ -665,14 +665,41 @@ function buildProductionSeriesConfig(
     plantId === "chennai" &&
     (viewBy === "overall" || viewBy === "product_type") &&
     Boolean(AGGREGATE_PRODUCT_BY_SECTION[sectionName]);
+  // BTP TBM/Curing store the section aggregate (Green Tyre / Cured Tyre)
+  // beside its own categories (Passenger Radial, LCV, Unknown) at every
+  // level — product, machine and SKU — so summing a month or a machine
+  // across product types doubles it (TBM Aug-2026: 1,378,634 vs the card's
+  // 689,317). Every lens except Product Type reads only the card's product,
+  // as the card does. Carcass has no Production_product row, so Overall
+  // falls back to the plain Production row for it.
+  const pinsBtpProduct = (viewBy) =>
+    plantId === "banmore" &&
+    viewBy !== "product_type" &&
+    Boolean(AGGREGATE_PRODUCT_BY_SECTION[sectionName]);
+  const btpProductPin = canonicalizeProductType(
+    cardProductType ?? AGGREGATE_PRODUCT_BY_SECTION[sectionName],
+  );
   return {
     viewByOptions: PRODUCTION_VIEW_BY_OPTIONS,
     defaultViewBy: "overall",
     mainKpiName: (viewBy) =>
       readsPlainProduction(viewBy)
         ? ["Production", "Production_product"]
-        : productionKpiName(viewBy, sectionName),
+        : pinsBtpProduct(viewBy) && viewBy === "overall"
+          ? ["Production_product", "Production"]
+          : productionKpiName(viewBy, sectionName),
     pickMainRows: (rows, viewBy) => {
+      if (pinsBtpProduct(viewBy)) {
+        const ofKpi = (name) =>
+          rows.filter(
+            (r) =>
+              (name == null || r.kpi_name === name) &&
+              canonicalizeProductType(r.product_type) === btpProductPin,
+          );
+        if (viewBy !== "overall") return ofKpi(null);
+        const productRows = ofKpi("Production_product");
+        return productRows.length > 0 ? productRows : ofKpi("Production");
+      }
       if (!readsPlainProduction(viewBy)) return rows;
       const pin =
         viewBy === "overall"
@@ -704,6 +731,9 @@ function buildProductionSeriesConfig(
       viewBy === "machine" || viewBy === "product_type",
     skuFilterVisibility: (viewBy) => viewBy === "sku",
     showCompare: (viewBy) => viewBy === "product_type",
+    // BTP Machine / SKU lenses carry hundreds of series — plot one by default.
+    singleSeriesByDefault: (viewBy) =>
+      plantId === "banmore" && (viewBy === "machine" || viewBy === "sku"),
     showOverlay: false,
     mainMonthlyAggregation: () => "sum",
     // CTP stores each day once per trench and tyre line (Curing 2026-10-06:
@@ -935,22 +965,9 @@ function MultiSeriesTrendModal({
     );
   }, [allRows, subSection, productType]);
 
-  // Distinct machine + SKU values from the scoped rows — the Autocomplete
-  // options for each filter. Empty while loading.
-  const machineOptions = useMemo(() => {
-    const set = new Set();
-    for (const r of scopedRows) if (hasMachine(r)) set.add(r.machine);
-    return [...set].sort();
-  }, [scopedRows]);
-
   // Which column holds the SKU identity is config-driven — Production
   // stores it in `itemcode`.
   const skuField = config.skuField ?? "sub_section";
-  const skuOptions = useMemo(() => {
-    const set = new Set();
-    for (const r of scopedRows) if (r[skuField]) set.add(r[skuField]);
-    return [...set].sort();
-  }, [scopedRows, skuField]);
 
   // Split the scoped rows by kpi_name into mainRows + (optional) overlay rows.
   // mainKpis may be an array (Downtime fetches 6 reasons in one call);
@@ -980,6 +997,60 @@ function MultiSeriesTrendModal({
     return only.length > 0 ? only : rawMainRows;
   }, [rawMainRows, kpi?.unit]);
 
+  // Distinct machine + SKU values — the Autocomplete options for each
+  // filter. Empty while loading. A config that picks its main rows (a
+  // product pin) lists only what survives the pick, so no option leads to
+  // an empty chart.
+  const optionRows = config.pickMainRows ? rawMainRows : scopedRows;
+  const machineOptions = useMemo(() => {
+    const set = new Set();
+    for (const r of optionRows) if (hasMachine(r)) set.add(r.machine);
+    return [...set].sort();
+  }, [optionRows]);
+  const skuOptions = useMemo(() => {
+    const set = new Set();
+    for (const r of optionRows) if (r[skuField]) set.add(r[skuField]);
+    return [...set].sort();
+  }, [optionRows, skuField]);
+
+  // Lenses with hundreds of series (Production Machine / SKU) are
+  // unreadable with every line drawn. With nothing picked, plot only the
+  // biggest producer in the window; the filter shows it as the selection
+  // and more can be added from there.
+  const singleSeriesField = config.singleSeriesByDefault?.(viewBy)
+    ? config.groupField(viewBy)
+    : null;
+  const defaultSeriesId = useMemo(() => {
+    if (!singleSeriesField) return null;
+    const totals = new Map();
+    for (const r of mainRows) {
+      const id = r[singleSeriesField];
+      if (singleSeriesField === "machine" ? !hasMachine(r) : !id) continue;
+      totals.set(id, (totals.get(id) ?? 0) + (numOrNull(r.actual_value) ?? 0));
+    }
+    let best = null;
+    for (const [id, total] of totals) {
+      if (!best || total > best.total) best = { id, total };
+    }
+    return best?.id ?? null;
+  }, [mainRows, singleSeriesField]);
+  const effectiveMachines = useMemo(
+    () =>
+      singleSeriesField === "machine" &&
+      machines.length === 0 &&
+      defaultSeriesId
+        ? [defaultSeriesId]
+        : machines,
+    [singleSeriesField, machines, defaultSeriesId],
+  );
+  const effectiveSku = useMemo(
+    () =>
+      singleSeriesField === skuField && sku.length === 0 && defaultSeriesId
+        ? [defaultSeriesId]
+        : sku,
+    [singleSeriesField, skuField, sku, defaultSeriesId],
+  );
+
   // Apply the Machines + SKU filters to mainRows before grouping.
   // Empty selection in either = all rows pass through that filter.
   const filteredMainRows = useMemo(() => {
@@ -987,15 +1058,18 @@ function MultiSeriesTrendModal({
     // machine has no series to belong to — it used to draw a "nan" line.
     const machineGrouped = config.groupField(viewBy) === "machine";
     const base = machineGrouped ? mainRows.filter(hasMachine) : mainRows;
-    if (machines.length === 0 && sku.length === 0) return base;
-    const allowedMachines = machines.length > 0 ? new Set(machines) : null;
-    const allowedSku = sku.length > 0 ? new Set(sku) : null;
+    if (effectiveMachines.length === 0 && effectiveSku.length === 0) {
+      return base;
+    }
+    const allowedMachines =
+      effectiveMachines.length > 0 ? new Set(effectiveMachines) : null;
+    const allowedSku = effectiveSku.length > 0 ? new Set(effectiveSku) : null;
     return base.filter((r) => {
       if (allowedMachines && !allowedMachines.has(r.machine)) return false;
       if (allowedSku && !allowedSku.has(r[skuField])) return false;
       return true;
     });
-  }, [mainRows, machines, sku, skuField, config, viewBy]);
+  }, [mainRows, effectiveMachines, effectiveSku, skuField, config, viewBy]);
 
   const overlayRowsByKpi = useMemo(() => {
     const out = {};
@@ -1223,7 +1297,7 @@ function MultiSeriesTrendModal({
             <FilterRow
               label="Machines"
               options={machineOptions}
-              value={machines}
+              value={effectiveMachines}
               onChange={setMachines}
               placeholder="All machines"
             />
@@ -1232,7 +1306,7 @@ function MultiSeriesTrendModal({
             <FilterRow
               label="SKU"
               options={skuOptions}
-              value={sku}
+              value={effectiveSku}
               onChange={setSku}
               placeholder="All SKUs"
             />
