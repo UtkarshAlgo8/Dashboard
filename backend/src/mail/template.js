@@ -30,21 +30,21 @@ export const DEFAULT_MANUAL_FULFILMENT = { gt: 81.9, rc4: 70.06, mixing: 44.85 }
 
 // CTP-PCR / CTP-TBR columns: fixed text for now, one cell per table row
 // (rows 1-5). Not automated and not editable from the pop-up — change here.
-// Current values: the 16-Oct manual mail.
+// Current values: provided for the 19-Oct mail.
 const CTP_VALUES = {
   pcr: [
-    "8.42% across 12 SKUs",
-    "4.41% across 9 SKUs",
-    "Curing: 91.58%; Building: 88.06%",
-    "614 tyres, 9 SKUs",
-    "1,172 tyres, 12 SKUs",
+    "13.60% across 16 SKUs",
+    "7.74% across 13 SKUs",
+    "Curing: 80.24%; Building: 76.87%",
+    "1,878 tyres, 12 SKUs",
+    "2,799 tyres, 16 SKUs",
   ],
   tbr: [
-    "12.89% across 14 SKUs",
-    "11.60% across 10 SKUs",
-    "Curing: 87.11%; Building: 76.31%",
-    "396 tyres, 10 SKUs",
-    "440 tyres, 14 SKUs",
+    "17.32% across 15 SKUs",
+    "10.92% across 13 SKUs",
+    "Curing: 79.24%; Building: 72.04%",
+    "514 tyres, 13 SKUs",
+    "750 tyres, 13 SKUs",
   ],
 };
 
