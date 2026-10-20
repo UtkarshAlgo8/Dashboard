@@ -289,13 +289,6 @@ async function fetchDashboard(payload) {
   });
   // Tolerate a bare array (older/unwrapped shape) so nothing hard-fails.
   const envelope = Array.isArray(body) ? { data: body } : (body ?? {});
-  console.log("[kpi-data]", {
-    sent: payload,
-    receivedRows: (envelope.data ?? []).length,
-    receivedBaseline: (envelope.baseline ?? []).length,
-    baselineWindow: envelope.baselineWindow,
-    baselineGranularity: envelope.baselineGranularity,
-  });
   return {
     rows: coerceMeasures(envelope.data ?? []),
     truncated: Boolean(envelope.truncated),
