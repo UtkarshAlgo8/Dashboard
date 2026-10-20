@@ -11,7 +11,6 @@ node_modules
 .git
 .gitignore
 npm-debug.log*
-temp.txt
 
 # Parsed-workbook cache; rebuilt on demand and often large.
 data/.quality_gold.cache.json
