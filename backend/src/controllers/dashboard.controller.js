@@ -145,24 +145,6 @@ export async function postFetch(req, res, next) {
       : drillOnly
         ? lookupDrill(req.body)
         : lookupLanding(req.body);
-    const rows =
-      matRows != null
-        ? matRows
-        : await cached(cacheKey, () => runQuery(sql), CACHE_TTL.KPI_ROWS);
-
-    // C10: we asked for one row beyond the cap. If it came back, the result is
-    // incomplete — trim the probe row and flag it so the UI can refuse to show
-    // the total as final rather than quietly under-reporting the range.
-    const truncated = rows.length > effectiveLimit;
-    if (truncated) {
-      console.warn(
-        `[dashboard] row cap ${effectiveLimit} reached — result truncated`,
-      );
-    }
-    const payload = {
-      data: truncated ? rows.slice(0, effectiveLimit) : rows,
-      truncated,
-    };
 
     // C15/C16 — the baseline query differs from the current one in the DATE
     // WINDOW ONLY. Everything else (kpi_name, section, sub_section, machine,
@@ -171,7 +153,7 @@ export async function postFetch(req, res, next) {
     // kpi_name alone let the "previous" value come from a different series.
     // A null window (open-ended range, or a snapshot with no predecessor)
     // means the UI renders blank — never 0%, never -100%.
-    if (withBaseline) {
+    const loadBaseline = async () => {
       const timeScope = resolveDatePredicate({ date, from, to });
       const granularity = resolveGranularity(
         context.granularity,
@@ -182,42 +164,63 @@ export async function postFetch(req, res, next) {
           ? previousWindow(timeScope, granularity)
           : null;
 
-      if (window) {
-        const baselineGranularity = previousWindowGranularity(
-          timeScope,
-          granularity,
-        );
-        const baselineContext = {
-          ...context,
-          granularity: baselineGranularity,
-        };
-        const baselineSql = buildFetchQuery({
-          plantId,
-          context: baselineContext,
-          ...window,
-          drillKpis,
-          landingKpis,
-          parentFilters,
-          limit: effectiveLimit + 1,
-          offset,
-          drillOnly,
-        });
-        const baselineRows = await cached(
-          buildCacheKey("/dashboard/kpi-data:baseline", { context: baselineContext, plantId, window, drillKpis, landingKpis, parentFilters, limit: effectiveLimit, offset, drillOnly }),
-          () => runQuery(baselineSql),
-          CACHE_TTL.KPI_ROWS,
-        );
-        payload.baseline = baselineRows.slice(0, effectiveLimit);
-        payload.baselineWindow = window;
-        payload.baselineGranularity = baselineGranularity;
-      } else {
-        payload.baseline = null;
-        payload.baselineWindow = null;
-        payload.baselineGranularity = null;
+      if (!window) {
+        return { baseline: null, baselineWindow: null, baselineGranularity: null };
       }
-    }
+      const baselineGranularity = previousWindowGranularity(
+        timeScope,
+        granularity,
+      );
+      const baselineContext = {
+        ...context,
+        granularity: baselineGranularity,
+      };
+      const baselineSql = buildFetchQuery({
+        plantId,
+        context: baselineContext,
+        ...window,
+        drillKpis,
+        landingKpis,
+        parentFilters,
+        limit: effectiveLimit + 1,
+        offset,
+        drillOnly,
+      });
+      const baselineRows = await cached(
+        buildCacheKey("/dashboard/kpi-data:baseline", { context: baselineContext, plantId, window, drillKpis, landingKpis, parentFilters, limit: effectiveLimit, offset, drillOnly }),
+        () => runQuery(baselineSql),
+        CACHE_TTL.KPI_ROWS,
+      );
+      return {
+        baseline: baselineRows.slice(0, effectiveLimit),
+        baselineWindow: window,
+        baselineGranularity,
+      };
+    };
 
-    res.json(payload);
+    // The current window and its baseline are independent queries, so they
+    // run side by side instead of one after the other.
+    const [rows, baseline] = await Promise.all([
+      matRows != null
+        ? matRows
+        : cached(cacheKey, () => runQuery(sql), CACHE_TTL.KPI_ROWS),
+      withBaseline ? loadBaseline() : null,
+    ]);
+
+    // C10: we asked for one row beyond the cap. If it came back, the result is
+    // incomplete — trim the probe row and flag it so the UI can refuse to show
+    // the total as final rather than quietly under-reporting the range.
+    const truncated = rows.length > effectiveLimit;
+    if (truncated) {
+      console.warn(
+        `[dashboard] row cap ${effectiveLimit} reached — result truncated`,
+      );
+    }
+    res.json({
+      data: truncated ? rows.slice(0, effectiveLimit) : rows,
+      truncated,
+      ...baseline,
+    });
   } catch (err) {
     next(err);
   }
