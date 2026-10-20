@@ -490,35 +490,48 @@ export async function getVocab(req, res, next) {
     // v2: `machines` added — a new key so a cached v1 payload (no machines)
     // is never served to a client that expects them.
     const vocab = await cached(`dashboard:vocab:v2:${plantId}`, async () => {
-      const grab = (sql) =>
-        runQuery(sql).then((rows) => rows.map((r) => Object.values(r)[0]));
       const table = goldSource({ plantId, fromKey: null, toKey: null });
       const scope = plantDepartmentPredicate(plantId);
-      const present = (col) =>
-        `${col} IS NOT NULL AND ${col} != 'nan' AND ${col} != 'null' AND ${col} != ''`;
 
-      const [
-        sections,
-        categories,
-        granularities,
-        tyreTypes,
-        subSectionRows,
-        machineRows,
-      ] = await Promise.all([
-          grab(`SELECT DISTINCT section FROM ${table} WHERE ${scope} AND ${present("section")} ORDER BY section`),
-          grab(`SELECT DISTINCT category FROM ${table} WHERE ${scope} AND ${present("category")} ORDER BY category`),
-          grab(`SELECT DISTINCT granularity FROM ${table} WHERE ${scope} AND ${present("granularity")} ORDER BY granularity`),
-          grab(`SELECT DISTINCT tyre_type FROM ${table} WHERE ${scope} AND ${present("tyre_type")} ORDER BY tyre_type`),
-          runQuery(
-            `SELECT DISTINCT section, sub_section FROM ${table} WHERE ${scope} AND ${present("section")} AND ${present("sub_section")} ORDER BY section, sub_section`,
-          ),
-          runQuery(
-            buildSectionMachinesQuery({
-              plantId,
-              sinceIso: isoDaysAgo(MACHINE_LOOKBACK_DAYS),
-            }),
-          ),
-        ]);
+      // ONE scan of the distinct (section, sub_section, category, granularity,
+      // tyre_type) combinations — a few hundred rows — instead of five
+      // separate full-history DISTINCT scans. Each list below applies the
+      // same "present" test and ascending order the per-column SQL did.
+      const [comboRows, machineRows] = await Promise.all([
+        runQuery(
+          `SELECT DISTINCT section, sub_section, category, granularity, tyre_type FROM ${table} WHERE ${scope}`,
+        ),
+        runQuery(
+          buildSectionMachinesQuery({
+            plantId,
+            sinceIso: isoDaysAgo(MACHINE_LOOKBACK_DAYS),
+          }),
+        ),
+      ]);
+      // Same as SQL: col IS NOT NULL AND col NOT IN ('nan', 'null', '').
+      const present = (v) => v != null && v !== "nan" && v !== "null" && v !== "";
+      const ascending = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+      const distinct = (col) =>
+        [...new Set(comboRows.map((r) => r[col]).filter(present))].sort(ascending);
+      const sections = distinct("section");
+      const categories = distinct("category");
+      const granularities = distinct("granularity");
+      const tyreTypes = distinct("tyre_type");
+      // DISTINCT (section, sub_section) ORDER BY section, sub_section.
+      const pairKeys = new Set();
+      const subSectionRows = [];
+      for (const r of comboRows) {
+        if (!present(r.section) || !present(r.sub_section)) continue;
+        const k = JSON.stringify([r.section, r.sub_section]);
+        if (pairKeys.has(k)) continue;
+        pairKeys.add(k);
+        subSectionRows.push({ section: r.section, sub_section: r.sub_section });
+      }
+      subSectionRows.sort(
+        (a, b) =>
+          ascending(a.section, b.section) ||
+          ascending(a.sub_section, b.sub_section),
+      );
 
       const subSections = {};
       for (const row of subSectionRows) {
