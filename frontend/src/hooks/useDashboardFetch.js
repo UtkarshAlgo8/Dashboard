@@ -580,7 +580,11 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
         ? fetchCachedDashboard(downtimePayload)
         : Promise.resolve(null),
     {
-      enabled: Boolean(downtimePayload),
+      // Same gate as the landing fetch: before the date window resolves the
+      // payload has no from/to, which reads the reasons' ENTIRE history and
+      // pages through it 4,500 rows at a time — minutes of upstream work
+      // whose result is discarded as soon as the window arrives.
+      enabled: hasDateRange && Boolean(downtimePayload),
       interval: 0,
       deps: [JSON.stringify(downtimePayload)],
     },
