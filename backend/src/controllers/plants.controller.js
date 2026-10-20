@@ -124,7 +124,6 @@ export async function getSummary(req, res, next) {
         ) ranked
         WHERE rn = 1
       `.trim();
-      const rows = await runQuery(sql);
       const toPick = (row) => {
         if (!row) return null;
         // d is "YYYYMMDD" → DD-MM-YYYY for the card.
@@ -134,7 +133,6 @@ export async function getSummary(req, res, next) {
           : null;
         return { value: row.actual_value, date };
       };
-      const pick = (name) => toPick(rows.find((r) => r.kpi_name === name));
 
       // Plant-level OEE (the sidebar's plant card headline). Unlike OEE_o —
       // which is always scoped to a section AND a product_type/sub_section —
@@ -160,7 +158,12 @@ export async function getSummary(req, res, next) {
         ) ranked
         WHERE rn = 1
       `.trim();
-      const oeePRows = await runQuery(oeePSql);
+      // Independent queries — run them side by side.
+      const [rows, oeePRows] = await Promise.all([
+        runQuery(sql),
+        runQuery(oeePSql),
+      ]);
+      const pick = (name) => toPick(rows.find((r) => r.kpi_name === name));
       const oeeP = toPick(oeePRows[0]);
 
       return { oeeP, oee: pick("OEE_o"), ftq: pick("FTQ"), scrap: pick("Scrap") };
@@ -169,6 +172,15 @@ export async function getSummary(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+const AS_OF_RECENT_DAYS = 30;
+
+/** Today (UTC) minus `days`, as a "YYYYMMDD" key. */
+function ymdDaysAgo(days) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10).replaceAll("-", "");
 }
 
 /**
@@ -181,18 +193,24 @@ export async function getAsOf(req, res, next) {
   const key = buildCacheKey(`/plants/${req.params.plantId}/as-of`, {});
   try {
     const data = await cached(key, async () => {
-      const sql = `
-        SELECT MAX(${DATE_YYYYMMDD}) AS d
-        FROM ${goldSource({ plantId: req.plantId, fromKey: null, toKey: null })}
-        WHERE ${coreFilter(req.plantId)} AND kpi_name = 'Production'
-      `.trim();
-      const rows = await runQuery(sql);
-      const raw = rows?.[0] ? Object.values(rows[0])[0] : null;
-      // raw is "YYYYMMDD" → ISO yyyy-mm-dd.
-      const s = raw == null ? "" : String(raw);
-      const asOf = /^\d{8}$/.test(s)
-        ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
-        : null;
+      const latest = async (fromKey) => {
+        const sql = `
+          SELECT MAX(${DATE_YYYYMMDD}) AS d
+          FROM ${goldSource({ plantId: req.plantId, fromKey, toKey: null })}
+          WHERE ${coreFilter(req.plantId)} AND kpi_name = 'Production'${dateWindowSql(fromKey, null)}
+        `.trim();
+        const rows = await runQuery(sql);
+        const raw = rows?.[0] ? Object.values(rows[0])[0] : null;
+        // raw is "YYYYMMDD".
+        const s = raw == null ? "" : String(raw);
+        return /^\d{8}$/.test(s) ? s : null;
+      };
+      // The newest date is almost always recent, so scan only the last
+      // AS_OF_RECENT_DAYS first (about half the Athena time). The full-history
+      // scan runs only when that window is empty, so the answer is the same.
+      const s = (await latest(ymdDaysAgo(AS_OF_RECENT_DAYS))) ?? (await latest(null));
+      // YYYYMMDD → ISO yyyy-mm-dd.
+      const asOf = s ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : null;
       return { asOf };
     }, CACHE_TTL.AS_OF);
     res.json({ data });
