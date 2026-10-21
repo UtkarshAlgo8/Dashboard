@@ -34,6 +34,43 @@ const client = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Requests in flight, so low-priority work (the drill prefetch) can wait until
+// the page's own requests are done instead of queueing ahead of them.
+let inFlight = 0;
+let idleWaiters = [];
+
+function requestDone() {
+  inFlight -= 1;
+  if (inFlight > 0) return;
+  const waiters = idleWaiters;
+  idleWaiters = [];
+  for (const resolve of waiters) resolve();
+}
+
+/** Resolves once no request has been in flight for `quietMs`. */
+export async function whenIdle(quietMs = 1000) {
+  for (;;) {
+    if (inFlight > 0) await new Promise((resolve) => idleWaiters.push(resolve));
+    await new Promise((resolve) => setTimeout(resolve, quietMs));
+    if (inFlight === 0) return;
+  }
+}
+
+client.interceptors.request.use((config) => {
+  inFlight += 1;
+  return config;
+});
+client.interceptors.response.use(
+  (response) => {
+    requestDone();
+    return response;
+  },
+  (error) => {
+    requestDone();
+    return Promise.reject(error);
+  },
+);
+
 // Keep the in-memory token mirror in sync with localStorage so
 // request headers are always current even before AuthProvider's
 // effect has flushed.
