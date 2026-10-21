@@ -21,7 +21,7 @@ test("Product scope is pinned to Banmore Quality Uniformity Testing", () => {
   assert.match(predicate, /UPPER\(plant\) = 'BANMORE'/);
 });
 
-test("Product summary is the canonical seven-card Uniformity inventory", () => {
+test("Product summary includes Uniformity and the single Paint Weight headline", () => {
   assert.deepEqual(PRODUCT_CARD_KPIS, [
     "Overall_Production_Yield",
     "Overall_Uniformity_Production",
@@ -30,11 +30,60 @@ test("Product summary is the canonical seven-card Uniformity inventory", () => {
     "Zf_Uniformity_Yield",
     "Zf_Balancing_Yield_o",
     "Dbm_Balancing_Yield",
+    "Paint_Wt_Within3_Pct_overall",
   ]);
   const sql = productSummaryQuery({ date: "2026-10-09", granularity: "DAY" });
   assert.match(sql, /kpi_name IN/);
   assert.match(sql, /granularity = 'DAY'/);
   assert.match(sql, /20261009/);
+  assert.match(sql, /LOWER\(department\) = 'production'/);
+  assert.match(sql, /section = 'Final Finish'/);
+  assert.match(sql, /category = 'Process Audit'/);
+  assert.doesNotMatch(sql, /Paint_Wt_Within[12]_Pct_overall/);
+});
+
+test("Paint Weight drill reads published overall and SKU values from its own scope", () => {
+  const names = [
+    "Paint_Wt_Within1_Pct_overall",
+    "Paint_Wt_Within2_Pct_overall",
+    "Paint_Wt_Within3_Pct_overall",
+    "Paint_Wt_Tyre_Qty_sku",
+    "Paint_Wt_Spec_Kg_sku",
+    "Paint_Wt_Avg_Kg_sku",
+    "Paint_Wt_Dev_Kg_sku",
+    "Paint_Wt_Within1_Pct_sku",
+    "Paint_Wt_Within2_Pct_sku",
+    "Paint_Wt_Within3_Pct_sku",
+  ];
+  for (const name of names)
+    assert.equal(isAllowedProductDrillKpi(name), true, name);
+  assert.equal(isAllowedProductDrillKpi("Paint_Wt_Unknown_sku"), false);
+  const sql = productChildrenQuery({
+    kpiNames: names,
+    date: "2026-10-21",
+    granularity: "SHIFT A",
+  });
+  assert.match(sql, /SELECT itemcode,/);
+  assert.match(sql, /LOWER\(department\) = 'production'/);
+  assert.match(sql, /section = 'Final Finish'/);
+  assert.doesNotMatch(sql, /Uniformity Testing/);
+  const { rows } = toProductChildren([
+    {
+      itemcode: "SKU-01",
+      kpi_name: "Paint_Wt_Spec_Kg_sku",
+      actual_value: "8.125",
+      unit_of_measurement: "KG",
+    },
+    {
+      itemcode: "SKU-02",
+      kpi_name: "Paint_Wt_Spec_Kg_sku",
+      actual_value: null,
+    },
+  ]);
+  assert.equal(rows[0].itemcode, "SKU-01");
+  assert.equal(rows[0].actual_value, "8.125");
+  assert.equal(rows[1].itemcode, "SKU-02");
+  assert.equal(rows[1].actual_value, null);
 });
 
 test("Product child query only accepts the canonical drill tree", () => {
@@ -55,15 +104,14 @@ test("Product transformers preserve empty card states and row drill metadata", (
       kpi_name: "Overall_Production_Yield",
       actual_value: "97.58",
       unit_of_measurement: "%",
-      drill_down_attribute:
-        "['Mtms_Uniformity_Yield', 'Tuo_Uniformity_Yield']",
+      drill_down_attribute: "['Mtms_Uniformity_Yield', 'Tuo_Uniformity_Yield']",
     },
   ]);
   assert.equal(summary.values.Overall_Production_Yield.actual_value, "97.58");
-  assert.deepEqual(summary.values.Overall_Production_Yield.drill_down.children, [
-    "Mtms_Uniformity_Yield",
-    "Tuo_Uniformity_Yield",
-  ]);
+  assert.deepEqual(
+    summary.values.Overall_Production_Yield.drill_down.children,
+    ["Mtms_Uniformity_Yield", "Tuo_Uniformity_Yield"],
+  );
   assert.equal(summary.values.Dbm_Balancing_Yield.actual_value, null);
 
   const children = toProductChildren([

@@ -1,10 +1,11 @@
-/** Row → response transformers for Product's Uniformity & Balancing feed. */
+/** Row → response transformers for Product's live KPI feed. */
 import { parseDrillDown, valueOrNull } from "../normalize.js";
 import { PRODUCT_CARD_KPIS } from "../queries/product.queries.js";
 
 function toProductRow(row) {
   return {
     kpi_name: row.kpi_name,
+    ...(row.itemcode != null ? { itemcode: valueOrNull(row.itemcode) } : {}),
     machine: valueOrNull(row.machine),
     actual_value: valueOrNull(row.actual_value),
     unit: valueOrNull(row.unit_of_measurement),
@@ -14,7 +15,7 @@ function toProductRow(row) {
   };
 }
 
-/** Preserve all seven canonical cards even when the selected period has no row. */
+/** Preserve all canonical cards even when the selected period has no row. */
 export function toProductSummary(rows) {
   const byName = new Map(rows.map((row) => [row.kpi_name, row]));
   const values = {};

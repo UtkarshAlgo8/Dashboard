@@ -1,8 +1,8 @@
 /**
- * SQL builders for the Quality Product tab's Uniformity & Balancing cards.
+ * SQL builders for the Quality Product tab's live cards.
  *
- * Product data has a distinct gold scope from the Process and SPC families:
- * BANMORE / Quality / Uniformity Testing.  Queries use the shared Quality
+ * Uniformity uses BANMORE / Quality / Uniformity Testing; Paint Weight uses
+ * BANMORE / Production / Final Finish / Process Audit. Queries use the shared
  * source resolver so recent DAY/SHIFT requests use gold_daily while historic
  * reads retain gold.gold.
  */
@@ -24,13 +24,28 @@ export const PRODUCT_CARD_KPIS = [
   "Zf_Uniformity_Yield",
   "Zf_Balancing_Yield_o",
   "Dbm_Balancing_Yield",
+  "Paint_Wt_Within3_Pct_overall",
 ];
+
+const PAINT_WEIGHT_KPIS = new Set([
+  "Paint_Wt_Within1_Pct_overall",
+  "Paint_Wt_Within2_Pct_overall",
+  "Paint_Wt_Within3_Pct_overall",
+  "Paint_Wt_Tyre_Qty_sku",
+  "Paint_Wt_Spec_Kg_sku",
+  "Paint_Wt_Avg_Kg_sku",
+  "Paint_Wt_Dev_Kg_sku",
+  "Paint_Wt_Within1_Pct_sku",
+  "Paint_Wt_Within2_Pct_sku",
+  "Paint_Wt_Within3_Pct_sku",
+]);
 
 // This allow-list prevents the generic child endpoint from becoming a way to
 // browse arbitrary Quality rows. The descendants are the canonical gold
 // drill_down_attribute values for the Product card set.
 const PRODUCT_DRILL_KPIS = new Set([
   ...PRODUCT_CARD_KPIS,
+  ...PAINT_WEIGHT_KPIS,
   "Mtms_Uniformity_Yield_m",
   "Tuo_Uniformity_Yield_m",
   "Zf_Uniformity_Yield_m",
@@ -56,13 +71,32 @@ export function isAllowedProductDrillKpi(kpiName) {
   return PRODUCT_DRILL_KPIS.has(kpiName);
 }
 
+// Paint Weight is published under Production, even though its card belongs
+// on Quality's Product screen. Keep each KPI family in its factual scope.
+function scopedKpiPredicate(kpiNames) {
+  const uniformity = kpiNames.filter((name) => !PAINT_WEIGHT_KPIS.has(name));
+  const paint = kpiNames.filter((name) => PAINT_WEIGHT_KPIS.has(name));
+  const scopes = [];
+  if (uniformity.length) {
+    scopes.push(
+      `(${productScopePredicate()} AND kpi_name IN (${uniformity.map(escapeLiteral).join(", ")}))`,
+    );
+  }
+  if (paint.length) {
+    scopes.push(
+      `(LOWER(department) = 'production' AND UPPER(plant) = 'BANMORE' ` +
+        `AND section = 'Final Finish' AND category = 'Process Audit' ` +
+        `AND kpi_name IN (${paint.map(escapeLiteral).join(", ")}))`,
+    );
+  }
+  return scopes.length ? `(${scopes.join(" OR ")})` : "1 = 0";
+}
+
 export function productSummaryQuery({ date, granularity }) {
-  const list = PRODUCT_CARD_KPIS.map(escapeLiteral).join(", ");
   return (
     `SELECT ${SELECT_COLS} FROM ${qualitySourceForDate(date, granularity)} ` +
-    `WHERE ${productScopePredicate()} ` +
+    `WHERE ${scopedKpiPredicate(PRODUCT_CARD_KPIS)} ` +
     `AND ${granularityAllowListPredicate()} ` +
-    `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))}`
   );
@@ -70,16 +104,14 @@ export function productSummaryQuery({ date, granularity }) {
 
 /**
  * Fetch one table level. `kpiNames` must have been checked by the controller.
- * Rows remain unaggregated: each machine row is a factual gold row, and the
- * frontend uses drill_down_attribute to decide whether it can navigate again.
+ * Rows remain unaggregated, preserving SKU identity for Paint Weight and
+ * machine/drill metadata for Uniformity.
  */
 export function productChildrenQuery({ kpiNames, date, granularity }) {
-  const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT ${SELECT_COLS} FROM ${qualitySourceForDate(date, granularity)} ` +
-    `WHERE ${productScopePredicate()} ` +
+    `SELECT itemcode, ${SELECT_COLS} FROM ${qualitySourceForDate(date, granularity)} ` +
+    `WHERE ${scopedKpiPredicate(kpiNames)} ` +
     `AND ${granularityAllowListPredicate()} ` +
-    `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))} ` +
     "ORDER BY kpi_name ASC, machine ASC"

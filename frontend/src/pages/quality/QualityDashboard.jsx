@@ -4552,9 +4552,11 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
     QUALITY_KPI_ICON[kpi.id] ?? (isPct ? TaskAltOutlinedIcon : GridViewIcon);
   const footnote = !hasValue
     ? (kpi.emptyReason ?? (kpi.na ? "Not available yet" : null))
-    : kpi.target
-      ? `Target ${kpi.target}`
-      : null;
+    : kpi.metricLabel
+      ? kpi.metricLabel
+      : kpi.target
+        ? `Target ${kpi.target}`
+        : null;
   const iconButtonSx = {
     p: 0.25,
     color: "text.secondary",
@@ -7623,9 +7625,8 @@ function ProcessDrillPanel({
   return null;
 }
 
-// Canonical Quality › Product inventory. Only the Uniformity & Balancing
-// rows exist in gold today; the remaining canonical cards intentionally render
-// an explicit empty state rather than legacy mock numbers.
+// Canonical Quality › Product inventory. Unsupported cards show an explicit
+// empty state; live families retain their published source and units.
 const PRODUCT_KPIS = [
   {
     id: "overallYield",
@@ -7659,7 +7660,12 @@ const PRODUCT_KPIS = [
     sourceKpi: "Dbm_Balancing_Yield",
   },
   { id: "insp", n: "Inspector Rating" },
-  { id: "gtw", n: "GT Weight Variation" },
+  {
+    id: "gtw",
+    n: "GT Weight Variation",
+    metricLabel: "Paint Weight Within 3%",
+    sourceKpi: "Paint_Wt_Within3_Pct_overall",
+  },
   { id: "eg", n: "E-Grade Count" },
   // Deliberately mirrors the Curing → Quality → Scrap KPI in Production;
   // this is a gold-backed quantity, not a newly-derived percentage.
@@ -12618,8 +12624,8 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
         <div style={{ fontSize: 11.5, color: C.mu }}>
           Cp / Cpk / Pp / Ppk are averaged over {from} to {to} — gold publishes
           SPC capability per day only, so a range has no snapshot of its own.
-          Charts show each combination's latest 300 subgroups (1,500
-          readings), whatever their date.
+          Charts show each combination's latest 300 subgroups (1,500 readings),
+          whatever their date.
         </div>
       ) : snapshotDate ? (
         <div style={{ fontSize: 11.5, color: C.mu }}>
@@ -13814,6 +13820,133 @@ function LiveCuringScrapDrillPanel({ date, shift, granularity, onClose }) {
   );
 }
 
+const PAINT_WEIGHT_COLUMNS = [
+  { label: "Tyre Qty", kpi: "Paint_Wt_Tyre_Qty_sku", decimals: 0 },
+  { label: "Spec Wt (kg)", kpi: "Paint_Wt_Spec_Kg_sku", decimals: 3 },
+  { label: "Avg Wt (kg)", kpi: "Paint_Wt_Avg_Kg_sku", decimals: 3 },
+  { label: "Deviation (kg)", kpi: "Paint_Wt_Dev_Kg_sku", decimals: 3 },
+  { label: "1%", kpi: "Paint_Wt_Within1_Pct_sku", decimals: 2, percent: true },
+  { label: "2%", kpi: "Paint_Wt_Within2_Pct_sku", decimals: 2, percent: true },
+  { label: "3%", kpi: "Paint_Wt_Within3_Pct_sku", decimals: 2, percent: true },
+];
+const PAINT_WEIGHT_OVERALL = [
+  { label: "Within 3%", kpi: "Paint_Wt_Within3_Pct_overall" },
+  { label: "Within 2%", kpi: "Paint_Wt_Within2_Pct_overall" },
+  { label: "Within 1%", kpi: "Paint_Wt_Within1_Pct_overall" },
+];
+const PAINT_WEIGHT_DRILL_KPIS = [
+  ...PAINT_WEIGHT_OVERALL.map((column) => column.kpi),
+  ...PAINT_WEIGHT_COLUMNS.map((column) => column.kpi),
+];
+
+function paintWeightValue(value, decimals = 2, percent = false) {
+  if (value == null || String(value).trim() === "") return "—";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  return (
+    number.toLocaleString("en-IN", { maximumFractionDigits: decimals }) +
+    (percent ? "%" : "")
+  );
+}
+
+function LivePaintWeightDrillPanel({ date, shift, granularity }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    setRows([]);
+    getProductChildren({
+      kpiNames: PAINT_WEIGHT_DRILL_KPIS,
+      date,
+      shift,
+      granularity,
+    })
+      .then((result) => {
+        if (!cancelled) setRows(result?.rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date, shift, granularity]);
+
+  const overall = new Map();
+  const bySku = new Map();
+  for (const row of rows) {
+    if (PAINT_WEIGHT_OVERALL.some((column) => column.kpi === row.kpi_name)) {
+      overall.set(row.kpi_name, row.actual_value);
+    } else if (row.itemcode) {
+      if (!bySku.has(row.itemcode)) bySku.set(row.itemcode, new Map());
+      bySku.get(row.itemcode).set(row.kpi_name, row.actual_value);
+    }
+  }
+  const tableRows = [...bySku]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([sku, values]) => [
+      sku,
+      ...PAINT_WEIGHT_COLUMNS.map((column) =>
+        paintWeightValue(
+          values.get(column.kpi),
+          column.decimals,
+          column.percent,
+        ),
+      ),
+    ]);
+
+  return (
+    <Card title="GT Weight Variation — Paint Weight" accent={C.tl}>
+      {loading ? (
+        <QualityLoader minHeight={180} message="Loading paint weight data" />
+      ) : error ? (
+        <Typography role="alert" color="error" sx={{ py: 2 }}>
+          Unable to load paint weight data.
+        </Typography>
+      ) : (
+        <>
+          <Stack
+            direction="row"
+            spacing={3}
+            sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}
+          >
+            {PAINT_WEIGHT_OVERALL.map((column) => (
+              <Box key={column.kpi}>
+                <Typography variant="body2" color="text.secondary">
+                  {column.label}
+                </Typography>
+                <Typography variant="h6">
+                  {paintWeightValue(overall.get(column.kpi), 2, true)}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+          {tableRows.length ? (
+            <DTable
+              cols={[
+                "SKU",
+                ...PAINT_WEIGHT_COLUMNS.map((column) => column.label),
+              ]}
+              rows={tableRows}
+            />
+          ) : (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              No SKU data for this period.
+            </Typography>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 function LiveProductDrillPanel({ kpi, date, shift, granularity }) {
   const initialLevel = {
     title: kpi.n,
@@ -14102,14 +14235,22 @@ function QualityDashboard({ plant, onBack }) {
     return {
       ...kpi,
       v: String(live.actual_value),
-      u: live.unit || "",
+      u: live.unit || (kpi.id === "gtw" ? "%" : ""),
       status: null,
       sp: null,
       na: false,
       live: true,
-      drill: live.drill_down?.is_leaf ? null : "product",
+      drill:
+        kpi.id === "gtw"
+          ? "paintWeight"
+          : live.drill_down?.is_leaf
+            ? null
+            : "product",
       drillChildren: live.drill_down?.children || [],
-      accentColor: productValueColor(Number(live.actual_value), live.unit),
+      accentColor: productValueColor(
+        Number(live.actual_value),
+        live.unit || (kpi.id === "gtw" ? "%" : ""),
+      ),
     };
   });
   const complaintCards = COMPLAINT_KPIS.map(toNaKpi);
@@ -14431,6 +14572,12 @@ function QualityDashboard({ plant, onBack }) {
                           shift={shift}
                           granularity={processGranularity}
                           onClose={() => setOpenKpi(null)}
+                        />
+                      ) : openObj?.drill === "paintWeight" ? (
+                        <LivePaintWeightDrillPanel
+                          date={processDate}
+                          shift={shift}
+                          granularity={processGranularity}
                         />
                       ) : (
                         <LiveProductDrillPanel

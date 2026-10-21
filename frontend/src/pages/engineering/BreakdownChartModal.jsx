@@ -97,7 +97,7 @@ const MEASURES = [
 // why the tail is reported in the caption rather than pooled into a bar.
 const MAX_BARS = 15;
 
-// Shared fractions for the Pareto's two axes — see ParetoChart.
+// Matching fractions keep the value and percentage axes on the same scale.
 const PARETO_STEPS = [0, 0.2, 0.4, 0.6, 0.8, 1];
 
 const axisTitleStyle = { fontSize: "12px", fontWeight: "700", color: C.md };
@@ -111,17 +111,21 @@ function truncate(text, max = 30) {
 /**
  * Sorted bars + a cumulative % line over the same order (spec: Pareto).
  *
- * The bar axis runs 0 → the scope total and the % axis 0 → 100 on the same
- * steps, so a bar's top and its cumulative point share one scale: the line
- * starts on the top of the first bar and climbs by each bar's height.
+ * Both axes span the displayed rows' cumulative total, expressed in values
+ * on the left and share of the displayed total on the right. This puts the first
+ * cumulative point on the first bar without stretching the axes to unseen rows.
  */
-function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
+function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
   const options = useMemo(() => {
+    const displayedTotal = rows.reduce((sum, row) => sum + row.value, 0);
     let running = 0;
     const cumulative = rows.map((r) => {
       running += r.value;
-      return total ? (running / total) * 100 : 0;
+      return displayedTotal ? (running / displayedTotal) * 100 : 0;
     });
+    const valueMax = displayedTotal || 1;
+    // Reserve the same headroom on both axes for the final marker and label.
+    const axisHeadroom = 1.1;
     const longest = rows.reduce(
       (n, r) => Math.max(n, truncate(r.label).length),
       0,
@@ -146,6 +150,8 @@ function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
       credits: { enabled: false },
       accessibility: { enabled: false },
       legend: { enabled: false },
+      // Explicit matching ticks preserve the value-to-percentage conversion.
+      alignTicks: false,
       xAxis: {
         categories: rows.map((r) => r.label),
         title: { text: groupLabel, style: axisTitleStyle },
@@ -183,9 +189,10 @@ function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
         {
           title: { text: measureLabel, style: axisTitleStyle },
           gridLineColor: C.bd,
-          ...(total
-            ? { tickPositions: PARETO_STEPS.map((f) => f * total) }
-            : {}),
+          min: 0,
+          max: valueMax * axisHeadroom,
+          endOnTick: false,
+          tickPositions: PARETO_STEPS.map((f) => f * valueMax),
           labels: {
             style: { fontSize: "11px", color: C.mu },
             formatter: function () {
@@ -194,18 +201,20 @@ function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
           },
         },
         {
-          // The cumulative % axis: labelled, but no grid of its own — its
-          // steps sit on the bar axis's grid lines.
+          // A complete Pareto of the displayed rows ends at 100%.
+          min: 0,
+          max: 100 * axisHeadroom,
+          endOnTick: false,
           tickPositions: PARETO_STEPS.map((f) => f * 100),
           opposite: true,
           title: {
-            text: "Cumulative %",
+            text: "Cumulative % of displayed total",
             style: { ...axisTitleStyle, color: C.am },
           },
           labels: {
             style: { fontSize: "11px", color: C.am },
             formatter: function () {
-              return this.value + "%";
+              return fmtNum(this.value, 1) + "%";
             },
           },
           gridLineWidth: 0,
@@ -219,7 +228,7 @@ function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
               width: 1,
               zIndex: 3,
               label: {
-                text: "80% of scope",
+                text: "80% of displayed total",
                 align: "right",
                 x: -4,
                 y: -5,
@@ -243,7 +252,7 @@ function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
               ? ""
               : `Breakdown %: <b>${fmtNum(row.pct, 2)}%</b><br/>`) +
             `Share of scope: <b>${fmtNum(row.share, 1)}%</b><br/>` +
-            `Cumulative: <b>${fmtNum(cumulative[idx], 1)}%</b>`
+            `Cumulative of displayed total: <b>${fmtNum(cumulative[idx], 1)}%</b>`
           );
         },
       },
@@ -286,11 +295,25 @@ function ParetoChart({ rows, measureLabel, groupLabel, total, barsTo80 }) {
           color: C.am,
           lineWidth: 2,
           marker: { enabled: true, radius: 4, symbol: "circle" },
+          dataLabels: {
+            enabled: true,
+            crop: false,
+            overflow: "allow",
+            style: {
+              fontSize: "11px",
+              fontWeight: "700",
+              color: C.am,
+              textOutline: "none",
+            },
+            formatter: function () {
+              return fmtNum(this.y, 1) + "%";
+            },
+          },
           data: cumulative,
         },
       ],
     };
-  }, [rows, measureLabel, groupLabel, total, barsTo80]);
+  }, [rows, measureLabel, groupLabel, barsTo80]);
 
   return <HighchartsReact highcharts={Highcharts} options={options} />;
 }
@@ -700,12 +723,12 @@ function ParetoView({
                 rows={barRows}
                 measureLabel={activeMeasure.label}
                 groupLabel={groupLabel}
-                total={measureTotal}
                 barsTo80={rowsTo80}
               />
               <ChartCaption>
                 Bars = {activeMeasure.label.toLowerCase()} (additive) · amber
-                line = cumulative % of scope
+                line = cumulative % of displayed total
+                {" · axes scaled to the displayed rows' cumulative total"}
                 {!aggregate && (viewBy === "machine" || machine)
                   ? " · small figure = that row's own Breakdown %"
                   : ""}
