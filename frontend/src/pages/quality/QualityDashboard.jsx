@@ -18,11 +18,13 @@ import {
   Select,
   useTheme,
 } from "@mui/material";
+import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
+import SouthEastIcon from "@mui/icons-material/SouthEast";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import Sparkline from "@/components/production/Sparkline.jsx";
@@ -44,8 +46,12 @@ import {
   getProcessKpiHistory,
   getProcessSummary,
   getProductChildren,
+  getProductHistory,
+  getProductKpiHistory,
   getProductSummary,
+  getCuringScrapHistory,
   getCuringScrapRows,
+  getQualityAsOf,
   getSpcDetail,
   getSpcFilterOptions,
   getSpcTrend,
@@ -677,7 +683,8 @@ function TrendChart({
     padR = 16,
     padT = 14,
     padB = 30;
-  const allVals = [...series, target];
+  const hasTarget = Number.isFinite(target);
+  const allVals = hasTarget ? [...series, target] : [...series];
   const min = Math.min(...allVals),
     max = Math.max(...allVals);
   const rng = max - min || Math.abs(max) * 0.1 || 1;
@@ -727,25 +734,29 @@ function TrendChart({
         );
       })}
       <polygon points={area} fill={color} opacity="0.08" />
-      <line
-        x1={padL}
-        y1={y(target)}
-        x2={padL + cw}
-        y2={y(target)}
-        stroke={C.am}
-        strokeWidth="1.5"
-        strokeDasharray="5,4"
-      />
-      <text
-        x={padL + cw - 4}
-        y={y(target) - 5}
-        fontSize="9"
-        fill={C.am}
-        fontWeight="700"
-        textAnchor="end"
-      >
-        Target {fmt2(target)}
-      </text>
+      {hasTarget && (
+        <>
+          <line
+            x1={padL}
+            y1={y(target)}
+            x2={padL + cw}
+            y2={y(target)}
+            stroke={C.am}
+            strokeWidth="1.5"
+            strokeDasharray="5,4"
+          />
+          <text
+            x={padL + cw - 4}
+            y={y(target) - 5}
+            fontSize="9"
+            fill={C.am}
+            fontWeight="700"
+            textAnchor="end"
+          >
+            Target {fmt2(target)}
+          </text>
+        </>
+      )}
       <polyline
         points={pts}
         fill="none"
@@ -2653,13 +2664,22 @@ function LiveProcessTrendPanel({
   dateTo,
   shift,
   granularity,
+  fetchHistory = getProcessKpiHistory,
 }) {
+  // Presets resolve around the date the panel was opened for, not a fixed
+  // workbook snapshot, so "Month" means the month the user is looking at.
+  const presetAnchor = dateTo || QUALITY_DATA_DATE;
+  const presetMonth = monthRangeFromKey(presetAnchor.slice(0, 7));
+  const presetYear = {
+    from: `${presetAnchor.slice(0, 4)}-01-01`,
+    to: `${presetAnchor.slice(0, 4)}-12-31`,
+  };
   const initialPreset =
     dateFrom === dateTo
       ? "day"
-      : dateFrom === QUALITY_MONTH_FROM && dateTo === QUALITY_MONTH_TO
+      : dateFrom === presetMonth.from && dateTo === presetMonth.to
         ? "month"
-        : dateFrom === "2026-01-01" && dateTo === "2026-12-31"
+        : dateFrom === presetYear.from && dateTo === presetYear.to
           ? "year"
           : "";
   const [rangePreset, setRangePreset] = useState(initialPreset);
@@ -2678,14 +2698,14 @@ function LiveProcessTrendPanel({
   const applyTrendPreset = (preset) => {
     setRangePreset(preset);
     if (preset === "day") {
-      setTrendFrom(QUALITY_DATA_DATE);
-      setTrendTo(QUALITY_DATA_DATE);
+      setTrendFrom(presetAnchor);
+      setTrendTo(presetAnchor);
     } else if (preset === "month") {
-      setTrendFrom(QUALITY_MONTH_FROM);
-      setTrendTo(QUALITY_MONTH_TO);
+      setTrendFrom(presetMonth.from);
+      setTrendTo(presetMonth.to);
     } else if (preset === "year") {
-      setTrendFrom("2026-01-01");
-      setTrendTo("2026-12-31");
+      setTrendFrom(presetYear.from);
+      setTrendTo(presetYear.to);
     }
   };
   const onTrendFromChange = (e) => {
@@ -2702,7 +2722,7 @@ function LiveProcessTrendPanel({
     setLoading(true);
     setError(null);
     setPoints([]);
-    getProcessKpiHistory({
+    fetchHistory({
       kpiName: kpi.trendKpiName,
       dateFrom: trendFrom,
       dateTo: trendTo,
@@ -2726,7 +2746,7 @@ function LiveProcessTrendPanel({
     return () => {
       cancelled = true;
     };
-  }, [kpi?.trendKpiName, trendFrom, trendTo, shift, granularity]);
+  }, [kpi?.trendKpiName, trendFrom, trendTo, shift, granularity, fetchHistory]);
   if (!kpi) return null;
   const labels = points.map((p) => toDisplayDate(p.date) ?? "");
   const series = points.map((p) => Number(p.value));
@@ -2809,7 +2829,7 @@ function LiveProcessTrendPanel({
             </div>
             <div style={{ fontSize: 12, color: C.mu, marginTop: 2 }}>
               {trendFrom} to {trendTo} ·{" "}
-              {shift === "All" ? "DAY" : `SHIFT ${shift}`}
+              {granularity ?? (shift === "All" ? "DAY" : `SHIFT ${shift}`)}
             </div>
           </div>
           <button
@@ -3063,7 +3083,7 @@ function LiveProcessTrendPanel({
               <TrendChart
                 labels={labels}
                 series={series}
-                target={target}
+                target={isNaN(targetNum) ? null : targetNum}
                 color={stCol}
                 bestIdx={ins.bestIdx}
                 worstIdx={ins.worstIdx}
@@ -4550,13 +4570,23 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
   const canDrill = Boolean(kpi.drill);
   const Icon =
     QUALITY_KPI_ICON[kpi.id] ?? (isPct ? TaskAltOutlinedIcon : GridViewIcon);
+  const caption = hasValue
+    ? [kpi.metricLabel, kpi.periodLabel].filter(Boolean).join(" · ")
+    : "";
   const footnote = !hasValue
     ? (kpi.emptyReason ?? (kpi.na ? "Not available yet" : null))
-    : kpi.metricLabel
-      ? kpi.metricLabel
-      : kpi.target
-        ? `Target ${kpi.target}`
+    : kpi.target
+      ? `Target ${kpi.target}`
+      : kpi.metricLabel && !kpi.periodLabel
+        ? kpi.metricLabel
         : null;
+  const trendPct = hasValue ? kpi.trendPct : null;
+  const hasTrend = Number.isFinite(trendPct);
+  const trendColor = !hasTrend
+    ? theme.palette.text.secondary
+    : trendPct === 0 || trendPct > 0 !== Boolean(kpi.lowerIsBetter)
+      ? theme.custom.status.green
+      : theme.custom.status.red;
   const iconButtonSx = {
     p: 0.25,
     color: "text.secondary",
@@ -4654,33 +4684,51 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
         spacing={1}
         sx={{ my: 0.25, minWidth: 0 }}
       >
-        <Stack
-          direction="row"
-          alignItems="baseline"
-          spacing={0.75}
-          sx={{ minWidth: 0 }}
-        >
-          <Typography
-            sx={{
-              fontSize: { xs: 24, md: 26, lg: 28 },
-              fontWeight: 800,
-              lineHeight: 1.1,
-              color: hasValue ? cardTheme.textColor : "text.disabled",
-              whiteSpace: "nowrap",
-            }}
+        <Stack sx={{ minWidth: 0, flex: 1 }}>
+          <Stack
+            direction="row"
+            alignItems="baseline"
+            spacing={0.75}
+            sx={{ minWidth: 0 }}
           >
-            {value}
-          </Typography>
-          {hasValue && kpi.u && !isPct && (
             <Typography
               sx={{
-                fontSize: 13,
-                fontWeight: 500,
-                color: "text.secondary",
+                fontSize: { xs: 24, md: 26, lg: 28 },
+                fontWeight: 800,
+                lineHeight: 1.1,
+                color: hasValue ? cardTheme.textColor : "text.disabled",
                 whiteSpace: "nowrap",
               }}
             >
-              {kpi.u}
+              {value}
+            </Typography>
+            {hasValue && kpi.u && !isPct && (
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {kpi.u}
+              </Typography>
+            )}
+          </Stack>
+          {caption && (
+            <Typography
+              title={caption}
+              sx={{
+                mt: 0.25,
+                fontSize: 11,
+                fontWeight: 500,
+                color: "text.secondary",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {caption}
             </Typography>
           )}
         </Stack>
@@ -4742,18 +4790,48 @@ function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
         spacing={1}
         sx={{ mt: 0.5, minHeight: 22 }}
       >
-        <Typography
-          sx={{
-            fontSize: 12.5,
-            fontWeight: 500,
-            color: "text.secondary",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {footnote}
-        </Typography>
+        {hasTrend ? (
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.5}
+            sx={{ minWidth: 0 }}
+          >
+            {trendPct >= 0 ? (
+              <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
+            ) : (
+              <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
+            )}
+            <Typography
+              sx={{ fontSize: 13, fontWeight: 700, color: trendColor }}
+            >
+              {`${trendPct > 0 ? "+" : ""}${trendPct.toFixed(1)}%`}
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: "text.secondary",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {kpi.trendBaseline ?? "vs prev"}
+            </Typography>
+          </Stack>
+        ) : (
+          <Typography
+            sx={{
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: "text.secondary",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {footnote}
+          </Typography>
+        )}
         <Stack direction="row" alignItems="center" spacing={0.5}>
           {canTrend && (
             <Tooltip title="View trend" arrow>
@@ -7669,11 +7747,75 @@ const PRODUCT_KPIS = [
   { id: "eg", n: "E-Grade Count" },
   // Deliberately mirrors the Curing → Quality → Scrap KPI in Production;
   // this is a gold-backed quantity, not a newly-derived percentage.
-  { id: "sc", n: "Scrap", productionSource: "curingScrap" },
+  {
+    id: "sc",
+    n: "Scrap",
+    productionSource: "curingScrap",
+    lowerIsBetter: true,
+  },
   { id: "cta", n: "CTA Compliance" },
 ];
 
 /* Product drill-downs are rendered by LiveProductDrillPanel below. */
+
+// Card sparklines span this many periods of the selected granularity, ending
+// at the selected period — the same 8-point window Production's cards use.
+const PRODUCT_HISTORY_PERIODS = 8;
+const PRODUCT_HISTORY_KPIS = PRODUCT_KPIS.map((k) => k.sourceKpi).filter(
+  Boolean,
+);
+
+/** Trailing [from, to] window for Product card history at `granularity`. */
+function productHistoryWindow(date, granularity) {
+  const back = PRODUCT_HISTORY_PERIODS - 1;
+  const [y, m] = String(date).split("-").map(Number);
+  if (granularity === "MONTH") {
+    const from = new Date(Date.UTC(y, m - 1 - back, 1));
+    return { from: from.toISOString().slice(0, 10), to: date };
+  }
+  if (granularity === "YEAR") return { from: `${y - back}-01-01`, to: date };
+  return { from: offsetIsoDate(date, -back), to: date };
+}
+
+/** Human label for the period a Product card value denotes. */
+function productPeriodLabel(date, granularity, shift) {
+  const [y, m] = String(date).split("-").map(Number);
+  if (granularity === "MONTH") {
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", {
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }
+  if (granularity === "YEAR") return String(y);
+  const shiftKey = String(shift).toUpperCase();
+  const day = toDisplayDate(date);
+  return ["A", "B", "C"].includes(shiftKey)
+    ? `${day} · Shift ${shiftKey}`
+    : day;
+}
+
+/**
+ * Sparkline values and the latest-vs-previous % change for one card, from
+ * an ascending `{date, value}` series. The change is only reported when the
+ * newest point is the selected period, so it never compares stale rows.
+ */
+function productTrendFromPoints(points, date) {
+  const valid = (Array.isArray(points) ? points : []).filter(
+    (p) => p.value != null && Number.isFinite(Number(p.value)),
+  );
+  const sp = valid.map((p) => Number(p.value));
+  const last = valid[valid.length - 1];
+  if (!last || String(last.date).slice(0, 10) !== date || sp.length < 2) {
+    return { sp: sp.length >= 2 ? sp : null, trendPct: null };
+  }
+  const prev = sp[sp.length - 2];
+  const curr = sp[sp.length - 1];
+  return {
+    sp,
+    trendPct: prev === 0 ? null : ((curr - prev) / Math.abs(prev)) * 100,
+  };
+}
 
 const COMPLAINT_KPIS = [
   {
@@ -14082,7 +14224,11 @@ function QualityDashboard({ plant, onBack }) {
   const [processSummary, setProcessSummary] = useState(null);
   const [productSummary, setProductSummary] = useState(null);
   const [curingScrapRows, setCuringScrapRows] = useState(null);
+  const [productHistory, setProductHistory] = useState({});
+  const [scrapHistory, setScrapHistory] = useState([]);
   const [productLoading, setProductLoading] = useState(false);
+  const [qualityAsOf, setQualityAsOf] = useState(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const processGranularity =
     tf === "month" ? "MONTH" : tf === "year" ? "YEAR" : null;
   const processDate = tf === "month" || tf === "year" ? tfFrom : tfTo;
@@ -14090,6 +14236,19 @@ function QualityDashboard({ plant, onBack }) {
   // while this tab is active, and all SPC API calls receive only `date`.
   const spcFrom = null;
   const spcTo = null;
+  const productWindow = productHistoryWindow(processDate, processGranularity);
+
+  useEffect(() => {
+    let cancelled = false;
+    getQualityAsOf()
+      .then((res) => {
+        if (!cancelled) setQualityAsOf(res?.asOf ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (tab !== "process") return;
@@ -14109,6 +14268,7 @@ function QualityDashboard({ plant, onBack }) {
           out[id] = { value: vals[name] === undefined ? null : vals[name] };
         }
         setLiveProcess(out);
+        setLastUpdatedAt(new Date());
       })
       .catch(() => {
         if (!cancelled) {
@@ -14139,9 +14299,33 @@ function QualityDashboard({ plant, onBack }) {
         shift,
         granularity: processGranularity,
       }),
+      getProductHistory({
+        kpiNames: PRODUCT_HISTORY_KPIS,
+        dateFrom: productWindow.from,
+        dateTo: productWindow.to,
+        shift,
+        granularity: processGranularity,
+      }),
+      getCuringScrapHistory({
+        dateFrom: productWindow.from,
+        dateTo: productWindow.to,
+        shift,
+        granularity: processGranularity,
+      }),
     ])
-      .then(([productResult, scrapResult]) => {
+      .then(([productResult, scrapResult, historyResult, scrapHistResult]) => {
         if (cancelled) return;
+        setProductHistory(
+          historyResult.status === "fulfilled"
+            ? historyResult.value?.series || {}
+            : {},
+        );
+        setScrapHistory(
+          scrapHistResult.status === "fulfilled"
+            ? scrapHistResult.value?.points || []
+            : [],
+        );
+        if (productResult.status === "fulfilled") setLastUpdatedAt(new Date());
         setProductSummary(
           productResult.status === "fulfilled"
             ? productResult.value || { values: {} }
@@ -14197,6 +14381,17 @@ function QualityDashboard({ plant, onBack }) {
         kpiDefs: [CURING_SCRAP_KPI],
       })[0]
     : null;
+  const periodLabel = productPeriodLabel(
+    processDate,
+    processGranularity,
+    shift,
+  );
+  const trendBaseline =
+    processGranularity === "MONTH"
+      ? "vs prev month"
+      : processGranularity === "YEAR"
+        ? "vs prev year"
+        : "vs prev day";
   const productCards = PRODUCT_KPIS.map((kpi) => {
     if (kpi.productionSource === "curingScrap") {
       if (!curingScrapCard || curingScrapCard.value == null) {
@@ -14208,13 +14403,18 @@ function QualityDashboard({ plant, onBack }) {
       }
       return {
         ...kpi,
+        ...productTrendFromPoints(scrapHistory, processDate),
         v: String(curingScrapCard.value),
         u: curingScrapCard.unit || "",
         status: curingScrapCard.status || null,
-        sp: null,
         na: false,
         live: true,
         drill: "curingScrap",
+        periodLabel,
+        trendBaseline,
+        trendApi: true,
+        trendKpiName: "Scrap",
+        fetchTrendHistory: getCuringScrapHistory,
       };
     }
     if (!kpi.sourceKpi) {
@@ -14234,12 +14434,17 @@ function QualityDashboard({ plant, onBack }) {
     }
     return {
       ...kpi,
+      ...productTrendFromPoints(productHistory[kpi.sourceKpi], processDate),
       v: String(live.actual_value),
       u: live.unit || (kpi.id === "gtw" ? "%" : ""),
       status: null,
-      sp: null,
       na: false,
       live: true,
+      periodLabel,
+      trendBaseline,
+      trendApi: true,
+      trendKpiName: kpi.sourceKpi,
+      fetchTrendHistory: getProductKpiHistory,
       drill:
         kpi.id === "gtw"
           ? "paintWeight"
@@ -14452,8 +14657,8 @@ function QualityDashboard({ plant, onBack }) {
         shift={headerShift}
         onShiftChange={onHeaderShiftChange}
         onExport={onHeaderExport}
-        asOf={null}
-        lastUpdatedAt={null}
+        asOf={qualityAsOf}
+        lastUpdatedAt={lastUpdatedAt}
         categoryTabs={subTabItems.map((t) => ({
           id: t.id,
           label: t.label,
@@ -14605,10 +14810,17 @@ function QualityDashboard({ plant, onBack }) {
         <LiveProcessTrendPanel
           kpi={trendKpi}
           onClose={() => setTrendKpi(null)}
-          dateFrom={tfFrom}
-          dateTo={processGranularity ? processDate : tfTo}
+          dateFrom={trendKpi.fetchTrendHistory ? productWindow.from : tfFrom}
+          dateTo={
+            trendKpi.fetchTrendHistory
+              ? productWindow.to
+              : processGranularity
+                ? processDate
+                : tfTo
+          }
           shift={shift}
           granularity={processGranularity}
+          fetchHistory={trendKpi.fetchTrendHistory}
         />
       )}
     </Box>

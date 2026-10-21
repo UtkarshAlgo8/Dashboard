@@ -4,11 +4,14 @@ import { runQuery } from "../datasource/index.js";
 import { resolveGranularity } from "../normalize.js";
 import {
   isAllowedProductDrillKpi,
+  isProductCardKpi,
   productChildrenQuery,
+  productHistoryQuery,
   productSummaryQuery,
 } from "../queries/product.queries.js";
 import {
   toProductChildren,
+  toProductHistory,
   toProductSummary,
 } from "../transformers/product.transformers.js";
 
@@ -79,6 +82,42 @@ export async function getProductChildren(req, res, next) {
       async () =>
         toProductChildren(
           await runQuery(productChildrenQuery({ kpiNames, date, granularity })),
+        ),
+      CACHE_TTL.QUALITY_PROCESS,
+    );
+    res.json({ context: contextOf(req.query, granularity), ...body });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /quality/product/history?kpi_names=a,b&date_from=&date_to=&granularity=|shift=
+ *
+ * Card-level series feeding the Product sparklines and trend modal. Only the
+ * canonical card KPIs are accepted, so drill rows cannot be read through it.
+ */
+export async function getProductHistory(req, res, next) {
+  try {
+    const { date_from: from, date_to: to } = req.query;
+    const kpiNames = parseNameList(req.query.kpi_names);
+    if (!from || !to || !kpiNames.length) {
+      return badRequest(res, "`kpi_names`, `date_from` and `date_to` are required.");
+    }
+    if (kpiNames.some((name) => !isProductCardKpi(name))) {
+      return badRequest(res, "`kpi_names` contains a KPI outside the Product cards.");
+    }
+    const granularity = resolveGranularity(req.query);
+    if (!granularity) {
+      return badRequest(res, `Unsupported granularity: ${req.query.granularity}`);
+    }
+    const key = buildCacheKey("/quality/product/history", req.query);
+    const body = await cached(
+      key,
+      async () =>
+        toProductHistory(
+          await runQuery(productHistoryQuery({ kpiNames, from, to, granularity })),
+          kpiNames,
         ),
       CACHE_TTL.QUALITY_PROCESS,
     );

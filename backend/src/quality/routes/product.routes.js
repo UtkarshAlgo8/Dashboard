@@ -3,6 +3,7 @@ import { Router } from "express";
 
 import {
   getProductChildren,
+  getProductHistory,
   getProductSummary,
 } from "../controllers/product.controller.js";
 
@@ -10,3 +11,4 @@ export const router = Router();
 
 router.get("/summary", getProductSummary);
 router.get("/children", getProductChildren);
+router.get("/history", getProductHistory);

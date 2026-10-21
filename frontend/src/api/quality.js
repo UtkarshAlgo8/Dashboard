@@ -119,30 +119,106 @@ const CURING_SCRAP_DRILL_KPIS = [
   "Scrap_m_sku",
 ];
 
+function curingScrapGranularity(shift, granularity) {
+  const normalizedShift = String(shift).trim().toUpperCase();
+  return (
+    granularity ||
+    (["A", "B", "C"].includes(normalizedShift)
+      ? `SHIFT ${normalizedShift}`
+      : "DAY")
+  );
+}
+
 export function getCuringScrapRows({
   date,
   shift = "All",
   granularity,
   includeDrill = false,
 }) {
-  const normalizedShift = String(shift).trim().toUpperCase();
-  const resolvedGranularity =
-    granularity ||
-    (["A", "B", "C"].includes(normalizedShift)
-      ? `SHIFT ${normalizedShift}`
-      : "DAY");
   return client.post("/dashboard/kpi-data", {
     plantId: "banmore",
     context: {
       section: "Curing",
       category: "Quality",
-      granularity: resolvedGranularity,
+      granularity: curingScrapGranularity(shift, granularity),
     },
     date,
     landingKpis: ["Scrap"],
     ...(includeDrill ? { drillKpis: CURING_SCRAP_DRILL_KPIS } : {}),
     limit: includeDrill ? 5000 : 100,
   });
+}
+
+/**
+ * Curing Scrap card series over [dateFrom, dateTo], in the trend panel's
+ * `{ points }` shape. Banmore publishes one landing Scrap row per date, so a
+ * repeated date keeps its first row rather than summing.
+ * @returns {Promise<{points: {date: string, value: number|null}[]}>}
+ */
+export function getCuringScrapHistory({
+  dateFrom,
+  dateTo,
+  shift = "All",
+  granularity,
+}) {
+  return client
+    .post("/dashboard/kpi-data", {
+      plantId: "banmore",
+      context: {
+        section: "Curing",
+        category: "Quality",
+        granularity: curingScrapGranularity(shift, granularity),
+      },
+      from: dateFrom,
+      to: dateTo,
+      landingKpis: ["Scrap"],
+      limit: 1000,
+    })
+    .then((rows) => {
+      const byDate = new Map();
+      for (const row of Array.isArray(rows) ? rows : []) {
+        const date = String(row.date ?? "").slice(0, 10);
+        if (!date || byDate.has(date)) continue;
+        const value = Number(row.actual_value);
+        byDate.set(date, Number.isFinite(value) ? value : null);
+      }
+      const points = [...byDate]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([date, value]) => ({ date, value }));
+      return { points };
+    });
+}
+
+/**
+ * Card-level series for several Product KPIs in one call (sparklines).
+ * @returns {Promise<{series: Record<string, {date: string, value: number|null}[]>}>}
+ */
+export function getProductHistory({
+  kpiNames,
+  dateFrom,
+  dateTo,
+  shift = "All",
+  granularity,
+}) {
+  const params = new URLSearchParams({
+    plant: "BANMORE",
+    kpi_names: kpiNames.join(","),
+    date_from: dateFrom,
+    date_to: dateTo,
+    shift,
+  });
+  if (granularity) params.set("granularity", granularity);
+  return cachedQualityGet(`/quality/product/history?${params.toString()}`);
+}
+
+/**
+ * One Product KPI's series, in the `{ points }` shape the trend panel reads
+ * (same shape as getProcessKpiHistory).
+ */
+export function getProductKpiHistory({ kpiName, ...window }) {
+  return getProductHistory({ kpiNames: [kpiName], ...window }).then((res) => ({
+    points: res?.series?.[kpiName] ?? [],
+  }));
 }
 
 /**

@@ -13,7 +13,7 @@ import {
   DATE_YYYYMMDD,
   isoToYyyymmdd,
 } from "../normalize.js";
-import { qualitySourceForDate } from "./gold-source.js";
+import { qualitySourceForDate, qualitySourceForRange } from "./gold-source.js";
 
 export const PRODUCT_CATEGORY = "Uniformity Testing";
 export const PRODUCT_CARD_KPIS = [
@@ -115,5 +115,26 @@ export function productChildrenQuery({ kpiNames, date, granularity }) {
     `AND granularity = ${escapeLiteral(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))} ` +
     "ORDER BY kpi_name ASC, machine ASC"
+  );
+}
+
+export function isProductCardKpi(kpiName) {
+  return PRODUCT_CARD_KPIS.includes(kpiName);
+}
+
+/**
+ * Card-level series for sparklines and the trend modal: the overall row of
+ * each requested card KPI at one granularity, dated within [from, to].
+ * `kpiNames` must have been checked against PRODUCT_CARD_KPIS by the caller.
+ */
+export function productHistoryQuery({ kpiNames, from, to, granularity }) {
+  return (
+    `SELECT date, kpi_name, actual_value FROM ${qualitySourceForRange(from, to, granularity)} ` +
+    `WHERE ${scopedKpiPredicate(kpiNames)} ` +
+    `AND ${granularityAllowListPredicate()} ` +
+    `AND granularity = ${escapeLiteral(granularity)} ` +
+    `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+    `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))} ` +
+    "ORDER BY date ASC"
   );
 }

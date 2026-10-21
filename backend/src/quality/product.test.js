@@ -5,12 +5,15 @@ import { resolveGranularity } from "./normalize.js";
 import {
   PRODUCT_CARD_KPIS,
   isAllowedProductDrillKpi,
+  isProductCardKpi,
   productChildrenQuery,
+  productHistoryQuery,
   productScopePredicate,
   productSummaryQuery,
 } from "./queries/product.queries.js";
 import {
   toProductChildren,
+  toProductHistory,
   toProductSummary,
 } from "./transformers/product.transformers.js";
 
@@ -136,4 +139,46 @@ test("Product transformers preserve empty card states and row drill metadata", (
 
 test("Product respects the same shift granularity normalization as Process", () => {
   assert.equal(resolveGranularity({ shift: "B" }), "SHIFT B");
+});
+
+test("Product history reads a dated card series at one granularity", () => {
+  const sql = productHistoryQuery({
+    kpiNames: ["Mtms_Uniformity_Yield", "Paint_Wt_Within3_Pct_overall"],
+    from: "2026-10-13",
+    to: "2026-10-20",
+    granularity: "DAY",
+  });
+  assert.match(sql, /SELECT date, kpi_name, actual_value/);
+  assert.match(sql, /granularity = 'DAY'/);
+  assert.match(sql, />= '20261013'/);
+  assert.match(sql, /<= '20261020'/);
+  assert.match(sql, /category = 'Uniformity Testing'/);
+  assert.match(sql, /section = 'Final Finish'/);
+  assert.match(sql, /ORDER BY date ASC$/);
+});
+
+test("Product history only accepts card KPIs, not drill rows", () => {
+  assert.equal(isProductCardKpi("Mtms_Uniformity_Yield"), true);
+  assert.equal(isProductCardKpi("Mtms_Uniformity_Yield_m"), false);
+  assert.equal(isProductCardKpi("Paint_Wt_Spec_Kg_sku"), false);
+});
+
+test("Product history groups rows per KPI and keeps empty series", () => {
+  const { series } = toProductHistory(
+    [
+      { date: "2026-10-12", kpi_name: "Tuo_Uniformity_Yield", actual_value: 98.29 },
+      { date: "2026-10-11", kpi_name: "Tuo_Uniformity_Yield", actual_value: 97.92 },
+      { date: "2026-10-11", kpi_name: "Tuo_Uniformity_Yield", actual_value: 97.95 },
+      { date: "2026-10-11", kpi_name: "Unrequested_Kpi", actual_value: "1" },
+      { date: "2026-10-12", kpi_name: "Tuo_Uniformity_Yield", actual_value: null },
+    ],
+    ["Tuo_Uniformity_Yield", "Zf_Uniformity_Yield"],
+  );
+  assert.deepEqual(series, {
+    Tuo_Uniformity_Yield: [
+      { date: "2026-10-11", value: 97.95 },
+      { date: "2026-10-12", value: null },
+    ],
+    Zf_Uniformity_Yield: [],
+  });
 });

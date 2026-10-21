@@ -112,7 +112,7 @@ app.use("/api/v1/mail", gate, mailRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
 //   /api/v1/quality/process/{kpi-value,kpi-value-batch,kpi-children,kpi-history}
-//   /api/v1/quality/product/{summary,children}
+//   /api/v1/quality/product/{summary,children,history}
 //   /api/v1/quality/spc/{summary,filter-options,widgets,detail,*-observations}
 app.use("/api/v1/quality/process", gate, qualityProcessRouter);
 app.use("/api/v1/quality/product", gate, qualityProductRouter);

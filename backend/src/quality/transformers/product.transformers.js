@@ -40,3 +40,23 @@ export function toProductSummary(rows) {
 export function toProductChildren(rows) {
   return { rows: rows.map(toProductRow) };
 }
+
+/**
+ * Group history rows into one ascending series per requested KPI. A date
+ * repeated for one KPI keeps its last row, matching toProductSummary.
+ */
+export function toProductHistory(rows, kpiNames) {
+  const byKpi = new Map(kpiNames.map((name) => [name, new Map()]));
+  for (const row of rows) {
+    const points = byKpi.get(row.kpi_name);
+    if (!points) continue;
+    points.set(String(row.date), valueOrNull(row.actual_value));
+  }
+  const series = {};
+  for (const [name, points] of byKpi) {
+    series[name] = [...points]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([date, value]) => ({ date, value }));
+  }
+  return { series };
+}
