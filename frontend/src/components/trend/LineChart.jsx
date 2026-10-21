@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Box, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
+import { formatCompactNumber, withUnit } from "@/lib/numberFormat.js";
 import ChartLegend from "./ChartLegend.jsx";
 import { buildTrendLegend } from "./trendLegend.js";
 
@@ -83,7 +84,7 @@ function LineChart({ labels, values, unit, target }) {
         labels: {
           style: { color: colors.text, fontSize: "11px" },
           formatter: function () {
-            return unit ? `${this.value}${unit}` : this.value;
+            return withUnit(formatCompactNumber(this.value), unit);
           },
         },
         plotLines:
@@ -97,7 +98,7 @@ function LineChart({ labels, values, unit, target }) {
                   dashStyle: "Dash",
                   zIndex: 4,
                   label: {
-                    text: `Target ${target}${unit ?? ""}`,
+                    text: `Target ${withUnit(formatCompactNumber(target), unit)}`,
                     align: "right",
                     style: {
                       color: colors.target,
@@ -133,9 +134,7 @@ function LineChart({ labels, values, unit, target }) {
             },
             formatter: function () {
               if (this.y == null) return null;
-              return typeof this.y === "number" && !Number.isInteger(this.y)
-                ? this.y.toFixed(1)
-                : this.y;
+              return formatCompactNumber(this.y);
             },
           },
         },

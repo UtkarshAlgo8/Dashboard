@@ -2,9 +2,13 @@
  * Scheduler Adherence mail (Daily Infiniti Scheduler metrics, JK BTP Curing).
  *
  *   GET  /mail/scheduler-adherence/preview?date=YYYY-MM-DD
- *   POST /mail/scheduler-adherence/send  { date }
+ *   POST /mail/scheduler-adherence/send
+ *        { date, manual: { gt, rc4, mixing }, mode: "official" | "custom", to, cc }
  *
- * Recipients are fixed by MAIL_TO / MAIL_CC; the dashboard only confirms.
+ * "official" sends to MAIL_TO / MAIL_CC from env; the client's to/cc are
+ * ignored. "custom" sends to the to/cc typed in the pop-up (for checking the
+ * mail before the official send) and is logged as a test, so it never counts
+ * as the day's official send.
  *
  * The mail ignores the dashboard's filters: always Banmore, Curing, All
  * Product Types, for the chosen report (plant) day. Send re-reads the values
@@ -12,7 +16,7 @@
  */
 import { config } from "../config.js";
 import { getCuringMailValues, MAIL_FIELDS } from "../mail/curing-kpis.js";
-import { renderSchedulerMail } from "../mail/template.js";
+import { renderSchedulerMail, DEFAULT_MANUAL_FULFILMENT } from "../mail/template.js";
 import { sendMail, missingSmtpSettings } from "../mail/mailer.js";
 import { logSend, lastSent } from "../mail/send-log.js";
 
@@ -64,13 +68,50 @@ function parseReportDay(raw) {
   return day;
 }
 
+function parseList(raw) {
+  const list = Array.isArray(raw) ? raw : String(raw ?? "").split(/[,;\s]+/);
+  return [...new Set(list.map((e) => String(e).trim()).filter(Boolean))];
+}
+
+/** Row-3 manual percentages, or an error message. */
+function parseManual(raw) {
+  const out = {};
+  for (const [key, label] of [["gt", "GT Building"], ["rc4", "4RC"], ["mixing", "Mixing"]]) {
+    const v = raw?.[key];
+    const n = typeof v === "number" ? v : Number.parseFloat(v);
+    if (v === "" || v == null || !Number.isFinite(n) || n < 0 || n > 100) {
+      return { error: `${label} % must be a number from 0 to 100.` };
+    }
+    out[key] = n;
+  }
+  return { manual: out };
+}
+
+/** Problems with a recipient list; empty when it can be sent to. */
+function recipientProblems(to, cc, { custom }) {
+  const problems = [];
+  if (!to.length) problems.push(custom ? "Add at least one To address." : "No recipients configured (MAIL_TO).");
+  const all = [...to, ...cc];
+  const bad = all.filter((e) => !EMAIL_RE.test(e));
+  if (bad.length) problems.push(`Invalid email address: ${bad.join(", ")}.`);
+  const domains = config.mail.customAllowedDomains;
+  if (custom && domains.length) {
+    const outside = all.filter((e) => EMAIL_RE.test(e) && !domains.includes(e.split("@")[1].toLowerCase()));
+    if (outside.length) problems.push(`Not an allowed domain (${domains.join(", ")}): ${outside.join(", ")}.`);
+  }
+  return problems;
+}
+
 function canSend(user) {
   const roles = config.mail.sendRoles;
   return !roles.length || roles.includes(user?.role);
 }
 
-/** Values + rendered mail + data check for one report day. */
-async function buildMail(reportDay) {
+/**
+ * Values + rendered mail + data check for one report day. Recipient checks
+ * are separate — they depend on official vs custom.
+ */
+async function buildMail(reportDay, manual = DEFAULT_MANUAL_FULFILMENT) {
   const { values, sources, errors } = await getCuringMailValues(reportDay);
   const problems = [...errors];
   // TEMPORARY (2026-10-15): allow sending before the plant day closes, so the
@@ -83,10 +124,6 @@ async function buildMail(reportDay) {
   if (missing.length) problems.push(`Missing values: ${missing.join(", ")}.`);
   const smtp = missingSmtpSettings();
   if (smtp.length) problems.push(`Mail server not configured: ${smtp.join(", ")}.`);
-  const recipients = [...config.mail.to, ...config.mail.cc];
-  if (!config.mail.to.length) problems.push("No recipients configured (MAIL_TO).");
-  const bad = recipients.filter((e) => !EMAIL_RE.test(e));
-  if (bad.length) problems.push(`Invalid recipient address: ${bad.join(", ")}.`);
 
   return {
     reportDate: reportDay,
@@ -95,7 +132,7 @@ async function buildMail(reportDay) {
     // Values read from the temporary snapshot rather than gold.
     fromSnapshot: Object.values(sources).includes("snapshot"),
     dataCheck: { ok: problems.length === 0, problems },
-    ...renderSchedulerMail(values, reportDay),
+    ...renderSchedulerMail(values, reportDay, manual),
   };
 }
 
@@ -109,8 +146,14 @@ export async function getPreview(req, res, next) {
     res.json({
       data: {
         ...mail,
-        to: config.mail.to,
-        cc: config.mail.cc,
+        defaultDate: defaultReportDay(),
+        manualDefaults: DEFAULT_MANUAL_FULFILMENT,
+        official: {
+          to: config.mail.to,
+          cc: config.mail.cc,
+          problems: recipientProblems(config.mail.to, config.mail.cc, { custom: false }),
+        },
+        customAllowedDomains: config.mail.customAllowedDomains,
         alreadySent: sentForDay,
       },
     });
@@ -119,40 +162,44 @@ export async function getPreview(req, res, next) {
   }
 }
 
-/** Sends to the configured MAIL_TO / MAIL_CC only — the client cannot pick recipients. */
 export async function postSend(req, res, next) {
   try {
     if (!canSend(req.user)) return fail(res, 403, "FORBIDDEN", "You are not allowed to send this mail.");
-    const reportDay = parseReportDay(req.body?.date);
+    const body = req.body ?? {};
+    const reportDay = parseReportDay(body.date);
     if (!reportDay) return fail(res, 400, "VALIDATION_ERROR", "date must be YYYY-MM-DD.");
-    const { to, cc } = config.mail;
+    const { manual, error } = parseManual(body.manual);
+    if (error) return fail(res, 400, "VALIDATION_ERROR", error);
 
-    const mail = await buildMail(reportDay);
+    const custom = body.mode === "custom";
+    const to = custom ? parseList(body.to) : config.mail.to;
+    const cc = custom ? parseList(body.cc) : config.mail.cc;
+    const badRecipients = recipientProblems(to, cc, { custom });
+    if (badRecipients.length) {
+      return fail(res, 400, "INVALID_RECIPIENTS", "The mail was not sent.", { problems: badRecipients });
+    }
+
+    const mail = await buildMail(reportDay, manual);
     if (!mail.dataCheck.ok) {
       return fail(res, 422, "DATA_CHECK_FAILED", "The mail was not sent.", { problems: mail.dataCheck.problems });
     }
 
+    // Custom sends are checks before the official one: logged as tests so
+    // they never show up as "already sent".
+    const log = { reportDate: reportDay, isTest: custom, user: req.user, to, cc, values: { ...mail.values, manual } };
     let result;
     try {
       result = await sendMail({ to, cc, subject: mail.subject, html: mail.html, text: mail.text });
     } catch (err) {
-      await logSend({ reportDate: reportDay, isTest: false, status: "failed", user: req.user, to, cc, values: mail.values, error: err.message });
+      await logSend({ ...log, status: "failed", error: err.message });
       return fail(res, 502, "SEND_FAILED", `Mail server rejected the send: ${err.message}`);
     }
 
-    await logSend({
-      reportDate: reportDay,
-      isTest: false,
-      status: "sent",
-      user: req.user,
-      to,
-      cc,
-      values: mail.values,
-      messageId: result.messageId,
-    });
+    await logSend({ ...log, status: "sent", messageId: result.messageId });
     res.json({
       data: {
         sent: true,
+        mode: custom ? "custom" : "official",
         messageId: result.messageId,
         accepted: result.accepted,
         rejected: result.rejected,

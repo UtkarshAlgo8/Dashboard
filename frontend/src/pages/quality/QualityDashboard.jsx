@@ -16,8 +16,18 @@ import {
   IconButton,
   MenuItem,
   Select,
+  useTheme,
 } from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import GridViewIcon from "@mui/icons-material/GridView";
+import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
+import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
+import Sparkline from "@/components/production/Sparkline.jsx";
+import { getKpiCardTheme } from "@/lib/thresholds.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
 import jkLogo from "@/assets/jk-logo.png";
 import JKLoader from "@/components/JKLoader.jsx";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
@@ -4495,236 +4505,293 @@ function ControlChart({ data, ucl, lcl, target, w = 240, h = 80 }) {
   );
 }
 
+// The Production KpiCard's tier (green / amber / red) for a Quality card.
+// An explicit accent wins over the status, as it always has here; anything
+// else (counts, missing values) is the neutral card.
+function qualityCardTier(kpi) {
+  const color = kpi.accentColor;
+  if (color === C.gn || (!color && kpi.status === "Green")) return "green";
+  if (color === C.am || (!color && kpi.status === "Yellow")) return "amber";
+  if (color === C.rd || (!color && kpi.status === "Red")) return "red";
+  return null;
+}
+
+const QUALITY_KPI_ICON = {
+  pqr: FactCheckOutlinedIcon,
+  audit: FactCheckOutlinedIcon,
+  mqv: ReportProblemOutlinedIcon,
+  ndev: ReportProblemOutlinedIcon,
+};
+
+/**
+ * Quality KPI card, built on the Production dashboard's KpiCard so the two
+ * pages read as one product: same tiered background, icon + title header,
+ * value with its unit, progress bar, and trend / drill icons in the footer.
+ */
 function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
-  const stCol =
-    kpi.accentColor ||
-    (kpi.status === "Red"
-      ? C.rd
-      : kpi.status === "Yellow"
-        ? C.am
-        : kpi.status === "Green"
-          ? C.gn
-          : "#9CA3AF");
+  const theme = useTheme();
+  const tier = qualityCardTier(kpi);
+  const cardTheme = getKpiCardTheme(theme, tier);
   const v = tAdjust(kpi.v, kpi.n, tyreType, plant);
   const numVal = numericKpiValue(v);
-  const progressPct =
-    numVal == null
-      ? 0
-      : kpi.u === "%"
-        ? Math.max(0, Math.min(100, numVal))
-        : Math.max(0, Math.min(100, numVal > 0 ? 100 : 0));
+  const hasValue = numVal != null;
+  const isPct = kpi.u === "%";
+  const progressPct = !hasValue
+    ? 0
+    : isPct
+      ? Math.max(0, Math.min(100, numVal))
+      : numVal > 0
+        ? 100
+        : 0;
+  const value = hasValue
+    ? `${formatIndianNumber(numVal)}${isPct ? "%" : ""}`
+    : "–";
   const canTrend = !kpi.na && kpi.trendApi && typeof onTrend === "function";
-  const trendClick = (e) => {
-    e.stopPropagation();
-    if (onTrend) onTrend(kpi);
+  const canDrill = Boolean(kpi.drill);
+  const Icon =
+    QUALITY_KPI_ICON[kpi.id] ?? (isPct ? TaskAltOutlinedIcon : GridViewIcon);
+  const footnote = !hasValue
+    ? (kpi.emptyReason ?? (kpi.na ? "Not available yet" : null))
+    : kpi.target
+      ? `Target ${kpi.target}`
+      : null;
+  const iconButtonSx = {
+    p: 0.25,
+    color: "text.secondary",
+    "&:hover": { color: "primary.main" },
   };
+
   return (
-    <div
-      onClick={onToggle}
-      style={{
-        background: productionCardBg(stCol),
-        borderRadius: 10,
-        border: "1px solid " + (isOpen ? C.bl : stCol + "35"),
-        boxShadow: isOpen
-          ? "0 4px 14px rgba(0,0,0,.08)"
-          : "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
-        cursor: kpi.drill ? "pointer" : "default",
-        overflow: "hidden",
-        transition:
-          "border-color .15s ease, box-shadow .15s ease, transform .15s ease",
-        minHeight: 136,
+    <Box
+      onClick={canDrill ? onToggle : undefined}
+      role={canDrill ? "button" : undefined}
+      tabIndex={canDrill ? 0 : undefined}
+      aria-expanded={canDrill ? isOpen : undefined}
+      onKeyDown={
+        canDrill
+          ? (e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onToggle();
+              }
+            }
+          : undefined
+      }
+      sx={{
+        position: "relative",
+        containerType: "inline-size",
+        backgroundColor: cardTheme.cardBg,
+        border: isOpen ? 2 : 1,
+        borderColor: isOpen ? "primary.main" : `${cardTheme.sparkColor}30`,
+        borderRadius: 2.5,
+        p: 1.75,
+        minWidth: 0,
+        boxShadow: isOpen ? "0 4px 14px rgba(0,0,0,0.08)" : theme.custom.shadow,
+        cursor: canDrill ? "pointer" : "default",
+        transition: "all 0.15s ease",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
+        minHeight: 136,
+        "&:hover": canDrill ? { boxShadow: "0 4px 12px rgba(0,0,0,0.06)" } : {},
+        "&:focus-visible": {
+          outline: "2px solid",
+          outlineColor: "primary.main",
+          outlineOffset: 2,
+        },
       }}
     >
-      <div style={{ padding: "14px 16px" }}>
-        <div
-          style={{
-            marginBottom: 8,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 6,
+      {/* Header: icon + title */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        sx={{ mb: 0.75, minWidth: 0 }}
+      >
+        <Icon
+          sx={{
+            fontSize: 20,
+            color: hasValue ? cardTheme.iconColor : "text.disabled",
+            flexShrink: 0,
+          }}
+        />
+        <Typography
+          title={kpi.n}
+          sx={{
+            fontSize: 15,
+            fontWeight: 700,
+            color: "text.primary",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 15,
-              color: C.tx,
-              fontWeight: 700,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                width: 20,
-                height: 20,
-                borderRadius: 6,
-                background: stCol + "16",
-                color: stCol,
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 8,
-                fontSize: 12,
-                verticalAlign: "middle",
-              }}
-            >
-              {kpi.id === "pqr"
-                ? "Q"
-                : kpi.id === "audit"
-                  ? "✓"
-                  : kpi.id === "mqv"
-                    ? "!"
-                    : "•"}
-            </span>
-            {kpi.n}
-            {kpi.manual && (
-              <span
-                style={{
-                  marginLeft: 4,
-                  fontSize: 11,
-                  padding: "1px 4px",
-                  background: "#9CA3AF22",
-                  color: "#6B7280",
-                  borderRadius: 3,
-                }}
-              >
-                MANUAL
-              </span>
-            )}
-          </span>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
+          {kpi.n}
+        </Typography>
+        {kpi.manual && (
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "text.secondary",
               flexShrink: 0,
             }}
           >
-            {canTrend && (
-              <button
-                onClick={trendClick}
-                title="View Trend (Daily / Monthly / Yearly)"
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 7,
-                  border: "1px solid " + C.bd,
-                  background: C.cd,
-                  color: C.bl,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 0,
-                }}
-              >
-                <TrendIcon size={11} />
-              </button>
-            )}
-            {kpi.drill && (
-              <span
-                title="Click card to drill down"
-                style={{
-                  color: isOpen ? C.bl : C.mu,
-                  transform: isOpen ? "rotate(180deg)" : "",
-                  transition: "transform .2s",
-                  fontSize: 13,
-                }}
-              >
-                {"▼"}
-              </span>
-            )}
-          </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span
-              style={{
-                fontSize: 28,
-                fontWeight: 800,
-                color: stCol,
-                lineHeight: 1.1,
-              }}
-            >
-              {v}
-            </span>
-            {kpi.u && (
-              <span style={{ fontSize: 13, color: C.mu, fontWeight: 600 }}>
-                {kpi.u}
-              </span>
-            )}
-          </div>
-          {kpi.sp && (
-            <span
-              onClick={canTrend ? trendClick : undefined}
-              title={
-                canTrend ? "View Trend (Daily / Monthly / Yearly)" : undefined
-              }
-              style={{
-                cursor: canTrend ? "pointer" : "default",
-                display: "inline-flex",
-                alignItems: "center",
-              }}
-            >
-              <Spark data={kpi.sp} color={stCol} />
-            </span>
-          )}
-        </div>
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            minHeight: 22,
-          }}
-        >
-          {kpi.target && (
-            <span style={{ fontSize: 12, color: C.mu, fontWeight: 500 }}>
-              Target: {kpi.target}
-            </span>
-          )}
-          {kpi.status && <StatusPill status={kpi.status} />}
-        </div>
-        {kpi.emptyReason && (
-          <div style={{ marginTop: 8, fontSize: 12, color: C.mu }}>
-            {kpi.emptyReason}
-          </div>
+            Manual
+          </Typography>
         )}
-        <div
-          style={{
-            marginTop: 10,
-            height: 5,
-            borderRadius: 999,
-            background: "rgba(15,23,42,.10)",
+      </Stack>
+
+      {/* Value + unit, sparkline on the right when there is one */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+        sx={{ my: 0.25, minWidth: 0 }}
+      >
+        <Stack
+          direction="row"
+          alignItems="baseline"
+          spacing={0.75}
+          sx={{ minWidth: 0 }}
+        >
+          <Typography
+            sx={{
+              fontSize: { xs: 24, md: 26, lg: 28 },
+              fontWeight: 800,
+              lineHeight: 1.1,
+              color: hasValue ? cardTheme.textColor : "text.disabled",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {value}
+          </Typography>
+          {hasValue && kpi.u && !isPct && (
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: "text.secondary",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {kpi.u}
+            </Typography>
+          )}
+        </Stack>
+        {hasValue && Array.isArray(kpi.sp) && kpi.sp.length >= 2 && (
+          <Box
+            sx={{
+              flexShrink: 0,
+              ml: 1,
+              "@container (max-width: 215px)": { display: "none" },
+            }}
+          >
+            <Sparkline
+              data={kpi.sp}
+              color={cardTheme.sparkColor}
+              width={70}
+              height={22}
+              onClick={
+                canTrend
+                  ? (e) => {
+                      e.stopPropagation();
+                      onTrend(kpi);
+                    }
+                  : undefined
+              }
+            />
+          </Box>
+        )}
+      </Stack>
+
+      {/* Progress bar */}
+      {!isOpen && (
+        <Box
+          sx={{
+            width: "100%",
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: cardTheme.trackColor,
             overflow: "hidden",
+            my: 0.75,
           }}
         >
-          <div
-            style={{
-              width: progressPct + "%",
+          <Box
+            sx={{
+              width: `${progressPct}%`,
               height: "100%",
-              borderRadius: 999,
-              background: stCol,
+              borderRadius: 3,
+              background: cardTheme.barGradient || cardTheme.barColor,
+              transition: "width 0.4s ease",
             }}
           />
-        </div>
-      </div>
-    </div>
+        </Box>
+      )}
+
+      {/* Footer: target or why the value is missing; trend + drill icons */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+        sx={{ mt: 0.5, minHeight: 22 }}
+      >
+        <Typography
+          sx={{
+            fontSize: 12.5,
+            fontWeight: 500,
+            color: "text.secondary",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {footnote}
+        </Typography>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          {canTrend && (
+            <Tooltip title="View trend" arrow>
+              <IconButton
+                size="small"
+                aria-label={`View ${kpi.n} trend`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTrend(kpi);
+                }}
+                sx={iconButtonSx}
+              >
+                <ShowChartIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {canDrill && (
+            <Tooltip
+              title={isOpen ? "Close drill-down" : "Open drill-down"}
+              arrow
+            >
+              <IconButton
+                size="small"
+                aria-label={`${isOpen ? "Close" : "Open"} ${kpi.n} drill-down`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle();
+                }}
+                sx={{
+                  ...iconButtonSx,
+                  color: isOpen ? "primary.main" : "text.secondary",
+                }}
+              >
+                <TableChartOutlinedIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+      </Stack>
+    </Box>
   );
 }
 
@@ -14003,7 +14070,7 @@ function QualityDashboard({ plant, onBack }) {
         return {
           ...toNaKpi(kpi),
           v: "—",
-          emptyReason: "No gold data available",
+          emptyReason: "No data for this period",
         };
       }
       return {
@@ -14021,7 +14088,7 @@ function QualityDashboard({ plant, onBack }) {
       return {
         ...toNaKpi(kpi),
         v: "—",
-        emptyReason: "No gold data available",
+        emptyReason: "No data for this period",
       };
     }
     const live = productSummary?.values?.[kpi.sourceKpi];
@@ -14029,7 +14096,7 @@ function QualityDashboard({ plant, onBack }) {
       return {
         ...toNaKpi(kpi),
         v: "—",
-        emptyReason: "No gold data available",
+        emptyReason: "No data for this period",
       };
     }
     return {
@@ -14184,16 +14251,13 @@ function QualityDashboard({ plant, onBack }) {
     />
   );
 
+  // Group heading in the Production section-title style (sentence case,
+  // primary text) so the Product tab reads like the Production dashboard.
   const productSectionHeading = (label) => (
-    <Box sx={{ gridColumn: "1 / -1", mb: -0.5 }}>
+    <Box sx={{ gridColumn: "1 / -1", mb: -0.5, mt: 0.5 }}>
       <Typography
-        sx={{
-          color: "text.secondary",
-          fontSize: 12,
-          fontWeight: 800,
-          letterSpacing: ".8px",
-          textTransform: "uppercase",
-        }}
+        component="h2"
+        sx={{ color: "text.primary", fontSize: 17, fontWeight: 700 }}
       >
         {label}
       </Typography>

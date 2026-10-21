@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Box, Stack, Typography, useTheme } from "@mui/material";
 import DataTable from "@/components/tables/DataTable.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
@@ -17,17 +17,50 @@ function deviationColor(v, theme) {
   return theme.palette.text.secondary;
 }
 
-/** Display-only over/under card: quantity, % of schedule, SKU count. */
-function OverUnderCard({ card }) {
+// Cards that describe the same values as the table below them act as
+// filters on it: Overproduction keeps the SKUs made above schedule,
+// Underproduction those below it. The MTD cards of a day view summarise a
+// different period than the day's table, so they stay display-only.
+const CARD_FILTERS = {
+  dailyOver: (r) => r.deviation > 0,
+  dailyUnder: (r) => r.deviation < 0,
+};
+
+/**
+ * Over/under card: quantity, % of schedule, SKU count. Clickable when
+ * `onClick` is given; `active` marks the filter currently applied.
+ */
+function OverUnderCard({ card, onClick, active, accent }) {
+  const clickable = Boolean(onClick);
   return (
     <Box
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-pressed={clickable ? active : undefined}
+      onClick={onClick}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       sx={{
-        border: 1,
-        borderColor: "divider",
+        border: active ? 2 : 1,
+        borderColor: active ? accent : "divider",
         borderRadius: 2,
-        p: 1.5,
+        p: active ? "11px" : 1.5,
         backgroundColor: "background.paper",
         minWidth: 0,
+        cursor: clickable ? "pointer" : "default",
+        transition: "border-color 120ms",
+        ...(clickable && {
+          "&:hover": { borderColor: accent },
+          "&:focus-visible": { outline: 2, outlineColor: accent },
+        }),
       }}
     >
       <Typography
@@ -83,7 +116,18 @@ export default function SkuFulfilmentDrillPanel({
 }) {
   const theme = useTheme();
   const cardRef = useRef(null);
-  const rows = useMemo(() => model?.table ?? [], [model]);
+  const cards = model?.cards ?? [];
+  const [cardFilter, setCardFilter] = useState(null);
+  // A filter whose card is gone (the view changed to a month) no longer
+  // applies.
+  const activeFilter =
+    cardFilter && cards.some((c) => c.id === cardFilter && !c.noSchedule)
+      ? cardFilter
+      : null;
+  const rows = useMemo(() => {
+    const table = model?.table ?? [];
+    return activeFilter ? table.filter(CARD_FILTERS[activeFilter]) : table;
+  }, [model, activeFilter]);
 
   const totals = useMemo(() => {
     let scheduled = 0;
@@ -174,7 +218,10 @@ export default function SkuFulfilmentDrillPanel({
     .filter(Boolean)
     .join(" · ");
 
-  const cards = model?.cards ?? [];
+  const accentFor = (id) =>
+    id === "dailyOver"
+      ? (theme.custom?.status?.green ?? theme.palette.success.main)
+      : (theme.custom?.status?.red ?? theme.palette.error.main);
 
   return (
     <Stack spacing={2} sx={{ position: "relative" }}>
@@ -236,9 +283,25 @@ export default function SkuFulfilmentDrillPanel({
                 },
               }}
             >
-              {cards.map((c) => (
-                <OverUnderCard key={c.id} card={c} />
-              ))}
+              {cards.map((c) => {
+                const filterable = Boolean(CARD_FILTERS[c.id]) && !c.noSchedule;
+                return (
+                  <OverUnderCard
+                    key={c.id}
+                    card={c}
+                    accent={accentFor(c.id)}
+                    active={activeFilter === c.id}
+                    onClick={
+                      filterable
+                        ? () =>
+                            setCardFilter((prev) =>
+                              prev === c.id ? null : c.id,
+                            )
+                        : undefined
+                    }
+                  />
+                );
+              })}
             </Box>
             <DataTable
               columns={columns}
@@ -246,7 +309,9 @@ export default function SkuFulfilmentDrillPanel({
               getRowKey={(r) => r.sku}
               searchPlaceholder="Search SKU code…"
               emptyMessage={
-                model.main.note ?? "No SKU rows for this selection."
+                activeFilter
+                  ? `No ${activeFilter === "dailyOver" ? "overproduced" : "underproduced"} SKUs for this selection.`
+                  : (model.main.note ?? "No SKU rows for this selection.")
               }
               footerRow={rows.length ? footerRow : null}
             />

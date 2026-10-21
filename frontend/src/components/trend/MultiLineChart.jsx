@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Box, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
+import { formatCompactNumber, withUnit } from "@/lib/numberFormat.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle — normalise both
 // the direct default and the wrapped default. Mirrors LineChart.jsx so
@@ -117,7 +118,7 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
           // a single axis, so the axis label stays unitless. Per-series
           // tooltips carry the unit; the legend does too.
           formatter: function () {
-            return unit ? `${this.value}${unit}` : this.value;
+            return withUnit(formatCompactNumber(this.value), unit);
           },
         },
         plotLines:
@@ -131,7 +132,7 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
                   dashStyle: "Dash",
                   zIndex: 4,
                   label: {
-                    text: `Target ${target}${unit ?? ""}`,
+                    text: `Target ${withUnit(formatCompactNumber(target), unit)}`,
                     align: "right",
                     style: {
                       color: amber,
@@ -166,9 +167,7 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
             },
             formatter: function () {
               if (this.y == null) return null;
-              return typeof this.y === "number" && !Number.isInteger(this.y)
-                ? this.y.toFixed(1)
-                : this.y;
+              return formatCompactNumber(this.y);
             },
           },
         },

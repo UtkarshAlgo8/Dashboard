@@ -358,81 +358,66 @@ function DowntimeDrillPanel({
           />
         ) : (
           <>
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{
-                mb: 1.5,
-                p: 1.5,
-                backgroundColor: theme.custom.surface.soft,
-                borderRadius: 1.25,
-              }}
-            >
-              <Typography
+            {/* BTP drops this total: it summed per-reason fleet averages,
+                each over a different machine count, so it never matched
+                the Total Downtime card. CTP's raw machine-minute sum stays. */}
+            {ctpProduction && (
+              <Stack
+                direction="row"
+                spacing={1}
                 sx={{
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  color: "text.primary",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.6,
-                  flex: 1,
+                  mb: 1.5,
+                  p: 1.5,
+                  backgroundColor: theme.custom.surface.soft,
+                  borderRadius: 1.25,
                 }}
               >
-                Total Downtime (selected window)
-              </Typography>
-              <Tooltip
-                title={
-                  ctpProduction
-                    ? selectedMachine
+                <Typography
+                  sx={{
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: "text.primary",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.6,
+                    flex: 1,
+                  }}
+                >
+                  Total Downtime (selected window)
+                </Typography>
+                <Tooltip
+                  title={
+                    selectedMachine
                       ? `Total downtime recorded by ${selectedMachine} in this window.`
                       : `Sum of the scoped reason values in ${sectionName}; simultaneous downtime on different machines adds together.`
-                    : selectedMachine
-                      ? `Total downtime recorded by ${selectedMachine} in this window.`
-                      : machineCount > 0
-                        ? `Machines go down at the same time, so their minutes cannot simply be added. Each reason below is averaged over the machines that reported THAT reason — this total is the sum of those per-reason fleet averages, spanning ${machineCount} machines in ${sectionName} overall.`
-                        : "Average downtime per machine for this window."
-                }
-                arrow
-              >
-                <Stack alignItems="flex-end">
-                  <Typography
-                    sx={{
-                      fontSize: 16,
-                      fontWeight: 700,
-                      color: "primary.main",
-                    }}
-                  >
-                    {formatIndianNumber(
-                      ctpProduction ? totalDowntime : Math.round(totalDowntime),
-                    )} min
-                  </Typography>
-                  {!selectedMachine && machineCount > 0 && !ctpProduction && (
+                  }
+                  arrow
+                >
+                  <Stack alignItems="flex-end">
                     <Typography
                       sx={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "text.secondary",
-                        mt: 0.25,
+                        fontSize: 16,
+                        fontWeight: 700,
+                        color: "primary.main",
                       }}
                     >
-                      sum of per-reason fleet averages
+                      {formatIndianNumber(totalDowntime)} min
                     </Typography>
-                  )}
-                  {!selectedMachine && machineCount > 0 && ctpProduction && (
-                    <Typography
-                      sx={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "text.secondary",
-                        mt: 0.25,
-                      }}
-                    >
-                      sum across machines
-                    </Typography>
-                  )}
-                </Stack>
-              </Tooltip>
-            </Stack>
+                    {!selectedMachine && machineCount > 0 && (
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "text.secondary",
+                          mt: 0.25,
+                        }}
+                      >
+                        sum across machines
+                      </Typography>
+                    )}
+                  </Stack>
+                </Tooltip>
+              </Stack>
+            )}
             <DataTable
               columns={reasonColumns}
               rows={reasonRows}

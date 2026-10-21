@@ -1,6 +1,7 @@
 /**
- * Renders the Daily Infiniti Scheduler mail exactly like the manual one:
- * greeting, one-line intro, a 4-column table with 5 KPI rows, sign-off.
+ * Renders the Daily Infiniti Scheduler mail: greeting, one-line intro, a
+ * 6-column table (#, KPI, Definition, BTP, CTP-PCR, CTP-TBR) with 5 KPI rows,
+ * and the auto-generated note.
  * Only the values and the report date change day to day.
  */
 
@@ -14,17 +15,41 @@ export function reportDayLabels(reportDay) {
   return { short, long: `${short}-${y}`, spaced: `${d} ${mon} ${y}` };
 }
 
-// Daily Schedule Fulfillment % for the other sections. Not automated yet, so
-// entered by hand — update these until they are read from gold.
 const AUTO_NOTE =
-  "Note: This is an auto-generated email from the Production Dashboard. Please do not reply to this email.";
-
-const MANUAL_FULFILMENT = "GT Building 81.90%, 4RC 70.06%, Mixing 44.85%";
+  "Note: This is an auto-generated email. Please do not reply to this email.";
 
 const NA = "not available";
 
 function pct(v) {
   return v == null ? NA : `${Number(v).toFixed(2)}%`;
+}
+
+// Daily Schedule Fulfillment % for the other sections in row 3. Not automated
+// yet: entered in the send pop-up for each mail. These are only its defaults.
+export const DEFAULT_MANUAL_FULFILMENT = { gt: 81.9, rc4: 70.06, mixing: 44.85 };
+
+// CTP-PCR / CTP-TBR columns: fixed text for now, one cell per table row
+// (rows 1-5). Not automated and not editable from the pop-up — change here.
+// Current values: provided for the 20-Oct mail.
+const CTP_VALUES = {
+  pcr: [
+    "10.88% across 15 SKUs",
+    "6.92% across 14 SKUs",
+    "Curing: 94.19%; Building: 88.80%",
+    "1,042 tyres, 12 SKUs",
+    "756 tyres, 10 SKUs",
+  ],
+  tbr: [
+    "13.90% across 14 SKUs",
+    "9.31% across 13 SKUs",
+    "Curing: 84.29%; Building: 81.72%",
+    "548 tyres, 12 SKUs",
+    "503 tyres, 13 SKUs",
+  ],
+};
+
+function manualFulfilment(m) {
+  return `GT Building ${pct(m.gt)}, 4RC ${pct(m.rc4)}, Mixing ${pct(m.mixing)}`;
 }
 
 function qty(v) {
@@ -43,8 +68,8 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;");
 }
 
-/** The 5 table rows: [kpi, definition, btp value]. */
-function rows(v, short) {
+/** The 5 table rows: [kpi, definition, btp value]; CTP cells are added by the caller. */
+function rows(v, short, manual) {
   return [
     [
       "MTD Underproduction %",
@@ -59,7 +84,7 @@ function rows(v, short) {
     [
       `Daily Schedule Fulfillment % (${short})`,
       `Actual credited against ${short} schedule at SKU/item/recipe level.`,
-      `Curing ${pct(v.daily_fulfilment_pct)}, ${MANUAL_FULFILMENT}`,
+      `Curing ${pct(v.daily_fulfilment_pct)}, ${manualFulfilment(manual)}`,
     ],
     [
       `Daily Curing Overproduction (${short})`,
@@ -77,44 +102,47 @@ function rows(v, short) {
 /**
  * @param {Record<string, number|null>} values the 9 mail values
  * @param {string} reportDay ISO yyyy-mm-dd
+ * @param {{gt: number, rc4: number, mixing: number}} [manual] row-3 GT Building / 4RC / Mixing %
+ * @param {{pcr: string[], tbr: string[]}} [ctp] the CTP-PCR / CTP-TBR cell for each of the 5 rows
  * @returns {{ subject: string, html: string, text: string }}
  */
-export function renderSchedulerMail(values, reportDay) {
+export function renderSchedulerMail(values, reportDay, manual = DEFAULT_MANUAL_FULFILMENT, ctp = CTP_VALUES) {
   const { short, long, spaced } = reportDayLabels(reportDay);
   const intro = `Please find below the Schedule vs Actual metrics through ${spaced}`;
   const subject = `JK BTP – Daily Infiniti Scheduler Metrics – ${long}`;
-  const body = rows(values, short);
+  const body = rows(values, short, manual);
 
   const cell = "border:1px solid #999;padding:6px 10px;vertical-align:top;";
   const head = `${cell}background:#f2f2f2;font-weight:bold;text-align:left;`;
+  const bold = `${cell}font-weight:bold;`;
   const tableRows = body
     .map(
       ([kpi, def, val], i) =>
         `<tr><td style="${cell}">${i + 1}</td><td style="${cell}">${escapeHtml(kpi)}</td>` +
-        `<td style="${cell}">${escapeHtml(def)}</td><td style="${cell}font-weight:bold;">${escapeHtml(val)}</td></tr>`,
+        `<td style="${cell}">${escapeHtml(def)}</td><td style="${bold}">${escapeHtml(val)}</td>` +
+        `<td style="${bold}">${escapeHtml(ctp.pcr[i] ?? "")}</td><td style="${bold}">${escapeHtml(ctp.tbr[i] ?? "")}</td></tr>`,
     )
     .join("");
 
   const html =
     `<div style="font-family:Calibri,Arial,sans-serif;font-size:14px;color:#222;">` +
-    `<p>Dear Sir,</p>` +
+    `<p>Dear Team,</p>` +
     `<p>${escapeHtml(intro)}</p>` +
     `<table style="border-collapse:collapse;font-size:13px;">` +
-    `<colgroup><col style="width:32px"><col style="width:230px"><col style="width:420px"><col style="width:300px"></colgroup>` +
-    `<thead><tr><th style="${head}">#</th><th style="${head}">KPI</th><th style="${head}">Definition</th><th style="${head}">BTP</th></tr></thead>` +
+    `<colgroup><col style="width:32px"><col style="width:230px"><col style="width:420px"><col style="width:300px"><col style="width:220px"><col style="width:220px"></colgroup>` +
+    `<thead><tr><th style="${head}">#</th><th style="${head}">KPI</th><th style="${head}">Definition</th><th style="${head}">BTP</th><th style="${head}">CTP-PCR</th><th style="${head}">CTP-TBR</th></tr></thead>` +
     `<tbody>${tableRows}</tbody></table>` +
-    `<p>Thanks,<br>Algo8</p>` +
     `<p style="font-size:12px;color:#666;">${AUTO_NOTE}</p></div>`;
 
   const text = [
-    "Dear Sir,",
+    "Dear Team,",
     "",
     intro,
     "",
-    ...body.map(([kpi, def, val], i) => `${i + 1}. ${kpi}: ${val}\n   ${def}`),
-    "",
-    "Thanks,",
-    "Algo8",
+    ...body.map(
+      ([kpi, def, val], i) =>
+        `${i + 1}. ${kpi}\n   BTP: ${val}\n   CTP-PCR: ${ctp.pcr[i] ?? ""}\n   CTP-TBR: ${ctp.tbr[i] ?? ""}\n   ${def}`,
+    ),
     "",
     AUTO_NOTE,
   ].join("\n");
