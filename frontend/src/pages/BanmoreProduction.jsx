@@ -467,20 +467,17 @@ function BanmoreProduction() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStock, dashboard.productType, navProductOptions.join("|")]);
 
+  // The page shell needs only the static lookups. The section OEE rings and
+  // the plant card show their own loaders, so the KPI cards (and the shift
+  // comparison under them) no longer wait for the slower summary query.
   const ready =
-    !plantLoading &&
-    plant &&
-    Array.isArray(sections) &&
-    Array.isArray(tabs) &&
-    summary;
+    !plantLoading && plant && Array.isArray(sections) && Array.isArray(tabs);
 
-  const contentLoading =
-    dashboard.category !== "i" &&
-    (kpiLoading || sectionOeeLoading || summaryLoading);
-
-  const bodyLoading =
-    dashboard.category !== "i" && (sectionOeeLoading || summaryLoading);
-  const contentOnlyLoading = contentLoading && !bodyLoading;
+  const contentLoading = dashboard.category !== "i" && kpiLoading;
+  // Banmore's plant OEE is the Curing section's OEE (plantOeeOverride), so its
+  // card also waits for the section OEE.
+  const plantCardLoading =
+    summaryLoading || (isBanmore && sectionOeeLoading);
 
   const [timeRange, setTimeRange] = useState({
     preset: "today",
@@ -792,14 +789,14 @@ function BanmoreProduction() {
                   activeSectionId={dashboard.section}
                   onSelect={onSectionSelect}
                   statsBySectionId={sectionStatsById}
-                  loading={false}
+                  loading={sectionOeeLoading}
                 />
               </Box>
               <PlantSummaryCard
                 plant={plant}
                 summary={summary}
                 oeeOverride={plantOeeOverride}
-                loading={false}
+                loading={plantCardLoading}
               />
             </Stack>
           )}
@@ -1112,7 +1109,7 @@ function BanmoreProduction() {
               )}
             </Box>
 
-            {contentOnlyLoading && (
+            {contentLoading && (
               <Box
                 sx={{
                   position: "absolute",
@@ -1130,21 +1127,6 @@ function BanmoreProduction() {
             )}
           </Box>
 
-          {bodyLoading && (
-            <Box
-              sx={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 5,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "background.default",
-              }}
-            >
-              <JKLoader />
-            </Box>
-          )}
         </Box>
       )}
 
