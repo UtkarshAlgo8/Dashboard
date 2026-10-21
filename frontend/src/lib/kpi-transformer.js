@@ -95,6 +95,19 @@ function sameGran(rowGran, wantGran) {
   return normGran(rowGran) === normGran(wantGran);
 }
 
+/**
+ * Does a card dated `resolvedDate` lag the section's newest anchor (a DAY)?
+ * A MONTH row is always dated the 1st of its month, so at MONTH granularity
+ * it lags only when its month is older than the anchor's month — otherwise
+ * every current-month card would read "as of" the 1st.
+ */
+function lagsAnchor(resolvedDate, anchor, granularity) {
+  if (sameGran(granularity, "MONTH")) {
+    return resolvedDate.slice(0, 7) < anchor.slice(0, 7);
+  }
+  return resolvedDate < anchor;
+}
+
 /* ---------- new_change.md C5: range aggregation class ----------
  * SUM for additive (flow) KPIs, AVERAGE for rate/ratio KPIs, LATEST for
  * stock LEVELS. The lists are EXPLICIT and keyed on kpi_name — never a
@@ -2339,7 +2352,7 @@ export function toKpiGrid(
           ? resolvedDate
           : sectionNewestAnchor &&
               resolvedDate &&
-              resolvedDate < sectionNewestAnchor
+              lagsAnchor(resolvedDate, sectionNewestAnchor, granularity)
             ? resolvedDate
             : null,
         partialDay,
