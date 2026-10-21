@@ -365,7 +365,10 @@ function BanmoreProduction() {
         }));
     },
     {
-      enabled: hasDateRange && dashboard.category === "p",
+      // Wait for the plant lookup (~30 ms, static): until it lands the tyre
+      // line falls back to "PCR", so a CTP page sent this once for PCR, threw
+      // the answer away, and sent it again for "All".
+      enabled: hasDateRange && dashboard.category === "p" && Boolean(plant),
       interval: 0,
       keepPreviousData: true,
       cacheKey: `production:${currentOptionsKey}:product-options`,
