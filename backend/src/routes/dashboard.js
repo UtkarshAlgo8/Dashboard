@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { getLiveRunningSkus } from "../controllers/live-running-skus.controller.js";
 import {
   postDrillAggregate,
   postFetch,
@@ -23,3 +24,5 @@ router.get("/vocab", getVocab);
 // new_change.md C6: per-KPI latest DAY date, so each card anchors to its own
 // newest data instead of one global date that blanks the lagging OEE cards.
 router.get("/anchors", getAnchors);
+// Live Silver data uses its own rolling window, independent of header dates.
+router.get("/live-running-skus", getLiveRunningSkus);

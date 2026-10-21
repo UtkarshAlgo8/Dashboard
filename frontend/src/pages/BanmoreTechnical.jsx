@@ -27,6 +27,9 @@ import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import KpiCard from "@/components/production/KpiCard.jsx";
 import { getAsOf, getPlant } from "@/api/plants.js";
 import { getVocab } from "@/api/dashboard.js";
+import { getLiveRunningSkus } from "@/api/technical.js";
+import LiveRunningSkusDrill from "@/components/technical/LiveRunningSkusDrill.jsx";
+import { LIVE_SKU_NOTE, liveMachineKey } from "@/lib/liveRunningSkus.js";
 import client from "@/api/client.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
@@ -269,6 +272,14 @@ function BanmoreTechnical() {
     staleTime: 15 * 60 * 1000,
   });
 
+  const liveSnapshot = usePolledQuery(getLiveRunningSkus, {
+    enabled: ["stock", "building", "curing"].includes(tab),
+    interval: 60_000,
+    cacheKey: "technical:banmore:live-running-skus",
+    staleTime: 60_000,
+    keepPreviousData: true,
+  });
+
   // Production-tab KPIs (Production) and Quality-tab KPIs (Scrap, NCM Hold)
   // come from separate category fetches — see technicalKpiSources.js.
   const productivity = useDashboardFetch({ plantId: "banmore" });
@@ -450,10 +461,43 @@ function BanmoreTechnical() {
         q: quality.kpis,
         downtime: downtimeKpis,
       };
+  const liveMachines = (liveSnapshot.data?.machines ?? []).filter(
+    (machine) =>
+      machine.section === SECTION_NAMES[section] &&
+      (!subSection || machine.sub_section === subSection) &&
+      (!selectedMachine ||
+        liveMachineKey(machine.machine_id) === liveMachineKey(selectedMachine)),
+  );
+  const runningSkuCard =
+    !liveSnapshot.error && liveSnapshot.data
+      ? {
+          id: "rsku",
+          name: "Current Running SKUs",
+          value: new Set(
+            liveMachines
+              .filter(
+                (machine) =>
+                  machine.machine_status === "Running" && machine.live_sku,
+              )
+              .map((machine) => machine.live_sku),
+          ).size,
+          unit: "SKUs",
+          note: "Live snapshot · last 7 days",
+          hideTrend: true,
+          drillable: true,
+        }
+      : null;
   const mapDisplayKpis = (definitions) =>
     definitions.map((definition) => ({
       definition,
-      live: resolveTechnicalKpi(definition, kpisByCategory),
+      live:
+        definition.id === "rsku"
+          ? runningSkuCard
+          : resolveTechnicalKpi(definition, kpisByCategory),
+      loading:
+        definition.id === "rsku" &&
+        !liveSnapshot.data &&
+        liveSnapshot.isLoading,
     }));
   const displayKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
 
@@ -479,6 +523,15 @@ function BanmoreTechnical() {
   };
 
   const handleDrillKpi = (kpi) => {
+    if (kpi.id === "rsku") {
+      if (openDrillKpiId === "rsku") handleCloseDrill();
+      else {
+        resetProductivityDrill();
+        resetQualityDrill();
+        setOpenDrill({ kpiId: "rsku", scope: drillScope });
+      }
+      return;
+    }
     const source = TECHNICAL_KPI_SOURCES[kpi.id];
     if (!kpi.drillable || !source) return;
     if (openDrillKpiId === kpi.id) {
@@ -500,8 +553,24 @@ function BanmoreTechnical() {
     );
   };
 
-  const drillPanel = openDrillKpi
-    ? (() => {
+  const areaLabel = tab === "stock" ? activeStockArea.label : activeTab?.label;
+  const drillPanel =
+    openDrillKpiId === "rsku" ? (
+      <LiveRunningSkusDrill
+        machines={liveMachines}
+        snapshot={liveSnapshot.data}
+        error={liveSnapshot.error}
+        isLoading={liveSnapshot.isLoading}
+        title={`Current Running SKUs — ${areaLabel}`}
+        breadcrumb={[
+          areaLabel,
+          ...(selectedMachine ? [selectedMachine] : []),
+          "Current Running SKUs",
+        ]}
+        onClose={handleCloseDrill}
+      />
+    ) : openDrillKpi ? (
+      (() => {
         const drillState = drillFetch.state;
         const definition = TECHNICAL_KPI_CATALOG[tab].find(
           (item) => item.id === openDrillKpiId,
@@ -545,7 +614,7 @@ function BanmoreTechnical() {
           </Box>
         );
       })()
-    : null;
+    ) : null;
 
   const handleTimeRangeChange = (updater) => {
     setTimeRange((previous) => {
@@ -585,7 +654,10 @@ function BanmoreTechnical() {
       >
         <Tabs
           value={tab}
-          onChange={(_, value) => setTab(value)}
+          onChange={(_, value) => {
+            setOpenDrill(null);
+            setTab(value);
+          }}
           variant="scrollable"
           scrollButtons="auto"
           aria-label="Technical dashboard sections"
@@ -639,14 +711,20 @@ function BanmoreTechnical() {
           <ScopeSelector
             items={STOCK_AREAS}
             value={stockArea}
-            onChange={setStockArea}
+            onChange={(value) => {
+              setOpenDrill(null);
+              setStockArea(value);
+            }}
           />
         )}
         {tab === "building" && (
           <MachineSelect
             machines={buildingMachines}
             value={selectedMachine ?? ALL_MACHINES}
-            onChange={setBuildingMachine}
+            onChange={(value) => {
+              setOpenDrill(null);
+              setBuildingMachine(value);
+            }}
           />
         )}
 
@@ -668,6 +746,7 @@ function BanmoreTechnical() {
               kpis={displayKpis}
               isLoading={isLiveTab && isLoading}
               error={isLiveTab ? error : null}
+              liveError={liveSnapshot.error}
               openDrillKpiId={openDrillKpiId}
               onDrillKpi={handleDrillKpi}
               onCloseDrill={handleCloseDrill}
@@ -789,6 +868,7 @@ function TechnicalKpiSection({
   kpis,
   isLoading,
   error,
+  liveError,
   openDrillKpiId,
   onDrillKpi,
   onCloseDrill,
@@ -804,34 +884,31 @@ function TechnicalKpiSection({
         </Typography>
       </Stack>
 
-      {isLoading ? (
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-            gap: 1,
-          }}
-        >
-          {Array.from({ length: Math.min(8, kpis.length) }, (_, index) => (
-            <Skeleton key={index} variant="rounded" height={136} />
-          ))}
-        </Box>
-      ) : (
-        <>
-          {error && (
-            <Typography sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}>
-              Live values unavailable: {error.message}
-            </Typography>
-          )}
-          <KpiGrid
-            kpis={kpis}
-            openDrillKpiId={openDrillKpiId}
-            onDrillKpi={onDrillKpi}
-            onCloseDrill={onCloseDrill}
-          />
-        </>
+      {error && (
+        <Typography sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}>
+          Period values unavailable: {error.message}
+        </Typography>
       )}
+      {kpis.some(({ definition }) => definition.id === "rsku") && (
+        <Typography
+          sx={{
+            mb: 1.5,
+            fontSize: 12,
+            color: liveError ? "error.main" : "text.secondary",
+          }}
+          role={liveError ? "alert" : undefined}
+        >
+          {LIVE_SKU_NOTE}
+          {liveError ? ` · Unavailable: ${liveError.message}` : ""}
+        </Typography>
+      )}
+      <KpiGrid
+        kpis={kpis}
+        isLoading={isLoading}
+        openDrillKpiId={openDrillKpiId}
+        onDrillKpi={onDrillKpi}
+        onCloseDrill={onCloseDrill}
+      />
     </Box>
   );
 }
@@ -839,6 +916,7 @@ function TechnicalKpiSection({
 function KpiGrid({
   kpis,
   minWidth = 220,
+  isLoading = false,
   openDrillKpiId = null,
   onDrillKpi,
   onCloseDrill,
@@ -851,8 +929,10 @@ function KpiGrid({
         gap: 1,
       }}
     >
-      {kpis.map(({ definition, live }) =>
-        live && hasKpiValue(live.value) ? (
+      {kpis.map(({ definition, live, loading }) =>
+        loading || (isLoading && definition.id !== "rsku") ? (
+          <Skeleton key={definition.id} variant="rounded" height={136} />
+        ) : live && hasKpiValue(live.value) ? (
           <KpiCard
             key={definition.id}
             kpi={onDrillKpi ? live : { ...live, drillable: false }}

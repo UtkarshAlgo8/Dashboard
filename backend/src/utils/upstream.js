@@ -86,9 +86,14 @@ function unwrapRowsEnvelope(payload) {
  * Run one read query against the upstream.
  *
  * @param {string} sql - Must start with SELECT or WITH.
+ * @param {{engine?: string, tables?: string[]}} [source] Trusted server-side
+ *   overrides for reads from a separate source, without changing Gold defaults.
  * @returns {Promise<Array<Record<string, unknown>>>}
  */
-export async function runQuery(sql) {
+export async function runQuery(
+  sql,
+  { engine = config.upstream.engine, tables = [config.upstream.table] } = {},
+) {
   // Read-only guard. SELECT or WITH (CTE) at the top is OK; anything
   // else gets rejected here before we hit the wire. Defence-in-depth:
   // the upstream Lambda has the same check.
@@ -118,9 +123,9 @@ export async function runQuery(sql) {
         // `engine` selects the upstream query engine (athena | databricks).
         // `tables` is only consumed by the legacy databricks path; Athena
         // ignores it, so we send it unconditionally to serve both engines.
-        engine: config.upstream.engine,
+        engine,
         sql,
-        tables: [config.upstream.table],
+        tables,
       }),
     });
   } catch (err) {
