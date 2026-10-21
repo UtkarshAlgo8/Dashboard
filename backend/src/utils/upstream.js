@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { config } from "../config.js";
 
 /**
@@ -83,6 +84,31 @@ function unwrapRowsEnvelope(payload) {
 }
 
 /**
+ * Per-request upstream timing, read by middlewares/requestLogger.js for the
+ * Server-Timing header and the request log. Queries in one request mostly run
+ * in parallel, so the slowest call is what the request waited for: keep its
+ * wall time and ITS Athena time, so the difference is that call's wait in the
+ * upstream API's queue.
+ */
+const timingStore = new AsyncLocalStorage();
+
+/** Run `fn` with `stats` collecting every upstream call made inside it. */
+export function withUpstreamTiming(stats, fn) {
+  return timingStore.run(stats, fn);
+}
+
+function recordTiming(wallMs, payload) {
+  const stats = timingStore.getStore();
+  if (!stats) return;
+  stats.queries++;
+  if (wallMs < stats.upstreamMs) return;
+  stats.upstreamMs = wallMs;
+  // `queryTimeSeconds` is the upstream's own Athena time for this query.
+  const athenaSec = payload?.queryTimeSeconds;
+  stats.athenaMs = typeof athenaSec === "number" ? athenaSec * 1000 : null;
+}
+
+/**
  * Run one read query against the upstream.
  *
  * @param {string} sql - Must start with SELECT or WITH.
@@ -104,6 +130,7 @@ export async function runQuery(
     });
   }
 
+  const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -152,6 +179,8 @@ export async function runQuery(
       status: 502,
     });
   }
+
+  recordTiming(Date.now() - startedAt, payload);
 
   // Some integrations nest the real payload inside `body`, `data`, `result`,
   // or similar envelopes. Unwrap before inspecting status / rows.
