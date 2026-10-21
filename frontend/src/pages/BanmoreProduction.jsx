@@ -282,7 +282,23 @@ function BanmoreProduction() {
   const prodSubOptions = isBanmore
     ? (PROD_SUB_OPTIONS[dashboard.section] ?? [])
     : [];
-  const sectionDefaultProduct = isBanmore ? SECTION_DEFAULT_PRODUCT : {};
+  // CTP has no fixed list — its pills come from product-options, which picks
+  // the first option. Seeding that same first option lets the first landing
+  // fetch carry it, instead of a fetch without product_type that is redone
+  // once the options arrive. Productivity only: the options (and so this
+  // default) are read on that tab alone. If the seed is ever missing from the
+  // options, the effect below still switches to the first real option.
+  const CTP_DEFAULT_PRODUCT = {
+    mix: "Final Chemical",
+    tbm: "Green Tyre",
+    cur: "Cured Tyre",
+    stk: null,
+  };
+  const sectionDefaultProduct = isBanmore
+    ? SECTION_DEFAULT_PRODUCT
+    : dashboard.category === "p"
+      ? CTP_DEFAULT_PRODUCT
+      : {};
 
   // Tyre lines come from the plant lookup (Banmore: ["PCR"] → the header
   // renders a static badge; CTP: ["All","PCR","TBR"] → a picker). Until it
