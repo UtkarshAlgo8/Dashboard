@@ -30,6 +30,8 @@ import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import Sparkline from "@/components/production/Sparkline.jsx";
 import { getKpiCardTheme } from "@/lib/thresholds.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
+import UniformityTrendModal from "@/components/quality/UniformityTrendModal.jsx";
+import { isUniformityTrendCard } from "@/lib/uniformityTrend.js";
 import jkLogo from "@/assets/jk-logo.png";
 import JKLoader from "@/components/JKLoader.jsx";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
@@ -14445,6 +14447,8 @@ function QualityDashboard({ plant, onBack }) {
       trendApi: true,
       trendKpiName: kpi.sourceKpi,
       fetchTrendHistory: getProductKpiHistory,
+      // Uniformity & Balancing cards open their own spec'd trend views.
+      trendKind: isUniformityTrendCard(kpi.sourceKpi) ? "uniformity" : null,
       drill:
         kpi.id === "gtw"
           ? "paintWeight"
@@ -14806,7 +14810,27 @@ function QualityDashboard({ plant, onBack }) {
           </>
         )}
       </Box>
-      {trendKpi && trendKpi.trendApi && (
+      {trendKpi?.trendKind === "uniformity" && (
+        <UniformityTrendModal
+          key={trendKpi.trendKpiName}
+          open
+          onClose={() => setTrendKpi(null)}
+          cardKpi={trendKpi.trendKpiName}
+          title={trendKpi.n}
+          today={todayInIST()}
+          initialFilter={
+            tf === "today" || tf === "day"
+              ? { preset: "today", shift: String(shift).toLowerCase() }
+              : tf === "month"
+                ? {
+                    preset: "month",
+                    month: tfMonth === currentMonthKeyInIST() ? null : tfMonth,
+                  }
+                : { preset: "custom", from: tfFrom, to: tfTo }
+          }
+        />
+      )}
+      {trendKpi && trendKpi.trendApi && trendKpi.trendKind !== "uniformity" && (
         <LiveProcessTrendPanel
           kpi={trendKpi}
           onClose={() => setTrendKpi(null)}
