@@ -100,6 +100,8 @@ export function getReliabilityKpiChildren({
   order,
   limit,
   agg,
+  // The plot drills show the 'Unmapped' bucket (grey); everything else hides it.
+  includeUnmapped = false,
 }) {
   const params = withScope({
     kpi_names: kpiNames.join(","),
@@ -117,6 +119,7 @@ export function getReliabilityKpiChildren({
     order,
     limit,
     agg,
+    include_unmapped: includeUnmapped ? "1" : null,
   });
   return cachedEngineeringGet(
     `/engineering/reliability/kpi-children?${params}`,

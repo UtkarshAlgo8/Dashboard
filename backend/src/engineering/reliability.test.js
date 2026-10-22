@@ -160,3 +160,52 @@ test("toLossTree: summed range rows retain machine display dimensions", () => {
   assert.equal(out.rows[0].section, "Mixing");
   assert.equal(out.rows[0].status, "A");
 });
+
+test("toLossTree: a tuple group_by sums per (machine, failure, discipline)", () => {
+  const out = toLossTree(
+    [
+      row("LEAKAGE", "2026-08-04", "BreakdownMin_m_Failure", 40),
+      row("LEAKAGE", "2026-08-05", "BreakdownMin_m_Failure", 20),
+      {
+        ...row("LEAKAGE", "2026-08-05", "BreakdownMin_m_Failure", 15),
+        sub_section: "Mechanical",
+      },
+      {
+        ...row("LEAKAGE", "2026-08-05", "BreakdownMin_m_Failure", 5),
+        machine: "",
+      },
+    ],
+    {
+      kpiNames: ["BreakdownMin_m_Failure"],
+      groupBy: "machine,remarks,sub_section",
+    },
+  );
+
+  assert.deepEqual(
+    out.rows.map((r) => [
+      r.machine,
+      r.remarks,
+      r.sub_section,
+      r.BreakdownMin_m_Failure,
+    ]),
+    [
+      ["0201", "LEAKAGE", "Electrical", 60],
+      ["0201", "LEAKAGE", "Mechanical", 15],
+    ],
+  );
+  assert.equal(out.rows[0].status, "A");
+  assert.equal(out.rows[0].section, "Mixing");
+});
+
+test("kpiChildrenQuery: include_unmapped drops the Unmapped exclusion", () => {
+  const base = {
+    kpiNames: ["BreakdownMin_m"],
+    date: "2026-08-01",
+    granularity: "MONTH",
+  };
+  assert.match(kpiChildrenQuery(base), /Unmapped/);
+  assert.doesNotMatch(
+    kpiChildrenQuery({ ...base, includeUnmapped: true }),
+    /Unmapped/,
+  );
+});
