@@ -37,8 +37,6 @@ backend/data/*
 # (copy of frontend/public/temp/curing-sku-fulfilment.json).
 !backend/data/curing-sku-fulfilment.json
 
-# Added by code-review-graph
-.code-review-graph/
 GEMINI.md
 AGENTS.md
 opencode.jsonc
