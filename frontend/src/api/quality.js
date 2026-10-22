@@ -354,3 +354,28 @@ export function getSpcTrend({
   });
   return cachedQualityGet(`/quality/spc/trend?${params.toString()}`);
 }
+
+/**
+ * Unaggregated Uniformity & Balancing rows for the Product trend modal:
+ * `rows` is "plant" (the plant row) or "machine" (one row per machine).
+ * @returns {Promise<{rows: {date, granularity, kpi_name, machine, actual_value, unit}[]}>}
+ */
+export function getUniformityTrend({
+  kpiNames,
+  rows = "plant",
+  granularities,
+  dateFrom,
+  dateTo,
+}) {
+  const params = new URLSearchParams({
+    plant: "BANMORE",
+    kpi_names: kpiNames.join(","),
+    rows,
+    granularities: granularities.join(","),
+    date_from: dateFrom,
+    date_to: dateTo,
+  });
+  return cachedQualityGet(
+    `/quality/product/uniformity-trend?${params.toString()}`,
+  );
+}

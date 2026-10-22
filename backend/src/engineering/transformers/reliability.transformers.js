@@ -129,33 +129,39 @@ export function toKpiChildren(rows, { kpiNames, groupBy }) {
  * @param {{ kpiNames: string[], groupBy: string }} opts
  */
 export function toLossTree(rows, { kpiNames, groupBy }) {
-  const sums = new Map(); // group -> { kpiName: number }
+  // `groupBy` may be a tuple ("machine,remarks,sub_section"): each part stays
+  // its own field, exactly as toKpiChildren returns it.
+  const dims = groupDims(groupBy);
+  const sums = new Map(); // group key -> { kpiName: number }
+  const anchors = new Map(); // group key -> first row of kpiNames[0]
   const order = [];
   for (const r of rows) {
-    const g = r[groupBy];
-    if (g == null || !kpiNames.includes(r.kpi_name)) continue;
-    if (!sums.has(g)) {
-      sums.set(g, {});
-      order.push(g);
+    const key = groupKey(r, dims);
+    if (key == null || !kpiNames.includes(r.kpi_name)) continue;
+    if (!sums.has(key)) {
+      sums.set(key, {});
+      order.push(key);
     }
+    if (r.kpi_name === kpiNames[0] && !anchors.has(key)) anchors.set(key, r);
     const v = valueOrNull(r.actual_value);
     if (v == null) continue;
-    const bucket = sums.get(g);
+    const bucket = sums.get(key);
     bucket[r.kpi_name] = (bucket[r.kpi_name] ?? 0) + v;
   }
-  const outRows = order.map((group) => {
-    const bucket = sums.get(group);
-    const out = { [groupBy]: group };
+  const outRows = order.map((key) => {
+    const bucket = sums.get(key);
+    const out = {};
+    dims.forEach((dim, i) => {
+      out[dim] = key.split(KEY_SEP)[i];
+    });
     for (const name of kpiNames) out[name] = bucket[name] ?? null;
-    const anchorRow = rows.find(
-      (r) => r[groupBy] === group && r.kpi_name === kpiNames[0],
-    );
+    const anchorRow = anchors.get(key);
     out.drill_down = parseDrillDown(anchorRow?.drill_down_attribute);
     // Summed range queries still need the display dimensions used by the
     // machine/section filters. Keep the first stable dimension values from
     // the anchor row without changing the arithmetic of the summed KPIs.
     for (const dim of CARRY_FORWARD_DIMS) {
-      if (dim === groupBy) continue;
+      if (dims.includes(dim)) continue;
       if (anchorRow && anchorRow[dim] != null) out[dim] = anchorRow[dim];
     }
     return out;
