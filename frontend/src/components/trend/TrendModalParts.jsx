@@ -1,10 +1,13 @@
 import {
   Autocomplete,
   Box,
+  Breadcrumbs,
   Dialog,
   DialogContent,
   DialogTitle,
   IconButton,
+  Link,
+  MenuItem,
   Stack,
   TextField,
   ToggleButton,
@@ -249,5 +252,92 @@ export function FilterRow({ label, options, value, onChange, placeholder }) {
         )}
       />
     </Stack>
+  );
+}
+
+// Shared label for the control rows below, matching SingleSelectRow's.
+function RowLabel({ children }) {
+  return (
+    <Typography
+      sx={{
+        fontSize: 11,
+        fontWeight: 700,
+        color: "text.disabled",
+        textTransform: "uppercase",
+        letterSpacing: 0.6,
+        minWidth: 76,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+/**
+ * Single-select dropdowns in one row (e.g. Category · Section). Each filter
+ * is { id, value, onChange, options, allLabel }; "" means "all".
+ */
+export function DropdownRow({ label, filters }) {
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1.5}
+      sx={{ flexWrap: "wrap" }}
+      useFlexGap
+    >
+      <RowLabel>{label}</RowLabel>
+      {filters.map((f) => (
+        <TextField
+          key={f.id}
+          select
+          size="small"
+          value={f.value}
+          onChange={(e) => f.onChange(e.target.value)}
+          sx={{ minWidth: 180 }}
+          SelectProps={{ displayEmpty: true }}
+        >
+          <MenuItem value="">{f.allLabel}</MenuItem>
+          {f.options.map((o) => (
+            <MenuItem key={o} value={o}>
+              {o}
+            </MenuItem>
+          ))}
+        </TextField>
+      ))}
+    </Stack>
+  );
+}
+
+/**
+ * Drill path for a chart that drills on click. `steps` is
+ * [{ label, onClick? }]; the last step is where the chart is, so it is plain
+ * text, and every earlier step goes back to its level.
+ */
+export function DrillBreadcrumb({ steps }) {
+  return (
+    <Breadcrumbs separator="›" sx={{ fontSize: 13 }}>
+      {steps.map((step, i) =>
+        i === steps.length - 1 ? (
+          <Typography
+            key={step.label}
+            sx={{ fontSize: 13, fontWeight: 700, color: "text.primary" }}
+          >
+            {step.label}
+          </Typography>
+        ) : (
+          <Link
+            key={step.label}
+            component="button"
+            type="button"
+            underline="hover"
+            onClick={step.onClick}
+            sx={{ fontSize: 13, fontWeight: 600 }}
+          >
+            {step.label}
+          </Link>
+        ),
+      )}
+    </Breadcrumbs>
   );
 }
