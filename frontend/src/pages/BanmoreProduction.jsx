@@ -495,8 +495,7 @@ function BanmoreProduction() {
   const contentLoading = dashboard.category !== "i" && kpiLoading;
   // Banmore's plant OEE is the Curing section's OEE (plantOeeOverride), so its
   // card also waits for the section OEE.
-  const plantCardLoading =
-    summaryLoading || (isBanmore && sectionOeeLoading);
+  const plantCardLoading = summaryLoading || (isBanmore && sectionOeeLoading);
 
   const [timeRange, setTimeRange] = useState({
     preset: "today",
@@ -1145,7 +1144,6 @@ function BanmoreProduction() {
               </Box>
             )}
           </Box>
-
         </Box>
       )}
 
