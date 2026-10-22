@@ -2,7 +2,11 @@ import { useMemo } from "react";
 import { Box, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
-import { formatCompactNumber, withUnit } from "@/lib/numberFormat.js";
+import {
+  formatCompactNumber,
+  formatIndianNumber,
+  withUnit,
+} from "@/lib/numberFormat.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle — normalise both
 // the direct default and the wrapped default. Mirrors LineChart.jsx so
@@ -30,7 +34,7 @@ const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
  * existing ChartLegend.jsx is single-series, so the legend ships as a
  * Highcharts native one here).
  */
-function MultiLineChart({ labels, series, unit, target, colors }) {
+function MultiLineChart({ labels, series, unit, target, colors, yMin }) {
   const theme = useTheme();
 
   const palette = useMemo(() => {
@@ -60,7 +64,11 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
         : (s.name ?? `Series ${i + 1}`);
       return {
         name: legendName,
-        data: values,
+        // `notes[i]` adds a line under that point in the tooltip (e.g. the
+        // tyres tested behind a machine's yield).
+        data: Array.isArray(s.notes)
+          ? values.map((y, j) => ({ y, note: s.notes[j] ?? null }))
+          : values,
         color,
         tooltip: {
           valueSuffix: seriesUnit ? ` ${seriesUnit}` : "",
@@ -109,6 +117,9 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       },
       yAxis: {
         title: { text: null },
+        // A floor set by the caller (yield lines start just below their
+        // lowest value rather than at 0).
+        ...(yMin != null ? { min: yMin, startOnTick: false } : {}),
         gridLineWidth: 1,
         gridLineColor: grid,
         gridLineDashStyle: "Solid",
@@ -146,6 +157,20 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       tooltip: {
         shared: true,
         useHTML: false,
+        // Only charts that carry notes swap the default point line.
+        ...((Array.isArray(series) ? series : []).some((s) =>
+          Array.isArray(s.notes),
+        )
+          ? {
+              pointFormatter: function () {
+                const suffix = this.series.tooltipOptions.valueSuffix ?? "";
+                const note = this.options?.note
+                  ? ` · ${this.options.note}`
+                  : "";
+                return `<span style="color:${this.color}">●</span> ${this.series.name}: <b>${formatIndianNumber(this.y)}${suffix}</b>${note}<br/>`;
+              },
+            }
+          : {}),
       },
       plotOptions: {
         line: {
@@ -174,7 +199,7 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       },
       series: cleanedSeries,
     };
-  }, [labels, series, unit, target, theme, palette]);
+  }, [labels, series, unit, target, theme, palette, yMin]);
 
   return (
     <Box sx={{ width: "100%" }}>
