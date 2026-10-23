@@ -14640,7 +14640,12 @@ function QualityDashboard({ plant, onBack }) {
           // FIRST so the user's pick reaches onHeaderMonthChange (which sets
           // tfFrom/tfTo/tfMonth from monthRangeFromKey) instead of
           // onHeaderPresetChange (which would hard-reset to the as-of month).
-          if (next?.month !== undefined && next.preset === "month") {
+          // Preset pills clear month to null; only a valid dropdown key
+          // selects a specific month. A reset must use the current month.
+          if (
+            next?.preset === "month" &&
+            /^\d{4}-(0[1-9]|1[0-2])$/.test(next.month)
+          ) {
             onHeaderMonthChange(next.month);
           } else if (next?.preset !== undefined) {
             onHeaderPresetChange({
