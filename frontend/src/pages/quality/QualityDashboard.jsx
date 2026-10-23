@@ -42,6 +42,13 @@ import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import {
+  PAINT_WEIGHT_COLUMNS,
+  PAINT_WEIGHT_DRILL_KPIS,
+  PAINT_WEIGHT_OVERALL,
+  groupPaintWeightRows,
+  paintWeightValue,
+} from "@/lib/paintWeight.js";
+import {
   getProcessKpiChildren,
   getProcessKpiHistory,
   getProcessSummary,
@@ -13962,35 +13969,6 @@ function LiveCuringScrapDrillPanel({ date, shift, granularity, onClose }) {
   );
 }
 
-const PAINT_WEIGHT_COLUMNS = [
-  { label: "Tyre Qty", kpi: "Paint_Wt_Tyre_Qty_sku", decimals: 0 },
-  { label: "Spec Wt (kg)", kpi: "Paint_Wt_Spec_Kg_sku", decimals: 3 },
-  { label: "Avg Wt (kg)", kpi: "Paint_Wt_Avg_Kg_sku", decimals: 3 },
-  { label: "Deviation (kg)", kpi: "Paint_Wt_Dev_Kg_sku", decimals: 3 },
-  { label: "1%", kpi: "Paint_Wt_Within1_Pct_sku", decimals: 2, percent: true },
-  { label: "2%", kpi: "Paint_Wt_Within2_Pct_sku", decimals: 2, percent: true },
-  { label: "3%", kpi: "Paint_Wt_Within3_Pct_sku", decimals: 2, percent: true },
-];
-const PAINT_WEIGHT_OVERALL = [
-  { label: "Within 3%", kpi: "Paint_Wt_Within3_Pct_overall" },
-  { label: "Within 2%", kpi: "Paint_Wt_Within2_Pct_overall" },
-  { label: "Within 1%", kpi: "Paint_Wt_Within1_Pct_overall" },
-];
-const PAINT_WEIGHT_DRILL_KPIS = [
-  ...PAINT_WEIGHT_OVERALL.map((column) => column.kpi),
-  ...PAINT_WEIGHT_COLUMNS.map((column) => column.kpi),
-];
-
-function paintWeightValue(value, decimals = 2, percent = false) {
-  if (value == null || String(value).trim() === "") return "—";
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "—";
-  return (
-    number.toLocaleString("en-IN", { maximumFractionDigits: decimals }) +
-    (percent ? "%" : "")
-  );
-}
-
 function LivePaintWeightDrillPanel({ date, shift, granularity }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14021,28 +13999,7 @@ function LivePaintWeightDrillPanel({ date, shift, granularity }) {
     };
   }, [date, shift, granularity]);
 
-  const overall = new Map();
-  const bySku = new Map();
-  for (const row of rows) {
-    if (PAINT_WEIGHT_OVERALL.some((column) => column.kpi === row.kpi_name)) {
-      overall.set(row.kpi_name, row.actual_value);
-    } else if (row.itemcode) {
-      if (!bySku.has(row.itemcode)) bySku.set(row.itemcode, new Map());
-      bySku.get(row.itemcode).set(row.kpi_name, row.actual_value);
-    }
-  }
-  const tableRows = [...bySku]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([sku, values]) => [
-      sku,
-      ...PAINT_WEIGHT_COLUMNS.map((column) =>
-        paintWeightValue(
-          values.get(column.kpi),
-          column.decimals,
-          column.percent,
-        ),
-      ),
-    ]);
+  const { overall, tableRows } = groupPaintWeightRows(rows);
 
   return (
     <Card title="GT Weight Variation — Paint Weight" accent={C.tl}>
