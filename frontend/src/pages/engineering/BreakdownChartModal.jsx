@@ -125,7 +125,7 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
     });
     const valueMax = displayedTotal || 1;
     // Reserve the same headroom on both axes for the final marker and label.
-    const axisHeadroom = 1.1;
+    const axisHeadroom = 1.06;
     const longest = rows.reduce(
       (n, r) => Math.max(n, truncate(r.label).length),
       0,
@@ -141,7 +141,7 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
       chart: {
         type: "column",
         // + room for the x-axis title under the category labels.
-        height: 290 + labelRoom + AXIS_TITLE_ROOM,
+        height: 440 + labelRoom + AXIS_TITLE_ROOM,
         marginBottom: labelRoom + AXIS_TITLE_ROOM,
         backgroundColor: "transparent",
         spacing: [12, 8, 4, 8],
@@ -281,12 +281,33 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
           name: measureLabel,
           type: "column",
           yAxis: 0,
+          // EXPERIMENT (waterfall): each bar sits on the running total of the
+          // bars before it, so its top meets the cumulative line.
+          stacking: "normal",
+          dataLabels: {
+            inside: true,
+            verticalAlign: "middle",
+            style: { color: "#fff", fontSize: "10px" },
+          },
           data: rows.map((r, i) => ({
             y: r.value,
             // Solid up to the 80% cut, faded after it — the mock's `i < cut`
             // rule, which says where the rows worth acting on end.
             color: i < barsTo80 ? C.bl : C.bl + "66",
           })),
+        },
+        {
+          // Invisible base under each bar: the total of the bars before it.
+          name: "Base",
+          type: "column",
+          yAxis: 0,
+          stacking: "normal",
+          color: "transparent",
+          enableMouseTracking: false,
+          dataLabels: { enabled: false },
+          data: rows.map((_, i) =>
+            rows.slice(0, i).reduce((sum, r) => sum + r.value, 0),
+          ),
         },
         {
           name: "Cumulative %",
