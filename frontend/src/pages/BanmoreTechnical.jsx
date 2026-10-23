@@ -5,7 +5,6 @@ import {
   FormControl,
   MenuItem,
   Select,
-  Skeleton,
   Stack,
   Tab,
   Tabs,
@@ -21,29 +20,40 @@ import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import NewReleasesOutlinedIcon from "@mui/icons-material/NewReleasesOutlined";
 import QueryStatsOutlinedIcon from "@mui/icons-material/QueryStatsOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import WarehouseOutlinedIcon from "@mui/icons-material/WarehouseOutlined";
 import DonutLargeOutlinedIcon from "@mui/icons-material/DonutLargeOutlined";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import KpiCard from "@/components/production/KpiCard.jsx";
+import JKLoader from "@/components/JKLoader.jsx";
 import { getAsOf, getPlant } from "@/api/plants.js";
-import { getVocab } from "@/api/dashboard.js";
 import { getLiveRunningSkus } from "@/api/technical.js";
 import LiveRunningSkusDrill from "@/components/technical/LiveRunningSkusDrill.jsx";
-import { LIVE_SKU_NOTE, liveMachineKey } from "@/lib/liveRunningSkus.js";
-import client from "@/api/client.js";
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import client from "@/api/client.js";
 import { buildDatePayload, presetToDateRange } from "@/lib/timeRange.js";
 import { withNumericValues } from "@/lib/technicalDrills.js";
 import { TEMP_DISABLE_SKU_PLAN } from "@/lib/tempFlags.js";
 import {
+  BUILDING_ATTRIBUTED_CARD_KPIS,
+  BUILDING_ATTRIBUTED_DRILL_KPIS,
+  BUILDING_ATTRIBUTED_KPIS,
   TECHNICAL_KPI_SOURCES,
+  buildingAttributedRows,
   resolveTechnicalKpi,
+  toBuildingAttributedKpis,
   toDowntimeReasonKpis,
-  toMachineProductionKpi,
 } from "@/lib/technicalKpiSources.js";
 import TechnicalDrillPanel from "@/components/technical/TechnicalDrillPanel.jsx";
+import PaintWeightDrill from "@/components/technical/PaintWeightDrill.jsx";
+import { getProductSummary } from "@/api/quality.js";
+import {
+  PAINT_WEIGHT_HEADLINE_KPI,
+  toGtWeightCard,
+} from "@/lib/paintWeight.js";
 import TechnicalUniformityBalancingSection from "@/components/technical/TechnicalUniformityBalancingSection.jsx";
+import InventoryPage from "@/components/inventory/InventoryPage.jsx";
 
 const TECHNICAL_TABS = [
   { id: "overall", label: "Overall", icon: DonutLargeOutlinedIcon },
@@ -84,6 +94,7 @@ const TECHNICAL_TABS = [
     icon: QueryStatsOutlinedIcon,
     pending: true,
   },
+  { id: "inventory", label: "Inventory", icon: WarehouseOutlinedIcon },
 ];
 
 const STOCK_AREAS = [
@@ -100,11 +111,6 @@ const STOCK_AREAS = [
   { id: "slitter", label: "Slitter", section: "stk", subSection: "Slitter" },
 ];
 
-const ALL_MACHINES = "all";
-
-// Rows a single Building machine's Production card and drill read.
-const MACHINE_PRODUCTION_KPIS = ["Production_m", "Production_m_sku"];
-
 const STOCK_KPIS = [
   { id: "prod", name: "Production" },
   { id: "rsku", name: "Current Running SKUs" },
@@ -114,7 +120,6 @@ const STOCK_KPIS = [
   { id: "ncr", name: "Held / NCR Material" },
   { id: "pcap", name: "Process Capability" },
   { id: "pparam", name: "Process Parameters" },
-  { id: "sinv", name: "Inventory" },
   { id: "dsku", name: "Development SKUs" },
   { id: "bdown", name: "Breakdown" },
   { id: "xmt", name: "Extra / Missing Time" },
@@ -155,21 +160,21 @@ const TECHNICAL_KPI_CATALOG = {
     { id: "rsku", name: "Current Running SKUs" },
     { id: "scrap", name: "Scrap" },
     { id: "bctscrap", name: "Cured Tyre Scrap" },
+    { id: "rwk", name: "Rework" },
     { id: "rej", name: "Rejection" },
     { id: "ovg", name: "Overage Material" },
     { id: "ncr", name: "Held / NCR Material" },
     { id: "pcap", name: "Process Capability" },
     { id: "pparam", name: "Process Parameters" },
-    { id: "sinv", name: "Inventory" },
     { id: "dsku", name: "Development SKUs" },
-    { id: "twc", name: "Tyre Weight Control (±1%)" },
+    { id: "gtw", name: "GT Weight Variation" },
     { id: "bshear", name: "Shearography" },
-    { id: "buoe", name: "Uniformity — OE Tyres" },
     { id: "bdown", name: "Breakdown" },
   ],
   curing: [
     { id: "prod", name: "Production" },
     { id: "ctscrap", name: "Cured Tyre Scrap" },
+    { id: "rwk", name: "Rework" },
     { id: "bdown", name: "Breakdown" },
     { id: "bldh", name: "Bladder Health" },
     { id: "rej", name: "Rejection" },
@@ -178,7 +183,6 @@ const TECHNICAL_KPI_CATALOG = {
     { id: "rsku", name: "Current Running SKUs" },
     { id: "ncr", name: "Held / NCR Material" },
     { id: "ovg", name: "Overage Material" },
-    { id: "sinv", name: "Inventory" },
     { id: "dsku", name: "Development SKUs" },
   ],
   uniformity: [
@@ -252,7 +256,6 @@ function BanmoreTechnical() {
   const theme = useTheme();
   const [tab, setTab] = useState("overall");
   const [stockArea, setStockArea] = useState("mixing");
-  const [buildingMachine, setBuildingMachine] = useState(ALL_MACHINES);
   const [shift, setShift] = useState("all");
   const [timeRange, setTimeRange] = useState({
     preset: "month",
@@ -291,68 +294,8 @@ function BanmoreTechnical() {
   const { setFilter: setQualityFilter, resetDrill: resetQualityDrill } =
     quality;
 
-  // Building machines come from the DB (production machines per section),
-  // never a frozen list — see buildSectionMachinesQuery.
-  const { data: vocab } = usePolledQuery(() => getVocab("banmore"), {
-    interval: 0,
-    cacheKey: "technical:banmore:vocab",
-    staleTime: 30 * 60 * 1000,
-  });
-  const buildingMachines = vocab?.machines?.TBM ?? [];
-  const selectedMachine =
-    tab === "building" && buildingMachines.includes(buildingMachine)
-      ? buildingMachine
-      : null;
-
-  // One machine's production rows, in the same window / granularity as the
-  // section cards. Scrap, NCR and downtime are not recorded against these
-  // machine names, so a single machine only has Production.
-  const machineState = productivity.state;
-  const machinePayload = selectedMachine
-    ? {
-        plantId: "banmore",
-        context: {
-          section: "TBM",
-          category: "Productivity",
-          tyre_type: "PCR",
-          granularity: machineState.granularity ?? "DAY",
-        },
-        ...buildDatePayload(machineState),
-        drillKpis: MACHINE_PRODUCTION_KPIS,
-        drillOnly: true,
-        parentFilters: { machine: selectedMachine },
-        limit: 10000,
-      }
-    : null;
-  const hasDateWindow = Boolean(
-    (machineState.from && machineState.to) || machineState.date,
-  );
-  const {
-    data: machineData,
-    isLoading: machineLoading,
-    error: machineError,
-  } = usePolledQuery(
-    () =>
-      machinePayload
-        ? client.post("/dashboard/kpi-data", machinePayload)
-        : Promise.resolve(null),
-    {
-      enabled: Boolean(machinePayload) && hasDateWindow,
-      interval: 0,
-      deps: [JSON.stringify(machinePayload)],
-    },
-  );
-  const machineRows = useMemo(
-    () => withNumericValues(machineData),
-    [machineData],
-  );
-
-  const isLoading = selectedMachine
-    ? !hasDateWindow || machineLoading
-    : productivity.isLoading || quality.isLoading;
-  const error = selectedMachine
-    ? machineError || null
-    : productivity.error || quality.error || null;
+  const isLoading = productivity.isLoading || quality.isLoading;
+  const error = productivity.error || quality.error || null;
 
   const activeStockArea =
     STOCK_AREAS.find((area) => area.id === stockArea) ?? STOCK_AREAS[0];
@@ -383,6 +326,22 @@ function BanmoreTechnical() {
       ? dateWindow.from
       : (dateWindow.to ?? dateWindow.from);
   const uniformityShift = shift === "all" ? "All" : String(shift).toUpperCase();
+
+  // Building's GT Weight Variation card reads the same Quality › Product
+  // summary (and snapshot date) as the Uniformity tab.
+  const productSummary = usePolledQuery(
+    () =>
+      getProductSummary({
+        date: uniformityDate,
+        shift: uniformityShift,
+        granularity: uniformityGranularity,
+      }),
+    {
+      enabled: tab === "building" && Boolean(uniformityDate),
+      interval: 0,
+      deps: [uniformityDate, uniformityShift, uniformityGranularity],
+    },
+  );
 
   useEffect(() => {
     if (!isLiveTab) return;
@@ -422,13 +381,7 @@ function BanmoreTechnical() {
   useEffect(() => {
     resetProductivityDrill();
     resetQualityDrill();
-  }, [
-    tab,
-    stockArea,
-    buildingMachine,
-    resetProductivityDrill,
-    resetQualityDrill,
-  ]);
+  }, [tab, stockArea, resetProductivityDrill, resetQualityDrill]);
 
   const downtimeKpis = useMemo(
     () =>
@@ -445,28 +398,61 @@ function BanmoreTechnical() {
       productivity.state.mode,
     ],
   );
-  const machineKpi = useMemo(
+  // Building has no Scrap / Rework rows of its own; its Cured Tyre Scrap and
+  // Rework are Curing's rows attributed to the BUILDING discipline, read in
+  // the same window / granularity as the Building quality cards.
+  const isBuildingTab = tab === "building";
+  const qualityState = quality.state;
+  const curingDisciplinePayload = (drillKpis, dates) => ({
+    plantId: "banmore",
+    context: {
+      section: "Curing",
+      category: "Quality",
+      tyre_type: "PCR",
+      sub_section: "BUILDING",
+      granularity: qualityState.granularity ?? "DAY",
+    },
+    ...dates,
+    drillKpis,
+    drillOnly: true,
+    limit: 10000,
+  });
+  const hasQualityWindow = Boolean(
+    (qualityState.from && qualityState.to) || qualityState.date,
+  );
+  const buildingCardPayload = curingDisciplinePayload(
+    BUILDING_ATTRIBUTED_CARD_KPIS,
+    buildDatePayload(qualityState),
+  );
+  const buildingCardQuery = usePolledQuery(
+    () => client.post("/dashboard/kpi-data", buildingCardPayload),
+    {
+      enabled: isBuildingTab && hasQualityWindow,
+      interval: 0,
+      deps: [JSON.stringify(buildingCardPayload)],
+    },
+  );
+  const buildingKpis = useMemo(
     () =>
-      toMachineProductionKpi(machineRows, {
-        granularity: machineState.granularity ?? "DAY",
-        mode: machineState.mode ?? "snapshot",
+      toBuildingAttributedKpis(withNumericValues(buildingCardQuery.data), {
+        granularity: qualityState.granularity ?? "DAY",
+        mode: qualityState.mode ?? "snapshot",
         plantId: "banmore",
       }),
-    [machineRows, machineState.granularity, machineState.mode],
+    [buildingCardQuery.data, qualityState.granularity, qualityState.mode],
   );
-  const kpisByCategory = selectedMachine
-    ? { p: machineKpi ? [machineKpi] : [], q: [], downtime: [] }
-    : {
-        p: productivity.kpis,
-        q: quality.kpis,
-        downtime: downtimeKpis,
-      };
+  const isBuildingAttributed = (id) =>
+    isBuildingTab && Boolean(BUILDING_ATTRIBUTED_KPIS[id]);
+
+  const kpisByCategory = {
+    p: productivity.kpis,
+    q: quality.kpis,
+    downtime: downtimeKpis,
+  };
   const liveMachines = (liveSnapshot.data?.machines ?? []).filter(
     (machine) =>
       machine.section === SECTION_NAMES[section] &&
-      (!subSection || machine.sub_section === subSection) &&
-      (!selectedMachine ||
-        liveMachineKey(machine.machine_id) === liveMachineKey(selectedMachine)),
+      (!subSection || machine.sub_section === subSection),
   );
   const runningSkuCard =
     !liveSnapshot.error && liveSnapshot.data
@@ -493,17 +479,45 @@ function BanmoreTechnical() {
       live:
         definition.id === "rsku"
           ? runningSkuCard
-          : resolveTechnicalKpi(definition, kpisByCategory),
-      loading:
-        definition.id === "rsku" &&
-        !liveSnapshot.data &&
-        liveSnapshot.isLoading,
+          : definition.id === "gtw"
+            ? toGtWeightCard(
+                productSummary.data?.values?.[PAINT_WEIGHT_HEADLINE_KPI],
+                definition,
+              )
+            : isBuildingAttributed(definition.id)
+              ? (buildingKpis.find((kpi) => kpi.id === definition.id) ?? null)
+              : resolveTechnicalKpi(definition, kpisByCategory),
+      unavailableReason:
+        definition.id === "rsku" && liveSnapshot.error
+          ? "Live source unavailable"
+          : definition.id === "gtw" && productSummary.error
+            ? "Quality source unavailable"
+            : undefined,
     }));
   const displayKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
 
+  // The section shows one loader until every source behind its cards has
+  // answered (data or error), so no card flashes NA while still fetching.
+  // The live snapshot and GT Weight only gate their first answer: their 60 s
+  // re-polls / refetches keep the previous cards on screen.
+  const hasCard = (id) =>
+    displayKpis.some(({ definition }) => definition.id === id);
+  const kpisLoading =
+    isLiveTab &&
+    (isLoading ||
+      productivity.isDowntimeLoading ||
+      (hasCard("rsku") && !liveSnapshot.data && !liveSnapshot.error) ||
+      (hasCard("gtw") &&
+        Boolean(uniformityDate) &&
+        !productSummary.data &&
+        !productSummary.error) ||
+      (isBuildingTab &&
+        (!hasQualityWindow ||
+          (!buildingCardQuery.data && !buildingCardQuery.error))));
+
   // One drill open at a time, tied to the scope it was opened in so a tab /
-  // area / machine switch closes it (the effect above resets the fetch side).
-  const drillScope = `${tab}|${stockArea}|${buildingMachine}`;
+  // area switch closes it (the effect above resets the fetch side).
+  const drillScope = `${tab}|${stockArea}`;
   const [openDrill, setOpenDrill] = useState(null);
   const openDrillKpiId =
     openDrill?.scope === drillScope ? openDrill.kpiId : null;
@@ -516,6 +530,34 @@ function BanmoreTechnical() {
     : null;
   const drillFetch = openDrillSource?.category === "q" ? quality : productivity;
 
+  // A Building-attributed drill reads the card's own window: one resolved
+  // day for Today / Shift cards, the whole window for Month / custom range.
+  const openBuildingDrill = isBuildingAttributed(openDrillKpiId)
+    ? openDrillKpi
+    : null;
+  const buildingDrillPayload = openBuildingDrill
+    ? curingDisciplinePayload(
+        BUILDING_ATTRIBUTED_DRILL_KPIS,
+        qualityState.granularity === "MONTH" ||
+          qualityState.mode === "aggregate" ||
+          !openBuildingDrill.resolvedDate
+          ? buildDatePayload(qualityState)
+          : buildDatePayload({ date: openBuildingDrill.resolvedDate }),
+      )
+    : null;
+  const buildingDrillQuery = usePolledQuery(
+    () => client.post("/dashboard/kpi-data", buildingDrillPayload),
+    {
+      enabled: Boolean(buildingDrillPayload),
+      interval: 0,
+      deps: [JSON.stringify(buildingDrillPayload)],
+    },
+  );
+  const buildingDrillRows = useMemo(
+    () => buildingAttributedRows(withNumericValues(buildingDrillQuery.data)),
+    [buildingDrillQuery.data],
+  );
+
   const handleCloseDrill = () => {
     setOpenDrill(null);
     resetProductivityDrill();
@@ -523,12 +565,13 @@ function BanmoreTechnical() {
   };
 
   const handleDrillKpi = (kpi) => {
-    if (kpi.id === "rsku") {
-      if (openDrillKpiId === "rsku") handleCloseDrill();
+    // These drills fetch their own rows.
+    if (kpi.id === "rsku" || kpi.id === "gtw" || isBuildingAttributed(kpi.id)) {
+      if (openDrillKpiId === kpi.id) handleCloseDrill();
       else {
         resetProductivityDrill();
         resetQualityDrill();
-        setOpenDrill({ kpiId: "rsku", scope: drillScope });
+        setOpenDrill({ kpiId: kpi.id, scope: drillScope });
       }
       return;
     }
@@ -541,9 +584,8 @@ function BanmoreTechnical() {
     resetProductivityDrill();
     resetQualityDrill();
     setOpenDrill({ kpiId: kpi.id, scope: drillScope });
-    // The downtime drills read the reason rows already fetched for the card;
-    // a single machine's drill reads the machine rows already fetched.
-    if (!source.drillKpis || selectedMachine) return;
+    // The downtime drills read the reason rows already fetched for the card.
+    if (!source.drillKpis) return;
     const fetcher = source.category === "q" ? quality : productivity;
     fetcher.drillInto(
       source.drillKpis,
@@ -562,11 +604,16 @@ function BanmoreTechnical() {
         error={liveSnapshot.error}
         isLoading={liveSnapshot.isLoading}
         title={`Current Running SKUs — ${areaLabel}`}
-        breadcrumb={[
-          areaLabel,
-          ...(selectedMachine ? [selectedMachine] : []),
-          "Current Running SKUs",
-        ]}
+        breadcrumb={[areaLabel, "Current Running SKUs"]}
+        onClose={handleCloseDrill}
+      />
+    ) : openDrillKpiId === "gtw" ? (
+      <PaintWeightDrill
+        key={`${uniformityDate}|${uniformityShift}|${uniformityGranularity}`}
+        date={uniformityDate}
+        shift={uniformityShift}
+        granularity={uniformityGranularity}
+        breadcrumb={[areaLabel, "GT Weight Variation"]}
         onClose={handleCloseDrill}
       />
     ) : openDrillKpi ? (
@@ -592,8 +639,12 @@ function BanmoreTechnical() {
                   ? ["Stock", activeStockArea.label, definition.name]
                   : [activeTab?.label, definition.name]
               }
-              sectionName={SECTION_NAMES[drillState.section]}
-              rawRows={selectedMachine ? machineRows : drillFetch.rawRows}
+              sectionName={
+                openBuildingDrill ? "Curing" : SECTION_NAMES[drillState.section]
+              }
+              rawRows={
+                openBuildingDrill ? buildingDrillRows : drillFetch.rawRows
+              }
               card={openDrillKpi}
               planCard={
                 TEMP_DISABLE_SKU_PLAN
@@ -607,7 +658,9 @@ function BanmoreTechnical() {
                 wholeWindow ? null : (openDrillKpi.resolvedDate ?? null)
               }
               isLoading={
-                selectedMachine ? machineLoading : drillFetch.isDrillLoading
+                openBuildingDrill
+                  ? buildingDrillQuery.isLoading
+                  : drillFetch.isDrillLoading
               }
               onClose={handleCloseDrill}
             />
@@ -717,19 +770,18 @@ function BanmoreTechnical() {
             }}
           />
         )}
-        {tab === "building" && (
-          <MachineSelect
-            machines={buildingMachines}
-            value={selectedMachine ?? ALL_MACHINES}
-            onChange={(value) => {
-              setOpenDrill(null);
-              setBuildingMachine(value);
-            }}
-          />
-        )}
 
         {tab === "overall" ? (
           <TechnicalOverallGroups mapKpis={mapDisplayKpis} />
+        ) : tab === "inventory" ? (
+          <InventoryPage
+            plantId="banmore"
+            tyreType="PCR"
+            shift={shift}
+            granularity={SHIFT_GRANULARITY[shift] ?? dateWindow.granularity}
+            from={dateWindow.from}
+            to={dateWindow.to}
+          />
         ) : tab === "analysis" ? (
           <TechnicalAnalysis />
         ) : tab === "uniformity" ? (
@@ -744,9 +796,8 @@ function BanmoreTechnical() {
             <TechnicalKpiSection
               title={tab === "stock" ? activeStockArea.label : activeTab?.label}
               kpis={displayKpis}
-              isLoading={isLiveTab && isLoading}
+              isLoading={kpisLoading}
               error={isLiveTab ? error : null}
-              liveError={liveSnapshot.error}
               openDrillKpiId={openDrillKpiId}
               onDrillKpi={handleDrillKpi}
               onCloseDrill={handleCloseDrill}
@@ -756,41 +807,6 @@ function BanmoreTechnical() {
         )}
       </Box>
     </Box>
-  );
-}
-
-function MachineSelect({ machines, value, onChange }) {
-  return (
-    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 2 }}>
-      <Typography
-        component="label"
-        htmlFor="technical-building-machine"
-        sx={{
-          minWidth: 68,
-          fontSize: 11,
-          fontWeight: 700,
-          color: "text.secondary",
-          textTransform: "uppercase",
-        }}
-      >
-        Machine
-      </Typography>
-      <FormControl size="small" sx={{ minWidth: 220 }}>
-        <Select
-          id="technical-building-machine"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          MenuProps={{ PaperProps: { sx: { maxHeight: 360 } } }}
-        >
-          <MenuItem value={ALL_MACHINES}>All machines</MenuItem>
-          {machines.map((machine) => (
-            <MenuItem key={machine} value={machine}>
-              {machine}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-    </Stack>
   );
 }
 
@@ -868,7 +884,6 @@ function TechnicalKpiSection({
   kpis,
   isLoading,
   error,
-  liveError,
   openDrillKpiId,
   onDrillKpi,
   onCloseDrill,
@@ -889,26 +904,16 @@ function TechnicalKpiSection({
           Period values unavailable: {error.message}
         </Typography>
       )}
-      {kpis.some(({ definition }) => definition.id === "rsku") && (
-        <Typography
-          sx={{
-            mb: 1.5,
-            fontSize: 12,
-            color: liveError ? "error.main" : "text.secondary",
-          }}
-          role={liveError ? "alert" : undefined}
-        >
-          {LIVE_SKU_NOTE}
-          {liveError ? ` · Unavailable: ${liveError.message}` : ""}
-        </Typography>
+      {isLoading ? (
+        <JKLoader message="Loading KPIs" />
+      ) : (
+        <KpiGrid
+          kpis={kpis}
+          openDrillKpiId={openDrillKpiId}
+          onDrillKpi={onDrillKpi}
+          onCloseDrill={onCloseDrill}
+        />
       )}
-      <KpiGrid
-        kpis={kpis}
-        isLoading={isLoading}
-        openDrillKpiId={openDrillKpiId}
-        onDrillKpi={onDrillKpi}
-        onCloseDrill={onCloseDrill}
-      />
     </Box>
   );
 }
@@ -916,7 +921,6 @@ function TechnicalKpiSection({
 function KpiGrid({
   kpis,
   minWidth = 220,
-  isLoading = false,
   openDrillKpiId = null,
   onDrillKpi,
   onCloseDrill,
@@ -929,10 +933,8 @@ function KpiGrid({
         gap: 1,
       }}
     >
-      {kpis.map(({ definition, live, loading }) =>
-        loading || (isLoading && definition.id !== "rsku") ? (
-          <Skeleton key={definition.id} variant="rounded" height={136} />
-        ) : live && hasKpiValue(live.value) ? (
+      {kpis.map(({ definition, live, unavailableReason }) =>
+        live && hasKpiValue(live.value) ? (
           <KpiCard
             key={definition.id}
             kpi={onDrillKpi ? live : { ...live, drillable: false }}
@@ -941,7 +943,11 @@ function KpiGrid({
             onCloseDrill={onCloseDrill}
           />
         ) : (
-          <UnavailableKpiCard key={definition.id} name={definition.name} />
+          <UnavailableKpiCard
+            key={definition.id}
+            name={definition.name}
+            reason={unavailableReason}
+          />
         ),
       )}
     </Box>
@@ -1152,7 +1158,7 @@ function AnalysisEmptyState({ label }) {
   );
 }
 
-function UnavailableKpiCard({ name }) {
+function UnavailableKpiCard({ name, reason = "Data unavailable" }) {
   const theme = useTheme();
   return (
     <Box
@@ -1201,7 +1207,7 @@ function UnavailableKpiCard({ name }) {
         NA
       </Typography>
       <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-        Data unavailable
+        {reason}
       </Typography>
     </Box>
   );

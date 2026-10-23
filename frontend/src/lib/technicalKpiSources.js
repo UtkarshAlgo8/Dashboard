@@ -11,13 +11,15 @@ import { TOTAL_DOWNTIME_NAME } from "./downtime.js";
  *   - Held / NCR Material is Production's NCM Hold (Quality tab).
  *   - Scrap / Cured Tyre Scrap are Production's Scrap (Quality tab); in
  *     Curing, Production's Scrap is the Cured Tyre scrap.
+ *   - Rework is Production's Rework (Quality tab) for Building and Curing.
  *   - Breakdown / Batch Change & Setup Loss are single OEE-availability-loss
  *     reasons ("Breakdown", "Setup & Change") that Production only shows
  *     inside Total Downtime; they are built here from the same reason rows.
  *
- * Building's "Cured Tyre Scrap" (bctscrap) is intentionally NOT mapped:
- * Production only has TBM scrap and Curing scrap, with no attribution of
- * cured-tyre scrap back to building — mapping it would show a wrong number.
+ * Building records no Scrap / Rework of its own: gold only has them under
+ * Curing, split by discipline (sub_section). Building's Cured Tyre Scrap and
+ * Rework are the Curing rows attributed to the BUILDING discipline — see
+ * toBuildingAttributedKpis.
  */
 const PRODUCTION_DRILL_KPIS = [
   "Production_m",
@@ -30,6 +32,13 @@ const SCRAP_DRILL_KPIS = [
   "Scrap_m",
   "Scrap_sku",
   "Scrap_m_sku",
+];
+const REWORK_DRILL_KPIS = [
+  "Rework_s",
+  "Rework_reason",
+  "Rework_m",
+  "Rework_sku",
+  "Rework_m_sku",
 ];
 
 // `drillKpis` are the child rows fetched when the card is clicked; the
@@ -46,10 +55,72 @@ export const TECHNICAL_KPI_SOURCES = {
     productionId: "scrap",
     drillKpis: SCRAP_DRILL_KPIS,
   },
+  rwk: { category: "q", productionId: "rw", drillKpis: REWORK_DRILL_KPIS },
   ncr: { category: "q", productionId: "ncm", drillKpis: ["NCM_Hold_sku"] },
   bdown: { category: "downtime", productionId: "bdown", reason: "Breakdown" },
   bcs: { category: "downtime", productionId: "bcs", reason: "Setup & Change" },
 };
+
+// Curing discipline the Building tab's Cured Tyre Scrap / Rework belong to.
+const BUILDING_DISCIPLINE = "BUILDING";
+
+/** Discipline-level Curing rows the Building cards are built from. */
+export const BUILDING_ATTRIBUTED_CARD_KPIS = ["Scrap_s", "Rework_s"];
+/** Every Curing Scrap / Rework child, fetched for the Building drills. */
+export const BUILDING_ATTRIBUTED_DRILL_KPIS = [
+  ...SCRAP_DRILL_KPIS,
+  ...REWORK_DRILL_KPIS,
+];
+/** Building card id → the Curing KPI family it is attributed from. */
+export const BUILDING_ATTRIBUTED_KPIS = { bctscrap: "Scrap", rwk: "Rework" };
+
+/**
+ * The Curing rows attributed to the BUILDING discipline.
+ *
+ * @param {object[] | null} rows
+ * @returns {object[]}
+ */
+export function buildingAttributedRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(
+    (row) =>
+      String(row?.sub_section ?? "")
+        .trim()
+        .toUpperCase() === BUILDING_DISCIPLINE,
+  );
+}
+
+/**
+ * Building's Cured Tyre Scrap and Rework cards from Curing's discipline rows
+ * (Scrap_s / Rework_s). The BUILDING rows are read as the card's own series,
+ * so value, trend and sparkline follow Production's Curing card rules.
+ *
+ * @param {object[] | null} rows Curing Scrap_s / Rework_s rows
+ * @param {{ granularity: string, mode: string, plantId: string }} opts
+ * @returns {object[]}
+ */
+export function toBuildingAttributedKpis(rows, { granularity, mode, plantId }) {
+  const series = buildingAttributedRows(rows).map((row) => ({
+    ...row,
+    kpi_name: String(row.kpi_name).replace(/_s$/, ""),
+    sub_section: "",
+  }));
+  if (series.length === 0) return [];
+  return toKpiGrid(series, {
+    section: "Curing",
+    category: "Q",
+    granularity,
+    mode,
+    plantId,
+    kpiDefs: Object.entries(BUILDING_ATTRIBUTED_KPIS).map(([id, kind]) => ({
+      id,
+      name: kind,
+      agg: "SUM",
+      drillType: null,
+      drillTargets: null,
+    })),
+  }).map((card) => ({ ...card, drillable: true }));
+}
 
 // Single-reason variants of Production's Total Downtime card: same
 // per-machine averaging and period rules, narrowed to one reason. They drill

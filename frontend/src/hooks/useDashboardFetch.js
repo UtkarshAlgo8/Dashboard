@@ -680,6 +680,9 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
   const isDrillLoading = skipDrillFetch
     ? Boolean(downtimePayload) && downtimeLoading
     : Boolean(drillPayload) && drillLoading;
+  // The reason-row fetch behind the downtime tiles runs beside the landing
+  // fetch; pages that build cards from `downtimeRows` wait on this too.
+  const isDowntimeLoading = Boolean(downtimePayload) && downtimeLoading;
   // A disabled query retains its last error/data. Do not leak Production's
   // stored-total status into another category after switching tabs.
   const error =
@@ -861,6 +864,7 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
     truncated,
     isLoading,
     isDrillLoading,
+    isDowntimeLoading,
     lastUpdatedAt,
     error,
     setFilter,

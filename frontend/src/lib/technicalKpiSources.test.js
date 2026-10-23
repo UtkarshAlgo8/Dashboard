@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildingAttributedRows,
   resolveTechnicalKpi,
+  toBuildingAttributedKpis,
   toDowntimeReasonKpis,
   toMachineProductionKpi,
 } from "./technicalKpiSources.js";
@@ -11,6 +13,7 @@ const kpisByCategory = {
   p: [{ id: "prod", name: "Production", value: "1,200" }],
   q: [
     { id: "scrap", name: "Scrap", value: "216" },
+    { id: "rw", name: "Rework", value: "34" },
     { id: "ncm", name: "NCM Hold", value: "12" },
   ],
 };
@@ -39,6 +42,20 @@ test("maps Curing Cured Tyre Scrap and Production to their sources", () => {
     resolveTechnicalKpi({ id: "prod", name: "Production" }, kpisByCategory)
       ?.value,
     "1,200",
+  );
+});
+
+test("maps Rework to Production Rework under the Technical id", () => {
+  assert.deepEqual(
+    resolveTechnicalKpi({ id: "rwk", name: "Rework" }, kpisByCategory),
+    { id: "rwk", name: "Rework", value: "34" },
+  );
+  assert.equal(
+    resolveTechnicalKpi(
+      { id: "rwk", name: "Rework" },
+      { q: [{ id: "scrap", value: "216" }] },
+    ),
+    null,
   );
 });
 
@@ -170,4 +187,64 @@ test("machine Production card ignores rows at another granularity", () => {
     machineOpts,
   );
   assert.equal(card?.value ?? "—", "—");
+});
+
+const disciplineRow = (kpi_name, sub_section, actual_value, date) => ({
+  kpi_name,
+  sub_section,
+  actual_value,
+  date,
+  section: "Curing",
+  category: "Quality",
+  granularity: "MONTH",
+  unit_of_measurement: "NOS",
+  product_type: "Cured Tyre",
+  tyre_type: "PCR",
+  drill_down_level: "3.0",
+});
+
+test("builds Building Cured Tyre Scrap and Rework from Curing BUILDING rows", () => {
+  const cards = toBuildingAttributedKpis(
+    [
+      disciplineRow("Scrap_s", "BUILDING", 3145, "2026-10-01"),
+      disciplineRow("Scrap_s", "CURING", 2000, "2026-10-01"),
+      disciplineRow("Rework_s", "BUILDING", 14784, "2026-10-01"),
+      disciplineRow("Rework_s", "ENGINEERING", 300, "2026-10-01"),
+    ],
+    { granularity: "MONTH", mode: "snapshot", plantId: "banmore" },
+  );
+  const byId = Object.fromEntries(cards.map((card) => [card.id, card]));
+  assert.equal(byId.bctscrap.value, 3145);
+  assert.equal(byId.rwk.value, 14784);
+  assert.equal(byId.bctscrap.drillable, true);
+});
+
+test("returns no Building cards when Curing has no BUILDING rows", () => {
+  assert.deepEqual(
+    toBuildingAttributedKpis(
+      [disciplineRow("Scrap_s", "CURING", 2000, "2026-10-01")],
+      { granularity: "MONTH", mode: "snapshot", plantId: "banmore" },
+    ),
+    [],
+  );
+  assert.deepEqual(
+    toBuildingAttributedKpis(null, {
+      granularity: "MONTH",
+      mode: "snapshot",
+      plantId: "banmore",
+    }),
+    [],
+  );
+});
+
+test("buildingAttributedRows matches the discipline case-insensitively", () => {
+  const rows = buildingAttributedRows([
+    disciplineRow("Scrap_m", " building ", 5, "2026-10-01"),
+    disciplineRow("Scrap_m", "CURING", 7, "2026-10-01"),
+    disciplineRow("Scrap_m", "", 9, "2026-10-01"),
+  ]);
+  assert.deepEqual(
+    rows.map((row) => row.actual_value),
+    [5],
+  );
 });

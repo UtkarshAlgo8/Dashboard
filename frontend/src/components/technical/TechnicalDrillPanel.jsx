@@ -83,7 +83,10 @@ function TechnicalDrillPanel({ kpiId, ...props }) {
       return <ProductionDrill {...props} />;
     case "scrap":
     case "ctscrap":
-      return <ScrapDrill {...props} />;
+    case "bctscrap":
+      return <ScrapReworkDrill kind="Scrap" {...props} />;
+    case "rwk":
+      return <ScrapReworkDrill kind="Rework" {...props} />;
     case "ncr":
       return <NcrDrill {...props} />;
     case "bdown":
@@ -211,19 +214,23 @@ function ProductionDrill({
   );
 }
 
-const SCRAP_VIEWS = [
-  { label: "Reason", kpi: "Scrap_reason", key: (r) => r.remarks },
-  { label: "Discipline", kpi: "Scrap_s", key: (r) => r.sub_section },
-  { label: "Machine", kpi: "Scrap_m", key: (r) => r.machine },
-  { label: "Item Code", kpi: "Scrap_sku", key: (r) => r.itemcode },
+// Scrap and Rework publish the same child rows under their own prefix
+// (Scrap_s / Rework_s, …), as Production's qScrapRework drill reads them.
+const lossViews = (kind) => [
+  { label: "Reason", kpi: `${kind}_reason`, key: (r) => r.remarks },
+  { label: "Discipline", kpi: `${kind}_s`, key: (r) => r.sub_section },
+  { label: "Machine", kpi: `${kind}_m`, key: (r) => r.machine },
+  { label: "Item Code", kpi: `${kind}_sku`, key: (r) => r.itemcode },
   {
     label: "Machine + Item Code",
-    kpi: "Scrap_m_sku",
+    kpi: `${kind}_m_sku`,
     key: (r) => `${r.machine}  ·  ${r.itemcode}`,
   },
 ];
 
-function ScrapDrill({
+/** @param {{ kind: "Scrap" | "Rework" }} props */
+function ScrapReworkDrill({
+  kind,
   title,
   breadcrumb,
   sectionName,
@@ -232,12 +239,14 @@ function ScrapDrill({
   onClose,
 }) {
   const theme = useTheme();
-  const [view, setView] = useState(SCRAP_VIEWS[0].label);
-  const active = SCRAP_VIEWS.find((v) => v.label === view) ?? SCRAP_VIEWS[0];
+  const views = lossViews(kind);
+  const noun = kind.toLowerCase();
+  const [view, setView] = useState(views[0].label);
+  const active = views.find((v) => v.label === view) ?? views[0];
   const rowsFor = (kpi) => rowsOf(rawRows, kpi, sectionName);
   const groups = groupTotals(rowsFor(active.kpi), active.key);
-  const bySubSection = rowsFor("Scrap_s");
-  const byReason = rowsFor("Scrap_reason");
+  const bySubSection = rowsFor(`${kind}_s`);
+  const byReason = rowsFor(`${kind}_reason`);
   const unit = unitOf(bySubSection) ?? unitOf(byReason);
   const total = totalOf(bySubSection.length ? bySubSection : byReason);
   const topReason = groupTotals(byReason, (r) => r.remarks)[0]?.key ?? "—";
@@ -250,26 +259,26 @@ function ScrapDrill({
       accent={theme.custom.brand.red}
       breadcrumb={breadcrumb}
       tiles={[
-        ["Total scrap", quantity(total, unit)],
+        [`Total ${noun}`, quantity(total, unit)],
         ["Top reason", topReason],
         ["Top discipline", topDiscipline],
         [
           "Machines affected",
-          fmt(distinctValues(rowsFor("Scrap_m"), "machine").length),
+          fmt(distinctValues(rowsFor(`${kind}_m`), "machine").length),
         ],
       ]}
       chipRows={[
         {
           label: "View by",
-          options: SCRAP_VIEWS.map((v) => v.label),
+          options: views.map((v) => v.label),
           value: view,
           onChange: setView,
         },
       ]}
       cols={groupedCols(view, unit)}
       rows={groupedRows(groups, unit)}
-      footnote={`Grouped by ${view.toLowerCase()}, summing to ${quantity(totalOf(rowsFor(active.kpi)), unit)}. Cumulative % shows the Pareto — the rows that make up 80% of the scrap.${cappedNote(groups.length)}`}
-      downloadFilename={`technical-scrap-${sectionName}`.toLowerCase()}
+      footnote={`Grouped by ${view.toLowerCase()}, summing to ${quantity(totalOf(rowsFor(active.kpi)), unit)}. Cumulative % shows the Pareto — the rows that make up 80% of the ${noun}.${cappedNote(groups.length)}`}
+      downloadFilename={`technical-${noun}-${sectionName}`.toLowerCase()}
       isLoading={
         isLoading && bySubSection.length === 0 && byReason.length === 0
       }
