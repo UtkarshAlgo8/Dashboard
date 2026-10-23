@@ -3,6 +3,7 @@ import { Box, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import ChartLegend from "./ChartLegend.jsx";
+import { formatCompactNumber, withUnit } from "@/lib/numberFormat.js";
 import { buildTrendLegend } from "./trendLegend.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle. Depending on
@@ -75,7 +76,7 @@ function BarChart({ labels, values, unit, target }) {
         labels: {
           style: { color: colors.text, fontSize: "11px" },
           formatter: function () {
-            return unit ? `${this.value}${unit}` : this.value;
+            return withUnit(formatCompactNumber(this.value), unit);
           },
         },
         plotLines:

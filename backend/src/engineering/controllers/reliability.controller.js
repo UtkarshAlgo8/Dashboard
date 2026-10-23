@@ -132,7 +132,7 @@ export async function getSummary(req, res, next) {
  *   ?kpi_names=a,b &date= &granularity= &group_by=
  *   [&date_from= &date_to=]
  *   [&status= &section= &machine= &sub_section= &product_type=]
- *   [&sort= &order=asc|desc &limit=] [&agg=sum]
+ *   [&sort= &order=asc|desc &limit=] [&agg=sum] [&include_unmapped=1]
  *
  * `group_by` is one dimension, or a comma-separated tuple ("remarks,date")
  * for a level keyed by more than one — with `date_from`/`date_to` and
@@ -161,6 +161,7 @@ export async function getKpiChildren(req, res, next) {
       order,
       limit,
       agg,
+      include_unmapped: includeUnmapped,
     } = req.query;
     if (kpiNames.length === 0 || !date || !groupBy) {
       return badRequest(res, "`kpi_names`, `date`, and `group_by` are required.");
@@ -189,6 +190,7 @@ export async function getKpiChildren(req, res, next) {
             machine,
             subSection,
             productType,
+            includeUnmapped: includeUnmapped === "1" || includeUnmapped === "true",
           }),
         );
         const result =

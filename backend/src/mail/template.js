@@ -30,21 +30,23 @@ export const DEFAULT_MANUAL_FULFILMENT = { gt: 81.9, rc4: 70.06, mixing: 44.85 }
 
 // CTP-PCR / CTP-TBR columns: fixed text for now, one cell per table row
 // (rows 1-5). Not automated and not editable from the pop-up — change here.
-// Current values: provided for the 20-Oct mail.
+// Current values: provided for the 21-Oct mail.
+// Listed in KPI order (MTD Under, MTD Over, Fulfilment, Over, Under), not in
+// the order the mail shows them — the rows are reversed in renderSchedulerMail.
 const CTP_VALUES = {
   pcr: [
-    "10.88% across 15 SKUs",
-    "6.92% across 14 SKUs",
-    "Curing: 94.19%; Building: 88.80%",
-    "1,042 tyres, 12 SKUs",
-    "756 tyres, 10 SKUs",
+    "10.35%; 19 SKUs",
+    "6.47%; 13 SKUs",
+    "Curing: 88.85%; Building: 84.13%",
+    "1,032 tyres, 16 SKUs",
+    "1,524 tyres, 11 SKUs",
   ],
   tbr: [
-    "13.90% across 14 SKUs",
-    "9.31% across 13 SKUs",
-    "Curing: 84.29%; Building: 81.72%",
-    "548 tyres, 12 SKUs",
-    "503 tyres, 13 SKUs",
+    "12.37%; 16 SKUs",
+    "7.50%; 15 SKUs",
+    "Curing: 80.58%; Building: 71.59%",
+    "464 tyres, 12 SKUs",
+    "672 tyres, 15 SKUs",
   ],
 };
 
@@ -110,17 +112,21 @@ export function renderSchedulerMail(values, reportDay, manual = DEFAULT_MANUAL_F
   const { short, long, spaced } = reportDayLabels(reportDay);
   const intro = `Please find below the Schedule vs Actual metrics through ${spaced}`;
   const subject = `JK BTP – Daily Infiniti Scheduler Metrics – ${long}`;
-  const body = rows(values, short, manual);
+  // Each KPI keeps its own CTP cells, then the rows are shown bottom-up:
+  // Daily Under, Daily Over, Fulfilment, MTD Over, MTD Under (numbered 1-5).
+  const body = rows(values, short, manual)
+    .map((row, k) => [...row, ctp.pcr[k] ?? "", ctp.tbr[k] ?? ""])
+    .reverse();
 
   const cell = "border:1px solid #999;padding:6px 10px;vertical-align:top;";
   const head = `${cell}background:#f2f2f2;font-weight:bold;text-align:left;`;
   const bold = `${cell}font-weight:bold;`;
   const tableRows = body
     .map(
-      ([kpi, def, val], i) =>
+      ([kpi, def, val, pcr, tbr], i) =>
         `<tr><td style="${cell}">${i + 1}</td><td style="${cell}">${escapeHtml(kpi)}</td>` +
         `<td style="${cell}">${escapeHtml(def)}</td><td style="${bold}">${escapeHtml(val)}</td>` +
-        `<td style="${bold}">${escapeHtml(ctp.pcr[i] ?? "")}</td><td style="${bold}">${escapeHtml(ctp.tbr[i] ?? "")}</td></tr>`,
+        `<td style="${bold}">${escapeHtml(pcr)}</td><td style="${bold}">${escapeHtml(tbr)}</td></tr>`,
     )
     .join("");
 
@@ -140,8 +146,8 @@ export function renderSchedulerMail(values, reportDay, manual = DEFAULT_MANUAL_F
     intro,
     "",
     ...body.map(
-      ([kpi, def, val], i) =>
-        `${i + 1}. ${kpi}\n   BTP: ${val}\n   CTP-PCR: ${ctp.pcr[i] ?? ""}\n   CTP-TBR: ${ctp.tbr[i] ?? ""}\n   ${def}`,
+      ([kpi, def, val, pcr, tbr], i) =>
+        `${i + 1}. ${kpi}\n   BTP: ${val}\n   CTP-PCR: ${pcr}\n   CTP-TBR: ${tbr}\n   ${def}`,
     ),
     "",
     AUTO_NOTE,

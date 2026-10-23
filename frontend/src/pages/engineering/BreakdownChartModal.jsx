@@ -1,77 +1,63 @@
-/* eslint-disable */
 /**
- * The Breakdown chart, opened from the Breakdown card's trend icon.
+ * The Breakdown chart, opened from the Breakdown card's trend icon (and, capped
+ * at 10 machines, from Top Machine Breakdowns). Built to plot_drilldown_spec
+ * §2 in the Production trend modal's look.
  *
- * Built to the KPI spec ("Breakdown chart — opens from the Breakdown card
- * trend icon"):
+ *   VIEW BY   Machine · Failure
+ *   MEASURE   Downtime (min) · Occurrences
+ *   FILTER    Category · Section
  *
- *   VIEW BY      Machine · Failure
- *   MEASURE      Downtime (min) · Occurrences
- *   FILTER       Category · Section · Machine  — "filter first, then group"
+ * A click on a bar or a table row opens the second level:
  *
- * The three filters compose and cascade: picking a category narrows the
- * section list, and both narrow the machine list, so a combination that
- * selects nothing can never be built. Category and Section are the machine's
- * published `status` and `section`; the machine lens applies them to the
- * machine rows (both measures are additive totals, so a filtered sum is the
- * scope's own figure), and the failure lens hands them to the engine, which
- * is the only place a failure row can be cut by them.
+ *   VIEW BY Machine   machine ──► its failures, coloured by discipline
+ *   VIEW BY Failure   failure ──► the machines that have it
  *
- * Files, one pair serving both lenses, read as published:
+ * The rows load once; a click only filters them (spec: "Load once. Every
+ * click just filters these rows"):
  *
- *   Machine lens   BreakdownMin_m + BreakdownOcc_m
- *   Failure lens   BreakdownMin_m_Failure + BreakdownOcc_m_Failure   (summed
- *                  over discipline, which the spec's "group by remarks" means)
+ *   Machine bars   BreakdownMin_m + BreakdownOcc_m (+ Breakdown_Pct_m)
+ *   Failure bars   BreakdownMin_m_Failure + BreakdownOcc_m_Failure
+ *                  (+ Breakdown_Pct_m_Failure), one row per
+ *                  (machine, failure, discipline)
  *
- * Three spec rules this implements literally:
+ * Machine-bar occurrences come from `BreakdownOcc_m`: summing the failure
+ * rows overcounts (0206 would read 78 instead of 70).
  *
- * 1. "Occurrences in the Machine view: use `breakdown_occ_m`, not the summed
- *    failure rows." Summing failure-level occurrences overcounts on 7
- *    machines (0206 reads 78 instead of 70, plant 2,174 instead of 2,152),
- *    so the machine lens reads the machine-level counter.
- * 2. "Cap the bars … Default to the top 15-20 with the rest in an 'Other'
- *    bar." The cap is here; the pooled bar is NOT, and that is a considered
- *    departure. Breakdown is spread almost evenly — the spec says so itself,
- *    "no single machine dominates, the worst is 2.4%" — so pooling the tail
- *    produces a bar that dwarfs the chart: 221 machines sum to 96,207 min
- *    against a 3,108-min leader, 31x the tallest real bar, flattening every
- *    row it was meant to make readable. That defeats the instruction's own
- *    stated purpose ("or the axis is unreadable"), and the design mock's
- *    Pareto pools nothing either. The tail is reported in words under the
- *    chart instead, so nothing it carried is lost.
- * 3. The Breakdown % the mock shows under each bar and in the table is only
- *    ever a PUBLISHED value, never a recomputed one (rule 2). It exists at
- *    two grains and nowhere else:
- *      Machine lens                → `Breakdown_Pct_m`
- *      Failure lens + machine pin  → `Breakdown_Pct_m_Failure`, which is
- *                                    published per (machine, failure)
- *    In the unpinned Failure lens a failure spans machines with different
- *    denominators, so there is no published figure and the column reads "—"
- *    rather than inventing one.
+ * Two departures, both agreed: the chart stays a Pareto (bars + cumulative
+ * line), and the tail is not pooled into an "Other" bar — 221 machines sum to
+ * 96,207 min against a 3,108-min leader, which would flatten every real bar.
+ * The caption states what the tail carries instead.
  *
- * Look and interaction follow the mock (reliabilityChrome.jsx carries its
- * chips, labels, banner and modal shell); the data, the controls and the
- * figures follow the KPI spec.
+ * Breakdown % is only ever a published value: the machine's
+ * `Breakdown_Pct_m`, or `Breakdown_Pct_m_Failure` while a machine is pinned.
+ * A failure across machines has no published % and reads "—".
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { Box, Stack, Typography, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import { getReliabilityKpiChildren } from "@/api/engineering.js";
-import JKLoader from "@/components/JKLoader.jsx";
-import { C, DTable, GradeChip, fmtNum } from "./reliabilityShared.jsx";
+import DataTable from "@/components/tables/DataTable.jsx";
+import {
+  ChartPanel,
+  DrillBreadcrumb,
+  DropdownRow,
+  ModalFrame,
+  SingleSelectRow,
+} from "@/components/trend/TrendModalParts.jsx";
+import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import { formatIndianNumber } from "@/lib/numberFormat.js";
+import {
+  DISCIPLINES,
+  OTHER_DISCIPLINE,
+  UNMAPPED,
+  disciplineColor,
+  num,
+} from "./reliabilityDrill.js";
 import {
   reliabilityTrendRequest,
   useReliabilityTrendRange,
 } from "./reliabilityTrendRange.jsx";
-import {
-  AnalysisModal,
-  ChartCaption,
-  Chip,
-  ControlLabel,
-  ControlRow,
-  ScopeBanner,
-  selectStyle,
-} from "./reliabilityChrome.jsx";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
@@ -79,29 +65,29 @@ const MACHINE_KPIS = ["BreakdownMin_m", "BreakdownOcc_m", "Breakdown_Pct_m"];
 const FAILURE_KPIS = [
   "BreakdownMin_m_Failure",
   "BreakdownOcc_m_Failure",
-  // Only meaningful when a machine is pinned — see the header note.
   "Breakdown_Pct_m_Failure",
 ];
+// A rate cannot be summed over a date range.
+const PCT_KPIS = new Set(["Breakdown_Pct_m", "Breakdown_Pct_m_Failure"]);
 
 const VIEWS_BY = [
-  { id: "machine", label: "Machine" },
-  { id: "failure", label: "Failure" },
+  { value: "machine", label: "Machine" },
+  { value: "failure", label: "Failure" },
 ];
 
 const MEASURES = [
-  { id: "downtime", label: "Downtime (min)", key: "minutes" },
-  { id: "occurrences", label: "Occurrences", key: "occurrences" },
+  { value: "downtime", label: "Downtime (min)", key: "minutes", unit: "min" },
+  { value: "occurrences", label: "Occurrences", key: "occurrences", unit: "" },
 ];
 
-// Spec: "Cap the bars … Default to the top 15-20". See the header note on
-// why the tail is reported in the caption rather than pooled into a bar.
+// Spec: "Show the top 15". See the header note on the tail.
 const MAX_BARS = 15;
 
 // Matching fractions keep the value and percentage axes on the same scale.
 const PARETO_STEPS = [0, 0.2, 0.4, 0.6, 0.8, 1];
 
-const axisTitleStyle = { fontSize: "12px", fontWeight: "700", color: C.md };
-const AXIS_TITLE_ROOM = 24;
+const fmt = (v, decimals = 0) =>
+  formatIndianNumber(v, { maxDecimals: decimals, minDecimals: decimals });
 
 function truncate(text, max = 30) {
   const s = String(text ?? "—");
@@ -109,77 +95,94 @@ function truncate(text, max = 30) {
 }
 
 /**
- * Sorted bars + a cumulative % line over the same order (spec: Pareto).
- *
- * Both axes span the displayed rows' cumulative total, expressed in values
- * on the left and share of the displayed total on the right. This puts the first
- * cumulative point on the first bar without stretching the axes to unseen rows.
+ * Sorted bars + a cumulative % line over the same order. Both axes span the
+ * displayed rows' total, so the first cumulative point sits on the first bar.
  */
-function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
+function ParetoChart({
+  rows,
+  measureLabel,
+  groupLabel,
+  barsTo80,
+  groups,
+  onPick,
+}) {
+  const theme = useTheme();
   const options = useMemo(() => {
+    const grid = theme.palette.divider;
+    const text = theme.palette.text.secondary;
+    const strong = theme.palette.text.primary;
+    const blue = theme.custom.brand.blue;
+    const amber = theme.custom.brand.amber;
+    const axisTitle = { color: text, fontSize: "12px", fontWeight: "700" };
+
     const displayedTotal = rows.reduce((sum, row) => sum + row.value, 0);
-    let running = 0;
-    const cumulative = rows.map((r) => {
-      running += r.value;
-      return displayedTotal ? (running / displayedTotal) * 100 : 0;
-    });
+    const cumulative = rows
+      .reduce((acc, r) => {
+        const running = (acc.length ? acc[acc.length - 1].sum : 0) + r.value;
+        acc.push({ sum: running });
+        return acc;
+      }, [])
+      .map(({ sum }) => (displayedTotal ? (sum / displayedTotal) * 100 : 0));
     const valueMax = displayedTotal || 1;
-    // Reserve the same headroom on both axes for the final marker and label.
-    const axisHeadroom = 1.06;
+    // The same headroom on both axes for the final marker and label.
+    const headroom = 1.1;
     const longest = rows.reduce(
       (n, r) => Math.max(n, truncate(r.label).length),
       0,
     );
-    // Upright labels are as tall as their text is long, so the room they need
-    // is a property of the data: machine codes ask for ~70px, a failure
-    // phrase for ~220px.
+    // Upright labels are as tall as their text is long: machine codes ask
+    // for ~70px, a failure phrase for ~220px.
     const upright = longest > 8;
     const labelRoom = upright
       ? Math.min(240, Math.max(90, longest * 6.2 + 30))
       : 70;
+    const clickable = rows.some((r) => r.clickable);
+
     return {
       chart: {
         type: "column",
-        // + room for the x-axis title under the category labels.
-        height: 440 + labelRoom + AXIS_TITLE_ROOM,
-        marginBottom: labelRoom + AXIS_TITLE_ROOM,
+        height: 310 + labelRoom + 24 + (groups ? 30 : 0),
         backgroundColor: "transparent",
-        spacing: [12, 8, 4, 8],
+        spacing: [12, 8, 8, 8],
+        style: { fontFamily: theme.typography.fontFamily },
       },
       title: { text: null },
       credits: { enabled: false },
       accessibility: { enabled: false },
-      legend: { enabled: false },
-      // Explicit matching ticks preserve the value-to-percentage conversion.
+      legend: {
+        enabled: Boolean(groups),
+        itemStyle: { color: text, fontSize: "11px", fontWeight: 600 },
+        symbolWidth: 12,
+        symbolHeight: 12,
+      },
       alignTicks: false,
       xAxis: {
         categories: rows.map((r) => r.label),
-        title: { text: groupLabel, style: axisTitleStyle },
-        lineColor: C.bd,
+        title: { text: groupLabel, style: axisTitle },
+        lineColor: grid,
         tickLength: 0,
         labels: {
           rotation: upright ? -90 : 0,
           align: upright ? "right" : "center",
           overflow: "allow",
           crop: false,
+          useHTML: true,
           style: {
             fontSize: "11px",
-            color: C.md,
+            color: text,
             whiteSpace: "nowrap",
             textOverflow: "none",
-            width: "190px",
           },
-          useHTML: true,
           formatter: function () {
-            // The mock's axis label: the name, and under it that row's own
-            // Breakdown %. The second line appears only where the figure is
-            // published (see the header note) — never computed to fill it.
+            // The name, and under it that row's own published Breakdown %.
             const row = rows[this.pos];
-            const own = row?.pct == null ? null : fmtNum(row.pct, 2) + "%";
+            const own = row?.pct == null ? null : fmt(row.pct, 2) + "%";
             return (
               `<div style="line-height:1.3">` +
-              `<div style="color:${C.md}">${truncate(this.value)}</div>` +
-              (own ? `<div style="color:${C.mu}">${own}</div>` : "") +
+              `<div style="color:${text}">${truncate(this.value)}</div>` +
+              (own
+                ? `<div style="color:${theme.palette.text.disabled}">${own}</div>`
+                : "") +
               `</div>`
             );
           },
@@ -187,43 +190,40 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
       },
       yAxis: [
         {
-          title: { text: measureLabel, style: axisTitleStyle },
-          gridLineColor: C.bd,
+          title: { text: measureLabel, style: axisTitle },
+          gridLineColor: grid,
           min: 0,
-          max: valueMax * axisHeadroom,
+          max: valueMax * headroom,
           endOnTick: false,
           tickPositions: PARETO_STEPS.map((f) => f * valueMax),
           labels: {
-            style: { fontSize: "11px", color: C.mu },
+            style: { fontSize: "11px", color: text },
             formatter: function () {
-              return fmtNum(this.value);
+              return fmt(this.value);
             },
           },
         },
         {
-          // A complete Pareto of the displayed rows ends at 100%.
           min: 0,
-          max: 100 * axisHeadroom,
+          max: 100 * headroom,
           endOnTick: false,
           tickPositions: PARETO_STEPS.map((f) => f * 100),
           opposite: true,
           title: {
             text: "Cumulative % of displayed total",
-            style: { ...axisTitleStyle, color: C.am },
+            style: { ...axisTitle, color: amber },
           },
           labels: {
-            style: { fontSize: "11px", color: C.am },
+            style: { fontSize: "11px", color: amber },
             formatter: function () {
-              return fmtNum(this.value, 1) + "%";
+              return fmt(this.value) + "%";
             },
           },
           gridLineWidth: 0,
-          lineWidth: 0,
-          tickWidth: 0,
           plotLines: [
             {
               value: 80,
-              color: C.am,
+              color: amber,
               dashStyle: "Dash",
               width: 1,
               zIndex: 3,
@@ -232,7 +232,7 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
                 align: "right",
                 x: -4,
                 y: -5,
-                style: { color: C.am, fontSize: "10px", fontWeight: "700" },
+                style: { color: amber, fontSize: "10px", fontWeight: "700" },
               },
             },
           ],
@@ -247,31 +247,39 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
           if (!row) return false;
           return (
             `<b>${row.label}</b><br/>` +
-            `${measureLabel}: <b>${fmtNum(row.value)}</b><br/>` +
-            (row.pct == null
-              ? ""
-              : `Breakdown %: <b>${fmtNum(row.pct, 2)}%</b><br/>`) +
-            `Share of scope: <b>${fmtNum(row.share, 1)}%</b><br/>` +
-            `Cumulative of displayed total: <b>${fmtNum(cumulative[idx], 1)}%</b>`
+            row.tooltip.map(([k, v]) => `${k}: <b>${v}</b>`).join("<br/>") +
+            `<br/>Cumulative of displayed total: <b>${fmt(cumulative[idx], 1)}%</b>` +
+            (row.clickable
+              ? `<br/><span style="color:${text}">Click to drill down</span>`
+              : "")
           );
         },
       },
       plotOptions: {
         column: {
           borderWidth: 0,
-          borderRadius: 4,
+          borderRadius: 3,
           groupPadding: 0.12,
           pointPadding: 0.06,
+          cursor: clickable ? "pointer" : undefined,
+          point: {
+            events: {
+              click: function () {
+                const row = rows[this.index];
+                if (row?.clickable) onPick?.(row);
+              },
+            },
+          },
           dataLabels: {
             enabled: true,
             style: {
               fontSize: "11px",
               fontWeight: "700",
-              color: C.tx,
+              color: strong,
               textOutline: "none",
             },
             formatter: function () {
-              return fmtNum(this.y);
+              return fmt(this.y);
             },
           },
         },
@@ -281,40 +289,22 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
           name: measureLabel,
           type: "column",
           yAxis: 0,
-          // EXPERIMENT (waterfall): each bar sits on the running total of the
-          // bars before it, so its top meets the cumulative line.
-          stacking: "normal",
-          dataLabels: {
-            inside: true,
-            verticalAlign: "middle",
-            style: { color: "#fff", fontSize: "10px" },
-          },
+          showInLegend: false,
           data: rows.map((r, i) => ({
             y: r.value,
-            // Solid up to the 80% cut, faded after it — the mock's `i < cut`
-            // rule, which says where the rows worth acting on end.
-            color: i < barsTo80 ? C.bl : C.bl + "66",
+            // A discipline colour when the level has one; otherwise solid up
+            // to the 80% cut and faded after it.
+            color: r.color ?? (i < barsTo80 ? blue : blue + "66"),
           })),
-        },
-        {
-          // Invisible base under each bar: the total of the bars before it.
-          name: "Base",
-          type: "column",
-          yAxis: 0,
-          stacking: "normal",
-          color: "transparent",
-          enableMouseTracking: false,
-          dataLabels: { enabled: false },
-          data: rows.map((_, i) =>
-            rows.slice(0, i).reduce((sum, r) => sum + r.value, 0),
-          ),
         },
         {
           name: "Cumulative %",
           type: "line",
           yAxis: 1,
-          color: C.am,
+          color: amber,
           lineWidth: 2,
+          showInLegend: false,
+          enableMouseTracking: true,
           marker: { enabled: true, radius: 4, symbol: "circle" },
           dataLabels: {
             enabled: true,
@@ -323,26 +313,58 @@ function ParetoChart({ rows, measureLabel, groupLabel, barsTo80 }) {
             style: {
               fontSize: "11px",
               fontWeight: "700",
-              color: C.am,
+              color: amber,
               textOutline: "none",
             },
             formatter: function () {
-              return fmtNum(this.y, 1) + "%";
+              return fmt(this.y, 1) + "%";
             },
           },
           data: cumulative,
         },
+        // Legend-only series: one swatch per discipline.
+        ...(groups ?? []).map((g) => ({
+          name: g.name,
+          color: g.color,
+          type: "column",
+          data: [],
+          events: { legendItemClick: () => false },
+        })),
       ],
     };
-  }, [rows, measureLabel, groupLabel, barsTo80]);
+  }, [rows, measureLabel, groupLabel, barsTo80, groups, onPick, theme]);
 
-  return <HighchartsReact highcharts={Highcharts} options={options} />;
+  return (
+    <Box sx={{ width: "100%" }}>
+      <HighchartsReact highcharts={Highcharts} options={options} />
+    </Box>
+  );
 }
 
-/**
- * @param {{ date: string, granularity: string, from?: string, to?: string,
- *   aggregate?: boolean, initialViewBy?: string, maxBars?: number }} props
- */
+/** Sum the failure rows into one row per `by` ("remarks" or "machine"). */
+function groupFailures(rows, by) {
+  const out = new Map();
+  for (const r of rows) {
+    const key = r[by];
+    const g = out.get(key) ?? {
+      key,
+      label: key,
+      section: r.section,
+      status: r.status,
+      minutes: 0,
+      occurrences: 0,
+      pct: null,
+      split: new Map(),
+    };
+    g.minutes += r.minutes;
+    g.occurrences += r.occurrences ?? 0;
+    if (r.pct != null) g.pct = (g.pct ?? 0) + r.pct;
+    g.split.set(r.sub_section, (g.split.get(r.sub_section) ?? 0) + r.minutes);
+    out.set(key, g);
+  }
+  return [...out.values()];
+}
+
 function ParetoView({
   date,
   granularity,
@@ -351,235 +373,177 @@ function ParetoView({
   aggregate = false,
   initialViewBy,
   maxBars = MAX_BARS,
+  periodText,
 }) {
+  const theme = useTheme();
   const [viewBy, setViewBy] = useState(initialViewBy ?? "machine");
   const [measure, setMeasure] = useState("downtime");
   const [category, setCategory] = useState("");
   const [section, setSection] = useState("");
-  const [machine, setMachine] = useState("");
+  // The clicked bar: a machine (VIEW BY Machine) or a failure (VIEW BY
+  // Failure). null = level 1.
+  const [picked, setPicked] = useState(null);
 
-  const [machineRows, setMachineRows] = useState([]);
-  const [machineState, setMachineState] = useState({
-    loading: true,
-    error: null,
-  });
-  const [failureRows, setFailureRows] = useState([]);
-  const [failureState, setFailureState] = useState({
-    loading: false,
-    error: null,
-  });
-  const machineKpis = aggregate
-    ? MACHINE_KPIS.filter((name) => name !== "Breakdown_Pct_m")
-    : MACHINE_KPIS;
-  const failureKpis = aggregate
-    ? FAILURE_KPIS.filter((name) => name !== "Breakdown_Pct_m_Failure")
-    : FAILURE_KPIS;
+  const period = { date, from, to, granularity };
+  const periodKey = JSON.stringify(period);
+  const withoutPct = (names) =>
+    aggregate ? names.filter((n) => !PCT_KPIS.has(n)) : names;
 
-  // The machine lens AND the machine-filter options come from one fetch of
-  // the machine-level pair; it is also the scope total the shares run on.
-  useEffect(() => {
-    let cancelled = false;
-    setMachineState({ loading: true, error: null });
-    getReliabilityKpiChildren({
-      kpiNames: machineKpis,
-      date,
-      from,
-      to,
-      granularity,
-      groupBy: "machine",
-      agg: aggregate ? "sum" : undefined,
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setMachineRows(Array.isArray(res?.rows) ? res.rows : []);
-        setMachineState({ loading: false, error: null });
-      })
-      .catch(
-        (err) => !cancelled && setMachineState({ loading: false, error: err }),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [date, from, to, granularity, aggregate, machineKpis.join(",")]);
-
-  // "Filter first, then group": all three filters go to the engine, which is
-  // the only place a failure row knows its machine's category and section.
-  useEffect(() => {
-    if (viewBy !== "failure") return;
-    let cancelled = false;
-    setFailureState({ loading: true, error: null });
-    getReliabilityKpiChildren({
-      kpiNames: failureKpis,
-      date,
-      from,
-      to,
-      granularity,
-      groupBy: "remarks",
-      agg: "sum",
-      status: category || undefined,
-      section: section || undefined,
-      machine: machine || undefined,
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setFailureRows(Array.isArray(res?.rows) ? res.rows : []);
-        setFailureState({ loading: false, error: null });
-      })
-      .catch(
-        (err) => !cancelled && setFailureState({ loading: false, error: err }),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    viewBy,
-    date,
-    from,
-    to,
-    granularity,
-    aggregate,
-    failureKpis.join(","),
-    category,
-    section,
-    machine,
-  ]);
-
-  // Every option list is cut by the filters above it, so no combination can
-  // select an empty scope.
-  const categoryOptions = useMemo(
-    () => [...new Set(machineRows.map((r) => r.status).filter(Boolean))].sort(),
-    [machineRows],
+  const machineQuery = usePolledQuery(
+    () =>
+      getReliabilityKpiChildren({
+        ...period,
+        kpiNames: withoutPct(MACHINE_KPIS),
+        groupBy: "machine",
+        agg: aggregate ? "sum" : undefined,
+        includeUnmapped: true,
+      }).then((res) => ({ key: periodKey, rows: res?.rows ?? [] })),
+    { interval: 0, deps: [periodKey] },
+  );
+  const failureQuery = usePolledQuery(
+    () =>
+      getReliabilityKpiChildren({
+        ...period,
+        kpiNames: withoutPct(FAILURE_KPIS),
+        groupBy: "machine,remarks,sub_section",
+        // One gold row per tuple in a month, so the sum is that row; over a
+        // range it adds the days.
+        agg: "sum",
+        includeUnmapped: true,
+      }).then((res) => ({ key: periodKey, rows: res?.rows ?? [] })),
+    { interval: 0, deps: [periodKey] },
   );
 
+  const machineRows = useMemo(
+    () =>
+      machineQuery.data?.key === periodKey
+        ? machineQuery.data.rows
+            .filter((r) => r.machine)
+            .map((r) => ({
+              machine: r.machine,
+              section: r.section || UNMAPPED,
+              status: r.status || UNMAPPED,
+              minutes: num(r.BreakdownMin_m),
+              occurrences: num(r.BreakdownOcc_m),
+              pct: num(r.Breakdown_Pct_m),
+            }))
+        : null,
+    [machineQuery.data, periodKey],
+  );
+  const failureRows = useMemo(
+    () =>
+      failureQuery.data?.key === periodKey
+        ? failureQuery.data.rows
+            .map((r) => ({
+              machine: r.machine,
+              remarks: r.remarks,
+              sub_section: r.sub_section,
+              section: r.section || UNMAPPED,
+              status: r.status || UNMAPPED,
+              minutes: num(r.BreakdownMin_m_Failure),
+              occurrences: num(r.BreakdownOcc_m_Failure),
+              pct: num(r.Breakdown_Pct_m_Failure),
+            }))
+            // Breakdown_Pct_m_Failure is published for pairs that never
+            // broke down; those are not failures.
+            .filter((r) => r.minutes > 0)
+        : null,
+    [failureQuery.data, periodKey],
+  );
+
+  // Option lists are cut by the filter above them.
+  const categoryOptions = useMemo(
+    () =>
+      [...new Set((machineRows ?? []).map((r) => r.status))].sort((a, b) =>
+        a === UNMAPPED ? 1 : b === UNMAPPED ? -1 : a.localeCompare(b),
+      ),
+    [machineRows],
+  );
   const sectionOptions = useMemo(
     () =>
       [
         ...new Set(
-          machineRows
+          (machineRows ?? [])
             .filter((r) => !category || r.status === category)
-            .map((r) => r.section)
-            .filter(Boolean),
+            .map((r) => r.section),
         ),
       ].sort(),
     [machineRows, category],
   );
+  // A section the category no longer offers is not applied.
+  const activeSection = sectionOptions.includes(section) ? section : "";
 
-  // The scope the machine lens plots and the scope every share is taken on.
-  // Both measures are additive totals, so filtering rows and summing them is
-  // the scope's own figure, not a recomputed one.
-  const scopeRows = useMemo(
-    () =>
-      machineRows.filter(
-        (r) =>
-          (!category || r.status === category) &&
-          (!section || r.section === section) &&
-          (!machine || r.machine === machine),
-      ),
-    [machineRows, category, section, machine],
+  const inScope = useCallback(
+    (r) =>
+      (!category || r.status === category) &&
+      (!activeSection || r.section === activeSection),
+    [category, activeSection],
   );
 
-  const machineOptions = useMemo(
-    () =>
-      [
-        ...new Set(
-          machineRows
-            .filter(
-              (r) =>
-                (!category || r.status === category) &&
-                (!section || r.section === section),
-            )
-            .map((r) => r.machine)
-            .filter((m) => m != null && m !== ""),
-        ),
-      ].sort(),
-    [machineRows, category, section],
-  );
+  const measureDef = MEASURES.find((m) => m.value === measure);
+  const level = picked ? 2 : 1;
 
-  // A narrowed filter can strand the selection below it — drop it rather
-  // than describe the chart with a scope it no longer has.
-  useEffect(() => {
-    if (section && !sectionOptions.includes(section)) setSection("");
-  }, [section, sectionOptions]);
-  useEffect(() => {
-    if (machine && !machineOptions.includes(machine)) setMachine("");
-  }, [machine, machineOptions]);
-
-  const scope = useMemo(() => {
-    let minutes = 0;
-    let occurrences = 0;
-    for (const r of scopeRows) {
-      minutes += r.BreakdownMin_m ?? 0;
-      occurrences += r.BreakdownOcc_m ?? 0;
-    }
-    return {
-      minutes,
-      occurrences,
-      machines: scopeRows.filter((r) => r.BreakdownMin_m > 0).length,
-    };
-  }, [scopeRows]);
-
-  const measureKey = MEASURES.find((m) => m.id === measure).key;
-
+  // One list per level: the chart's bars and the table's rows.
   const allRows = useMemo(() => {
-    const built =
-      viewBy === "machine"
-        ? scopeRows.map((r) => ({
-            key: r.machine,
-            label: r.machine ?? "—",
-            section: r.section,
-            status: r.status,
-            minutes: r.BreakdownMin_m,
-            // Spec rule: the machine-level counter, never the summed
-            // failure rows.
-            occurrences: r.BreakdownOcc_m,
-            pct: r.Breakdown_Pct_m,
-          }))
-        : failureRows.map((r) => ({
-            key: r.remarks,
-            label: r.remarks ?? "—",
-            minutes: r.BreakdownMin_m_Failure,
-            occurrences: r.BreakdownOcc_m_Failure,
-            // Published per (machine, failure) — so it describes this row
-            // only while a machine is pinned.
-            pct: machine ? r.Breakdown_Pct_m_Failure : null,
-          }));
+    if (!machineRows || !failureRows) return null;
+    let built;
+    if (viewBy === "machine" && !picked) {
+      built = machineRows.filter(inScope).map((r) => ({
+        ...r,
+        key: r.machine,
+        label: r.machine,
+      }));
+    } else if (viewBy === "machine") {
+      // The clicked machine's failures. A failure filed under two
+      // disciplines is one bar, coloured by the one with more minutes.
+      built = groupFailures(
+        failureRows.filter((r) => r.machine === picked.key),
+        "remarks",
+      ).map((g) => {
+        const split = [...g.split.entries()].sort((a, b) => b[1] - a[1]);
+        return {
+          ...g,
+          discipline: split[0]?.[0],
+          splitText:
+            split.length > 1
+              ? split.map(([d, m]) => `${d} ${fmt(m)} min`).join(" · ")
+              : null,
+          color: disciplineColor(split[0]?.[0]),
+        };
+      });
+    } else if (!picked) {
+      // Failures across machines: no published % of their own.
+      built = groupFailures(failureRows.filter(inScope), "remarks").map(
+        (g) => ({ ...g, pct: null }),
+      );
+    } else {
+      built = groupFailures(
+        failureRows.filter((r) => r.remarks === picked.key && inScope(r)),
+        "machine",
+      );
+    }
 
     const ranked = built
-      .map((r) => ({ ...r, value: r[measureKey] }))
+      .map((r) => ({ ...r, value: r[measureDef.key] }))
       // A Pareto ranks what was lost; a machine that ran clean has no bar.
       .filter((r) => r.value != null && r.value > 0)
       .sort((a, b) => b.value - a.value);
-
     const total = ranked.reduce((s, r) => s + r.value, 0);
     return ranked.map((r) => ({
       ...r,
       share: total ? (r.value / total) * 100 : 0,
+      clickable: level === 1,
     }));
-  }, [viewBy, scopeRows, failureRows, measureKey, machine]);
+  }, [machineRows, failureRows, viewBy, picked, inScope, measureDef, level]);
 
   const measureTotal = useMemo(
-    () => allRows.reduce((s, r) => s + r.value, 0),
+    () => (allRows ?? []).reduce((s, r) => s + r.value, 0),
     [allRows],
   );
 
-  const barRows = useMemo(() => allRows.slice(0, maxBars), [allRows, maxBars]);
-
-  // What the plotted head actually covers, stated in the caption — this is
-  // the figure the pooled "Other" bar would have shown.
-  const plottedShare = useMemo(
-    () =>
-      measureTotal
-        ? (barRows.reduce((s, r) => s + r.value, 0) / measureTotal) * 100
-        : 0,
-    [barRows, measureTotal],
-  );
-
-  // Counted over the REAL rows, never over the pooled bar: "Other" is 345
-  // failures in one rectangle, so including it answers "16 of 16 bars", which
-  // says nothing. The honest figure is how many distinct machines or failures
-  // carry 80% — 85 of 360 in August.
+  // How many distinct rows carry 80% of the scope — counted on real rows.
   const rowsTo80 = useMemo(() => {
-    if (!measureTotal) return 0;
+    if (!allRows || !measureTotal) return 0;
     let running = 0;
     for (let i = 0; i < allRows.length; i++) {
       running += allRows[i].value;
@@ -588,209 +552,217 @@ function ParetoView({
     return allRows.length;
   }, [allRows, measureTotal]);
 
-  const loading =
-    machineState.loading || (viewBy === "failure" && failureState.loading);
-  const error = machineState.error || failureState.error;
-  const groupLabel = viewBy === "machine" ? "Machine" : "Failure";
-  const activeMeasure = MEASURES.find((m) => m.id === measure);
+  const groupLabel =
+    viewBy === "machine"
+      ? picked
+        ? "Failure"
+        : "Machine"
+      : picked
+        ? "Machine"
+        : "Failure";
+
+  const barRows = useMemo(
+    () =>
+      (allRows ?? []).slice(0, maxBars).map((r) => ({
+        ...r,
+        tooltip: [
+          ...(r.section && groupLabel === "Machine"
+            ? [
+                ["Section", r.section],
+                ["Category", r.status],
+              ]
+            : []),
+          ...(r.splitText
+            ? [["Disciplines", r.splitText]]
+            : r.discipline
+              ? [["Discipline", r.discipline]]
+              : []),
+          ["Downtime", `${fmt(r.minutes)} min`],
+          ["Occurrences", fmt(r.occurrences)],
+          ...(r.pct == null ? [] : [["Breakdown %", `${fmt(r.pct, 2)}%`]]),
+          ["Share of scope", `${fmt(r.share, 1)}%`],
+        ],
+      })),
+    [allRows, maxBars, groupLabel],
+  );
+  const plottedShare = measureTotal
+    ? (barRows.reduce((s, r) => s + r.value, 0) / measureTotal) * 100
+    : 0;
+
+  // Discipline legend for a machine's failures, in the fixed order.
+  const disciplineGroups = useMemo(() => {
+    if (!(viewBy === "machine" && picked)) return null;
+    const present = new Set(barRows.map((r) => r.discipline));
+    return [...DISCIPLINES, OTHER_DISCIPLINE]
+      .filter((d) => present.has(d.id))
+      .map((d) => ({ name: d.id, color: d.color }));
+  }, [viewBy, picked, barRows]);
+
+  const pick = useCallback(
+    (row) => setPicked({ key: row.key, label: row.label }),
+    [],
+  );
+
+  const loading = machineQuery.isLoading || !machineRows || !failureRows;
+  const error = machineQuery.error || failureQuery.error;
+  const scopeMinutes = (allRows ?? []).reduce(
+    (s, r) => s + (r.minutes ?? 0),
+    0,
+  );
+  const scopeOcc = (allRows ?? []).reduce(
+    (s, r) => s + (r.occurrences ?? 0),
+    0,
+  );
+  const plural = groupLabel === "Machine" ? "machines" : "failures";
+  const emptyMessage = error
+    ? `Breakdown chart fetch failed: ${error.message || "Request failed"}`
+    : loading
+      ? "Loading…"
+      : picked
+        ? `No breakdowns for ${picked.label} in this period.`
+        : "No breakdowns in this period.";
+
+  const steps = [
+    {
+      label: viewBy === "machine" ? "All machines" : "All failures",
+      onClick: () => setPicked(null),
+    },
+    ...(picked ? [{ label: picked.label }] : []),
+  ];
 
   const columns = [
-    { key: "label", label: groupLabel, align: "left", render: (r) => r.label },
-    ...(viewBy === "machine"
+    { key: "label", label: groupLabel, align: "left" },
+    ...(groupLabel === "Machine"
       ? [
-          { key: "section", label: "Section", render: (r) => r.section ?? "—" },
-          {
-            key: "status",
-            label: "Category",
-            render: (r) => <GradeChip grade={r.status} />,
-          },
+          { key: "section", label: "Section", align: "left" },
+          { key: "status", label: "Category" },
         ]
+      : []),
+    ...(viewBy === "machine" && picked
+      ? [{ key: "discipline", label: "Discipline", align: "left" }]
       : []),
     {
       key: "minutes",
       label: "Downtime (min)",
       align: "right",
-      render: (r) => fmtNum(r.minutes),
+      render: (r) => fmt(r.minutes),
     },
     {
       key: "occurrences",
       label: "Occurrences",
       align: "right",
-      render: (r) => fmtNum(r.occurrences),
+      render: (r) => fmt(r.occurrences),
     },
     {
       key: "pct",
       label: "Breakdown %",
       align: "right",
-      // Published or "—": a failure spanning machines has no percentage of
-      // its own, and the UI does not make one up.
-      render: (r) => (r.pct == null ? "—" : fmtNum(r.pct, 2) + "%"),
+      render: (r) => (r.pct == null ? "—" : fmt(r.pct, 2) + "%"),
     },
     {
       key: "share",
       label: "Share of scope",
       align: "right",
-      render: (r) => fmtNum(r.share, 1) + "%",
+      render: (r) => fmt(r.share, 1) + "%",
     },
   ];
 
   return (
-    <div>
-      <ControlRow>
-        <ControlLabel>View by</ControlLabel>
-        {VIEWS_BY.map((v) => (
-          <Chip
-            key={v.id}
-            on={viewBy === v.id}
-            color={C.pp}
-            onClick={() => setViewBy(v.id)}
-          >
-            {v.label}
-          </Chip>
-        ))}
-        <span style={{ width: 12 }} />
-        <ControlLabel gutter={false}>Measure</ControlLabel>
-        {MEASURES.map((m) => (
-          <Chip
-            key={m.id}
-            on={measure === m.id}
-            onClick={() => setMeasure(m.id)}
-          >
-            {m.label}
-          </Chip>
-        ))}
-      </ControlRow>
+    <>
+      <Stack spacing={1.25}>
+        <SingleSelectRow
+          label="View by"
+          value={viewBy}
+          onChange={(next) => {
+            setViewBy(next);
+            setPicked(null);
+          }}
+          options={VIEWS_BY}
+        />
+        <SingleSelectRow
+          label="Measure"
+          value={measure}
+          onChange={setMeasure}
+          options={MEASURES}
+        />
+        <DropdownRow
+          label="Filter"
+          filters={[
+            {
+              id: "category",
+              value: category,
+              onChange: (v) => {
+                setCategory(v);
+                setSection("");
+              },
+              options: categoryOptions,
+              allLabel: "All categories",
+            },
+            {
+              id: "section",
+              value: activeSection,
+              onChange: setSection,
+              options: sectionOptions,
+              allLabel: "All sections",
+            },
+          ]}
+        />
+      </Stack>
 
-      <ControlRow last>
-        <ControlLabel>Filter</ControlLabel>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          style={{ ...selectStyle, maxWidth: 200 }}
-        >
-          <option value="">All categories</option>
-          {categoryOptions.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <select
-          value={section}
-          onChange={(e) => setSection(e.target.value)}
-          style={{ ...selectStyle, maxWidth: 220 }}
-        >
-          <option value="">All sections</option>
-          {sectionOptions.map((sec) => (
-            <option key={sec} value={sec}>
-              {sec}
-            </option>
-          ))}
-        </select>
-        <select
-          value={machine}
-          onChange={(e) => setMachine(e.target.value)}
-          style={{ ...selectStyle, maxWidth: 220 }}
-        >
-          <option value="">All machines</option>
-          {machineOptions.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        {(category || section || machine) && (
-          <Chip
-            on
-            color={C.pp}
-            onClick={() => {
-              setCategory("");
-              setSection("");
-              setMachine("");
-            }}
-          >
-            Clear
-          </Chip>
-        )}
-      </ControlRow>
+      <DrillBreadcrumb steps={steps} />
 
-      {error ? (
-        <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
-          Breakdown chart fetch failed: {error.message || "Request failed"}
-        </div>
-      ) : loading ? (
-        <JKLoader message="Loading breakdown chart" />
-      ) : (
+      <ChartPanel
+        theme={theme}
+        title={`${measureDef.label} by ${groupLabel.toLowerCase()} · ${periodText}`}
+        loading={loading}
+        empty={loading || Boolean(error) || barRows.length === 0}
+        emptyMessage={emptyMessage}
+      >
+        <ParetoChart
+          rows={barRows}
+          measureLabel={measureDef.label}
+          groupLabel={groupLabel}
+          barsTo80={disciplineGroups ? barRows.length : rowsTo80}
+          groups={disciplineGroups}
+          onPick={pick}
+        />
+      </ChartPanel>
+
+      {!loading && !error && barRows.length > 0 && (
         <>
-          <ScopeBanner>
-            <b style={{ color: C.tx }}>Scope: </b>
-            {category || "All categories"} · {section || "all sections"} ·{" "}
-            {machine
-              ? `machine ${machine}`
-              : `${fmtNum(scope.machines)} machines with a breakdown`}{" "}
-            — <b style={{ color: C.tx }}>{fmtNum(scope.minutes)} min</b> over{" "}
-            <b style={{ color: C.tx }}>{fmtNum(scope.occurrences)}</b>{" "}
-            breakdowns.{" "}
-            {allRows.length === 0
-              ? "Nothing recorded in this scope."
-              : `${fmtNum(rowsTo80)} of ${fmtNum(allRows.length)} ${
-                  groupLabel === "Machine" ? "machines" : "failures"
-                } carry 80% of the ${activeMeasure.label.toLowerCase()}.`}
-          </ScopeBanner>
-
-          {barRows.length > 0 && (
-            <>
-              <ParetoChart
-                rows={barRows}
-                measureLabel={activeMeasure.label}
-                groupLabel={groupLabel}
-                barsTo80={rowsTo80}
-              />
-              <ChartCaption>
-                Bars = {activeMeasure.label.toLowerCase()} (additive) · amber
-                line = cumulative % of displayed total
-                {" · axes scaled to the displayed rows' cumulative total"}
-                {!aggregate && (viewBy === "machine" || machine)
-                  ? " · small figure = that row's own Breakdown %"
-                  : ""}
-                {allRows.length > maxBars &&
-                  ` · top ${maxBars} of ${fmtNum(allRows.length)} = ${fmtNum(
-                    plottedShare,
-                    1,
-                  )}% of scope; the remaining ${fmtNum(allRows.length - maxBars)} carry ${fmtNum(
-                    100 - plottedShare,
-                    1,
-                  )}%`}
-              </ChartCaption>
-            </>
-          )}
-
-          <div style={{ marginTop: 10 }}>
-            <DTable
-              columns={columns}
-              rows={allRows}
-              getRowKey={(r) => r.key}
-              emptyMessage="No breakdowns recorded in this scope."
-              downloadName="engineering-breakdown-pareto"
-            />
-          </div>
+          <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+            <b>{fmt(scopeMinutes)} min</b> over <b>{fmt(scopeOcc)}</b>{" "}
+            breakdowns. {fmt(rowsTo80)} of {fmt(allRows.length)} {plural} carry
+            80% of the {measureDef.label.toLowerCase()}.
+            {allRows.length > maxBars &&
+              ` Top ${maxBars} = ${fmt(plottedShare, 1)}% of scope; the remaining ${fmt(
+                allRows.length - maxBars,
+              )} carry ${fmt(100 - plottedShare, 1)}%.`}
+            {level === 1 && " Click a bar or a row to drill down."}
+          </Typography>
+          <DataTable
+            columns={columns}
+            rows={allRows}
+            getRowKey={(r) => r.key}
+            onRowClick={level === 1 ? pick : undefined}
+            searchPlaceholder={`Search ${groupLabel.toLowerCase()}…`}
+            emptyMessage="No breakdowns recorded in this scope."
+          />
         </>
       )}
-    </div>
+    </>
   );
 }
 
 /**
- * The modal behind the Breakdown trend icon: one Pareto, three filters.
- *
- * @param {{ open: boolean, onClose: () => void, date: string, granularity: string,
- *           asOf?: string, title?: string, initialViewBy?: string, maxBars?: number }} props
+ * @param {{ open: boolean, onClose: () => void, date: string,
+ *   granularity: string, asOf?: string, title?: string,
+ *   initialViewBy?: string, maxBars?: number }} props
  */
 function BreakdownChartModal({
   open,
   onClose,
   date,
-  granularity,
   asOf,
   title = "Breakdown",
   initialViewBy,
@@ -804,26 +776,34 @@ function BreakdownChartModal({
     to: trend.to,
     asOf: asOf ?? date,
   });
+  const periodText = request.aggregate
+    ? `${request.from} – ${request.to}`
+    : new Date(`${request.date}T00:00:00`).toLocaleString("en-IN", {
+        month: "short",
+        year: "numeric",
+      });
 
   return (
-    <AnalysisModal
+    <ModalFrame
       open={open}
       onClose={onClose}
-      eyebrow="Pareto Analysis"
-      title={title}
-      headerExtra={trend.control}
-      maxWidth={1000}
+      kpi={{ name: title }}
+      headerExtras={trend.control}
     >
-      <ParetoView
-        date={request.date}
-        from={request.from}
-        to={request.to}
-        granularity={request.granularity}
-        aggregate={request.aggregate}
-        initialViewBy={initialViewBy}
-        maxBars={maxBars}
-      />
-    </AnalysisModal>
+      {/* Remounted per opening so every opening starts at level 1. */}
+      {open && (
+        <ParetoView
+          date={request.date}
+          from={request.from}
+          to={request.to}
+          granularity={request.granularity}
+          aggregate={request.aggregate}
+          initialViewBy={initialViewBy}
+          maxBars={maxBars}
+          periodText={periodText}
+        />
+      )}
+    </ModalFrame>
   );
 }
 

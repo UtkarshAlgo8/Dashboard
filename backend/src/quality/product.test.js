@@ -182,3 +182,29 @@ test("Product history groups rows per KPI and keeps empty series", () => {
     Zf_Uniformity_Yield: [],
   });
 });
+
+test("Uniformity trend reads plant or machine rows over a granularity list", async () => {
+  const { uniformityTrendQuery, isUniformityTrendKpi } = await import(
+    "./queries/product.queries.js"
+  );
+  const plant = uniformityTrendQuery({
+    kpiNames: ["Zf_Uniformity_Yield"],
+    rowScope: "plant",
+    granularities: ["SHIFT A", "SHIFT B", "SHIFT C"],
+    from: "2026-10-12",
+    to: "2026-10-22",
+  });
+  assert.match(plant, /category = 'Uniformity Testing'/);
+  assert.match(plant, /\(machine IS NULL OR/);
+  assert.match(plant, /granularity IN \('SHIFT A', 'SHIFT B', 'SHIFT C'\)/);
+  const machine = uniformityTrendQuery({
+    kpiNames: ["Zf_Uniformity_Yield_m", "Zf_Uniformity_Production"],
+    rowScope: "machine",
+    granularities: ["MONTH"],
+    from: "2026-10-01",
+    to: "2026-10-01",
+  });
+  assert.match(machine, /NOT \(machine IS NULL OR/);
+  assert.ok(isUniformityTrendKpi("Zf_Uniformity_Yield_m"));
+  assert.ok(!isUniformityTrendKpi("Paint_Wt_Within3_Pct_overall"));
+});
