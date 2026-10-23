@@ -106,3 +106,33 @@ test("live SKU upstream failure is an error, never a zero-machine snapshot", asy
     assert.equal(body.data, undefined);
   });
 });
+
+test("a failed live snapshot is replayed, not re-queried, while remembered", async (t) => {
+  await _clear();
+  const nativeFetch = globalThis.fetch;
+  let upstreamCalls = 0;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    if (String(url) !== config.upstream.url) return nativeFetch(url, init);
+    upstreamCalls += 1;
+    return new Response(
+      JSON.stringify({ status: "ERROR", message: "Service Unavailable" }),
+      { status: 503 },
+    );
+  });
+  await withServer(async (base) => {
+    const url = `${base}/api/v1/dashboard/live-running-skus`;
+    const first = await nativeFetch(url);
+    const second = await nativeFetch(url);
+    assert.equal(first.status, 503);
+    assert.equal(second.status, 503);
+    assert.deepEqual(await second.json(), await first.json());
+  });
+  assert.equal(upstreamCalls, 1, "the remembered failure must not re-hit Silver");
+
+  // Once the failure is forgotten the next request queries Silver again.
+  await _clear();
+  await withServer(async (base) => {
+    await nativeFetch(`${base}/api/v1/dashboard/live-running-skus`);
+  });
+  assert.equal(upstreamCalls, 2);
+});
