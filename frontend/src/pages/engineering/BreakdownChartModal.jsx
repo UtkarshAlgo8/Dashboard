@@ -257,6 +257,9 @@ function ParetoChart({
       },
       plotOptions: {
         column: {
+          // One bar per category: the legend-only discipline series below
+          // would otherwise each claim a slot and push the bar off-centre.
+          grouping: false,
           borderWidth: 0,
           borderRadius: 3,
           groupPadding: 0.12,
