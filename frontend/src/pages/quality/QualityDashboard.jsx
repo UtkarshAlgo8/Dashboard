@@ -14115,7 +14115,6 @@ function LiveProductDrillPanel({ kpi, date, shift, granularity }) {
       ) : (
         label
       ),
-      row.machine && row.machine !== label ? row.machine : "—",
       row.actual_value == null ? "—" : fmt(Number(row.actual_value)),
       row.unit || "—",
     ];
@@ -14139,7 +14138,7 @@ function LiveProductDrillPanel({ kpi, date, shift, granularity }) {
       ) : tableRows.length ? (
         <>
           <DTable
-            cols={["KPI / machine", "Machine", "Value", "Unit"]}
+            cols={["KPI / machine", "Value", "Unit"]}
             rows={tableRows}
             isRowClickable={(row) => row.canDrill}
             onRowClick={(row) => openChild(row.productRow)}

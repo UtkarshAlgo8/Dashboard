@@ -39,7 +39,8 @@ function yieldFloor(seriesList) {
  * Trend modal for the Quality › Product › Uniformity & Balancing cards
  * (Uniformity_KPI_Fetch_Spec). Built from the Production trend modal's
  * parts so the two read as one product. Every value plotted is its own gold
- * row — nothing is added or averaged here, and a missing period is a gap.
+ * row — nothing is added or averaged here. A missing period has no point;
+ * the line is drawn across it so a machine's trend still reads as one line.
  *
  * @param {{ open: boolean, onClose: () => void, cardKpi: string,
  *   title: string, today: string,
@@ -314,6 +315,7 @@ function UniformityTrendModal({
             series={[{ name: "Overall", values: chart.values }]}
             unit={card.unit}
             yMin={yieldFloor([{ values: chart.values }])}
+            connectNulls
           />
         )}
         {!empty && view.kind === "columns" && (
@@ -329,6 +331,7 @@ function UniformityTrendModal({
             series={chart.series}
             unit="%"
             yMin={yieldFloor(chart.series)}
+            connectNulls
           />
         )}
         {!empty && view.kind === "byType" && (

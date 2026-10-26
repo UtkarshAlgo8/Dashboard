@@ -21,7 +21,7 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { getTrend } from "@/api/trends.js";
 import client from "@/api/client.js";
 import { presetToDateRange } from "@/lib/timeRange.js";
-import { canonicalUnit } from "@/lib/kpi-transformer.js";
+import { canonicalUnit, isLowerBetterKpi } from "@/lib/kpi-transformer.js";
 import { isKg, kgToTonnes } from "@/lib/units.js";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 import {
@@ -436,6 +436,9 @@ function LegacyTrendModal({
   }
 
   const chartType = pickChartType(kpi.id, kpi.unit, kpi.name);
+  // Best/Worst colouring follows the KPI's direction: most Scrap is Worst.
+  const lowerIsBetter =
+    kpi.lowerIsBetter ?? isLowerBetterKpi(kpi.rawName ?? kpi.name);
 
   return (
     <ModalFrame
@@ -491,6 +494,7 @@ function LegacyTrendModal({
             values={values}
             unit={kpi.unit}
             target={kpi.target ?? null}
+            lowerIsBetter={lowerIsBetter}
           />
         ) : chartType === "bar" ? (
           <BarChart
@@ -498,6 +502,7 @@ function LegacyTrendModal({
             values={values}
             unit={kpi.unit}
             target={kpi.target ?? null}
+            lowerIsBetter={lowerIsBetter}
           />
         ) : (
           <ProgressChart
