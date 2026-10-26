@@ -28,21 +28,33 @@ const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
  *   unit     - global unit suffix; overridden per-series when set
  *   target   - optional dashed amber plot line
  *   colors   - optional override of the brand palette, one per series
+ *   connectNulls - draw the line straight across a missing period instead
+ *              of breaking it (the point itself is still absent)
  *
  * Highcharts natively supports multi-series; we just feed the array in
  * instead of a hard-coded single entry. Legend renders inline (the
  * existing ChartLegend.jsx is single-series, so the legend ships as a
  * Highcharts native one here).
  */
-function MultiLineChart({ labels, series, unit, target, colors, yMin }) {
+function MultiLineChart({
+  labels,
+  series,
+  unit,
+  target,
+  colors,
+  yMin,
+  connectNulls = false,
+}) {
   const theme = useTheme();
 
   const palette = useMemo(() => {
     if (Array.isArray(colors) && colors.length) return colors;
     // Stable brand palette — pulled once via theme, not per render, so
-    // HMR / theme swaps don't reshuffle series colours.
+    // HMR / theme swaps don't reshuffle series colours. Only distinct hues:
+    // brand.orange/ocean alias blue and brand.teal aliases green in the
+    // theme, so listing them would draw two series in the same colour.
     const b = theme.custom.brand;
-    return [b.blue, b.orange, b.green, b.purple, b.teal, b.cyan];
+    return [b.blue, b.purple, b.green, b.amber, b.red];
   }, [colors, theme]);
 
   const options = useMemo(() => {
@@ -174,6 +186,7 @@ function MultiLineChart({ labels, series, unit, target, colors, yMin }) {
       },
       plotOptions: {
         line: {
+          connectNulls,
           lineWidth: 2.5,
           marker: { enabled: true, radius: 3.5, lineWidth: 0 },
           states: { hover: { lineWidth: 3 } },
@@ -199,7 +212,7 @@ function MultiLineChart({ labels, series, unit, target, colors, yMin }) {
       },
       series: cleanedSeries,
     };
-  }, [labels, series, unit, target, theme, palette, yMin]);
+  }, [labels, series, unit, target, theme, palette, yMin, connectNulls]);
 
   return (
     <Box sx={{ width: "100%" }}>
