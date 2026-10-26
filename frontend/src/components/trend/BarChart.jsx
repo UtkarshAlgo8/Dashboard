@@ -4,7 +4,7 @@ import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import ChartLegend from "./ChartLegend.jsx";
 import { formatCompactNumber, withUnit } from "@/lib/numberFormat.js";
-import { buildTrendLegend } from "./trendLegend.js";
+import { buildTrendLegend, pickTrendExtremes } from "./trendLegend.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle. Depending on
 // the Vite CJS-interop path the default import resolves to either
@@ -20,12 +20,13 @@ const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
  *   values  - numeric series parallel to labels
  *   unit    - optional unit string
  *   target  - optional dashed amber plot line
+ *   lowerIsBetter - colour the min Best / max Worst (Scrap, Rework, ...)
  *
  * Note: Highcharts calls vertical bars `column` (their `bar` is
  * horizontal). We use `column` since the artifact's discrete-count
  * KPIs render vertical bars.
  */
-function BarChart({ labels, values, unit, target }) {
+function BarChart({ labels, values, unit, target, lowerIsBetter = false }) {
   const theme = useTheme();
 
   const options = useMemo(() => {
@@ -41,14 +42,12 @@ function BarChart({ labels, values, unit, target }) {
     const cleaned = values.map((v) =>
       typeof v === "number" && Number.isFinite(v) ? v : null,
     );
-    const numeric = cleaned.filter((v) => v !== null);
-    const max = numeric.length ? Math.max(...numeric) : null;
-    const min = numeric.length ? Math.min(...numeric) : null;
+    const { best, worst } = pickTrendExtremes(cleaned, lowerIsBetter);
 
     const data = cleaned.map((v) => {
       if (v === null) return { y: null };
-      if (max !== min && v === max) return { y: v, color: colors.best };
-      if (max !== min && v === min) return { y: v, color: colors.worst };
+      if (best !== null && v === best) return { y: v, color: colors.best };
+      if (worst !== null && v === worst) return { y: v, color: colors.worst };
       return { y: v };
     });
 
@@ -116,7 +115,7 @@ function BarChart({ labels, values, unit, target }) {
       },
       series: [{ name: "Actual", data }],
     };
-  }, [labels, values, unit, target, theme]);
+  }, [labels, values, unit, target, lowerIsBetter, theme]);
 
   const legendItems = buildTrendLegend({
     values,

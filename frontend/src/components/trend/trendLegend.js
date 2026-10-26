@@ -1,4 +1,27 @@
 /**
+ * Pick which plotted values the trend charts colour as Best and Worst.
+ *
+ * Unlisted KPIs are higher-is-better (max = Best); lower-is-better KPIs such
+ * as Scrap / Rework / Downtime flip it, so the month with the MOST scrap is
+ * the Worst one. Returns nulls when the series is flat or empty — the same
+ * condition under which buildTrendLegend omits the Best / Worst keys.
+ *
+ * @param {(number|null)[]} values
+ * @param {boolean} lowerIsBetter
+ * @returns {{best:number|null, worst:number|null}}
+ */
+export function pickTrendExtremes(values, lowerIsBetter) {
+  const numeric = (values ?? []).filter(
+    (v) => typeof v === "number" && Number.isFinite(v),
+  );
+  if (numeric.length === 0) return { best: null, worst: null };
+  const max = Math.max(...numeric);
+  const min = Math.min(...numeric);
+  if (max === min) return { best: null, worst: null };
+  return lowerIsBetter ? { best: min, worst: max } : { best: max, worst: min };
+}
+
+/**
  * Build the legend items for a trend LineChart / BarChart from its data.
  *
  * The charts colour the single series' extremes (best green, worst red) and
