@@ -155,16 +155,10 @@ function BanmoreEngineering() {
           </Box>
         )}
         {activeTab === "overall" && (
-          <EngineeringOverviewSection
-            period={period}
-            periodLabel={periodLabel}
-          />
+          <EngineeringOverviewSection period={period} />
         )}
         {activeTab === "reliability" && (
-          <EngineeringReliabilitySection
-            period={period}
-            periodLabel={periodLabel}
-          />
+          <EngineeringReliabilitySection period={period} />
         )}
         {!isLiveTab && (
           <EngineeringKpiGrid

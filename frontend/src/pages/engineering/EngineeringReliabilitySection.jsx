@@ -10,7 +10,7 @@ import { C } from "./reliabilityShared.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
 import { periodRequestParams } from "@/lib/engineeringPeriod.js";
 
-function EngineeringReliabilitySection({ period, periodLabel }) {
+function EngineeringReliabilitySection({ period }) {
   // The response is stamped with the period it answered for, so "still
   // loading" is DERIVED (stamp !== current period) rather than held in its
   // own state. That covers the first render and every period change with one
@@ -61,7 +61,6 @@ function EngineeringReliabilitySection({ period, periodLabel }) {
       <ReliabilityCardsGrid
         values={result.values}
         period={period}
-        periodLabel={periodLabel}
         includeTopMachines={true}
       />
     </div>

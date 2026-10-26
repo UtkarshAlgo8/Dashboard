@@ -14,6 +14,12 @@ import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { toExportTable, toFileSlug } from "@/lib/tableExport.js";
+import {
+  meanRepairMinutes,
+  pooledBreakdownPct,
+  pooledDowntime,
+  pooledMtbf,
+} from "@/lib/reliabilityPooled.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle; normalize the
 // CJS-interop shape (mirrors components/trend/LineChart.jsx).
@@ -749,6 +755,193 @@ export const MTTR_LEVELS = [
   }),
 ];
 
+/* ─── CUSTOM-RANGE DRILL LEVELS ───
+ * A custom range has no published rate row, and summing daily rates is
+ * rule-8 arithmetic. These levels read only additive components with
+ * `agg=sum` over the window and rebuild each rate per row (see
+ * lib/reliabilityPooled.js) — the same formulas behind the range headline.
+ *
+ * Every machine-level component row carries its status and section, so
+ * grouping them by category or section pools that group's machines. Below
+ * machine only additive columns are shown: there is no scheduled or
+ * operating time per discipline or failure to divide by.
+ */
+const POOLED_KPIS = [
+  "BreakdownMin_m",
+  "BreakdownOcc_m",
+  "OperatingMin_m",
+  "ScheduledMin_m",
+];
+
+const POOLED_NOTE =
+  "Recalculated for the selected range from summed machine downtime, " +
+  "breakdown events and scheduled / operating time.";
+
+const pooledEventsColumn = {
+  key: "BreakdownOcc_m",
+  label: "Events",
+  align: "right",
+  render: (r) => fmtNum(r.BreakdownOcc_m),
+};
+
+function pooledBreakdownLevel(groupBy, groupLabel) {
+  return {
+    groupBy,
+    groupLabel,
+    kpiNames: POOLED_KPIS,
+    columns: [
+      {
+        key: "pooled_breakdown_pct",
+        label: "Breakdown %",
+        align: "right",
+        sortValue: pooledBreakdownPct,
+        render: (r) => {
+          const pct = pooledBreakdownPct(r);
+          return pct == null ? "—" : fmtNum(pct, 2) + "%";
+        },
+      },
+      {
+        key: "pooled_downtime",
+        label: "Downtime",
+        align: "right",
+        sortValue: pooledDowntime,
+        render: (r) => fmtMinHrs(pooledDowntime(r)),
+      },
+      shareColumn("BreakdownMin_m"),
+    ],
+  };
+}
+
+function pooledMtbfLevel(groupBy, groupLabel) {
+  return {
+    groupBy,
+    groupLabel,
+    kpiNames: POOLED_KPIS,
+    columns: [
+      {
+        key: "pooled_mtbf",
+        label: "MTBF",
+        align: "right",
+        sortValue: pooledMtbf,
+        render: (r) => fmtMinHrs(pooledMtbf(r)),
+      },
+      pooledEventsColumn,
+      {
+        key: "OperatingMin_m",
+        label: "Operating time",
+        align: "right",
+        render: (r) => fmtMinHrs(r.OperatingMin_m),
+      },
+    ],
+  };
+}
+
+function pooledMttrLevel(groupBy, groupLabel, minutesKpi, occKpi) {
+  const mttr = (r) => meanRepairMinutes(r[minutesKpi], r[occKpi]);
+  return {
+    groupBy,
+    groupLabel,
+    kpiNames: [minutesKpi, occKpi],
+    columns: [
+      {
+        key: `pooled_mttr_${minutesKpi}`,
+        label: "MTTR",
+        align: "right",
+        sortValue: mttr,
+        render: (r) => fmtMinHrs(mttr(r)),
+      },
+      {
+        key: occKpi,
+        label: "Events",
+        align: "right",
+        render: (r) => fmtNum(r[occKpi]),
+      },
+      {
+        key: minutesKpi,
+        label: "Repair time",
+        align: "right",
+        render: (r) => fmtMinHrs(r[minutesKpi]),
+      },
+    ],
+  };
+}
+
+/** Downtime (+ events, where a counter exists at that grain) and Share. */
+function rangeDowntimeLevel(groupBy, groupLabel, minKpi, occKpi) {
+  const columns = [
+    {
+      key: minKpi,
+      label: "Downtime",
+      align: "right",
+      render: (r) => fmtMinHrs(r[minKpi]),
+    },
+  ];
+  if (occKpi) {
+    columns.push({
+      key: occKpi,
+      label: "Events",
+      align: "right",
+      render: (r) => fmtNum(r[occKpi]),
+    });
+  }
+  columns.push(shareColumn(minKpi));
+  return {
+    groupBy,
+    groupLabel,
+    kpiNames: occKpi ? [minKpi, occKpi] : [minKpi],
+    columns,
+  };
+}
+
+export const BREAKDOWN_RANGE_LEVELS = [
+  {
+    ...pooledBreakdownLevel("status", "Machine Category"),
+    note: POOLED_NOTE,
+  },
+  pooledBreakdownLevel("section", "Section"),
+  pooledBreakdownLevel("machine", "Machine"),
+  {
+    ...rangeDowntimeLevel(
+      "sub_section",
+      "Discipline",
+      "BreakdownMin_m_Discipline",
+    ),
+    padTo: DISCIPLINES,
+  },
+  rangeDowntimeLevel(
+    "remarks",
+    "Failure",
+    "BreakdownMin_m_Failure",
+    "BreakdownOcc_m_Failure",
+  ),
+];
+
+export const MTBF_RANGE_LEVELS = [
+  { ...pooledMtbfLevel("status", "Machine Category"), note: POOLED_NOTE },
+  pooledMtbfLevel("section", "Section"),
+  pooledMtbfLevel("machine", "Machine"),
+];
+
+export const MTTR_RANGE_LEVELS = [
+  {
+    ...pooledMttrLevel(
+      "status",
+      "Machine Category",
+      "BreakdownMin_m",
+      "BreakdownOcc_m",
+    ),
+    note: POOLED_NOTE,
+  },
+  pooledMttrLevel("section", "Section", "BreakdownMin_m", "BreakdownOcc_m"),
+  pooledMttrLevel("machine", "Machine", "BreakdownMin_m", "BreakdownOcc_m"),
+  pooledMttrLevel(
+    "remarks",
+    "Failure",
+    "BreakdownMin_m_Failure",
+    "BreakdownOcc_m_Failure",
+  ),
+];
+
 function lossLevel(groupBy, groupLabel, timeKpi, occKpi) {
   const columns = [
     {
@@ -824,9 +1017,9 @@ function DrillLevelTable({
   // covering the panel's month means asking for its whole date window —
   // without it the level would show the 1st of the month and nothing else.
   //
-  // A custom `range` (Loss Tree only — lost time and occurrences are
-  // additive, so `agg=sum` over every DAY row in it is the period total)
-  // reads at DAY grain across that window instead.
+  // A custom `range` (Loss Tree and the *_RANGE_LEVELS — they read only
+  // additive measures, so `agg=sum` over every DAY row in it is the period
+  // total) reads at DAY grain across that window instead.
   const levelGranularity = range ? "DAY" : (level.granularity ?? granularity);
   const dayWindow = range
     ? range
@@ -971,8 +1164,9 @@ function DrillLevelTable({
  * `slice(0, i + 1)` truncation of `history`.
  *
  * Reused for Breakdown/MTBF/MTTR (agg=undefined, ancestor dims pinned so
- * each group is one row) and Loss Tree levels 2-4 (agg="sum", status/section
- * never pinned).
+ * each group is one row; over a custom range their *_RANGE_LEVELS with
+ * agg="sum") and Loss Tree levels 2-4 (agg="sum", status/section never
+ * pinned).
  *
  * `initialFilters`/`initialLabel` seed the root view — Loss Tree opens
  * already scoped to the clicked pie category (productType), so its root

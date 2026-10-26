@@ -24,6 +24,9 @@ import {
   BREAKDOWN_LEVELS,
   MTBF_LEVELS,
   MTTR_LEVELS,
+  BREAKDOWN_RANGE_LEVELS,
+  MTBF_RANGE_LEVELS,
+  MTTR_RANGE_LEVELS,
   C,
   fmtNum,
   fmtMinHrs,
@@ -188,20 +191,19 @@ function SummaryCard({
 }
 
 /**
- * @param {{ values: Record<string, number|null>, period: { kind: string, date: string, granularity: string }, periodLabel: string, includeTopMachines?: boolean }} props
+ * @param {{ values: Record<string, number|null>, period: { kind: string, date: string, granularity: string, from?: string, to?: string }, includeTopMachines?: boolean }} props
  */
-function ReliabilityCardsGrid({
-  values,
-  period,
-  periodLabel,
-  includeTopMachines = false,
-}) {
+function ReliabilityCardsGrid({ values, period, includeTopMachines = false }) {
   const { date, granularity } = period;
-  // The generic Breakdown/MTBF/MTTR drills need one published period; the
-  // Top Machine card/table instead pool additive machine components across a
-  // custom window. Its trend icon retains the existing page-level range gate.
+  // A published period drills through the stored rate rows. A custom window
+  // has none, so the Breakdown/MTBF/MTTR drills switch to the *_RANGE_LEVELS,
+  // which sum additive machine components over it and rebuild each rate —
+  // as the Top Machine card/table already do. The trend icons keep the
+  // existing page-level range gate.
   const isRange = period.kind === "range";
   const perRowCardIds = new Set(["breakdown", "mtbf", "mttr"]);
+  const drillRange = isRange ? { from: period.from, to: period.to } : null;
+  const drillAgg = isRange ? "sum" : undefined;
   const [expanded, setExpanded] = useState(null);
   // Which card's trend icon is open, by card id — every card's icon opens a
   // different analysis, so one id covers all of them. Chevrons are separate
@@ -307,49 +309,44 @@ function ReliabilityCardsGrid({
       {expanded && (
         <div style={{ marginTop: 14 }}>
           <Card title={cards.find((c) => c.id === expanded)?.label}>
-            {isRange && perRowCardIds.has(expanded) ? (
-              <div style={{ fontSize: 13, color: C.mu, padding: "8px 0" }}>
-                Section and machine breakdowns are available for a single day or
-                a whole month. Pick Today, This Month, a month, or a one-day /
-                full-month range to drill down — the headline value above covers{" "}
-                {periodLabel}.
-              </div>
-            ) : (
-              <>
-                {expanded === "breakdown" && (
-                  <ReliabilityDrillPanel
-                    levels={BREAKDOWN_LEVELS}
-                    date={date}
-                    granularity={granularity}
-                    rootLabel="Breakdown"
-                  />
-                )}
-                {expanded === "mtbf" && (
-                  <ReliabilityDrillPanel
-                    levels={MTBF_LEVELS}
-                    date={date}
-                    granularity={granularity}
-                    rootLabel="MTBF"
-                  />
-                )}
-                {expanded === "mttr" && (
-                  <ReliabilityDrillPanel
-                    levels={MTTR_LEVELS}
-                    date={date}
-                    granularity={granularity}
-                    rootLabel="MTTR"
-                  />
-                )}
-                {expanded === "zeroBreakdown" && <ZeroBreakdownPanel />}
-                {expanded === "topMachines" && (
-                  <TopMachineBreakdownsPanel
-                    rows={topMachines.rows}
-                    loading={topMachines.loading}
-                    error={topMachines.error}
-                    totalMinutes={values?.BreakdownMin_Overall}
-                  />
-                )}
-              </>
+            {expanded === "breakdown" && (
+              <ReliabilityDrillPanel
+                levels={isRange ? BREAKDOWN_RANGE_LEVELS : BREAKDOWN_LEVELS}
+                date={date}
+                granularity={granularity}
+                range={drillRange}
+                agg={drillAgg}
+                rootLabel="Breakdown"
+              />
+            )}
+            {expanded === "mtbf" && (
+              <ReliabilityDrillPanel
+                levels={isRange ? MTBF_RANGE_LEVELS : MTBF_LEVELS}
+                date={date}
+                granularity={granularity}
+                range={drillRange}
+                agg={drillAgg}
+                rootLabel="MTBF"
+              />
+            )}
+            {expanded === "mttr" && (
+              <ReliabilityDrillPanel
+                levels={isRange ? MTTR_RANGE_LEVELS : MTTR_LEVELS}
+                date={date}
+                granularity={granularity}
+                range={drillRange}
+                agg={drillAgg}
+                rootLabel="MTTR"
+              />
+            )}
+            {expanded === "zeroBreakdown" && <ZeroBreakdownPanel />}
+            {expanded === "topMachines" && (
+              <TopMachineBreakdownsPanel
+                rows={topMachines.rows}
+                loading={topMachines.loading}
+                error={topMachines.error}
+                totalMinutes={values?.BreakdownMin_Overall}
+              />
             )}
           </Card>
         </div>
