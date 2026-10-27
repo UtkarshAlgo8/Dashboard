@@ -1,6 +1,8 @@
 /**
  * Quality KPI card shared by the BTP and CTP Quality pages. The caller passes
  * the display value in `kpi.v`; any tyre-type adjustment happens upstream.
+ * `kpi.ragInfo` (lines of text) adds an info icon that explains the card's
+ * colour rule.
  */
 import {
   Box,
@@ -12,6 +14,7 @@ import {
 } from "@mui/material";
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import GridViewIcon from "@mui/icons-material/GridView";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import SouthEastIcon from "@mui/icons-material/SouthEast";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
@@ -315,6 +318,28 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
           </Typography>
         )}
         <Stack direction="row" alignItems="center" spacing={0.5}>
+          {Array.isArray(kpi.ragInfo) && kpi.ragInfo.length > 0 && (
+            <Tooltip
+              arrow
+              title={
+                <Box sx={{ fontSize: 12, lineHeight: 1.6 }}>
+                  <Box sx={{ fontWeight: 700, mb: 0.25 }}>Card colour</Box>
+                  {kpi.ragInfo.map((line) => (
+                    <Box key={line}>{line}</Box>
+                  ))}
+                </Box>
+              }
+            >
+              <IconButton
+                size="small"
+                aria-label={`How the ${kpi.n} colour is set`}
+                onClick={(e) => e.stopPropagation()}
+                sx={iconButtonSx}
+              >
+                <InfoOutlinedIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
+          )}
           {canTrend && (
             <Tooltip title="View trend" arrow>
               <IconButton

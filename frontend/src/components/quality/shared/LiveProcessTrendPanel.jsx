@@ -1,5 +1,6 @@
 /** Trend pop-up for one Quality KPI, fed by an injectable history fetcher. */
 import { useEffect, useState } from "react";
+import JKLoader from "@/components/JKLoader.jsx";
 import { getProcessKpiHistory } from "@/api/quality.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import { C } from "./theme.js";
@@ -7,18 +8,38 @@ import { monthRangeFromKey, QUALITY_DATA_DATE } from "./dates.js";
 import { TrendChart } from "./TrendCharts.jsx";
 import { _genInsight } from "./trendUtils.js";
 
+const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+
+/** Compact x-axis label: "01 Oct" daily, "Oct 26" monthly, "2026" yearly. */
+function shortAxisLabel(iso, granularity) {
+  if (typeof iso !== "string" || iso.length < 10)
+    return toDisplayDate(iso) ?? "";
+  const month = MONTHS[Number(iso.slice(5, 7)) - 1];
+  if (granularity === "YEAR") return iso.slice(0, 4);
+  if (granularity === "MONTH") return `${month} ${iso.slice(2, 4)}`;
+  return `${iso.slice(8, 10)} ${month}`;
+}
+
 export function LiveProcessTrendPanel({
   kpi,
   onClose,
   dateFrom,
   dateTo,
+  // Day the Day / Month / Year pills are built around. Defaults to dateTo;
+  // pass it when dateTo is a period end that can lie in the future.
+  anchorDate,
+  // Range pills this caller does not offer, e.g. ["day"].
+  hiddenPresets = [],
+  // Optional (from, to) → granularity, so the point grain follows the
+  // selected range instead of staying fixed to `granularity`.
+  granularityForRange,
   shift,
   granularity,
   fetchHistory = getProcessKpiHistory,
 }) {
   // Presets resolve around the date the panel was opened for, not a fixed
   // workbook snapshot, so "Month" means the month the user is looking at.
-  const presetAnchor = dateTo || QUALITY_DATA_DATE;
+  const presetAnchor = anchorDate || dateTo || QUALITY_DATA_DATE;
   const presetMonth = monthRangeFromKey(presetAnchor.slice(0, 7));
   const presetYear = {
     from: `${presetAnchor.slice(0, 4)}-01-01`,
@@ -66,6 +87,9 @@ export function LiveProcessTrendPanel({
     setRangePreset("");
     setTrendTo(e.target.value);
   };
+  const effectiveGranularity = granularityForRange
+    ? granularityForRange(trendFrom, trendTo)
+    : granularity;
   useEffect(() => {
     if (!kpi?.trendKpiName) return;
     let cancelled = false;
@@ -78,7 +102,7 @@ export function LiveProcessTrendPanel({
       dateFrom: trendFrom,
       dateTo: trendTo,
       shift,
-      granularity,
+      granularity: effectiveGranularity,
     })
       .then((res) => {
         if (!cancelled)
@@ -97,9 +121,19 @@ export function LiveProcessTrendPanel({
     return () => {
       cancelled = true;
     };
-  }, [kpi?.trendKpiName, trendFrom, trendTo, shift, granularity, fetchHistory]);
+  }, [
+    kpi?.trendKpiName,
+    trendFrom,
+    trendTo,
+    shift,
+    effectiveGranularity,
+    fetchHistory,
+  ]);
   if (!kpi) return null;
   const labels = points.map((p) => toDisplayDate(p.date) ?? "");
+  const axisLabels = points.map((p) =>
+    shortAxisLabel(p.date, effectiveGranularity),
+  );
   const series = points.map((p) => Number(p.value));
   const targetNum =
     kpi.target != null
@@ -180,7 +214,8 @@ export function LiveProcessTrendPanel({
             </div>
             <div style={{ fontSize: 12, color: C.mu, marginTop: 2 }}>
               {trendFrom} to {trendTo} ·{" "}
-              {granularity ?? (shift === "All" ? "DAY" : `SHIFT ${shift}`)}
+              {effectiveGranularity ??
+                (shift === "All" ? "DAY" : `SHIFT ${shift}`)}
             </div>
           </div>
           <button
@@ -223,27 +258,29 @@ export function LiveProcessTrendPanel({
               ["day", "Day"],
               ["month", "Month"],
               ["year", "Year"],
-            ].map(([id, label]) => {
-              const active = rangePreset === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => applyTrendPreset(id)}
-                  style={{
-                    padding: "4px 12px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: active ? C.cd : "transparent",
-                    color: active ? C.tx : C.mu,
-                    fontSize: 12,
-                    fontWeight: active ? 700 : 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
+            ]
+              .filter(([id]) => !hiddenPresets.includes(id))
+              .map(([id, label]) => {
+                const active = rangePreset === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => applyTrendPreset(id)}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: 8,
+                      border: "none",
+                      background: active ? C.cd : "transparent",
+                      color: active ? C.tx : C.mu,
+                      fontSize: 12,
+                      fontWeight: active ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
           </div>
           <div
             title="Trend date range"
@@ -397,13 +434,13 @@ export function LiveProcessTrendPanel({
             {loading && (
               <div
                 style={{
-                  padding: 24,
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: C.mu,
+                  minHeight: 240,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                Fetching trend points...
+                <JKLoader message="Loading trend" />
               </div>
             )}
             {error && (
@@ -433,6 +470,7 @@ export function LiveProcessTrendPanel({
             {!loading && !error && series.length > 0 && (
               <TrendChart
                 labels={labels}
+                axisLabels={axisLabels}
                 series={series}
                 target={isNaN(targetNum) ? null : targetNum}
                 color={stCol}

@@ -1,6 +1,22 @@
 /** Trend charts behind the Quality KPI trend panels. */
 import { C } from "./theme.js";
 
+// At most this many x-axis labels, so long daily ranges stay readable.
+const MAX_AXIS_LABELS = 8;
+
+/** Indexes of the x-axis labels to draw: evenly spaced, first and last kept. */
+function axisLabelIndexes(n) {
+  if (n <= MAX_AXIS_LABELS) return new Set([...Array(n).keys()]);
+  const step = Math.ceil((n - 1) / (MAX_AXIS_LABELS - 1));
+  const keep = new Set();
+  for (let i = 0; i < n - 1; i += step) keep.add(i);
+  // Drop the label just before the last one if the two would collide.
+  const prev = Math.max(...keep);
+  if (prev !== 0 && n - 1 - prev < step / 2) keep.delete(prev);
+  keep.add(n - 1);
+  return keep;
+}
+
 export function TrendChart({
   labels,
   axisLabels = labels,
@@ -33,6 +49,7 @@ export function TrendChart({
   const area = `${x(0)},${padT + ch} ${pts} ${x(series.length - 1)},${padT + ch}`;
   const fmt2 = (v) =>
     Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v).toString();
+  const shownLabels = axisLabelIndexes(axisLabels.length);
   return (
     <svg
       width="100%"
@@ -128,18 +145,26 @@ export function TrendChart({
           </g>
         );
       })}
-      {axisLabels.map((l, i) => (
-        <text
-          key={i}
-          x={x(i)}
-          y={h - padB + 14}
-          fontSize="9"
-          fill={C.mu}
-          textAnchor="middle"
-        >
-          {l}
-        </text>
-      ))}
+      {axisLabels.map((l, i) =>
+        shownLabels.has(i) ? (
+          <text
+            key={i}
+            x={x(i)}
+            y={h - padB + 14}
+            fontSize="9"
+            fill={C.mu}
+            textAnchor={
+              i === 0 && axisLabels.length > 1
+                ? "start"
+                : i === axisLabels.length - 1 && axisLabels.length > 1
+                  ? "end"
+                  : "middle"
+            }
+          >
+            {l}
+          </text>
+        ) : null,
+      )}
     </svg>
   );
 }
