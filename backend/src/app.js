@@ -29,6 +29,7 @@ import { router as qualityProcessRouter } from "./quality/routes/process.routes.
 import { router as qualityProductRouter } from "./quality/routes/product.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
 import { router as qualityRouter } from "./quality/routes/quality.routes.js";
+import { router as ctpQualityProcessRouter } from "./quality/ctp/routes.js";
 import { router as engineeringReliabilityRouter } from "./engineering/routes/reliability.routes.js";
 
 // Auth slice — see backend/src/middlewares/auth.middleware.js
@@ -117,6 +118,8 @@ app.use("/api/v1/mail", gate, mailRouter);
 app.use("/api/v1/quality/process", gate, qualityProcessRouter);
 app.use("/api/v1/quality/product", gate, qualityProductRouter);
 app.use("/api/v1/quality/spc", gate, qualitySpcRouter);
+//   /api/v1/quality/ctp/process/{summary,trend,as-of}    → CTP Process Audit
+app.use("/api/v1/quality/ctp/process", gate, ctpQualityProcessRouter);
 app.use("/api/v1/quality", gate, qualityRouter);
 
 // Engineering Head dashboard (additive; separate data family — spec 16/17).
