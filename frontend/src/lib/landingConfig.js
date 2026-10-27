@@ -9,6 +9,9 @@ export const PHASE_1_NAVIGABLE_FUNCTIONS = new Set([
 
 export const PRODUCTION_ONLY_FUNCTIONS = new Set(["prod"]);
 
+// Chennai (CTP): Production plus the Quality Process tab.
+export const CTP_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
+
 export const PLANT_GEO = {
   banmore: {
     code: "BTP",
