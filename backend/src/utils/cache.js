@@ -40,6 +40,10 @@ export const CACHE_TTL = {
   QUALITY_PROCESS: 5 * 60 * 1000,
   ENGINEERING_RELIABILITY: 5 * 60 * 1000,
   INVENTORY_MASTER: 5 * 60 * 1000,
+  // CTP Quality: an open period (today / this month / this year) can still
+  // gain rows; a closed one rarely changes.
+  CTP_QUALITY_CURRENT: 10 * 60 * 1000,
+  CTP_QUALITY_PAST: 60 * 60 * 1000,
 };
 
 const stats = {

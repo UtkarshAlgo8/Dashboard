@@ -3,6 +3,7 @@ import {
   Box,
   Menu,
   MenuItem,
+  Popover,
   Select,
   Stack,
   TextField,
@@ -37,6 +38,14 @@ function TimeRangeSelect({
   disabledPresets = [],
   // Preset ids the host page should not render at all.
   hiddenPresets = [],
+  // Opt-in "This Year" pill (preset "year") for pages backed by a YEAR grain.
+  showYearPreset = false,
+  // Drop "Custom Date Range…" from the month menu, for pages that can only
+  // serve stored periods (Day / Month / Year).
+  hideCustomRange = false,
+  // Move the single-day picker from an inline field into the Date Range
+  // menu, as its last item ("Select a Day…").
+  dayPickerInMenu = false,
   singleDay = null,
   onSingleDayChange,
   size = "md",
@@ -44,6 +53,7 @@ function TimeRangeSelect({
   const theme = useTheme();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [monthAnchor, setMonthAnchor] = useState(null);
+  const [dayAnchor, setDayAnchor] = useState(null);
 
   const fromDate = parseSafe(from);
   const toDateVal = parseSafe(to);
@@ -62,18 +72,23 @@ function TimeRangeSelect({
   const isPinnedMonth =
     preset === "month" && selectedMonthKey !== defaultMonthKey;
   const isMonthPreset = preset === "month" && !isPinnedMonth;
-  const dropdownActive = isCustomRange || isPinnedMonth;
-  const customLabel = isCustomRange
-    ? formatRangeLabel(fromDate, toDateVal)
-    : isPinnedMonth
-      ? (monthOptions.find((o) => o.key === selectedMonthKey)?.label ??
-        selectedMonthKey)
-      : "Date Range";
+  const hasSingleDayPicker = typeof onSingleDayChange === "function";
+  const dayInMenu = dayPickerInMenu && hasSingleDayPicker;
+  const isPickedDay = dayInMenu && preset === "day";
+  const dropdownActive = isCustomRange || isPinnedMonth || isPickedDay;
+  const customLabel = isPickedDay
+    ? (formatDayLabel(parseSafe(singleDay)) ?? "Date Range")
+    : isCustomRange
+      ? formatRangeLabel(fromDate, toDateVal)
+      : isPinnedMonth
+        ? (monthOptions.find((o) => o.key === selectedMonthKey)?.label ??
+          selectedMonthKey)
+        : "Date Range";
   const monthDisabled = disabledPresets.includes("month");
   const showTodayPreset = !hiddenPresets.includes("today");
   const showMonthPreset = !hiddenPresets.includes("month");
   const showRangePreset = !hiddenPresets.includes("range");
-  const hasSingleDayPicker = typeof onSingleDayChange === "function";
+  const isYearPreset = preset === "year";
   const singleDayActive = hasSingleDayPicker && preset === "day";
   const showShift =
     (preset === "today" || hasSingleDayPicker) &&
@@ -197,7 +212,7 @@ function TimeRangeSelect({
           </Box>
         )}
 
-        {hasSingleDayPicker && (
+        {hasSingleDayPicker && !dayInMenu && (
           <TextField
             type="date"
             size="small"
@@ -275,6 +290,37 @@ function TimeRangeSelect({
             }}
           >
             {presetLabel("month", "This Month")}
+          </Box>
+        )}
+
+        {showYearPreset && !isTrendVariant && (
+          /* 2b. This Year Pill (opt-in) */
+          <Box
+            onClick={() => selectPreset("year")}
+            sx={{
+              ...pad,
+              m: isYearPreset ? "-1px" : 0,
+              zIndex: isYearPreset ? 1 : 0,
+              fontWeight: isYearPreset ? 600 : 500,
+              whiteSpace: "nowrap",
+              userSelect: "none",
+              borderRadius: 999,
+              cursor: "pointer",
+              border: 1,
+              borderColor: isYearPreset ? "primary.main" : "transparent",
+              backgroundColor: isYearPreset
+                ? theme.custom.pills.activeBg
+                : "transparent",
+              color: isYearPreset ? "primary.main" : "text.primary",
+              transition: "all 0.15s ease",
+              "&:hover": {
+                backgroundColor: isYearPreset
+                  ? theme.custom.pills.activeBg
+                  : theme.custom.surface.soft,
+              },
+            }}
+          >
+            {presetLabel("year", "This Year")}
           </Box>
         )}
 
@@ -363,23 +409,80 @@ function TimeRangeSelect({
             {opt.label}
           </MenuItem>
         ))}
-        <MenuItem
-          onClick={() => {
-            setMonthAnchor(null);
-            setDialogOpen(true);
-          }}
-          sx={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: "primary.main",
-            borderTop: 1,
-            borderColor: "divider",
-            mt: 0.5,
+        {!hideCustomRange && (
+          <MenuItem
+            onClick={() => {
+              setMonthAnchor(null);
+              setDialogOpen(true);
+            }}
+            sx={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "primary.main",
+              borderTop: 1,
+              borderColor: "divider",
+              mt: 0.5,
+            }}
+          >
+            Custom Date Range…
+          </MenuItem>
+        )}
+        {dayInMenu && (
+          <MenuItem
+            onClick={() => {
+              setDayAnchor(monthAnchor);
+              setMonthAnchor(null);
+            }}
+            sx={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "primary.main",
+              borderTop: 1,
+              borderColor: "divider",
+              mt: 0.5,
+            }}
+          >
+            Select a Day…
+          </MenuItem>
+        )}
+      </Menu>
+
+      {dayInMenu && (
+        <Popover
+          open={Boolean(dayAnchor)}
+          anchorEl={dayAnchor}
+          onClose={() => setDayAnchor(null)}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 0.75,
+                p: 1.5,
+                borderRadius: 2,
+                boxShadow: theme.custom.shadow,
+                border: 1,
+                borderColor: "divider",
+              },
+            },
           }}
         >
-          Custom Date Range…
-        </MenuItem>
-      </Menu>
+          <TextField
+            type="date"
+            size="small"
+            autoFocus
+            label="Day"
+            value={singleDay || ""}
+            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(event) => {
+              if (!event.target.value) return;
+              onSingleDayChange(event.target.value);
+              setDayAnchor(null);
+            }}
+            sx={{ width: 190 }}
+          />
+        </Popover>
+      )}
 
       <DateRangeFilterDialog
         open={dialogOpen}
@@ -399,6 +502,10 @@ function parseSafe(val) {
   if (!val) return null;
   const d = parseISO(val);
   return isValid(d) ? d : null;
+}
+
+function formatDayLabel(day) {
+  return day ? format(day, "dd MMM yyyy") : null;
 }
 
 function formatRangeLabel(from, to) {

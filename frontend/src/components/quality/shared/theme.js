@@ -1,0 +1,25 @@
+/** Quality dashboard palette, shared by the BTP and CTP Quality pages. */
+
+export const C = {
+  bg: "#F3F4F8",
+  cd: "#FFFFFF",
+  c2: "#F7F8FA",
+  bd: "#E0E3EA",
+  tx: "#1A1D26",
+  md: "#4A5168",
+  mu: "#8891A5",
+  ac: "#E8651A",
+  aL: "rgba(232,101,26,.07)",
+  aB: "rgba(232,101,26,.28)",
+  rowAlt: "rgba(0,119,182,0.04)",
+  thBg: "#EAEDF3",
+  tl: "#1A9A3E",
+  bl: "#2563EB",
+  rd: "#DC2626",
+  am: "#CA8A04",
+  gn: "#1A9A3E",
+  pp: "#7C3AED",
+  cy: "#0D9488",
+  sh: "0 1px 3px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04)",
+  r: 8,
+};

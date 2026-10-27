@@ -14,6 +14,7 @@ import {
   PHASE_1_NAVIGABLE_FUNCTIONS,
   PLANT_GEO,
   PRODUCTION_ONLY_FUNCTIONS,
+  CTP_NAVIGABLE_FUNCTIONS,
 } from "@/lib/landingConfig.js";
 
 function LandingPage() {
@@ -108,7 +109,9 @@ function LandingPage() {
   const modalActiveIds =
     modalPlant?.id === "banmore"
       ? PHASE_1_NAVIGABLE_FUNCTIONS
-      : PRODUCTION_ONLY_FUNCTIONS;
+      : modalPlant?.id === "chennai"
+        ? CTP_NAVIGABLE_FUNCTIONS
+        : PRODUCTION_ONLY_FUNCTIONS;
 
   const openModalFor = useCallback((plantId) => {
     if (!PHASE_1_ACTIVE_PLANTS.has(plantId)) return;
@@ -121,6 +124,8 @@ function LandingPage() {
       navigate(`/${modalPlant.id}/production`);
     } else if (fn.id === "qual" && modalPlant.id === "banmore") {
       navigate("/banmore/quality");
+    } else if (fn.id === "qual" && modalPlant.id === "chennai") {
+      navigate("/chennai/quality");
     } else if (fn.id === "tech" && modalPlant.id === "banmore") {
       navigate("/banmore/technical");
     } else if (fn.id === "eng" && modalPlant.id === "banmore") {
