@@ -11,11 +11,7 @@ import {
   periodsBack,
   resolvePeriod,
 } from "./periods.js";
-import {
-  processAsOfQuery,
-  processSummaryQuery,
-  processTrendQuery,
-} from "./queries.js";
+import { processSummaryQuery, processTrendQuery } from "./queries.js";
 import { toProcessSummary, toProcessTrend } from "./transform.js";
 
 /* ---------------------------- periods ---------------------------- */
@@ -61,11 +57,15 @@ test("periodsBack crosses month and year ends", () => {
   assert.equal(periodsBack("2026-01-02", "DAY", 4), "2025-12-29");
 });
 
-test("isCurrentPeriod: open periods use the short TTL", () => {
+test("isCurrentPeriod: open periods and those ended yesterday use the short TTL", () => {
   assert.equal(isCurrentPeriod("2026-10-01", "MONTH", "2026-10-27"), true);
   assert.equal(isCurrentPeriod("2026-09-01", "MONTH", "2026-10-27"), false);
-  assert.equal(isCurrentPeriod("2026-10-26", "DAY", "2026-10-27"), false);
+  assert.equal(isCurrentPeriod("2026-09-01", "MONTH", "2026-10-01"), true);
+  assert.equal(isCurrentPeriod("2026-10-26", "DAY", "2026-10-27"), true);
+  assert.equal(isCurrentPeriod("2026-10-25", "DAY", "2026-10-27"), false);
   assert.equal(isCurrentPeriod("2026-01-01", "YEAR", "2026-10-27"), true);
+  assert.equal(isCurrentPeriod("2025-01-01", "YEAR", "2026-01-01"), true);
+  assert.equal(isCurrentPeriod("2025-01-01", "YEAR", "2026-01-02"), false);
 });
 
 test("isIsoDate", () => {
@@ -107,7 +107,6 @@ test("processTrendQuery escapes literals", () => {
   assert.match(sql, /kpi_name = 'PQR'/);
   assert.match(sql, /granularity = 'SHIFT A'/);
   assert.match(sql, /ORDER BY date$/);
-  assert.match(processAsOfQuery(), /MAX\(date\)/);
 });
 
 /* ---------------------------- transform ---------------------------- */
@@ -191,7 +190,7 @@ const ROWS = [
 ];
 
 test("toProcessSummary: cards carry value, previous and sparkline", () => {
-  const { cards } = toProcessSummary(ROWS, { anchor: SEP });
+  const { cards } = toProcessSummary(ROWS, { anchor: SEP, grain: "MONTH" });
   const pqr = cards.find((c) => c.id === "pqr");
   assert.equal(pqr.value, 95.04);
   assert.equal(pqr.previous, 94.1);
@@ -208,9 +207,15 @@ test("toProcessSummary: cards carry value, previous and sparkline", () => {
 });
 
 test("toProcessSummary: PQR drill orders processes and zero-fills counts", () => {
-  const { drills } = toProcessSummary(ROWS, { anchor: SEP });
+  const { drills } = toProcessSummary(ROWS, { anchor: SEP, grain: "MONTH" });
   assert.deepEqual(drills.pqr.processes, [
-    { process: "RMS", rating: 97.46, violations: 0, scheduled: 0, completed: 0 },
+    {
+      process: "RMS",
+      rating: 97.46,
+      violations: 0,
+      scheduled: 0,
+      completed: 0,
+    },
     {
       process: "Curing",
       rating: 88.15,
@@ -224,14 +229,14 @@ test("toProcessSummary: PQR drill orders processes and zero-fills counts", () =>
 });
 
 test("toProcessSummary: MQV top violation sums across machines", () => {
-  const { drills } = toProcessSummary(ROWS, { anchor: SEP });
+  const { drills } = toProcessSummary(ROWS, { anchor: SEP, grain: "MONTH" });
   assert.equal(drills.mqv.processes[0].topViolation, "Dirty sidewall");
   assert.equal(drills.mqv.processes[0].capaOpen, 27);
   assert.equal(drills.mqv.violations.length, 3);
 });
 
 test("toProcessSummary: deviations grouped by process, CPC worst first", () => {
-  const { drills } = toProcessSummary(ROWS, { anchor: SEP });
+  const { drills } = toProcessSummary(ROWS, { anchor: SEP, grain: "MONTH" });
   assert.deepEqual(drills.ndev.processes, [
     { process: "Mixing", deviations: 3, open: 2, closed: 1 },
   ]);
@@ -247,11 +252,37 @@ test("toProcessSummary: drill rows ignore spark-window dates", () => {
     ...ROWS,
     row("2026-08-01", "MQV_Process", 9, { section: "RMS" }),
   ];
-  const { drills } = toProcessSummary(rows, { anchor: SEP });
+  const { drills } = toProcessSummary(rows, { anchor: SEP, grain: "MONTH" });
   assert.equal(
     drills.mqv.processes.some((p) => p.process === "RMS"),
     false,
   );
+});
+
+test("toProcessSummary: delta only against the period right before", () => {
+  const rows = [row("2026-10-23", "PQR", 90), row("2026-10-26", "PQR", 95)];
+  const day = toProcessSummary(rows, { anchor: "2026-10-26", grain: "DAY" });
+  assert.equal(day.cards[0].value, 95);
+  assert.equal(day.cards[0].previous, null); // 25-Oct has no audits
+  const next = toProcessSummary([...rows, row("2026-10-27", "PQR", 97)], {
+    anchor: "2026-10-27",
+    grain: "DAY",
+  });
+  assert.equal(next.cards[0].previous, 95);
+});
+
+test("toProcessSummary: a null checkpoint never becomes 'null'", () => {
+  const rows = [
+    row(SEP, "MQV_Process", 3, { section: "Mixing" }),
+    row(SEP, "MQV_Violation", 3, {
+      section: "Mixing",
+      sub_section: "Open",
+      machine: "2101",
+      remarks: "",
+    }),
+  ];
+  const { drills } = toProcessSummary(rows, { anchor: SEP, grain: "MONTH" });
+  assert.equal(drills.mqv.processes[0].topViolation, null);
 });
 
 test("toProcessTrend drops empty values", () => {

@@ -67,14 +67,3 @@ export function processTrendQuery({
     `ORDER BY date`
   );
 }
-
-/** Newest audit day in the Process Audit gold (the header's "as of"). */
-export function processAsOfQuery() {
-  return (
-    `SELECT CAST(MAX(date) AS VARCHAR) AS as_of FROM ${CTP_QUALITY_TABLE} ` +
-    `WHERE UPPER(plant) = ${escapeLiteral(CTP_QUALITY_PLANT)} ` +
-    `AND product_type = ${escapeLiteral(CTP_PROCESS_PRODUCT_TYPE)} ` +
-    `AND granularity = 'DAY' ` +
-    `AND kpi_name = ${escapeLiteral(CARD_KPIS.audit)}`
-  );
-}

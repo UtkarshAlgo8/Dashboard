@@ -12,7 +12,7 @@ function axisLabelIndexes(n) {
   for (let i = 0; i < n - 1; i += step) keep.add(i);
   // Drop the label just before the last one if the two would collide.
   const prev = Math.max(...keep);
-  if (prev !== 0 && n - 1 - prev < step / 2) keep.delete(prev);
+  if (prev !== 0 && n - 1 - prev <= step / 2) keep.delete(prev);
   keep.add(n - 1);
   return keep;
 }

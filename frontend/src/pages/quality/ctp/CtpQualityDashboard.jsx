@@ -16,11 +16,7 @@ import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
 import { LiveProcessTrendPanel } from "@/components/quality/shared/LiveProcessTrendPanel.jsx";
 import { PrintStyles } from "@/components/quality/shared/PrintStyles.jsx";
 import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
-import {
-  getCtpProcessAsOf,
-  getCtpProcessSummary,
-  getCtpProcessTrend,
-} from "@/api/ctpQuality.js";
+import { getCtpProcessSummary, getCtpProcessTrend } from "@/api/ctpQuality.js";
 import { buildProcessCards } from "./ctpProcessCards.js";
 import CtpProcessDrillPanel from "./CtpProcessDrillPanel.jsx";
 
@@ -112,7 +108,6 @@ export default function CtpQualityDashboard({ plant }) {
   const [shift, setShift] = useState("All");
   const [openKpi, setOpenKpi] = useState(null);
   const [trendKpi, setTrendKpi] = useState(null);
-  const [asOf, setAsOf] = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -130,18 +125,6 @@ export default function CtpQualityDashboard({ plant }) {
           : `${monthKey ?? today.slice(0, 7)}-01`;
   const activeShift = isDayView ? shift : "All";
   const periodLabel = formatPeriod(grain, date, activeShift);
-
-  useEffect(() => {
-    let cancelled = false;
-    getCtpProcessAsOf()
-      .then((res) => {
-        if (!cancelled) setAsOf(res?.asOf ?? null);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,7 +240,9 @@ export default function CtpQualityDashboard({ plant }) {
         hideCustomRange
         dayPickerInMenu
         onExport={() => window.print?.()}
-        asOf={asOf}
+        // "This Month" is the calendar month (IST), so the month menu is
+        // built from today too, even when the gold lags behind.
+        asOf={today}
         lastUpdatedAt={lastUpdatedAt}
         categoryTabs={SUB_TABS}
         activeCategory="process"

@@ -68,8 +68,7 @@ app.use("/api/v1/roles", rolesRouter);
 // entirely). NODE_ENV=test bypasses auth by default so the route
 // smoke tests can hit `/api/v1/*` without a token. Default is true
 // in production / development.
-const protectApi =
-  config.auth.enabled && process.env.NODE_ENV !== "test";
+const protectApi = config.auth.enabled && process.env.NODE_ENV !== "test";
 
 // URL layout (unchanged from CR-07):
 //   /api/v1/{plants,functions,sections,category-tabs}     → static
@@ -89,7 +88,8 @@ const protectApi =
 app.use("/api/v1", staticRouter);
 
 const gate = protectApi
-  ? (req, _res, next) => (req._isWarmReplay ? next() : verifyJWT(req, _res, next))
+  ? (req, _res, next) =>
+      req._isWarmReplay ? next() : verifyJWT(req, _res, next)
   : (_req, _res, next) => next();
 app.use("/api/v1/plants", gate, plantsRouter);
 app.use("/api/v1/plants/:plantId/production/kpis", gate, kpisRouter);
@@ -118,7 +118,7 @@ app.use("/api/v1/mail", gate, mailRouter);
 app.use("/api/v1/quality/process", gate, qualityProcessRouter);
 app.use("/api/v1/quality/product", gate, qualityProductRouter);
 app.use("/api/v1/quality/spc", gate, qualitySpcRouter);
-//   /api/v1/quality/ctp/process/{summary,trend,as-of}    → CTP Process Audit
+//   /api/v1/quality/ctp/process/{summary,trend}          → CTP Process Audit
 app.use("/api/v1/quality/ctp/process", gate, ctpQualityProcessRouter);
 app.use("/api/v1/quality", gate, qualityRouter);
 

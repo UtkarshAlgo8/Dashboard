@@ -81,10 +81,18 @@ export function resolvePeriod({ granularity, date, shift } = {}) {
   };
 }
 
+/** Last day of the period starting at `anchor`. */
+export function periodEnd(anchor, grain) {
+  if (grain === "MONTH") return shiftIso(anchor, { months: 1, days: -1 });
+  if (grain === "YEAR") return shiftIso(anchor, { years: 1, days: -1 });
+  return anchor;
+}
+
 /**
- * True when the period starting at `anchor` is still open: it contains today
- * (IST) or lies in the future. Open periods can still gain rows.
+ * True while the period starting at `anchor` can still gain rows: it ends
+ * yesterday (IST) or later. Gold lands with a lag, so a period that closed
+ * yesterday keeps the short TTL; an empty early read never sticks for an hour.
  */
 export function isCurrentPeriod(anchor, grain, today = todayInIst()) {
-  return anchor >= periodStart(today, grain);
+  return periodEnd(anchor, grain) >= shiftIso(today, { days: -1 });
 }

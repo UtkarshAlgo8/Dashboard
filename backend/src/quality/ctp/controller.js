@@ -13,13 +13,8 @@ import {
   isIsoDate,
   periodStart,
   resolvePeriod,
-  todayInIst,
 } from "./periods.js";
-import {
-  processAsOfQuery,
-  processSummaryQuery,
-  processTrendQuery,
-} from "./queries.js";
+import { processSummaryQuery, processTrendQuery } from "./queries.js";
 import { CARD_KPIS, TYRE_TYPE_TO_GOLD } from "./registry.js";
 import { toProcessSummary, toProcessTrend } from "./transform.js";
 
@@ -120,23 +115,6 @@ export async function getProcessTrend(req, res, next) {
       ttlFor(isCurrentPeriod(period.anchor, period.grain)),
     );
     res.json({ kpi, ...body });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/** GET /quality/ctp/process/as-of — newest audit day in the gold. */
-export async function getProcessAsOf(req, res, next) {
-  try {
-    const asOf = await cached(
-      buildCacheKey("/quality/ctp/process/as-of", {}),
-      async () => {
-        const rows = await runQuery(processAsOfQuery());
-        return rows[0]?.as_of || null;
-      },
-      CACHE_TTL.CTP_QUALITY_CURRENT,
-    );
-    res.json({ asOf, today: todayInIst() });
   } catch (err) {
     next(err);
   }

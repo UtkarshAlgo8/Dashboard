@@ -6,6 +6,7 @@
  * row for a process means zero events; a missing % row means "not measured"
  * and stays null.
  */
+import { periodsBack } from "./periods.js";
 import { CARD_KPIS, PROCESS_ORDER } from "./registry.js";
 
 function num(v) {
@@ -74,7 +75,10 @@ function detailRows(groups, kpiName, subKey) {
     .sort((a, b) => b.count - a.count || byProcess(a, b));
 }
 
-function cardsFrom(rows, anchor) {
+function cardsFrom(rows, anchor, grain) {
+  // The delta is "vs previous period", so only the period right before the
+  // anchor counts; a gap (no audits that day) means no delta, not an older one.
+  const prevDate = periodsBack(anchor, grain, 1);
   return Object.entries(CARD_KPIS).map(([id, kpiName]) => {
     const points = rows
       .filter((r) => r.kpi_name === kpiName)
@@ -82,12 +86,12 @@ function cardsFrom(rows, anchor) {
       .filter((p) => p.value != null)
       .sort((a, b) => a.date.localeCompare(b.date));
     const current = points.find((p) => p.date === anchor);
-    const before = points.filter((p) => p.date < anchor);
+    const previous = points.find((p) => p.date === prevDate);
     return {
       id,
       kpiName,
       value: current ? current.value : null,
-      previous: before.length ? before[before.length - 1].value : null,
+      previous: previous ? previous.value : null,
       spark: points,
     };
   });
@@ -95,24 +99,30 @@ function cardsFrom(rows, anchor) {
 
 /**
  * @param {Array<Record<string, string>>} rows Rows from processSummaryQuery.
- * @param {{ anchor: string }} period
+ * @param {{ anchor: string, grain: string }} period
  */
-export function toProcessSummary(rows, { anchor }) {
+export function toProcessSummary(rows, { anchor, grain }) {
   const groups = groupAtAnchor(rows, anchor);
 
   const mqvViolations = detailRows(groups, "MQV_Violation", "capa");
-  const topViolation = new Map();
+  // process → checkpoint → MQV count, summed across machines.
+  const perCheckpoint = new Map();
   for (const v of mqvViolations) {
-    const key = `${v.process}\u0000${v.checkpoint}`;
-    topViolation.set(key, (topViolation.get(key) ?? 0) + v.count);
+    if (v.checkpoint == null) continue;
+    const byCheckpoint = perCheckpoint.get(v.process) ?? new Map();
+    byCheckpoint.set(
+      v.checkpoint,
+      (byCheckpoint.get(v.checkpoint) ?? 0) + v.count,
+    );
+    perCheckpoint.set(v.process, byCheckpoint);
   }
   const topByProcess = new Map();
-  for (const [key, count] of topViolation) {
-    const [process, checkpoint] = key.split("\u0000");
-    const best = topByProcess.get(process);
-    if (!best || count > best.count) {
-      topByProcess.set(process, { checkpoint, count });
+  for (const [process, byCheckpoint] of perCheckpoint) {
+    let best = null;
+    for (const [checkpoint, count] of byCheckpoint) {
+      if (!best || count > best.count) best = { checkpoint, count };
     }
+    topByProcess.set(process, best);
   }
 
   const deviations = detailRows(groups, "Audit_Deviation_Parameter", "status");
@@ -131,7 +141,7 @@ export function toProcessSummary(rows, { anchor }) {
   }
 
   return {
-    cards: cardsFrom(rows, anchor),
+    cards: cardsFrom(rows, anchor, grain),
     drills: {
       pqr: {
         processes: processTable(

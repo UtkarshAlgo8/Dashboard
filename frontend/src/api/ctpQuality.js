@@ -71,8 +71,3 @@ export function getCtpProcessTrend({
     date_to: dateTo,
   });
 }
-
-/** Newest audit day in the Process Audit gold. */
-export function getCtpProcessAsOf() {
-  return cachedGet("/quality/ctp/process/as-of", {});
-}
