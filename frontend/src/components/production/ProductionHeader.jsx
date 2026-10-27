@@ -76,6 +76,9 @@ function ProductionHeader({
   // Time-range presets this page cannot serve (e.g. ["month"] on Quality SPC).
   disabledPresets = [],
   hiddenPresets = [],
+  showYearPreset = false,
+  hideCustomRange = false,
+  dayPickerInMenu = false,
   singleDay = null,
   onSingleDayChange,
   showSpcAlertIcon = false,
@@ -424,6 +427,9 @@ function ProductionHeader({
               asOf={asOf}
               disabledPresets={disabledPresets}
               hiddenPresets={hiddenPresets}
+              showYearPreset={showYearPreset}
+              hideCustomRange={hideCustomRange}
+              dayPickerInMenu={dayPickerInMenu}
               singleDay={singleDay}
               onSingleDayChange={onSingleDayChange}
               month={timeRange?.month ?? null}
