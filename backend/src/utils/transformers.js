@@ -900,3 +900,47 @@ function slug(s) {
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replaceAll(/(^-|-$)/g, "");
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Overage Material (frontend/specs/17-overage-material.md)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** YYYYMMDD digit string → ISO yyyy-mm-dd, or null. */
+function yyyymmddToIso(v) {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(String(v ?? ""));
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+
+/** One overage row with clean dimensions, numbers and an ISO oldest date. */
+function overageRow(r) {
+  return {
+    section: denan(r.section),
+    sub_section: subSection(r.sub_section),
+    product_type: productType(r.product_type),
+    unit: unit(r.unit_of_measurement),
+    overage_qty: numOrNull(r.overage_qty) ?? 0,
+    oldest_lot_date: yyyymmddToIso(r.oldest_lot_date),
+    production_days: numOrNull(r.production_days) ?? 0,
+  };
+}
+
+/**
+ * Overage payload from the totals and SKU reads (overage-query.js).
+ * Totals keep their grouping `level`; SKU rows add `itemcode`. Rows stay
+ * per unit — quantities in different units are never combined.
+ *
+ * @param {Array<object>} totalRows - buildOverageTotalsSql rows
+ * @param {Array<object>} skuRows - buildOverageSkuSql rows
+ * @returns {{ totals: Array<object>, skus: Array<object> }}
+ */
+export function toOverage(totalRows, skuRows) {
+  const totals = (Array.isArray(totalRows) ? totalRows : []).map((r) => ({
+    level: r.level,
+    ...overageRow(r),
+  }));
+  const skus = (Array.isArray(skuRows) ? skuRows : []).map((r) => ({
+    ...overageRow(r),
+    itemcode: denan(r.itemcode),
+  }));
+  return { totals, skus };
+}

@@ -4,8 +4,13 @@ import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
 import { goldSource } from "../queries/gold-source.js";
 import {
+  buildOverageTotalsSql,
+  buildOverageSkuSql,
+} from "../queries/overage-query.js";
+import {
   toInventory,
   toCtpInventoryMaster,
+  toOverage,
   CTP_INVENTORY_KPIS,
   CTP_CARD_KPIS,
 } from "../utils/transformers.js";
@@ -188,6 +193,35 @@ export async function getCtpInventoryMaster(req, res, next) {
       async () => {
         const sql = ctpInventoryMasterSql({ plantId, granularity, fromKey, toKey });
         return toCtpInventoryMaster(await runQuery(sql));
+      },
+      CACHE_TTL.INVENTORY_MASTER,
+    );
+    res.json({ data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /plants/:plantId/inventory/overage
+ *
+ * Overage Material snapshot (frontend/specs/17-overage-material.md):
+ * section / sub-section / component totals plus per-SKU rows, per unit.
+ * Reads every date, so it takes no from / to / granularity params.
+ * Cached for 5 min (CACHE_TTL.INVENTORY_MASTER).
+ */
+export async function getOverage(req, res, next) {
+  const plantId = normalizePlantId(req.params.plantId) ?? "banmore";
+  const key = buildCacheKey(`/plants/${plantId}/inventory/overage`, {});
+  try {
+    const data = await cached(
+      key,
+      async () => {
+        const [totalRows, skuRows] = await Promise.all([
+          runQuery(buildOverageTotalsSql({ plantId })),
+          runQuery(buildOverageSkuSql({ plantId })),
+        ]);
+        return toOverage(totalRows, skuRows);
       },
       CACHE_TTL.INVENTORY_MASTER,
     );
