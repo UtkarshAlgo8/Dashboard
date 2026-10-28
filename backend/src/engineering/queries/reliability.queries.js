@@ -39,8 +39,8 @@ const TABLE = () => config.engineering.sqlTable;
 // Columns every Reliability response needs. drill_down_attribute is
 // selected raw and parsed in the transformer (parseDrillDown).
 const SELECT_COLS =
-  "date, status, section, sub_section, machine, product_type, remarks, " +
-  "kpi_name, actual_value, unit_of_measurement, drill_down_attribute";
+  "date, status, section, sub_section, machine, eqname, product_type, " +
+  "remarks, kpi_name, actual_value, unit_of_measurement, drill_down_attribute";
 
 /**
  * The machine-level component measurements a multi-day period is rebuilt

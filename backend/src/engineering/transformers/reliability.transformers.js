@@ -31,6 +31,8 @@ const CARRY_FORWARD_DIMS = [
   "sub_section",
   "remarks",
   "unit_of_measurement",
+  // Machine name, for the Breakdown drill's date-wise table.
+  "eqname",
 ];
 
 /**

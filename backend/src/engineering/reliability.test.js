@@ -161,6 +161,31 @@ test("toLossTree: summed range rows retain machine display dimensions", () => {
   assert.equal(out.rows[0].status, "A");
 });
 
+test("toLossTree: date-wise failure rows carry the machine name (eqname)", () => {
+  const out = toLossTree(
+    [
+      { ...row("LEAKAGE", "2026-08-04", "BreakdownMin_m_Failure", 40), eqname: "BANBURY 1" },
+      { ...row("LEAKAGE", "2026-08-04", "BreakdownOcc_m_Failure", 2), eqname: "BANBURY 1" },
+      { ...row("LEAKAGE", "2026-08-05", "BreakdownMin_m_Failure", 15), machine: "0202" },
+    ],
+    {
+      kpiNames: ["BreakdownMin_m_Failure", "BreakdownOcc_m_Failure"],
+      groupBy: "date,machine,remarks",
+    },
+  );
+
+  assert.equal(out.rows.length, 2);
+  const named = out.rows.find((r) => r.machine === "0201");
+  assert.equal(named.date, "2026-08-04");
+  assert.equal(named.eqname, "BANBURY 1");
+  assert.equal(named.BreakdownMin_m_Failure, 40);
+  assert.equal(named.BreakdownOcc_m_Failure, 2);
+  // No eqname in gold: the row stays, the name is simply absent.
+  const unnamed = out.rows.find((r) => r.machine === "0202");
+  assert.equal(unnamed.eqname, undefined);
+  assert.equal(unnamed.BreakdownOcc_m_Failure, null);
+});
+
 test("toLossTree: a tuple group_by sums per (machine, failure, discipline)", () => {
   const out = toLossTree(
     [
