@@ -21,6 +21,7 @@ import {
   isSameDay,
   isWithinInterval,
   parseISO,
+  startOfDay,
   startOfMonth,
   setMonth,
   setYear,
@@ -90,7 +91,7 @@ function DateRangeFilterDialog({ open, onClose, from, to, onApply }) {
   }, []);
 
   const handleDayClick = (date) => {
-    if (date == null) return;
+    if (date == null || isFuture(date)) return;
     // If both endpoints exist, start a new range.
     if (pendingStart && pendingEnd) {
       setPendingStart(date);
@@ -348,6 +349,8 @@ function DayCell({ cell, start, end, onClick }) {
   }
   const { date, currentMonth } = cell;
   const today = isSameDay(date, new Date());
+  // No data exists after today, so those days cannot be picked.
+  const disabled = isFuture(date);
 
   const hasRange = start && end;
   const inRange = hasRange && isWithinInterval(date, { start, end });
@@ -375,15 +378,17 @@ function DayCell({ cell, start, end, onClick }) {
 
   return (
     <Box
-      onClick={() => onClick(date)}
+      onClick={disabled ? undefined : () => onClick(date)}
+      aria-disabled={disabled || undefined}
       sx={{
         aspectRatio: "1.4 / 1",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        cursor: currentMonth ? "pointer" : "default",
+        cursor: disabled ? "not-allowed" : currentMonth ? "pointer" : "default",
         background,
-        color: !currentMonth ? "text.disabled" : "text.primary",
+        color: !currentMonth || disabled ? "text.disabled" : "text.primary",
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       <Box
@@ -400,7 +405,7 @@ function DayCell({ cell, start, end, onClick }) {
           fontWeight: today ? 700 : 500,
           textDecoration: today && !isEdge ? "underline" : "none",
           "&:hover":
-            currentMonth && !isEdge
+            currentMonth && !isEdge && !disabled
               ? { backgroundColor: `${accent}22` }
               : undefined,
         }}
@@ -409,6 +414,11 @@ function DayCell({ cell, start, end, onClick }) {
       </Box>
     </Box>
   );
+}
+
+/** True for any day after today. */
+function isFuture(date) {
+  return startOfDay(date) > startOfDay(new Date());
 }
 
 function parseSafe(iso) {

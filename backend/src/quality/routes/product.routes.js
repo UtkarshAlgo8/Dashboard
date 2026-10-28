@@ -5,6 +5,7 @@ import {
   getProductChildren,
   getProductHistory,
   getProductSummary,
+  getUniformityTrend,
 } from "../controllers/product.controller.js";
 
 export const router = Router();
@@ -12,3 +13,4 @@ export const router = Router();
 router.get("/summary", getProductSummary);
 router.get("/children", getProductChildren);
 router.get("/history", getProductHistory);
+router.get("/uniformity-trend", getUniformityTrend);

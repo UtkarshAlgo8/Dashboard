@@ -14,13 +14,19 @@ import {
 } from "@mui/material";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import KpiCard from "@/components/production/KpiCard.jsx";
+import JKLoader from "@/components/JKLoader.jsx";
 import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
+import PaintWeightDrill from "@/components/technical/PaintWeightDrill.jsx";
 import {
   getCuringScrapRows,
   getProductChildren,
   getProductSummary,
 } from "@/api/quality.js";
 import { toDrillRows, toKpiGrid } from "@/lib/kpi-transformer.js";
+import {
+  PAINT_WEIGHT_HEADLINE_KPI,
+  toGtWeightCard,
+} from "@/lib/paintWeight.js";
 
 const PRODUCT_KPIS = [
   {
@@ -501,6 +507,15 @@ export default function TechnicalUniformityBalancingSection({
             drillType: "curingScrap",
           };
         }
+        // GT Weight stays under "Other Product KPIs", so it carries no
+        // sourceKpi; its value is the paint-weight headline gold KPI.
+        if (definition.id === "gtw")
+          return (
+            toGtWeightCard(
+              summary?.values?.[PAINT_WEIGHT_HEADLINE_KPI],
+              definition,
+            ) ?? { ...definition, value: null }
+          );
         if (!definition.sourceKpi) return { ...definition, value: null };
         const live = summary?.values?.[definition.sourceKpi];
         if (live?.actual_value == null) return { ...definition, value: null };
@@ -530,9 +545,7 @@ export default function TechnicalUniformityBalancingSection({
         Uniformity &amp; Balancing
       </Typography>
       {loading ? (
-        <Box sx={{ display: "grid", placeItems: "center", minHeight: 180 }}>
-          <CircularProgress aria-label="Loading Uniformity and Balancing data" />
-        </Box>
+        <JKLoader message="Loading KPIs" />
       ) : (
         <>
           {error && (
@@ -568,6 +581,16 @@ export default function TechnicalUniformityBalancingSection({
           date={date}
           shift={shift}
           granularity={granularity}
+          onClose={() => setOpenDrill(null)}
+        />
+      )}
+      {openDrill?.drillType === "paintWeight" && (
+        <PaintWeightDrill
+          key={`${date}-${shift}-${granularity}`}
+          date={date}
+          shift={shift}
+          granularity={granularity}
+          breadcrumb={["Uniformity & Balancing", openDrill.name]}
           onClose={() => setOpenDrill(null)}
         />
       )}

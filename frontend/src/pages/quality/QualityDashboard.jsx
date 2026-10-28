@@ -18,18 +18,28 @@ import {
   Select,
   useTheme,
 } from "@mui/material";
-import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
-import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
-import GridViewIcon from "@mui/icons-material/GridView";
-import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import SouthEastIcon from "@mui/icons-material/SouthEast";
-import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
-import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
-import Sparkline from "@/components/production/Sparkline.jsx";
-import { getKpiCardTheme } from "@/lib/thresholds.js";
-import { formatIndianNumber } from "@/lib/numberFormat.js";
+import UniformityTrendModal from "@/components/quality/UniformityTrendModal.jsx";
+import { C } from "@/components/quality/shared/theme.js";
+import { monthRangeFromKey } from "@/components/quality/shared/dates.js";
+import { Breadcrumb } from "@/components/quality/shared/Breadcrumb.jsx";
+import { Card } from "@/components/quality/shared/Card.jsx";
+import { DTable } from "@/components/quality/shared/DTable.jsx";
+import { LiveProcessTrendPanel } from "@/components/quality/shared/LiveProcessTrendPanel.jsx";
+import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
+import { PrintStyles } from "@/components/quality/shared/PrintStyles.jsx";
+import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
+import { StatusPill } from "@/components/quality/shared/StatusPill.jsx";
+import {
+  TrendBar,
+  TrendChart,
+  TrendProgress,
+} from "@/components/quality/shared/TrendCharts.jsx";
+import {
+  _genInsight,
+  pickChartType,
+} from "@/components/quality/shared/trendUtils.js";
+import { isUniformityTrendCard } from "@/lib/uniformityTrend.js";
 import jkLogo from "@/assets/jk-logo.png";
 import JKLoader from "@/components/JKLoader.jsx";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
@@ -42,8 +52,14 @@ import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 import {
+  PAINT_WEIGHT_COLUMNS,
+  PAINT_WEIGHT_DRILL_KPIS,
+  PAINT_WEIGHT_OVERALL,
+  groupPaintWeightRows,
+  paintWeightValue,
+} from "@/lib/paintWeight.js";
+import {
   getProcessKpiChildren,
-  getProcessKpiHistory,
   getProcessSummary,
   getProductChildren,
   getProductHistory,
@@ -63,7 +79,6 @@ import {
 // these constants are fallbacks used only by the per-KPI trend panel when
 // its caller doesn't pin a date range. The dashboard's main date state is
 // driven by the system clock in IST (see todayInIST below), not these.
-const QUALITY_DATA_DATE = "2026-06-10";
 const QUALITY_MONTH_FROM = "2026-06-01";
 const QUALITY_MONTH_TO = "2026-06-30";
 
@@ -97,16 +112,6 @@ function currentMonthKeyInIST() {
 function currentYearRange() {
   return { from: "2026-01-01", to: "2026-12-31" };
 }
-function monthRangeFromKey(monthKey) {
-  const [yStr, mStr] = String(monthKey).split("-");
-  const y = Number(yStr);
-  const m = Number(mStr);
-  const lastDay = new Date(y, m, 0).getDate();
-  return {
-    from: `${y}-${_pad2(m)}-01`,
-    to: `${y}-${_pad2(m)}-${_pad2(lastDay)}`,
-  };
-}
 const QUALITY_USER = {
   ...MOCK_USER,
   name: "Quality Head",
@@ -119,30 +124,6 @@ const QUALITY_USER = {
 /* ─── LOGO ─── */
 const LOGO = jkLogo;
 
-/* ─── LIGHT THEME ─── */
-const C = {
-  bg: "#F3F4F8",
-  cd: "#FFFFFF",
-  c2: "#F7F8FA",
-  bd: "#E0E3EA",
-  tx: "#1A1D26",
-  md: "#4A5168",
-  mu: "#8891A5",
-  ac: "#E8651A",
-  aL: "rgba(232,101,26,.07)",
-  aB: "rgba(232,101,26,.28)",
-  rowAlt: "rgba(0,119,182,0.04)",
-  thBg: "#EAEDF3",
-  tl: "#1A9A3E",
-  bl: "#2563EB",
-  rd: "#DC2626",
-  am: "#CA8A04",
-  gn: "#1A9A3E",
-  pp: "#7C3AED",
-  cy: "#0D9488",
-  sh: "0 1px 3px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04)",
-  r: 8,
-};
 const rc = (v) => (v >= 90 ? C.gn : v >= 80 ? C.am : C.rd);
 
 /**
@@ -174,11 +155,6 @@ const productionCardBg = (color) =>
         : color === C.bl
           ? "#EFF6FF"
           : "#FFFFFF";
-const numericKpiValue = (value) => {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const n = parseFloat(String(value ?? "").replace(/,/g, ""));
-  return Number.isFinite(n) ? n : null;
-};
 
 function QualityLoader({ minHeight = 360, message = "Please wait" }) {
   return (
@@ -629,510 +605,6 @@ function _genTrendSeries(kpi, range, effV) {
   }
   arr[arr.length - 1] = Math.round(v * 100) / 100;
   return { labels, series: arr };
-}
-function _genInsight(series, target, current, inv, name) {
-  const avg = series.reduce((a, b) => a + b, 0) / series.length;
-  const best = inv ? Math.min(...series) : Math.max(...series);
-  const worst = inv ? Math.max(...series) : Math.min(...series);
-  const gap = inv ? current - target : current - target;
-  const last3 = series.slice(-3).reduce((a, b) => a + b, 0) / 3;
-  const first3 = series.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
-  const improving = inv ? first3 > last3 : last3 > first3;
-  const stable = Math.abs(last3 - first3) / Math.max(Math.abs(avg), 0.5) < 0.02;
-  const onTarget = inv ? current <= target : current >= target;
-  let txt = "";
-  if (onTarget) {
-    txt += "Currently meeting target ";
-  } else {
-    txt +=
-      "Currently " +
-      Math.abs(gap).toFixed(2) +
-      " " +
-      (inv ? "above" : "below") +
-      " target ";
-  }
-  if (stable) {
-    txt += "— stable performance over the period.";
-  } else if (improving) {
-    txt += "— trending in the right direction.";
-  } else {
-    txt += "— negative trend; investigate root cause.";
-  }
-  return {
-    avg: Math.round(avg * 100) / 100,
-    best: Math.round(best * 100) / 100,
-    worst: Math.round(worst * 100) / 100,
-    gap: Math.round(gap * 100) / 100,
-    text: txt,
-    bestIdx: series.indexOf(best),
-    worstIdx: series.indexOf(worst),
-  };
-}
-function TrendChart({
-  labels,
-  axisLabels = labels,
-  series,
-  target,
-  color,
-  bestIdx,
-  worstIdx,
-}) {
-  const w = 620,
-    h = 200,
-    padL = 44,
-    padR = 16,
-    padT = 14,
-    padB = 30;
-  const hasTarget = Number.isFinite(target);
-  const allVals = hasTarget ? [...series, target] : [...series];
-  const min = Math.min(...allVals),
-    max = Math.max(...allVals);
-  const rng = max - min || Math.abs(max) * 0.1 || 1;
-  const yMin = min - rng * 0.15,
-    yMax = max + rng * 0.2,
-    yR = yMax - yMin;
-  const cw = w - padL - padR,
-    ch = h - padT - padB;
-  const xStep = cw / Math.max(labels.length - 1, 1);
-  const x = (i) => padL + i * xStep;
-  const y = (v) => padT + ch - ((v - yMin) / yR) * ch;
-  const pts = series.map((v, i) => x(i) + "," + y(v)).join(" ");
-  const area = `${x(0)},${padT + ch} ${pts} ${x(series.length - 1)},${padT + ch}`;
-  const fmt2 = (v) =>
-    Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v).toString();
-  return (
-    <svg
-      width="100%"
-      viewBox={"0 0 " + w + " " + h}
-      style={{ display: "block", maxHeight: 240 }}
-    >
-      {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-        <line
-          key={i}
-          x1={padL}
-          y1={padT + ch * p}
-          x2={padL + cw}
-          y2={padT + ch * p}
-          stroke={C.bd}
-          strokeWidth="0.5"
-          strokeDasharray={i === 0 || i === 1 ? "" : "2,3"}
-        />
-      ))}
-      {[0, 0.5, 1].map((p, i) => {
-        const v = yMax - (yMax - yMin) * p;
-        return (
-          <text
-            key={i}
-            x={padL - 6}
-            y={padT + ch * p + 3}
-            fontSize="9"
-            fill={C.mu}
-            textAnchor="end"
-          >
-            {fmt2(v)}
-          </text>
-        );
-      })}
-      <polygon points={area} fill={color} opacity="0.08" />
-      {hasTarget && (
-        <>
-          <line
-            x1={padL}
-            y1={y(target)}
-            x2={padL + cw}
-            y2={y(target)}
-            stroke={C.am}
-            strokeWidth="1.5"
-            strokeDasharray="5,4"
-          />
-          <text
-            x={padL + cw - 4}
-            y={y(target) - 5}
-            fontSize="9"
-            fill={C.am}
-            fontWeight="700"
-            textAnchor="end"
-          >
-            Target {fmt2(target)}
-          </text>
-        </>
-      )}
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={color}
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      {series.map((v, i) => {
-        const isBest = i === bestIdx,
-          isWorst = i === worstIdx;
-        return (
-          <g key={i}>
-            <circle
-              cx={x(i)}
-              cy={y(v)}
-              r={isBest || isWorst ? 4.5 : 3}
-              fill={isBest ? C.gn : isWorst ? C.rd : color}
-              stroke="#fff"
-              strokeWidth="1.5"
-            >
-              <title>{`${labels[i] || "Point " + (i + 1)}: ${fmt2(v)}`}</title>
-            </circle>
-            {(isBest || isWorst) && (
-              <text
-                x={x(i)}
-                y={y(v) - 9}
-                fontSize="8"
-                fill={isBest ? C.gn : C.rd}
-                fontWeight="700"
-                textAnchor="middle"
-              >
-                {isBest ? "BEST" : "WORST"}
-              </text>
-            )}
-          </g>
-        );
-      })}
-      {axisLabels.map((l, i) => (
-        <text
-          key={i}
-          x={x(i)}
-          y={h - padB + 14}
-          fontSize="9"
-          fill={C.mu}
-          textAnchor="middle"
-        >
-          {l}
-        </text>
-      ))}
-    </svg>
-  );
-}
-/* Pick the right chart type based on KPI intent (name + unit) */
-function pickChartType(kpi) {
-  if (kpi.chart) return kpi.chart;
-  const n = (kpi.n || "").toLowerCase();
-  const u = (kpi.u || "").toLowerCase();
-  if (/days without|days since|safe days/.test(n)) return "progress";
-  const barUnits = [
-    "nos",
-    "cases",
-    "batches",
-    "events",
-    "count",
-    "tickets",
-    "tyres",
-    "projects",
-    "members",
-    "stockouts",
-    "alarms",
-    "kgs",
-  ];
-  if (barUnits.some((x) => u.indexOf(x) >= 0)) return "bar";
-  if (/₹|inr|lakh|cr/i.test(kpi.u || "")) return "bar";
-  const barNames = [
-    "ncm hold",
-    "lot hold",
-    "open capa",
-    "overdue",
-    "stockout",
-    "repeat failure",
-    "anomalies",
-    "audits",
-    "stoppage",
-    "complaint",
-    "breakdown hour",
-    "downtime hour",
-    "manpower absent",
-    "production loss",
-    "milestones",
-    "absentee",
-    "spare",
-  ];
-  if (barNames.some((x) => n.indexOf(x) >= 0)) return "bar";
-  return "line";
-}
-
-function TrendBar({ labels, series, target, color, bestIdx, worstIdx }) {
-  const w = 620,
-    h = 200,
-    padL = 44,
-    padR = 16,
-    padT = 20,
-    padB = 30;
-  const allVals = [...series, target];
-  const dataMax = Math.max(...allVals);
-  const yMin = 0,
-    yMax = dataMax * 1.2 || 1,
-    yR = yMax - yMin;
-  const cw = w - padL - padR,
-    ch = h - padT - padB;
-  const xStep = cw / series.length;
-  const barW = Math.min(48, xStep * 0.62);
-  const xPos = (i) => padL + i * xStep + (xStep - barW) / 2;
-  const yPos = (v) => padT + ch - ((v - yMin) / yR) * ch;
-  const fmt2 = (v) =>
-    Math.abs(v) < 10
-      ? (Math.round(v * 10) / 10).toString()
-      : Math.round(v).toString();
-  return (
-    <svg
-      width="100%"
-      viewBox={"0 0 " + w + " " + h}
-      style={{ display: "block", maxHeight: 240 }}
-    >
-      {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-        <line
-          key={i}
-          x1={padL}
-          y1={padT + ch * p}
-          x2={padL + cw}
-          y2={padT + ch * p}
-          stroke={C.bd}
-          strokeWidth="0.5"
-          strokeDasharray={p === 1 ? "" : "2,3"}
-        />
-      ))}
-      {[0, 0.5, 1].map((p, i) => {
-        const v = yMax - (yMax - yMin) * p;
-        return (
-          <text
-            key={i}
-            x={padL - 6}
-            y={padT + ch * p + 3}
-            fontSize="9"
-            fill={C.mu}
-            textAnchor="end"
-          >
-            {fmt2(v)}
-          </text>
-        );
-      })}
-      <line
-        x1={padL}
-        y1={yPos(target)}
-        x2={padL + cw}
-        y2={yPos(target)}
-        stroke={C.am}
-        strokeWidth="1.5"
-        strokeDasharray="5,4"
-      />
-      <text
-        x={padL + cw - 4}
-        y={yPos(target) - 5}
-        fontSize="9"
-        fill={C.am}
-        fontWeight="700"
-        textAnchor="end"
-      >
-        Target {fmt2(target)}
-      </text>
-      {series.map((v, i) => {
-        const isBest = i === bestIdx,
-          isWorst = i === worstIdx;
-        const bh = Math.max(0, padT + ch - yPos(v));
-        const fill = isBest ? C.gn : isWorst ? C.rd : color;
-        return (
-          <g key={i}>
-            <rect
-              x={xPos(i)}
-              y={yPos(v)}
-              width={barW}
-              height={bh}
-              fill={fill}
-              opacity={isBest || isWorst ? 1 : 0.85}
-              rx="2.5"
-            >
-              <title>{`${labels[i] || "Period " + (i + 1)}: ${fmt2(v)}`}</title>
-            </rect>
-            <text
-              x={xPos(i) + barW / 2}
-              y={yPos(v) - 4}
-              fontSize="8"
-              fill={isBest ? C.gn : isWorst ? C.rd : C.tx}
-              fontWeight="700"
-              textAnchor="middle"
-            >
-              {fmt2(v)}
-            </text>
-          </g>
-        );
-      })}
-      {labels.map((l, i) => (
-        <text
-          key={i}
-          x={xPos(i) + barW / 2}
-          y={h - padB + 14}
-          fontSize="9"
-          fill={C.mu}
-          textAnchor="middle"
-        >
-          {l}
-        </text>
-      ))}
-    </svg>
-  );
-}
-
-function TrendProgress({ current, target, unit, color, series, labels }) {
-  const pct = target ? Math.min(150, Math.max(0, (current / target) * 100)) : 0;
-  const onTarget = pct >= 100;
-  const barW = Math.min(100, pct);
-  const w = 620,
-    h = 70,
-    padL = 44,
-    padR = 16,
-    padT = 8,
-    padB = 18;
-  const mn = Math.min(...series),
-    mx = Math.max(...series),
-    rn = mx - mn || 1;
-  const cw = w - padL - padR,
-    ch = h - padT - padB;
-  const xStep = cw / Math.max(series.length - 1, 1);
-  const pts = series
-    .map((v, i) => padL + i * xStep + "," + (padT + ch - ((v - mn) / rn) * ch))
-    .join(" ");
-  return (
-    <div style={{ padding: "6px 4px" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          fontSize: 13,
-          color: C.mu,
-          marginBottom: 8,
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>0</span>
-        <span style={{ fontWeight: 700, color: C.am }}>
-          Target: {target} {unit || ""}
-        </span>
-      </div>
-      <div
-        style={{
-          position: "relative",
-          height: 36,
-          background: C.c2,
-          borderRadius: 18,
-          border: "1px solid " + C.bd,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            width: barW + "%",
-            height: "100%",
-            background: onTarget ? C.gn : color,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            paddingRight: 14,
-            transition: "width .4s",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#fff",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {current} {unit || ""}
-          </span>
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            left:
-              Math.min(100, (target / Math.max(current, target)) * 100) + "%",
-            top: -3,
-            bottom: -3,
-            width: 2,
-            background: C.am,
-            transform: "translateX(-1px)",
-          }}
-        />
-      </div>
-      <div
-        style={{
-          textAlign: "center",
-          marginTop: 12,
-          fontSize: 16,
-          fontWeight: 700,
-          color: onTarget ? C.gn : C.tx,
-        }}
-      >
-        {Math.round(pct)}% of target{" "}
-        {onTarget && (
-          <span
-            style={{
-              fontSize: 13,
-              marginLeft: 6,
-              padding: "2px 7px",
-              borderRadius: 4,
-              background: C.gn + "18",
-              color: C.gn,
-            }}
-          >
-            ON TRACK
-          </span>
-        )}
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          color: C.mu,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          marginTop: 14,
-          marginBottom: 2,
-        }}
-      >
-        Trajectory
-      </div>
-      <svg
-        width="100%"
-        viewBox={"0 0 " + w + " " + h}
-        style={{ display: "block", maxHeight: 90 }}
-      >
-        <polyline
-          points={pts}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
-        {series.map((v, i) => (
-          <circle
-            key={i}
-            cx={padL + i * xStep}
-            cy={padT + ch - ((v - mn) / rn) * ch}
-            r="2.5"
-            fill={color}
-          >
-            <title>{`${labels[i] || "Point " + (i + 1)}: ${v} ${unit || ""}`}</title>
-          </circle>
-        ))}
-        {labels.map((l, i) => (
-          <text
-            key={i}
-            x={padL + i * xStep}
-            y={h - padB + 13}
-            fontSize="9"
-            fill={C.mu}
-            textAnchor="middle"
-          >
-            {l}
-          </text>
-        ))}
-      </svg>
-    </div>
-  );
 }
 
 /* ── KPI-aligned category charts (drill-structure visualizations) ── */
@@ -2657,509 +2129,6 @@ function TrendPanel({ kpi, onClose, tyreType, plant }) {
   );
 }
 
-function LiveProcessTrendPanel({
-  kpi,
-  onClose,
-  dateFrom,
-  dateTo,
-  shift,
-  granularity,
-  fetchHistory = getProcessKpiHistory,
-}) {
-  // Presets resolve around the date the panel was opened for, not a fixed
-  // workbook snapshot, so "Month" means the month the user is looking at.
-  const presetAnchor = dateTo || QUALITY_DATA_DATE;
-  const presetMonth = monthRangeFromKey(presetAnchor.slice(0, 7));
-  const presetYear = {
-    from: `${presetAnchor.slice(0, 4)}-01-01`,
-    to: `${presetAnchor.slice(0, 4)}-12-31`,
-  };
-  const initialPreset =
-    dateFrom === dateTo
-      ? "day"
-      : dateFrom === presetMonth.from && dateTo === presetMonth.to
-        ? "month"
-        : dateFrom === presetYear.from && dateTo === presetYear.to
-          ? "year"
-          : "";
-  const [rangePreset, setRangePreset] = useState(initialPreset);
-  const [trendFrom, setTrendFrom] = useState(dateFrom || QUALITY_DATA_DATE);
-  const [trendTo, setTrendTo] = useState(dateTo || QUALITY_DATA_DATE);
-  const [points, setPoints] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  useEffect(() => {
-    const h = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
-  const applyTrendPreset = (preset) => {
-    setRangePreset(preset);
-    if (preset === "day") {
-      setTrendFrom(presetAnchor);
-      setTrendTo(presetAnchor);
-    } else if (preset === "month") {
-      setTrendFrom(presetMonth.from);
-      setTrendTo(presetMonth.to);
-    } else if (preset === "year") {
-      setTrendFrom(presetYear.from);
-      setTrendTo(presetYear.to);
-    }
-  };
-  const onTrendFromChange = (e) => {
-    setRangePreset("");
-    setTrendFrom(e.target.value);
-  };
-  const onTrendToChange = (e) => {
-    setRangePreset("");
-    setTrendTo(e.target.value);
-  };
-  useEffect(() => {
-    if (!kpi?.trendKpiName) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setPoints([]);
-    fetchHistory({
-      kpiName: kpi.trendKpiName,
-      dateFrom: trendFrom,
-      dateTo: trendTo,
-      shift,
-      granularity,
-    })
-      .then((res) => {
-        if (!cancelled)
-          setPoints(
-            Array.isArray(res?.points)
-              ? res.points.filter((p) => p.value != null)
-              : [],
-          );
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [kpi?.trendKpiName, trendFrom, trendTo, shift, granularity, fetchHistory]);
-  if (!kpi) return null;
-  const labels = points.map((p) => toDisplayDate(p.date) ?? "");
-  const series = points.map((p) => Number(p.value));
-  const targetNum =
-    kpi.target != null
-      ? parseFloat(String(kpi.target).replace(/[^0-9.\-]/g, ""))
-      : NaN;
-  const current = series.length
-    ? series[series.length - 1]
-    : parseFloat(String(kpi.v).replace(/,/g, ""));
-  const target = !isNaN(targetNum) ? targetNum : current;
-  const inv =
-    /Violation|Scrap|Reject|Loss|Absent|First|Downtime|NCM|Defect|Reduced|Stoppage|Repeat|Hold|Breakdown/i.test(
-      kpi.n,
-    );
-  const stCol = kpi.id === "mqv" ? C.rd : kpi.id === "audit" ? C.bl : C.ac;
-  const ins = series.length
-    ? _genInsight(series, target, current, inv, kpi.n)
-    : { bestIdx: -1, worstIdx: -1 };
-  return (
-    <div
-      onClick={onClose}
-      className="no-print"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(15,23,42,0.55)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        animation: "fadeIn .15s ease",
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.cd,
-          borderRadius: 12,
-          maxWidth: 740,
-          width: "100%",
-          maxHeight: "90vh",
-          overflow: "auto",
-          boxShadow: "0 20px 60px rgba(0,0,0,.25)",
-          border: "1px solid " + C.bd,
-        }}
-      >
-        <div
-          style={{
-            padding: "14px 18px",
-            borderBottom: "1px solid " + C.bd,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                color: C.mu,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: ".5px",
-              }}
-            >
-              KPI Trend Analysis
-            </div>
-            <div
-              style={{
-                fontSize: 19,
-                fontWeight: 700,
-                color: C.tx,
-                marginTop: 2,
-              }}
-            >
-              {kpi.n}
-            </div>
-            <div style={{ fontSize: 12, color: C.mu, marginTop: 2 }}>
-              {trendFrom} to {trendTo} ·{" "}
-              {granularity ?? (shift === "All" ? "DAY" : `SHIFT ${shift}`)}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 8,
-              border: "1px solid " + C.bd,
-              background: C.c2,
-              color: C.mu,
-              fontSize: 19,
-              cursor: "pointer",
-              lineHeight: 1,
-            }}
-          >
-            {"✕"}
-          </button>
-        </div>
-        <div
-          style={{
-            padding: "12px 18px",
-            borderBottom: "1px solid " + C.bd,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: 1,
-              background: C.bg,
-              borderRadius: 10,
-              padding: 2,
-            }}
-          >
-            {[
-              ["day", "Day"],
-              ["month", "Month"],
-              ["year", "Year"],
-            ].map(([id, label]) => {
-              const active = rangePreset === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => applyTrendPreset(id)}
-                  style={{
-                    padding: "4px 12px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: active ? C.cd : "transparent",
-                    color: active ? C.tx : C.mu,
-                    fontSize: 12,
-                    fontWeight: active ? 700 : 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <div
-            title="Trend date range"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "3px 8px",
-              border: "1px solid " + C.bd,
-              borderRadius: 8,
-              background: C.cd,
-            }}
-          >
-            <input
-              type="date"
-              value={trendFrom}
-              onChange={onTrendFromChange}
-              style={{
-                border: "none",
-                outline: "none",
-                background: "transparent",
-                fontSize: 12,
-                fontFamily: "inherit",
-                color: C.tx,
-                padding: "2px 0",
-                width: 116,
-              }}
-            />
-            <span style={{ color: C.bd, fontSize: 12 }}>{"–"}</span>
-            <input
-              type="date"
-              value={trendTo}
-              onChange={onTrendToChange}
-              style={{
-                border: "none",
-                outline: "none",
-                background: "transparent",
-                fontSize: 12,
-                fontFamily: "inherit",
-                color: C.tx,
-                padding: "2px 0",
-                width: 116,
-              }}
-            />
-          </div>
-        </div>
-        <div style={{ padding: "14px 18px" }}>
-          <div
-            style={{
-              background: C.c2,
-              borderRadius: 8,
-              border: "1px solid " + C.bd,
-              padding: "10px 12px 4px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 12,
-                color: C.mu,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                marginBottom: 4,
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <span>Actual vs Target — fetched from API</span>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 4,
-                  fontSize: 11,
-                }}
-              >
-                <span
-                  style={{
-                    width: 14,
-                    height: 2,
-                    background: stCol,
-                    display: "inline-block",
-                  }}
-                />
-                Actual
-              </span>
-              {!isNaN(targetNum) && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontSize: 11,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 14,
-                      height: 0,
-                      borderTop: "1.5px dashed " + C.am,
-                      display: "inline-block",
-                    }}
-                  />
-                  Target
-                </span>
-              )}
-              {ins.bestIdx >= 0 && (
-                <>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      fontSize: 11,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        background: C.gn,
-                        display: "inline-block",
-                        borderRadius: "50%",
-                      }}
-                    />
-                    Best
-                  </span>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      fontSize: 11,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        background: C.rd,
-                        display: "inline-block",
-                        borderRadius: "50%",
-                      }}
-                    />
-                    Worst
-                  </span>
-                </>
-              )}
-            </div>
-            {loading && (
-              <div
-                style={{
-                  padding: 24,
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: C.mu,
-                }}
-              >
-                Fetching trend points...
-              </div>
-            )}
-            {error && (
-              <div
-                style={{
-                  padding: 24,
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: C.rd,
-                }}
-              >
-                Trend fetch failed: {error.message || "Request failed"}
-              </div>
-            )}
-            {!loading && !error && !series.length && (
-              <div
-                style={{
-                  padding: 24,
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: C.mu,
-                }}
-              >
-                No trend points returned for this date range.
-              </div>
-            )}
-            {!loading && !error && series.length > 0 && (
-              <TrendChart
-                labels={labels}
-                series={series}
-                target={isNaN(targetNum) ? null : targetNum}
-                color={stCol}
-                bestIdx={ins.bestIdx}
-                worstIdx={ins.worstIdx}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── DOWNLOAD HELPERS ─── */
-function _safeName(s) {
-  return (
-    (s || "export")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_|_$/g, "")
-      .slice(0, 60) || "export"
-  );
-}
-function _dl(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 0);
-}
-function _tableToCSV(tbl) {
-  return Array.from(tbl.querySelectorAll("tr"))
-    .map((tr) =>
-      Array.from(tr.querySelectorAll("th,td"))
-        .map((c) => {
-          const t = (c.innerText || "").trim().replace(/\s+/g, " ");
-          return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
-        })
-        .join(","),
-    )
-    .join("\n");
-}
-function _svgToPNG(svg, scale, onDone) {
-  try {
-    const bbox = svg.getBoundingClientRect();
-    const w = Math.max(bbox.width, 1),
-      h = Math.max(bbox.height, 1);
-    const clone = svg.cloneNode(true);
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    if (!clone.getAttribute("width")) clone.setAttribute("width", w);
-    if (!clone.getAttribute("height")) clone.setAttribute("height", h);
-    if (!clone.getAttribute("viewBox"))
-      clone.setAttribute("viewBox", "0 0 " + w + " " + h);
-    const xml = new XMLSerializer().serializeToString(clone);
-    const canvas = document.createElement("canvas");
-    canvas.width = w * scale;
-    canvas.height = h * scale;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const img = new Image();
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((b) => onDone(b));
-    };
-    img.onerror = () => onDone(null);
-    img.src =
-      "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
-  } catch (e) {
-    onDone(null);
-  }
-}
 function _printPage() {
   window.print();
 }
@@ -3984,468 +2953,6 @@ function UserMenu({ plant, role, onLogout }) {
   );
 }
 
-/* ─── PRINT STYLESHEET ─── */
-function PrintStyles() {
-  return (
-    <style>{`@media print{
-  @page{size:A3 landscape;margin:10mm;}
-  html,body{background:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .no-print,.no-print *{display:none !important;}
-  [style*="position: sticky"],[style*="position:sticky"]{position:static !important;top:auto !important;}
-  [style*="position: fixed"],[style*="position:fixed"]{position:static !important;}
-  [style*="overflow-x: auto"],[style*="overflowX"]{overflow:visible !important;}
-  [style*="overflow-y: auto"],[style*="overflow:auto"]{overflow:visible !important;max-height:none !important;}
-  [style*="min-height: 100vh"],[style*="minHeight"]{min-height:0 !important;}
-  button{cursor:default !important;}
-  table{page-break-inside:avoid;}
-}`}</style>
-  );
-}
-
-function Card({ title, children, accent, style: s, hideExport }) {
-  const ref = useRef(null);
-  const [menu, setMenu] = useState(false);
-  const [caps, setCaps] = useState({ tbl: false, svg: false });
-  useEffect(() => {
-    if (ref.current) {
-      setCaps({
-        tbl: !!ref.current.querySelector("table"),
-        svg: !!ref.current.querySelector("svg"),
-      });
-    }
-  }, [children]);
-  const fname = _safeName(title);
-  const onCSV = (e) => {
-    e && e.stopPropagation();
-    const t = ref.current && ref.current.querySelector("table");
-    if (t)
-      _dl(
-        new Blob([_tableToCSV(t)], { type: "text/csv;charset=utf-8" }),
-        fname + ".csv",
-      );
-    setMenu(false);
-  };
-  const onPNG = (e) => {
-    e && e.stopPropagation();
-    const sv = ref.current && ref.current.querySelector("svg");
-    if (sv)
-      _svgToPNG(sv, 2, (b) => {
-        if (b) _dl(b, fname + ".png");
-      });
-    setMenu(false);
-  };
-  const onClick = (e) => {
-    e.stopPropagation();
-    const only =
-      caps.tbl && !caps.svg ? "csv" : !caps.tbl && caps.svg ? "png" : null;
-    if (only === "csv") return onCSV();
-    if (only === "png") return onPNG();
-    if (caps.tbl || caps.svg) setMenu((m) => !m);
-  };
-  const showBtn = !hideExport && (caps.tbl || caps.svg);
-  return (
-    <div
-      style={{
-        background: C.cd,
-        borderRadius: 10,
-        border: "1px solid " + C.bd,
-        padding: "14px 16px",
-        boxShadow: "0 1px 3px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.035)",
-        minWidth: 0,
-        overflow: "hidden",
-        borderTop: accent ? "3px solid " + accent : undefined,
-        position: "relative",
-        ...s,
-      }}
-    >
-      {(title || showBtn) && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 8,
-            gap: 8,
-          }}
-        >
-          {title ? (
-            <div
-              style={{
-                fontSize: 15,
-                fontWeight: 700,
-                color: accent || C.bl,
-                textTransform: "uppercase",
-                letterSpacing: ".6px",
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              {title}
-            </div>
-          ) : (
-            <div style={{ flex: 1 }} />
-          )}
-          {showBtn && (
-            <div
-              className="no-print"
-              style={{ position: "relative", flexShrink: 0 }}
-            >
-              <button
-                onClick={onClick}
-                title="Download"
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 4,
-                  border: "1px solid " + C.bd,
-                  background: "#F8FAFC",
-                  color: C.bl,
-                  fontSize: 14,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: 1,
-                  padding: 0,
-                }}
-              >
-                {"⤓"}
-              </button>
-              {menu && caps.tbl && caps.svg && (
-                <>
-                  <div
-                    onClick={() => setMenu(false)}
-                    style={{ position: "fixed", inset: 0, zIndex: 200 }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 4px)",
-                      background: C.cd,
-                      border: "1px solid " + C.bd,
-                      borderRadius: 6,
-                      boxShadow: "0 4px 12px rgba(0,0,0,.12)",
-                      zIndex: 201,
-                      minWidth: 140,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <button
-                      onClick={onCSV}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        padding: "7px 12px",
-                        border: "none",
-                        background: "transparent",
-                        textAlign: "left",
-                        fontSize: 13,
-                        color: C.tx,
-                        cursor: "pointer",
-                        borderBottom: "1px solid " + C.bd,
-                      }}
-                    >
-                      {"⤓"} CSV (Table)
-                    </button>
-                    <button
-                      onClick={onPNG}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        padding: "7px 12px",
-                        border: "none",
-                        background: "transparent",
-                        textAlign: "left",
-                        fontSize: 13,
-                        color: C.tx,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {"⤓"} PNG (Chart)
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      <div ref={ref}>{children}</div>
-    </div>
-  );
-}
-
-function DTable({ cols, rows, onRowClick, isRowClickable }) {
-  const [sc, setSc] = useState(null),
-    [sd, setSd] = useState("desc");
-  const ck = cols.join("|");
-  useEffect(() => {
-    setSc(null);
-    setSd("desc");
-  }, [ck]);
-  const num = (cell) => {
-    let s = cell;
-    if (s && typeof s === "object" && s.props) return null;
-    s = String(s == null ? "" : s);
-    const n = parseFloat(s.replace(/[^0-9.\-]/g, ""));
-    return /[0-9]/.test(s) && !isNaN(n) ? n : null;
-  };
-  const txt = (cell) => {
-    let s = cell;
-    if (s && typeof s === "object" && s.props) s = "";
-    return String(s == null ? "" : s).toLowerCase();
-  };
-  let disp = rows;
-  if (sc != null) {
-    disp = [...rows].sort((a, b) => {
-      const na = num(a[sc]),
-        nb = num(b[sc]);
-      let c2;
-      if (na != null && nb != null) c2 = na - nb;
-      else {
-        const ta = txt(a[sc]),
-          tb = txt(b[sc]);
-        c2 = ta < tb ? -1 : ta > tb ? 1 : 0;
-      }
-      return sd === "asc" ? c2 : -c2;
-    });
-  }
-  const onH = (i) => {
-    if (sc === i) setSd((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSc(i);
-      setSd("desc");
-    }
-  };
-  return (
-    <div
-      style={{
-        overflowX: "auto",
-        border: "1px solid " + C.bd,
-        borderRadius: 10,
-        maxHeight: 320,
-      }}
-    >
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "separate",
-          borderSpacing: 0,
-          fontSize: 13,
-        }}
-      >
-        <thead>
-          <tr>
-            {cols.map((c, i) => {
-              const a = sc === i;
-              return (
-                <th
-                  key={i}
-                  onClick={() => onH(i)}
-                  title="Click to sort"
-                  style={{
-                    textAlign: "center",
-                    padding: "8px 10px",
-                    background: C.thBg,
-                    color: a ? C.bl : C.tx,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: ".6px",
-                    borderBottom: "2px solid " + C.bd,
-                    borderRight:
-                      i === cols.length - 1 ? "none" : "1px solid " + C.bd,
-                    fontSize: 11,
-                    cursor: "pointer",
-                    userSelect: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {c}
-                  <span
-                    style={{ marginLeft: 4, fontSize: 9, opacity: a ? 1 : 0.3 }}
-                  >
-                    {a ? (sd === "asc" ? "▲" : "▼") : "⇅"}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {disp.map((row, ri) => {
-            const clickable =
-              typeof onRowClick === "function" &&
-              (typeof isRowClickable !== "function" || isRowClickable(row));
-            return (
-              <tr
-                key={ri}
-                onClick={clickable ? () => onRowClick(row) : undefined}
-                style={{
-                  background: ri % 2 === 0 ? C.cd : C.rowAlt,
-                  transition: "background .15s ease",
-                  cursor: clickable ? "pointer" : "default",
-                }}
-                onMouseEnter={(event) => {
-                  if (clickable) event.currentTarget.style.background = C.aL;
-                }}
-                onMouseLeave={(event) => {
-                  if (clickable)
-                    event.currentTarget.style.background =
-                      ri % 2 === 0 ? C.cd : C.rowAlt;
-                }}
-              >
-                {row.map((cell, ci) => {
-                  const isS =
-                    typeof cell === "string" &&
-                    [
-                      "OK",
-                      "High",
-                      "Low",
-                      "Alert",
-                      "Below",
-                      "Monitor",
-                      "Escalate",
-                      "Open",
-                      "Closed",
-                      "Scrapped",
-                      "Electrical",
-                      "Mechanical",
-                      "Instrumentation",
-                    ].includes(cell);
-                  const stC = isS
-                    ? ["OK", "Closed"].includes(cell)
-                      ? C.gn
-                      : [
-                            "High",
-                            "Low",
-                            "Scrapped",
-                            "Escalate",
-                            "Below",
-                            "Open",
-                          ].includes(cell)
-                        ? C.rd
-                        : [
-                              "Electrical",
-                              "Mechanical",
-                              "Instrumentation",
-                            ].includes(cell)
-                          ? C.bl
-                          : C.am
-                    : null;
-                  return (
-                    <td
-                      key={ci}
-                      style={{
-                        padding: "8px 10px",
-                        borderBottom: "1px solid " + C.bd,
-                        borderRight:
-                          ci === row.length - 1 ? "none" : "1px solid " + C.bd,
-                        textAlign: "center",
-                        color: stC || C.tx,
-                        fontWeight: ci === 0 || stC ? 600 : 400,
-                      }}
-                    >
-                      {isS ? (
-                        <span
-                          style={{
-                            padding: "2px 6px",
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            background: (stC || C.am) + "18",
-                            color: stC || C.am,
-                          }}
-                        >
-                          {cell}
-                        </span>
-                      ) : (
-                        cell
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* ─── STATUS PILL ─── */
-function StatusPill({ status }) {
-  const map = {
-    Green: { bg: C.gn + "18", fg: C.gn, t: "Green" },
-    Yellow: { bg: C.am + "18", fg: C.am, t: "Yellow" },
-    Red: { bg: C.rd + "18", fg: C.rd, t: "Red" },
-    Grey: { bg: "#9CA3AF18", fg: "#6B7280", t: "Manual" },
-    Open: { bg: C.am + "18", fg: C.am, t: "Open" },
-    Closed: { bg: C.gn + "18", fg: C.gn, t: "Closed" },
-    Overdue: { bg: C.rd + "18", fg: C.rd, t: "Overdue" },
-    Pending: { bg: C.am + "18", fg: C.am, t: "Pending" },
-    Released: { bg: C.gn + "18", fg: C.gn, t: "Released" },
-    Hold: { bg: C.rd + "18", fg: C.rd, t: "Hold" },
-    Accepted: { bg: C.gn + "18", fg: C.gn, t: "Accepted" },
-    Rejected: { bg: C.rd + "18", fg: C.rd, t: "Rejected" },
-    Manual: { bg: "#9CA3AF18", fg: "#6B7280", t: "Manual" },
-    Insufficient: { bg: "#9CA3AF18", fg: "#6B7280", t: "Insufficient" },
-    Marginal: { bg: C.ac + "18", fg: C.ac, t: "Marginal" },
-  };
-  const s = map[status] || { bg: C.bd, fg: C.mu, t: status };
-  return (
-    <span
-      style={{
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        background: s.bg,
-        color: s.fg,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {s.t}
-    </span>
-  );
-}
-
-/* ─── BREADCRUMB ─── */
-function Breadcrumb({ path, onNav }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        fontSize: 13,
-        color: C.mu,
-        marginBottom: 8,
-        flexWrap: "wrap",
-      }}
-    >
-      {path.map((p, i) => (
-        <span key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span
-            onClick={() => onNav && onNav(i)}
-            style={{
-              cursor: onNav && i < path.length - 1 ? "pointer" : "default",
-              color: i === path.length - 1 ? C.tx : C.mu,
-              fontWeight: i === path.length - 1 ? 700 : 400,
-              textDecoration:
-                onNav && i < path.length - 1 ? "underline" : "none",
-            }}
-          >
-            {p}
-          </span>
-          {i < path.length - 1 && <span style={{ color: C.bd }}>{"›"}</span>}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /* ─── MINI CONTROL CHART (SPC) ─── */
 function ControlChart({ data, ucl, lcl, target, w = 240, h = 80 }) {
   const mn = Math.min(...data, lcl) - 0.05,
@@ -4522,356 +3029,6 @@ function ControlChart({ data, ucl, lcl, target, w = 240, h = 80 }) {
         );
       })}
     </svg>
-  );
-}
-
-// The Production KpiCard's tier (green / amber / red) for a Quality card.
-// An explicit accent wins over the status, as it always has here; anything
-// else (counts, missing values) is the neutral card.
-function qualityCardTier(kpi) {
-  const color = kpi.accentColor;
-  if (color === C.gn || (!color && kpi.status === "Green")) return "green";
-  if (color === C.am || (!color && kpi.status === "Yellow")) return "amber";
-  if (color === C.rd || (!color && kpi.status === "Red")) return "red";
-  return null;
-}
-
-const QUALITY_KPI_ICON = {
-  pqr: FactCheckOutlinedIcon,
-  audit: FactCheckOutlinedIcon,
-  mqv: ReportProblemOutlinedIcon,
-  ndev: ReportProblemOutlinedIcon,
-};
-
-/**
- * Quality KPI card, built on the Production dashboard's KpiCard so the two
- * pages read as one product: same tiered background, icon + title header,
- * value with its unit, progress bar, and trend / drill icons in the footer.
- */
-function QKpiCard({ kpi, isOpen, onToggle, onTrend, tyreType, plant }) {
-  const theme = useTheme();
-  const tier = qualityCardTier(kpi);
-  const cardTheme = getKpiCardTheme(theme, tier);
-  const v = tAdjust(kpi.v, kpi.n, tyreType, plant);
-  const numVal = numericKpiValue(v);
-  const hasValue = numVal != null;
-  const isPct = kpi.u === "%";
-  const progressPct = !hasValue
-    ? 0
-    : isPct
-      ? Math.max(0, Math.min(100, numVal))
-      : numVal > 0
-        ? 100
-        : 0;
-  const value = hasValue
-    ? `${formatIndianNumber(numVal)}${isPct ? "%" : ""}`
-    : "–";
-  const canTrend = !kpi.na && kpi.trendApi && typeof onTrend === "function";
-  const canDrill = Boolean(kpi.drill);
-  const Icon =
-    QUALITY_KPI_ICON[kpi.id] ?? (isPct ? TaskAltOutlinedIcon : GridViewIcon);
-  const caption = hasValue
-    ? [kpi.metricLabel, kpi.periodLabel].filter(Boolean).join(" · ")
-    : "";
-  const footnote = !hasValue
-    ? (kpi.emptyReason ?? (kpi.na ? "Not available yet" : null))
-    : kpi.target
-      ? `Target ${kpi.target}`
-      : kpi.metricLabel && !kpi.periodLabel
-        ? kpi.metricLabel
-        : null;
-  const trendPct = hasValue ? kpi.trendPct : null;
-  const hasTrend = Number.isFinite(trendPct);
-  const trendColor = !hasTrend
-    ? theme.palette.text.secondary
-    : trendPct === 0 || trendPct > 0 !== Boolean(kpi.lowerIsBetter)
-      ? theme.custom.status.green
-      : theme.custom.status.red;
-  const iconButtonSx = {
-    p: 0.25,
-    color: "text.secondary",
-    "&:hover": { color: "primary.main" },
-  };
-
-  return (
-    <Box
-      onClick={canDrill ? onToggle : undefined}
-      role={canDrill ? "button" : undefined}
-      tabIndex={canDrill ? 0 : undefined}
-      aria-expanded={canDrill ? isOpen : undefined}
-      onKeyDown={
-        canDrill
-          ? (e) => {
-              if (e.target !== e.currentTarget) return;
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onToggle();
-              }
-            }
-          : undefined
-      }
-      sx={{
-        position: "relative",
-        containerType: "inline-size",
-        backgroundColor: cardTheme.cardBg,
-        border: isOpen ? 2 : 1,
-        borderColor: isOpen ? "primary.main" : `${cardTheme.sparkColor}30`,
-        borderRadius: 2.5,
-        p: 1.75,
-        minWidth: 0,
-        boxShadow: isOpen ? "0 4px 14px rgba(0,0,0,0.08)" : theme.custom.shadow,
-        cursor: canDrill ? "pointer" : "default",
-        transition: "all 0.15s ease",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        minHeight: 136,
-        "&:hover": canDrill ? { boxShadow: "0 4px 12px rgba(0,0,0,0.06)" } : {},
-        "&:focus-visible": {
-          outline: "2px solid",
-          outlineColor: "primary.main",
-          outlineOffset: 2,
-        },
-      }}
-    >
-      {/* Header: icon + title */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={1}
-        sx={{ mb: 0.75, minWidth: 0 }}
-      >
-        <Icon
-          sx={{
-            fontSize: 20,
-            color: hasValue ? cardTheme.iconColor : "text.disabled",
-            flexShrink: 0,
-          }}
-        />
-        <Typography
-          title={kpi.n}
-          sx={{
-            fontSize: 15,
-            fontWeight: 700,
-            color: "text.primary",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {kpi.n}
-        </Typography>
-        {kpi.manual && (
-          <Typography
-            component="span"
-            sx={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "text.secondary",
-              flexShrink: 0,
-            }}
-          >
-            Manual
-          </Typography>
-        )}
-      </Stack>
-
-      {/* Value + unit, sparkline on the right when there is one */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        spacing={1}
-        sx={{ my: 0.25, minWidth: 0 }}
-      >
-        <Stack sx={{ minWidth: 0, flex: 1 }}>
-          <Stack
-            direction="row"
-            alignItems="baseline"
-            spacing={0.75}
-            sx={{ minWidth: 0 }}
-          >
-            <Typography
-              sx={{
-                fontSize: { xs: 24, md: 26, lg: 28 },
-                fontWeight: 800,
-                lineHeight: 1.1,
-                color: hasValue ? cardTheme.textColor : "text.disabled",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {value}
-            </Typography>
-            {hasValue && kpi.u && !isPct && (
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "text.secondary",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {kpi.u}
-              </Typography>
-            )}
-          </Stack>
-          {caption && (
-            <Typography
-              title={caption}
-              sx={{
-                mt: 0.25,
-                fontSize: 11,
-                fontWeight: 500,
-                color: "text.secondary",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {caption}
-            </Typography>
-          )}
-        </Stack>
-        {hasValue && Array.isArray(kpi.sp) && kpi.sp.length >= 2 && (
-          <Box
-            sx={{
-              flexShrink: 0,
-              ml: 1,
-              "@container (max-width: 215px)": { display: "none" },
-            }}
-          >
-            <Sparkline
-              data={kpi.sp}
-              color={cardTheme.sparkColor}
-              width={70}
-              height={22}
-              onClick={
-                canTrend
-                  ? (e) => {
-                      e.stopPropagation();
-                      onTrend(kpi);
-                    }
-                  : undefined
-              }
-            />
-          </Box>
-        )}
-      </Stack>
-
-      {/* Progress bar */}
-      {!isOpen && (
-        <Box
-          sx={{
-            width: "100%",
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: cardTheme.trackColor,
-            overflow: "hidden",
-            my: 0.75,
-          }}
-        >
-          <Box
-            sx={{
-              width: `${progressPct}%`,
-              height: "100%",
-              borderRadius: 3,
-              background: cardTheme.barGradient || cardTheme.barColor,
-              transition: "width 0.4s ease",
-            }}
-          />
-        </Box>
-      )}
-
-      {/* Footer: target or why the value is missing; trend + drill icons */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        spacing={1}
-        sx={{ mt: 0.5, minHeight: 22 }}
-      >
-        {hasTrend ? (
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={0.5}
-            sx={{ minWidth: 0 }}
-          >
-            {trendPct >= 0 ? (
-              <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
-            ) : (
-              <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
-            )}
-            <Typography
-              sx={{ fontSize: 13, fontWeight: 700, color: trendColor }}
-            >
-              {`${trendPct > 0 ? "+" : ""}${trendPct.toFixed(1)}%`}
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: 12.5,
-                fontWeight: 500,
-                color: "text.secondary",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {kpi.trendBaseline ?? "vs prev"}
-            </Typography>
-          </Stack>
-        ) : (
-          <Typography
-            sx={{
-              fontSize: 12.5,
-              fontWeight: 500,
-              color: "text.secondary",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {footnote}
-          </Typography>
-        )}
-        <Stack direction="row" alignItems="center" spacing={0.5}>
-          {canTrend && (
-            <Tooltip title="View trend" arrow>
-              <IconButton
-                size="small"
-                aria-label={`View ${kpi.n} trend`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTrend(kpi);
-                }}
-                sx={iconButtonSx}
-              >
-                <ShowChartIcon sx={{ fontSize: 15 }} />
-              </IconButton>
-            </Tooltip>
-          )}
-          {canDrill && (
-            <Tooltip
-              title={isOpen ? "Close drill-down" : "Open drill-down"}
-              arrow
-            >
-              <IconButton
-                size="small"
-                aria-label={`${isOpen ? "Close" : "Open"} ${kpi.n} drill-down`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle();
-                }}
-                sx={{
-                  ...iconButtonSx,
-                  color: isOpen ? "primary.main" : "text.secondary",
-                }}
-              >
-                <TableChartOutlinedIcon sx={{ fontSize: 15 }} />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Stack>
-      </Stack>
-    </Box>
   );
 }
 
@@ -13962,35 +12119,6 @@ function LiveCuringScrapDrillPanel({ date, shift, granularity, onClose }) {
   );
 }
 
-const PAINT_WEIGHT_COLUMNS = [
-  { label: "Tyre Qty", kpi: "Paint_Wt_Tyre_Qty_sku", decimals: 0 },
-  { label: "Spec Wt (kg)", kpi: "Paint_Wt_Spec_Kg_sku", decimals: 3 },
-  { label: "Avg Wt (kg)", kpi: "Paint_Wt_Avg_Kg_sku", decimals: 3 },
-  { label: "Deviation (kg)", kpi: "Paint_Wt_Dev_Kg_sku", decimals: 3 },
-  { label: "1%", kpi: "Paint_Wt_Within1_Pct_sku", decimals: 2, percent: true },
-  { label: "2%", kpi: "Paint_Wt_Within2_Pct_sku", decimals: 2, percent: true },
-  { label: "3%", kpi: "Paint_Wt_Within3_Pct_sku", decimals: 2, percent: true },
-];
-const PAINT_WEIGHT_OVERALL = [
-  { label: "Within 3%", kpi: "Paint_Wt_Within3_Pct_overall" },
-  { label: "Within 2%", kpi: "Paint_Wt_Within2_Pct_overall" },
-  { label: "Within 1%", kpi: "Paint_Wt_Within1_Pct_overall" },
-];
-const PAINT_WEIGHT_DRILL_KPIS = [
-  ...PAINT_WEIGHT_OVERALL.map((column) => column.kpi),
-  ...PAINT_WEIGHT_COLUMNS.map((column) => column.kpi),
-];
-
-function paintWeightValue(value, decimals = 2, percent = false) {
-  if (value == null || String(value).trim() === "") return "—";
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "—";
-  return (
-    number.toLocaleString("en-IN", { maximumFractionDigits: decimals }) +
-    (percent ? "%" : "")
-  );
-}
-
 function LivePaintWeightDrillPanel({ date, shift, granularity }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14021,28 +12149,7 @@ function LivePaintWeightDrillPanel({ date, shift, granularity }) {
     };
   }, [date, shift, granularity]);
 
-  const overall = new Map();
-  const bySku = new Map();
-  for (const row of rows) {
-    if (PAINT_WEIGHT_OVERALL.some((column) => column.kpi === row.kpi_name)) {
-      overall.set(row.kpi_name, row.actual_value);
-    } else if (row.itemcode) {
-      if (!bySku.has(row.itemcode)) bySku.set(row.itemcode, new Map());
-      bySku.get(row.itemcode).set(row.kpi_name, row.actual_value);
-    }
-  }
-  const tableRows = [...bySku]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([sku, values]) => [
-      sku,
-      ...PAINT_WEIGHT_COLUMNS.map((column) =>
-        paintWeightValue(
-          values.get(column.kpi),
-          column.decimals,
-          column.percent,
-        ),
-      ),
-    ]);
+  const { overall, tableRows } = groupPaintWeightRows(rows);
 
   return (
     <Card title="GT Weight Variation — Paint Weight" accent={C.tl}>
@@ -14156,7 +12263,6 @@ function LiveProductDrillPanel({ kpi, date, shift, granularity }) {
       ) : (
         label
       ),
-      row.machine && row.machine !== label ? row.machine : "—",
       row.actual_value == null ? "—" : fmt(Number(row.actual_value)),
       row.unit || "—",
     ];
@@ -14180,7 +12286,7 @@ function LiveProductDrillPanel({ kpi, date, shift, granularity }) {
       ) : tableRows.length ? (
         <>
           <DTable
-            cols={["KPI / machine", "Machine", "Value", "Unit"]}
+            cols={["KPI / machine", "Value", "Unit"]}
             rows={tableRows}
             isRowClickable={(row) => row.canDrill}
             onRowClick={(row) => openChild(row.productRow)}
@@ -14445,6 +12551,8 @@ function QualityDashboard({ plant, onBack }) {
       trendApi: true,
       trendKpiName: kpi.sourceKpi,
       fetchTrendHistory: getProductKpiHistory,
+      // Uniformity & Balancing cards open their own spec'd trend views.
+      trendKind: isUniformityTrendCard(kpi.sourceKpi) ? "uniformity" : null,
       drill:
         kpi.id === "gtw"
           ? "paintWeight"
@@ -14588,12 +12696,10 @@ function QualityDashboard({ plant, onBack }) {
   const renderKpiCard = (kpi) => (
     <QKpiCard
       key={kpi.id}
-      kpi={kpi}
+      kpi={{ ...kpi, v: tAdjust(kpi.v, kpi.n, tyreType, plant) }}
       isOpen={openKpi === kpi.id}
       onToggle={() => kpi.drill && toggle(kpi.id)}
       onTrend={setTrendKpi}
-      tyreType={tyreType}
-      plant={plant}
     />
   );
 
@@ -14640,7 +12746,12 @@ function QualityDashboard({ plant, onBack }) {
           // FIRST so the user's pick reaches onHeaderMonthChange (which sets
           // tfFrom/tfTo/tfMonth from monthRangeFromKey) instead of
           // onHeaderPresetChange (which would hard-reset to the as-of month).
-          if (next?.month !== undefined && next.preset === "month") {
+          // Preset pills clear month to null; only a valid dropdown key
+          // selects a specific month. A reset must use the current month.
+          if (
+            next?.preset === "month" &&
+            /^\d{4}-(0[1-9]|1[0-2])$/.test(next.month)
+          ) {
             onHeaderMonthChange(next.month);
           } else if (next?.preset !== undefined) {
             onHeaderPresetChange({
@@ -14702,57 +12813,24 @@ function QualityDashboard({ plant, onBack }) {
                 />
               </Box>
             ) : (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: {
-                    xs: "column",
-                    lg: openObj ? "row" : "column",
-                  },
-                  gap: 2,
-                  alignItems: "flex-start",
-                  width: "100%",
-                  transition: "all .3s ease",
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "grid",
-                    gap: 2,
-                    width: openObj ? { xs: "100%", lg: "340px" } : "100%",
-                    flex: openObj ? "0 0 340px" : "1 1 auto",
-                    gridTemplateColumns: openObj
-                      ? "1fr"
-                      : {
-                          xs: "1fr",
-                          sm: "repeat(2, minmax(0, 1fr))",
-                          md: "repeat(4, minmax(0, 1fr))",
-                        },
-                    transition: "all .3s ease",
-                  }}
-                >
-                  {tab === "product" ? (
-                    <>
-                      {productSectionHeading("Uniformity & Balancing")}
-                      {productCards.slice(0, 7).map(renderKpiCard)}
-                      {productSectionHeading("Other Product KPIs")}
-                      {productCards.slice(7).map(renderKpiCard)}
-                    </>
-                  ) : (
-                    kpis.map(renderKpiCard)
-                  )}
-                </Box>
-
-                {openObj && (
-                  <Box
-                    sx={{
-                      flex: 1,
-                      minWidth: 0,
-                      width: "100%",
-                      pt: { xs: 0, lg: 0 },
-                      animation: "fadeIn .3s ease",
-                    }}
-                  >
+              <KpiSplitLayout
+                open={Boolean(openObj)}
+                cards={
+                  <>
+                    {tab === "product" ? (
+                      <>
+                        {productSectionHeading("Uniformity & Balancing")}
+                        {productCards.slice(0, 7).map(renderKpiCard)}
+                        {productSectionHeading("Other Product KPIs")}
+                        {productCards.slice(7).map(renderKpiCard)}
+                      </>
+                    ) : (
+                      kpis.map(renderKpiCard)
+                    )}
+                  </>
+                }
+                panel={
+                  <>
                     {tab === "process" && (
                       <ProcessDrillPanel
                         kpi={openObj}
@@ -14799,14 +12877,34 @@ function QualityDashboard({ plant, onBack }) {
                         setSub={setSub}
                       />
                     )}
-                  </Box>
-                )}
-              </Box>
+                  </>
+                }
+              />
             )}
           </>
         )}
       </Box>
-      {trendKpi && trendKpi.trendApi && (
+      {trendKpi?.trendKind === "uniformity" && (
+        <UniformityTrendModal
+          key={trendKpi.trendKpiName}
+          open
+          onClose={() => setTrendKpi(null)}
+          cardKpi={trendKpi.trendKpiName}
+          title={trendKpi.n}
+          today={todayInIST()}
+          initialFilter={
+            tf === "today" || tf === "day"
+              ? { preset: "today", shift: String(shift).toLowerCase() }
+              : tf === "month"
+                ? {
+                    preset: "month",
+                    month: tfMonth === currentMonthKeyInIST() ? null : tfMonth,
+                  }
+                : { preset: "custom", from: tfFrom, to: tfTo }
+          }
+        />
+      )}
+      {trendKpi && trendKpi.trendApi && trendKpi.trendKind !== "uniformity" && (
         <LiveProcessTrendPanel
           kpi={trendKpi}
           onClose={() => setTrendKpi(null)}

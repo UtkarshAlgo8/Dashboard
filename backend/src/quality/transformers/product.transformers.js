@@ -41,6 +41,20 @@ export function toProductChildren(rows) {
   return { rows: rows.map(toProductRow) };
 }
 
+/** Uniformity trend rows in a flat, UI-ready shape (no aggregation). */
+export function toUniformityTrend(rows) {
+  return {
+    rows: rows.map((row) => ({
+      date: String(row.date).slice(0, 10),
+      granularity: row.granularity,
+      kpi_name: row.kpi_name,
+      machine: valueOrNull(row.machine),
+      actual_value: valueOrNull(row.actual_value),
+      unit: valueOrNull(row.unit_of_measurement),
+    })),
+  };
+}
+
 /**
  * Group history rows into one ascending series per requested KPI. A date
  * repeated for one KPI keeps its last row, matching toProductSummary.

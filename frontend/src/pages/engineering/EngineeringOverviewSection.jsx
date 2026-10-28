@@ -18,7 +18,7 @@ import { LossTreePie } from "./reliabilityPanels.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
 import { periodRequestParams } from "@/lib/engineeringPeriod.js";
 
-function EngineeringOverviewSection({ period, periodLabel }) {
+function EngineeringOverviewSection({ period }) {
   const { date, granularity, from, to } = period;
   const [lossRows, setLossRows] = useState([]);
   const [lossLoading, setLossLoading] = useState(true);
@@ -98,7 +98,6 @@ function EngineeringOverviewSection({ period, periodLabel }) {
       <ReliabilityCardsGrid
         values={summaryValues}
         period={period}
-        periodLabel={periodLabel}
         includeTopMachines={false}
       />
     </div>

@@ -96,16 +96,22 @@ function sameGran(rowGran, wantGran) {
 }
 
 /**
- * Does a card dated `resolvedDate` lag the section's newest anchor (a DAY)?
- * A MONTH row is always dated the 1st of its month, so at MONTH granularity
- * it lags only when its month is older than the anchor's month — otherwise
- * every current-month card would read "as of" the 1st.
+ * The "as of" date of a card, or null when it needs none.
+ *
+ * DAY and shift cards lag when their date is older than the section's newest
+ * anchor. A MONTH row is always dated the 1st, so that comparison is
+ * meaningless there: the date worth showing is the newest DAY the KPI has
+ * inside the displayed month ("as of 22 Oct"). A past month is complete, so
+ * its card shows no date.
  */
-function lagsAnchor(resolvedDate, anchor, granularity) {
+function asOfFor({ resolvedDate, sectionAnchor, ownAnchor, granularity }) {
+  if (!resolvedDate) return null;
   if (sameGran(granularity, "MONTH")) {
-    return resolvedDate.slice(0, 7) < anchor.slice(0, 7);
+    return ownAnchor && ownAnchor.slice(0, 7) === resolvedDate.slice(0, 7)
+      ? ownAnchor
+      : null;
   }
-  return resolvedDate < anchor;
+  return sectionAnchor && resolvedDate < sectionAnchor ? resolvedDate : null;
 }
 
 /* ---------- new_change.md C5: range aggregation class ----------
@@ -2350,11 +2356,19 @@ export function toKpiGrid(
         // stay unadorned.
         asOfDate: latestDayFallback
           ? resolvedDate
-          : sectionNewestAnchor &&
-              resolvedDate &&
-              lagsAnchor(resolvedDate, sectionNewestAnchor, granularity)
-            ? resolvedDate
-            : null,
+          : asOfFor({
+              resolvedDate,
+              sectionAnchor: sectionNewestAnchor,
+              ownAnchor: anchors
+                ? (anchors[`${section}|${name}`] ??
+                  (isPlanFulfillment
+                    ? (anchors[`${section}|Production`] ??
+                      anchors[`${section}|OEE_o`])
+                    : null) ??
+                  null)
+                : null,
+              granularity,
+            }),
         partialDay,
         // C10: a hit row cap means this total is INCOMPLETE.
         truncated,

@@ -17,6 +17,29 @@ export function normalizeStatus(rawStatus) {
   return null;
 }
 
+// Which threshold family a KPI falls into. evaluateKpiTier and
+// describeKpiTier both branch on this, so a card's colour and its
+// explanation can never disagree.
+function kpiTierFamily(kpi) {
+  const id = String(kpi.id || kpi.rawName || "").toLowerCase();
+  const name = String(kpi.name || "").toLowerCase();
+  if (
+    id.includes("oee") ||
+    name.includes("oee") ||
+    name.includes("effectiveness")
+  )
+    return "oee";
+  if (
+    id.includes("comp") ||
+    name.includes("compliance") ||
+    name.includes("fulfillment") ||
+    name.includes("plan")
+  )
+    return "compliance";
+  if (id.includes("prod") || name.includes("production")) return "production";
+  return "trend";
+}
+
 /**
  * Evaluates KPI threshold tier: "green" | "amber" | "red" | "neutral"
  */
@@ -27,16 +50,11 @@ export function evaluateKpiTier(kpi) {
   const explicit = normalizeStatus(kpi.status || kpi.statusRaw);
   if (explicit) return explicit;
 
-  const id = String(kpi.id || kpi.rawName || "").toLowerCase();
-  const name = String(kpi.name || "").toLowerCase();
   const val = typeof kpi.value === "number" ? kpi.value : parseFloat(kpi.value);
+  const family = kpiTierFamily(kpi);
 
   // 2. OEE KPI logic (≥90% Green, 80-89.9% Amber, <80% Red)
-  if (
-    id.includes("oee") ||
-    name.includes("oee") ||
-    name.includes("effectiveness")
-  ) {
+  if (family === "oee") {
     if (isNaN(val)) return "amber";
     if (val >= 90) return "green";
     if (val >= 80) return "amber";
@@ -44,12 +62,7 @@ export function evaluateKpiTier(kpi) {
   }
 
   // 3. Plan Compliance KPI logic (≥98% Green, 95-97.9% Amber, <95% Red)
-  if (
-    id.includes("comp") ||
-    name.includes("compliance") ||
-    name.includes("fulfillment") ||
-    name.includes("plan")
-  ) {
+  if (family === "compliance") {
     if (isNaN(val)) return "red";
     if (val >= 98) return "green";
     if (val >= 95) return "amber";
@@ -57,7 +70,7 @@ export function evaluateKpiTier(kpi) {
   }
 
   // 4. Production KPI logic (Actual / Capacity or Target)
-  if (id.includes("prod") || name.includes("production")) {
+  if (family === "production") {
     const target =
       typeof kpi.target === "number" ? kpi.target : parseFloat(kpi.target);
     if (!isNaN(val) && !isNaN(target) && target > 0) {
@@ -74,6 +87,34 @@ export function evaluateKpiTier(kpi) {
   if (kpi.trendFavourable === true) return "green";
   if (kpi.trendFavourable === false) return "red";
   return "neutral";
+}
+
+/**
+ * Plain-language RAG rule for a KPI, matching evaluateKpiTier branch for
+ * branch. Returns one line per tier for an info tooltip.
+ *
+ * @returns {string[]}
+ */
+export function describeKpiTier(kpi) {
+  if (!kpi) return [];
+  switch (kpiTierFamily(kpi)) {
+    case "oee":
+      return ["Green: 90% or more", "Amber: 80% to 89.9%", "Red: below 80%"];
+    case "compliance":
+      return ["Green: 98% or more", "Amber: 95% to 97.9%", "Red: below 95%"];
+    case "production":
+      return [
+        "Green: 95% of target or more",
+        "Amber: 85% to 94.9% of target",
+        "Red: below 85% of target",
+      ];
+    default:
+      return [
+        "Green: same as or better than the previous period",
+        "Red: worse than the previous period",
+        "Neutral: no previous period to compare",
+      ];
+  }
 }
 
 /**

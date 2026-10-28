@@ -178,6 +178,7 @@ export function kpiChildrenQuery({
   machine,
   subSection,
   productType,
+  includeUnmapped = false,
 }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
@@ -186,8 +187,9 @@ export function kpiChildrenQuery({
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
     // Every drill table and every chart is fed from here, so this one line
-    // is what keeps the 'Unmapped' bucket off all of them.
-    `AND ${excludeUnmappedPredicate()} ` +
+    // is what keeps the 'Unmapped' bucket off all of them — except the
+    // Breakdown and MTBF/MTTR plot drills, which show it in grey.
+    (includeUnmapped ? "" : `AND ${excludeUnmappedPredicate()} `) +
     datePredicate({ date, from, to }) +
     scopeFragment({ status, section, machine, subSection, productType })
   );

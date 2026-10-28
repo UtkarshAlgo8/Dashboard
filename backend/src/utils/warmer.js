@@ -35,6 +35,7 @@ function staticTargets() {
     // Quality cross-family endpoints — plant-agnostic, single entry per URL.
     { method: "GET", path: "/api/v1/quality/as-of" },
   ];
+  targets.push(...spcTargets(todayInIst()));
   for (const plantId of config.warm.plants) {
     targets.push(
       { method: "GET", path: `/api/v1/plants/${plantId}/as-of` },
@@ -48,6 +49,28 @@ function staticTargets() {
     );
   }
   return targets;
+}
+
+/** Calendar date in IST (yyyy-mm-dd) — the day the Quality SPC tab opens on. */
+function todayInIst() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
+    new Date(),
+  );
+}
+
+/**
+ * The Quality SPC tab's opening requests (Today, all shifts, no filters), in
+ * the exact query shape the frontend sends. The widgets board scans every
+ * silver SPC table for chart points (~20 s cold); warming it means the first
+ * visitor after a cache expiry no longer pays that scan. The silver board
+ * cache is keyed without the date, so this also serves any other day's board.
+ */
+export function spcTargets(date) {
+  const query = new URLSearchParams({ plant: "BANMORE", shift: "All", date });
+  return [
+    { method: "GET", path: `/api/v1/quality/spc/filter-options?${query}` },
+    { method: "GET", path: `/api/v1/quality/spc/widgets?${query}` },
+  ];
 }
 
 async function warmOne(target, baseUrl) {

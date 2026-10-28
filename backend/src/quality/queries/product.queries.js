@@ -13,6 +13,10 @@ import {
   DATE_YYYYMMDD,
   isoToYyyymmdd,
 } from "../normalize.js";
+import {
+  emptyColumnPredicate,
+  nonEmptyColumnPredicate,
+} from "../../utils/normalize.js";
 import { qualitySourceForDate, qualitySourceForRange } from "./gold-source.js";
 
 export const PRODUCT_CATEGORY = "Uniformity Testing";
@@ -115,6 +119,59 @@ export function productChildrenQuery({ kpiNames, date, granularity }) {
     `AND granularity = ${escapeLiteral(granularity)} ` +
     `AND ${DATE_YYYYMMDD} = ${escapeLiteral(isoToYyyymmdd(date))} ` +
     "ORDER BY kpi_name ASC, machine ASC"
+  );
+}
+
+// The Uniformity & Balancing trend modal reads these: the card KPIs at plant
+// level, and the per-machine yield / tyres-tested KPIs at machine level.
+const UNIFORMITY_TREND_KPIS = new Set([
+  "Overall_Production_Yield",
+  "Overall_Uniformity_Production",
+  "Mtms_Uniformity_Yield",
+  "Tuo_Uniformity_Yield",
+  "Zf_Uniformity_Yield",
+  "Zf_Balancing_Yield_o",
+  "Dbm_Balancing_Yield",
+  "Mtms_Uniformity_Yield_m",
+  "Tuo_Uniformity_Yield_m",
+  "Zf_Uniformity_Yield_m",
+  "Mtms_Uniformity_Production",
+  "Tuo_Uniformity_Production",
+  "Zf_Uniformity_Production",
+]);
+
+export function isUniformityTrendKpi(kpiName) {
+  return UNIFORMITY_TREND_KPIS.has(kpiName);
+}
+
+/**
+ * Rows for the Uniformity trend modal: the requested KPIs at one or more
+ * granularities within [from, to], either the plant row (`machine` empty)
+ * or the machine rows. Rows are returned unaggregated — every yield the UI
+ * shows is its own gold row. `kpiNames` and `granularities` must have been
+ * checked by the caller.
+ */
+export function uniformityTrendQuery({
+  kpiNames,
+  rowScope,
+  granularities,
+  from,
+  to,
+}) {
+  const machinePredicate =
+    rowScope === "machine"
+      ? nonEmptyColumnPredicate("machine")
+      : emptyColumnPredicate("machine");
+  return (
+    "SELECT date, granularity, kpi_name, machine, actual_value, unit_of_measurement " +
+    `FROM ${qualitySourceForRange(from, to, granularities)} ` +
+    `WHERE ${productScopePredicate()} ` +
+    `AND kpi_name IN (${kpiNames.map(escapeLiteral).join(", ")}) ` +
+    `AND ${machinePredicate} ` +
+    `AND granularity IN (${granularities.map(escapeLiteral).join(", ")}) ` +
+    `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
+    `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))} ` +
+    "ORDER BY date ASC, kpi_name ASC, machine ASC"
   );
 }
 

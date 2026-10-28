@@ -2,7 +2,11 @@ import { useMemo } from "react";
 import { Box, useTheme } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
-import { formatCompactNumber, withUnit } from "@/lib/numberFormat.js";
+import {
+  formatCompactNumber,
+  formatIndianNumber,
+  withUnit,
+} from "@/lib/numberFormat.js";
 
 // highcharts-react-official 3.x ships as a UMD bundle — normalise both
 // the direct default and the wrapped default. Mirrors LineChart.jsx so
@@ -24,21 +28,33 @@ const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
  *   unit     - global unit suffix; overridden per-series when set
  *   target   - optional dashed amber plot line
  *   colors   - optional override of the brand palette, one per series
+ *   connectNulls - draw the line straight across a missing period instead
+ *              of breaking it (the point itself is still absent)
  *
  * Highcharts natively supports multi-series; we just feed the array in
  * instead of a hard-coded single entry. Legend renders inline (the
  * existing ChartLegend.jsx is single-series, so the legend ships as a
  * Highcharts native one here).
  */
-function MultiLineChart({ labels, series, unit, target, colors }) {
+function MultiLineChart({
+  labels,
+  series,
+  unit,
+  target,
+  colors,
+  yMin,
+  connectNulls = false,
+}) {
   const theme = useTheme();
 
   const palette = useMemo(() => {
     if (Array.isArray(colors) && colors.length) return colors;
     // Stable brand palette — pulled once via theme, not per render, so
-    // HMR / theme swaps don't reshuffle series colours.
+    // HMR / theme swaps don't reshuffle series colours. Only distinct hues:
+    // brand.orange/ocean alias blue and brand.teal aliases green in the
+    // theme, so listing them would draw two series in the same colour.
     const b = theme.custom.brand;
-    return [b.blue, b.orange, b.green, b.purple, b.teal, b.cyan];
+    return [b.blue, b.purple, b.green, b.amber, b.red];
   }, [colors, theme]);
 
   const options = useMemo(() => {
@@ -60,7 +76,11 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
         : (s.name ?? `Series ${i + 1}`);
       return {
         name: legendName,
-        data: values,
+        // `notes[i]` adds a line under that point in the tooltip (e.g. the
+        // tyres tested behind a machine's yield).
+        data: Array.isArray(s.notes)
+          ? values.map((y, j) => ({ y, note: s.notes[j] ?? null }))
+          : values,
         color,
         tooltip: {
           valueSuffix: seriesUnit ? ` ${seriesUnit}` : "",
@@ -109,6 +129,9 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       },
       yAxis: {
         title: { text: null },
+        // A floor set by the caller (yield lines start just below their
+        // lowest value rather than at 0).
+        ...(yMin != null ? { min: yMin, startOnTick: false } : {}),
         gridLineWidth: 1,
         gridLineColor: grid,
         gridLineDashStyle: "Solid",
@@ -146,9 +169,24 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       tooltip: {
         shared: true,
         useHTML: false,
+        // Only charts that carry notes swap the default point line.
+        ...((Array.isArray(series) ? series : []).some((s) =>
+          Array.isArray(s.notes),
+        )
+          ? {
+              pointFormatter: function () {
+                const suffix = this.series.tooltipOptions.valueSuffix ?? "";
+                const note = this.options?.note
+                  ? ` · ${this.options.note}`
+                  : "";
+                return `<span style="color:${this.color}">●</span> ${this.series.name}: <b>${formatIndianNumber(this.y)}${suffix}</b>${note}<br/>`;
+              },
+            }
+          : {}),
       },
       plotOptions: {
         line: {
+          connectNulls,
           lineWidth: 2.5,
           marker: { enabled: true, radius: 3.5, lineWidth: 0 },
           states: { hover: { lineWidth: 3 } },
@@ -174,7 +212,7 @@ function MultiLineChart({ labels, series, unit, target, colors }) {
       },
       series: cleanedSeries,
     };
-  }, [labels, series, unit, target, theme, palette]);
+  }, [labels, series, unit, target, theme, palette, yMin, connectNulls]);
 
   return (
     <Box sx={{ width: "100%" }}>
