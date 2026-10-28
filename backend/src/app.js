@@ -4,6 +4,7 @@
  */
 import express from "express";
 import cookieParser from "cookie-parser";
+import compression from "compression";
 
 import { corsMiddleware } from "./middlewares/cors.js";
 import { requestLogger } from "./middlewares/requestLogger.js";
@@ -40,6 +41,10 @@ import { verifyJWT } from "./middlewares/auth.middleware.js";
 const app = express();
 
 app.use(corsMiddleware);
+// gzip JSON responses. kpi-data rows are highly repetitive: a 753 kB payload
+// goes over the wire as ~22 kB, which is most of the transfer time for a
+// remote browser.
+app.use(compression());
 app.use(express.json());
 // verifyJWT reads the optional `accessToken` cookie as a fallback
 // when the Authorization header is absent.

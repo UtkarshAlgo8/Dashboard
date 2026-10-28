@@ -282,7 +282,23 @@ function BanmoreProduction() {
   const prodSubOptions = isBanmore
     ? (PROD_SUB_OPTIONS[dashboard.section] ?? [])
     : [];
-  const sectionDefaultProduct = isBanmore ? SECTION_DEFAULT_PRODUCT : {};
+  // CTP has no fixed list — its pills come from product-options, which picks
+  // the first option. Seeding that same first option lets the first landing
+  // fetch carry it, instead of a fetch without product_type that is redone
+  // once the options arrive. Productivity only: the options (and so this
+  // default) are read on that tab alone. If the seed is ever missing from the
+  // options, the effect below still switches to the first real option.
+  const CTP_DEFAULT_PRODUCT = {
+    mix: "Final Chemical",
+    tbm: "Green Tyre",
+    cur: "Cured Tyre",
+    stk: null,
+  };
+  const sectionDefaultProduct = isBanmore
+    ? SECTION_DEFAULT_PRODUCT
+    : dashboard.category === "p"
+      ? CTP_DEFAULT_PRODUCT
+      : {};
 
   // Tyre lines come from the plant lookup (Banmore: ["PCR"] → the header
   // renders a static badge; CTP: ["All","PCR","TBR"] → a picker). Until it
@@ -349,7 +365,10 @@ function BanmoreProduction() {
         }));
     },
     {
-      enabled: hasDateRange && dashboard.category === "p",
+      // Wait for the plant lookup (~30 ms, static): until it lands the tyre
+      // line falls back to "PCR", so a CTP page sent this once for PCR, threw
+      // the answer away, and sent it again for "All".
+      enabled: hasDateRange && dashboard.category === "p" && Boolean(plant),
       interval: 0,
       keepPreviousData: true,
       cacheKey: `production:${currentOptionsKey}:product-options`,
@@ -467,20 +486,16 @@ function BanmoreProduction() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStock, dashboard.productType, navProductOptions.join("|")]);
 
+  // The page shell needs only the static lookups. The section OEE rings and
+  // the plant card show their own loaders, so the KPI cards (and the shift
+  // comparison under them) no longer wait for the slower summary query.
   const ready =
-    !plantLoading &&
-    plant &&
-    Array.isArray(sections) &&
-    Array.isArray(tabs) &&
-    summary;
+    !plantLoading && plant && Array.isArray(sections) && Array.isArray(tabs);
 
-  const contentLoading =
-    dashboard.category !== "i" &&
-    (kpiLoading || sectionOeeLoading || summaryLoading);
-
-  const bodyLoading =
-    dashboard.category !== "i" && (sectionOeeLoading || summaryLoading);
-  const contentOnlyLoading = contentLoading && !bodyLoading;
+  const contentLoading = dashboard.category !== "i" && kpiLoading;
+  // Banmore's plant OEE is the Curing section's OEE (plantOeeOverride), so its
+  // card also waits for the section OEE.
+  const plantCardLoading = summaryLoading || (isBanmore && sectionOeeLoading);
 
   const [timeRange, setTimeRange] = useState({
     preset: "today",
@@ -792,14 +807,14 @@ function BanmoreProduction() {
                   activeSectionId={dashboard.section}
                   onSelect={onSectionSelect}
                   statsBySectionId={sectionStatsById}
-                  loading={false}
+                  loading={sectionOeeLoading}
                 />
               </Box>
               <PlantSummaryCard
                 plant={plant}
                 summary={summary}
                 oeeOverride={plantOeeOverride}
-                loading={false}
+                loading={plantCardLoading}
               />
             </Stack>
           )}
@@ -1112,7 +1127,7 @@ function BanmoreProduction() {
               )}
             </Box>
 
-            {contentOnlyLoading && (
+            {contentLoading && (
               <Box
                 sx={{
                   position: "absolute",
@@ -1129,22 +1144,6 @@ function BanmoreProduction() {
               </Box>
             )}
           </Box>
-
-          {bodyLoading && (
-            <Box
-              sx={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 5,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "background.default",
-              }}
-            >
-              <JKLoader />
-            </Box>
-          )}
         </Box>
       )}
 

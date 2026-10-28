@@ -29,7 +29,7 @@ import { buildDatePayload } from "@/lib/timeRange.js";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
 import { ctpDowntimePayload } from "@/lib/ctpDowntime.js";
 import { getAnchors } from "@/api/dashboard.js";
-import client from "@/api/client.js";
+import client, { whenIdle } from "@/api/client.js";
 
 const DASHBOARD_CACHE_TTL_MS = 2 * 60 * 1000;
 const DASHBOARD_CACHE_MAX_ENTRIES = 80;
@@ -289,13 +289,6 @@ async function fetchDashboard(payload) {
   });
   // Tolerate a bare array (older/unwrapped shape) so nothing hard-fails.
   const envelope = Array.isArray(body) ? { data: body } : (body ?? {});
-  console.log("[kpi-data]", {
-    sent: payload,
-    receivedRows: (envelope.data ?? []).length,
-    receivedBaseline: (envelope.baseline ?? []).length,
-    baselineWindow: envelope.baselineWindow,
-    baselineGranularity: envelope.baselineGranularity,
-  });
   return {
     rows: coerceMeasures(envelope.data ?? []),
     truncated: Boolean(envelope.truncated),
@@ -587,7 +580,11 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
         ? fetchCachedDashboard(downtimePayload)
         : Promise.resolve(null),
     {
-      enabled: Boolean(downtimePayload),
+      // Same gate as the landing fetch: before the date window resolves the
+      // payload has no from/to, which reads the reasons' ENTIRE history and
+      // pages through it 4,500 rows at a time — minutes of upstream work
+      // whose result is discarded as soon as the window arrives.
+      enabled: hasDateRange && Boolean(downtimePayload),
       interval: 0,
       deps: [JSON.stringify(downtimePayload)],
     },
@@ -794,29 +791,39 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
       )
       .slice(0, 3);
 
-    for (const kpi of candidates) {
-      const source =
-        kpi.resolvedDate && state.granularity !== "MONTH"
-          ? { date: kpi.resolvedDate }
-          : state;
-      // Must match drillGranularity above, or the prefetch warms a cache key
-      // the real drill fetch never asks for.
-      const gran = state.granularity ?? "DAY";
-      fetchCachedDashboard({
-        plantId,
-        context: {
-          ...buildContext(state),
-          granularity: gran,
-        },
-        ...buildDatePayload(source),
-        drillKpis: kpi.drillTargets,
-        parentFilters: {},
-        limit: 3000,
-        drillOnly: true,
-      }).catch(() => {
-        // Prefetch is opportunistic; the foreground drill fetch still owns UX.
-      });
-    }
+    // Speculative, so it waits until the page's own requests are done rather
+    // than queueing ahead of them in the upstream. Skipped if the view
+    // changes first; the next run prefetches for the new view.
+    let cancelled = false;
+    whenIdle().then(() => {
+      if (cancelled) return;
+      for (const kpi of candidates) {
+        const source =
+          kpi.resolvedDate && state.granularity !== "MONTH"
+            ? { date: kpi.resolvedDate }
+            : state;
+        // Must match drillGranularity above, or the prefetch warms a cache key
+        // the real drill fetch never asks for.
+        const gran = state.granularity ?? "DAY";
+        fetchCachedDashboard({
+          plantId,
+          context: {
+            ...buildContext(state),
+            granularity: gran,
+          },
+          ...buildDatePayload(source),
+          drillKpis: kpi.drillTargets,
+          parentFilters: {},
+          limit: 3000,
+          drillOnly: true,
+        }).catch(() => {
+          // Prefetch is opportunistic; the foreground drill fetch still owns UX.
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [hasDateRange, isLoading, kpis, plantId, state]);
 
   const setFilter = useCallback((payload, resetDrill = false) => {

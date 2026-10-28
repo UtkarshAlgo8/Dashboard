@@ -413,16 +413,27 @@ export async function getPlants(req, res, next) {
       to: typeof req.query.to === "string" ? req.query.to : "",
     };
     const enabled = PLANTS.filter((p) => p.enabled);
-    const staticSummaries = await cached(
-      buildCacheKey("/plants:landing-live-kpis", {}),
-      () => perPlantSummaries(enabled, landingKpisForPlant),
-      CACHE_TTL.STATIC_LOOKUPS,
-    );
-    // Time-aware KPIs are NOT cached at this layer (window changes per
-    // user pick). Cheap query; per-plant fan-out.
-    const timeAwareSummaries = await perPlantSummaries(enabled, (plantId) =>
-      landingTimeAwareKpisForPlant(plantId, timeRange),
-    );
+    // Independent — the static and the time-aware KPIs load side by side.
+    const [staticSummaries, timeAwareSummaries] = await Promise.all([
+      cached(
+        buildCacheKey("/plants:landing-live-kpis", {}),
+        () => perPlantSummaries(enabled, landingKpisForPlant),
+        CACHE_TTL.STATIC_LOOKUPS,
+      ),
+      // Time-aware KPIs are cached per plant AND per resolved window, with
+      // the short KPI TTL. A failed plant is not cached (cached() never
+      // stores a rejection), so the next request retries it.
+      perPlantSummaries(enabled, (plantId) =>
+        cached(
+          buildCacheKey("/plants:landing-time-aware-kpis", {
+            plantId,
+            ...resolveLandingWindow(timeRange),
+          }),
+          () => landingTimeAwareKpisForPlant(plantId, timeRange),
+          CACHE_TTL.KPI_ROWS,
+        ),
+      ),
+    ]);
     const data = PLANTS.map((p) => ({
       ...p,
       ...(staticSummaries[p.id] ?? { oee: null, otif: null, yield: null }),
