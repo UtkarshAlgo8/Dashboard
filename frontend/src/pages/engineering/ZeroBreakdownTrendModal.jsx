@@ -61,8 +61,7 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
         // Complete days only — the running day is published incrementally and
         // would plot as a false drop to ~0.
         const days = (Array.isArray(res?.series) ? res.series : []).filter(
-          (p) =>
-            p.complete && p.date >= history.from && p.date <= history.to,
+          (p) => p.complete && p.date >= history.from && p.date <= history.to,
         );
         if (history.granularity === "DAY") {
           setPoints(days.map((p) => [p.date, p.count]));
@@ -95,9 +94,20 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
     (target / Math.max(selectedTotal ?? 0, target)) * 100,
   );
 
+  // The trajectory as a sheet: one row per plotted day or month.
+  const periodHeader = history.granularity === "DAY" ? "Date" : "Month";
+  const exportHeaders = [periodHeader, "Zero breakdown machines", "Target"];
+  const exportRows = points.map(([key, value]) => ({
+    [periodHeader]: history.granularity === "DAY" ? key : key.slice(0, 7),
+    "Zero breakdown machines": value,
+    Target: target,
+  }));
+
   return (
     <AnalysisModal
       open={open}
+      exportHeaders={exportHeaders}
+      exportRows={exportRows}
       onClose={onClose}
       eyebrow="KPI Trend Analysis"
       title="Zero Breakdown Machines"

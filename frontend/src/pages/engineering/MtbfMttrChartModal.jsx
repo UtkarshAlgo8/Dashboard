@@ -27,8 +27,8 @@
  * Units follow the spec's examples: MTBF in hrs everywhere; MTTR in hrs at
  * Section and Machine, in min at Discipline and Failure.
  */
-import { useCallback, useMemo, useState } from "react";
-import { Link, Stack, Typography, useTheme } from "@mui/material";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Box, Link, Stack, Typography, useTheme } from "@mui/material";
 import {
   getReliabilityKpiChildren,
   getReliabilitySummary,
@@ -44,6 +44,7 @@ import {
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import MtbfMttrMap from "./MtbfMttrMap.jsx";
+import ExportButton from "./ExportButton.jsx";
 import {
   DISCIPLINES,
   OTHER_DISCIPLINE,
@@ -136,6 +137,8 @@ function MtbfMttrChartModal({
   measure: cardMeasure,
 }) {
   const theme = useTheme();
+  // The chart panel (title + plot or map) — what the plot's PDF captures.
+  const chartRef = useRef(null);
   const [measure, setMeasure] = useState(cardMeasure);
   const [viewBy, setViewBy] = useState("section");
   const [path, setPath] = useState([]);
@@ -421,6 +424,7 @@ function MtbfMttrChartModal({
           };
 
   const measureLabel = measure.toUpperCase();
+  const chartTitle = `${measureLabel} by ${LEVELS[level].label.toLowerCase()} · ${periodLabel(request)}`;
   const isMap = levelId === "machine" && display === "map";
   const loading =
     level >= 2
@@ -495,31 +499,43 @@ function MtbfMttrChartModal({
 
       <DrillBreadcrumb steps={steps} />
 
-      <ChartPanel
-        theme={theme}
-        title={`${measureLabel} by ${LEVELS[level].label.toLowerCase()} · ${periodLabel(request)}`}
-        loading={loading}
-        empty={loading || empty}
-        emptyMessage={emptyMessage}
-      >
-        {isMap ? (
-          <MtbfMttrMap points={mapPoints} plant={plant} onPick={goTo} />
-        ) : (
-          <DrillColumnChart
-            items={items}
-            unit={unit}
-            xTitle={LEVELS[level].label}
-            yTitle={`${measureLabel} (${unit})`}
-            refLine={refLine}
-            groups={
-              levelId === "machine"
-                ? categoryGroups(shown.map((r) => r.status))
-                : null
-            }
-            onPick={goTo}
-          />
-        )}
-      </ChartPanel>
+      <Box ref={chartRef}>
+        <ChartPanel
+          theme={theme}
+          title={chartTitle}
+          loading={loading}
+          empty={loading || empty}
+          emptyMessage={emptyMessage}
+          action={
+            !loading && !empty ? (
+              <ExportButton
+                targetRef={chartRef}
+                columns={columnsFor(levelId, measure)}
+                rows={ranked}
+                name={chartTitle}
+              />
+            ) : null
+          }
+        >
+          {isMap ? (
+            <MtbfMttrMap points={mapPoints} plant={plant} onPick={goTo} />
+          ) : (
+            <DrillColumnChart
+              items={items}
+              unit={unit}
+              xTitle={LEVELS[level].label}
+              yTitle={`${measureLabel} (${unit})`}
+              refLine={refLine}
+              groups={
+                levelId === "machine"
+                  ? categoryGroups(shown.map((r) => r.status))
+                  : null
+              }
+              onPick={goTo}
+            />
+          )}
+        </ChartPanel>
+      </Box>
 
       {!loading && !empty && (
         <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
@@ -559,6 +575,13 @@ function MtbfMttrChartModal({
           onRowClick={clickable ? (r) => r.value != null && goTo(r) : undefined}
           searchPlaceholder={`Search ${LEVELS[level].label.toLowerCase()}…`}
           emptyMessage={emptyMessage}
+          toolbarRight={
+            <ExportButton
+              columns={columnsFor(levelId, measure)}
+              rows={isMap ? ranked : shown}
+              name={`${chartTitle}-table`}
+            />
+          }
         />
       )}
     </ModalFrame>

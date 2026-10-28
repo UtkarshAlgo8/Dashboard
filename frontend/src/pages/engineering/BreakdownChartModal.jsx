@@ -67,6 +67,7 @@ import {
   useReliabilityTrendRange,
 } from "./reliabilityTrendRange.jsx";
 import { monthRangeFromKey } from "./reliabilityShared.jsx";
+import ExportButton from "./ExportButton.jsx";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
@@ -502,6 +503,7 @@ function ParetoLevel({
   onPick,
 }) {
   const theme = useTheme();
+  const panelRef = useRef(null);
   const barRows = useMemo(
     () =>
       (rows ?? []).slice(0, maxBars).map((r) => ({
@@ -547,23 +549,35 @@ function ParetoLevel({
 
   return (
     <>
-      <ChartPanel
-        theme={theme}
-        title={title}
-        loading={loading}
-        empty={loading || Boolean(error) || barRows.length === 0}
-        emptyMessage={emptyMessage}
-      >
-        <ParetoChart
-          rows={barRows}
-          measureLabel={measureDef.label}
-          groupLabel={groupLabel}
-          barsTo80={groups ? barRows.length : rowsTo80}
-          groups={groups}
-          selectedKey={selectedKey}
-          onPick={onPick}
-        />
-      </ChartPanel>
+      <Box ref={panelRef}>
+        <ChartPanel
+          theme={theme}
+          title={title}
+          loading={loading}
+          empty={loading || Boolean(error) || barRows.length === 0}
+          emptyMessage={emptyMessage}
+          action={
+            all.length > 0 ? (
+              <ExportButton
+                targetRef={panelRef}
+                columns={tableColumns(groupLabel, Boolean(disciplineLegend))}
+                rows={all}
+                name={title}
+              />
+            ) : null
+          }
+        >
+          <ParetoChart
+            rows={barRows}
+            measureLabel={measureDef.label}
+            groupLabel={groupLabel}
+            barsTo80={groups ? barRows.length : rowsTo80}
+            groups={groups}
+            selectedKey={selectedKey}
+            onPick={onPick}
+          />
+        </ChartPanel>
+      </Box>
       {!loading && !error && barRows.length > 0 && (
         <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
           <b>{fmt(scopeMinutes)} min</b> over <b>{fmt(scopeOcc)}</b> breakdowns.{" "}
@@ -967,6 +981,16 @@ function ParetoView({
                 rows={drillRows}
                 getRowKey={(r) => r.key}
                 searchPlaceholder={`Search ${drillGroupLabel.toLowerCase()}…`}
+                toolbarRight={
+                  <ExportButton
+                    columns={tableColumns(
+                      drillGroupLabel,
+                      viewBy === "machine",
+                    )}
+                    rows={drillRows}
+                    name={`breakdown-${picked.label}-by-${drillGroupLabel}`}
+                  />
+                }
                 emptyMessage="No breakdowns recorded in this scope."
               />
             )}
@@ -993,6 +1017,15 @@ function ParetoView({
                 rows={dailyRows ?? []}
                 getRowKey={(r) => `${r.date}|${r.machine}|${r.remarks}`}
                 searchPlaceholder="Search date, machine or reason…"
+                toolbarRight={
+                  dailyRows?.length ? (
+                    <ExportButton
+                      columns={DAILY_COLUMNS}
+                      rows={dailyRows}
+                      name={`breakdown-${picked.label}-date-wise`}
+                    />
+                  ) : null
+                }
                 emptyMessage={
                   dailyRows
                     ? "No date-wise breakdowns in this period."
@@ -1011,6 +1044,13 @@ function ParetoView({
           getRowKey={(r) => r.key}
           onRowClick={pick}
           searchPlaceholder={`Search ${mainGroupLabel.toLowerCase()}…`}
+          toolbarRight={
+            <ExportButton
+              columns={tableColumns(mainGroupLabel, false)}
+              rows={mainRows}
+              name={`breakdown-by-${mainGroupLabel}-${periodText}`}
+            />
+          }
           emptyMessage="No breakdowns recorded in this scope."
         />
       )}

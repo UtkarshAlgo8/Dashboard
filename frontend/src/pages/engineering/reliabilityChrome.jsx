@@ -32,6 +32,9 @@ export function AnalysisModal({
   headerExtra,
   maxWidth = 1000,
   align = "start",
+  // Optional Excel of the modal's data, offered next to the PDF.
+  exportHeaders,
+  exportRows,
   children,
 }) {
   // The whole panel (title, filters, chart, table) — what the PDF captures.
@@ -111,6 +114,8 @@ export function AnalysisModal({
           {headerExtra}
           <CardDownloadButton
             cardRef={panelRef}
+            headers={exportHeaders}
+            rows={exportRows}
             filename={toFileSlug(`engineering-${title}`)}
             sx={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 2 }}
           />

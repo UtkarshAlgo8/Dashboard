@@ -87,28 +87,46 @@ export function ModalFrame({ open, onClose, kpi, headerExtras, children }) {
 
 // A bordered panel that hosts one chart, with title + skeleton/empty states.
 // Reused by the OEE modal for the main chart and every overlay chart.
+// `action` (optional) sits at the right of the title, e.g. a download button.
 export function ChartPanel({
   theme,
   title,
   loading,
   empty,
   emptyMessage,
+  action = null,
   children,
 }) {
+  const heading = (
+    <Typography
+      sx={{
+        fontSize: 13,
+        fontWeight: 700,
+        color: "primary.main",
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        mb: action ? 0 : 1,
+      }}
+    >
+      {title}
+    </Typography>
+  );
   return (
     <Box>
-      <Typography
-        sx={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: "primary.main",
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-          mb: 1,
-        }}
-      >
-        {title}
-      </Typography>
+      {action ? (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={1}
+          sx={{ mb: 1 }}
+        >
+          {heading}
+          {action}
+        </Stack>
+      ) : (
+        heading
+      )}
       <Box
         sx={{
           backgroundColor: theme.custom.surface.soft,
