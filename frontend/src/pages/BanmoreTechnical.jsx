@@ -54,6 +54,9 @@ import {
 } from "@/lib/paintWeight.js";
 import TechnicalUniformityBalancingSection from "@/components/technical/TechnicalUniformityBalancingSection.jsx";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
+import { getOverage } from "@/api/inventory.js";
+import OverageDrill from "@/components/technical/OverageDrill.jsx";
+import { areaTotals, toOverageCard } from "@/lib/overage.js";
 
 const TECHNICAL_TABS = [
   { id: "overall", label: "Overall", icon: DonutLargeOutlinedIcon },
@@ -283,6 +286,15 @@ function BanmoreTechnical() {
     keepPreviousData: true,
   });
 
+  // Stock › Overage Material is a current snapshot over every production
+  // date, so it ignores the date and shift filters (spec 17).
+  const overage = usePolledQuery(() => getOverage({ plantId: "banmore" }), {
+    enabled: tab === "stock",
+    interval: 0,
+    cacheKey: "technical:banmore:overage",
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Production-tab KPIs (Production) and Quality-tab KPIs (Scrap, NCM Hold)
   // come from separate category fetches — see technicalKpiSources.js.
   const productivity = useDashboardFetch({ plantId: "banmore" });
@@ -309,6 +321,11 @@ function BanmoreTechnical() {
           ? "cur"
           : null;
   const subSection = tab === "stock" ? activeStockArea.subSection : null;
+  const overageScope = {
+    section: SECTION_NAMES[activeStockArea.section],
+    subSection: activeStockArea.subSection,
+  };
+  const isOverageCard = (id) => tab === "stock" && id === "ovg";
   const isLiveTab = Boolean(section) && !activeTab?.pending;
 
   const dateWindow = useMemo(
@@ -486,13 +503,22 @@ function BanmoreTechnical() {
               )
             : isBuildingAttributed(definition.id)
               ? (buildingKpis.find((kpi) => kpi.id === definition.id) ?? null)
-              : resolveTechnicalKpi(definition, kpisByCategory),
+              : isOverageCard(definition.id)
+                ? overage.data && !overage.error
+                  ? toOverageCard(
+                      areaTotals(overage.data.totals, overageScope),
+                      definition,
+                    )
+                  : null
+                : resolveTechnicalKpi(definition, kpisByCategory),
       unavailableReason:
         definition.id === "rsku" && liveSnapshot.error
           ? "Live source unavailable"
           : definition.id === "gtw" && productSummary.error
             ? "Quality source unavailable"
-            : undefined,
+            : isOverageCard(definition.id) && overage.error
+              ? "Inventory source unavailable"
+              : undefined,
     }));
   const displayKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
 
@@ -507,6 +533,7 @@ function BanmoreTechnical() {
     (isLoading ||
       productivity.isDowntimeLoading ||
       (hasCard("rsku") && !liveSnapshot.data && !liveSnapshot.error) ||
+      (tab === "stock" && !overage.data && !overage.error) ||
       (hasCard("gtw") &&
         Boolean(uniformityDate) &&
         !productSummary.data &&
@@ -566,7 +593,12 @@ function BanmoreTechnical() {
 
   const handleDrillKpi = (kpi) => {
     // These drills fetch their own rows.
-    if (kpi.id === "rsku" || kpi.id === "gtw" || isBuildingAttributed(kpi.id)) {
+    if (
+      kpi.id === "rsku" ||
+      kpi.id === "gtw" ||
+      isBuildingAttributed(kpi.id) ||
+      isOverageCard(kpi.id)
+    ) {
       if (openDrillKpiId === kpi.id) handleCloseDrill();
       else {
         resetProductivityDrill();
@@ -614,6 +646,19 @@ function BanmoreTechnical() {
         shift={uniformityShift}
         granularity={uniformityGranularity}
         breadcrumb={[areaLabel, "GT Weight Variation"]}
+        onClose={handleCloseDrill}
+      />
+    ) : isOverageCard(openDrillKpiId) ? (
+      <OverageDrill
+        key={stockArea}
+        data={overage.data}
+        error={overage.error}
+        isLoading={overage.isLoading}
+        scope={overageScope}
+        areaLabel={areaLabel}
+        title={`Overage Material — ${areaLabel}`}
+        breadcrumb={["Stock", areaLabel, "Overage Material"]}
+        asOf={asOfData?.asOf ?? null}
         onClose={handleCloseDrill}
       />
     ) : openDrillKpi ? (

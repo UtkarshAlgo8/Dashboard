@@ -64,3 +64,20 @@ export function getCtpInventoryMaster({
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return client.get(`/plants/${plantId}/inventory/master${suffix}`);
 }
+
+/**
+ * Fetch the Overage Material snapshot (specs/17-overage-material.md):
+ * section / sub-section / component totals and per-SKU rows, per unit.
+ * Reads every production date, so it takes no date or shift filter.
+ * Mock mode has no overage fixture and returns empty lists.
+ *
+ * @param {object} params
+ * @param {string} params.plantId
+ * @returns {Promise<{ totals: Array<object>, skus: Array<object> }>}
+ */
+export function getOverage({ plantId }) {
+  if (USE_MOCK) {
+    return mockDelay({ totals: [], skus: [] });
+  }
+  return client.get(`/plants/${plantId}/inventory/overage`);
+}
