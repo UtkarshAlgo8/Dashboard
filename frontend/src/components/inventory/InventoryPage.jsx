@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Box, ButtonBase, Stack, Typography } from "@mui/material";
+import { Box, Button, ButtonBase, Stack, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 import { getCtpInventoryMaster } from "@/api/inventory.js";
 import CtpDrillCard from "@/components/inventory/CtpDrillCard.jsx";
@@ -26,13 +27,17 @@ import {
 } from "@/lib/ctpInventory.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 
+// Banmore's inventory lives in a separate Streamlit app.
+const BANMORE_INVENTORY_APP_URL = "http://10.200.203.239:8599/";
+
 const fmt = (v) => formatIndianNumber(v == null ? null : Math.round(v));
 
 const SHIFT_LABELS = { all: "All", a: "A", b: "B", c: "C" };
 
 /**
- * Production · Inventory. Only CTP (Chennai) has an inventory master;
- * every other plant shows "not configured".
+ * Production · Inventory. CTP (Chennai) renders the in-app inventory
+ * master; Banmore links out to its Streamlit app; every other plant
+ * shows "not configured".
  *
  * @param {object} props
  * @param {string} props.plantId
@@ -56,6 +61,7 @@ function InventoryPage({ plantId, tyreType, shift, granularity, from, to }) {
     },
   );
 
+  if (plantId === "banmore") return <BanmoreInventoryLink />;
   if (!isCtp) return <InventoryMessage text="Inventory not configured." />;
   if (error && !isLoading) {
     return (
@@ -85,6 +91,36 @@ function InventoryMessage({ text }) {
       }}
     >
       <Typography sx={{ fontSize: 13 }}>{text}</Typography>
+    </Box>
+  );
+}
+
+function BanmoreInventoryLink() {
+  return (
+    <Box sx={{ height: "100%", display: "grid", placeItems: "center", p: 3 }}>
+      <Stack spacing={2} alignItems="center" sx={{ textAlign: "center" }}>
+        <Typography sx={{ fontSize: 16, fontWeight: 700 }}>
+          Inventory Dashboard
+        </Typography>
+        <Typography
+          sx={{ fontSize: 13, color: "text.secondary", maxWidth: 420 }}
+        >
+          The inventory dashboard opens in a new tab.
+        </Typography>
+        {/* Rendered as an anchor (not an onClick) so the browser's native
+            open-in-new-tab / middle-click behaviour works. */}
+        <Button
+          component="a"
+          href={BANMORE_INVENTORY_APP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          variant="contained"
+          startIcon={<OpenInNewIcon />}
+          sx={{ textTransform: "none", fontWeight: 600 }}
+        >
+          Open Inventory Dashboard
+        </Button>
+      </Stack>
     </Box>
   );
 }
