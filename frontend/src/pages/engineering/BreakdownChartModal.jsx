@@ -403,6 +403,7 @@ function groupFailures(rows, by) {
     const g = out.get(key) ?? {
       key,
       label: key,
+      eqname: r.eqname,
       section: r.section,
       status: r.status,
       minutes: 0,
@@ -451,6 +452,8 @@ function tableColumns(groupLabel, withDiscipline) {
     { key: "label", label: groupLabel, align: "left" },
     ...(groupLabel === "Machine"
       ? [
+          // Blank when gold has no eqname for the machine.
+          { key: "eqname", label: "Machine name", align: "left" },
           { key: "section", label: "Section", align: "left" },
           { key: "status", label: "Category" },
         ]
@@ -670,6 +673,7 @@ function ParetoView({
             .filter((r) => r.machine)
             .map((r) => ({
               machine: r.machine,
+              eqname: denanDimension(r.eqname) ?? "",
               section: r.section || UNMAPPED,
               status: r.status || UNMAPPED,
               minutes: num(r.BreakdownMin_m),
@@ -685,6 +689,7 @@ function ParetoView({
         ? failureQuery.data.rows
             .map((r) => ({
               machine: r.machine,
+              eqname: denanDimension(r.eqname) ?? "",
               remarks: r.remarks,
               sub_section: r.sub_section,
               section: r.section || UNMAPPED,
