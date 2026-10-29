@@ -23,6 +23,7 @@ import {
   topMachineBreakdownRequest,
   topMachineBreakdownRows,
 } from "./topMachineBreakdowns.js";
+import { MACHINE_NAME_COLUMN } from "./machineName.js";
 import {
   C,
   DTable,
@@ -363,6 +364,7 @@ export function ZeroBreakdownPanel() {
 
   const columns = [
     { key: "machine", label: "Machine" },
+    MACHINE_NAME_COLUMN,
     { key: "section", label: "Section" },
     {
       key: "status",
@@ -523,6 +525,7 @@ export function TopMachineBreakdownsPanel({
 }) {
   const columns = [
     { key: "machine", label: "Machine" },
+    MACHINE_NAME_COLUMN,
     { key: "section", label: "Section" },
     {
       key: "status",

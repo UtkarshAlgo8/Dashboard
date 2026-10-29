@@ -122,6 +122,7 @@ function MtbfMttrMap({ points, plant, onPick }) {
           const p = this.point.options.meta;
           return (
             `<b>${p.label}</b> · ${p.status ?? "—"}<br/>` +
+            (p.eqname ? `${p.eqname}<br/>` : "") +
             `MTBF: <b>${fmtDrill(p.mtbf)} hrs</b><br/>` +
             `MTTR: <b>${fmtDrill(p.mttr)} hrs</b><br/>` +
             `Downtime: <b>${formatIndianNumber(p.downtime)} min</b>` +

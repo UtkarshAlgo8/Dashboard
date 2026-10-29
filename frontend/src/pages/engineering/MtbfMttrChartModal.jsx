@@ -44,6 +44,11 @@ import {
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import MtbfMttrMap from "./MtbfMttrMap.jsx";
+import {
+  MACHINE_NAME_COLUMN,
+  machineLabel,
+  machineName,
+} from "./machineName.js";
 import ExportButton from "./ExportButton.jsx";
 import {
   DISCIPLINES,
@@ -257,6 +262,7 @@ function MtbfMttrChartModal({
         const occ = num(r.BreakdownOcc_m);
         return {
           machine: r.machine,
+          eqname: machineName(r),
           section: r.section || UNMAPPED,
           status: r.status || UNMAPPED,
           op,
@@ -389,7 +395,15 @@ function MtbfMttrChartModal({
     (item) => {
       setPath([
         ...trail,
-        { level: levelId, value: item.key, label: item.label },
+        {
+          level: levelId,
+          value: item.key,
+          // The breadcrumb names the machine, not just its code.
+          label:
+            levelId === "machine"
+              ? machineLabel({ machine: item.label, eqname: item.eqname })
+              : item.label,
+        },
       ]);
       setShowAll(false);
     },
@@ -399,6 +413,7 @@ function MtbfMttrChartModal({
   const items = shown.map((r) => ({
     key: r.key,
     label: r.label,
+    eqname: r.eqname,
     value: r.value,
     color: r.color,
     clickable: clickable && r.value != null,
@@ -455,6 +470,7 @@ function MtbfMttrChartModal({
         .map((r) => ({
           key: r.key,
           label: r.label,
+          eqname: r.eqname,
           status: r.status,
           mtbf: r.mtbf,
           mttr: r.mttr,
@@ -591,7 +607,11 @@ function MtbfMttrChartModal({
 function tooltipFor(r, levelId) {
   const lines = [];
   if (levelId === "machine") {
-    lines.push(["Section", r.section], ["Category", r.status]);
+    lines.push(
+      ["Name", machineName(r) ?? "—"],
+      ["Section", r.section],
+      ["Category", r.status],
+    );
   }
   const mttrUnit =
     levelId === "discipline" || levelId === "failure" ? "min" : "hrs";
@@ -656,6 +676,7 @@ function columnsFor(levelId, measure) {
   if (levelId === "machine") {
     return [
       name,
+      MACHINE_NAME_COLUMN,
       { key: "section", label: "Section", align: "left" },
       { key: "status", label: "Category" },
       ...rates,

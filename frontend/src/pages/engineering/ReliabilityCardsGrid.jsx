@@ -38,6 +38,7 @@ import {
   useZeroBreakdownTotal,
 } from "./reliabilityPanels.jsx";
 import BreakdownChartModal from "./BreakdownChartModal.jsx";
+import { machineName } from "./machineName.js";
 import MtbfMttrChartModal from "./MtbfMttrChartModal.jsx";
 import ZeroBreakdownTrendModal from "./ZeroBreakdownTrendModal.jsx";
 
@@ -165,6 +166,21 @@ function SummaryCard({
               </div>
             </div>
           </div>
+          {machineName(featured) && (
+            <div
+              title={machineName(featured)}
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: C.md,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {machineName(featured)}
+            </div>
+          )}
           <div style={{ fontSize: 11, fontWeight: 600, color: C.mu }}>
             MTBF {fmtHours(featured.MTBF_m)} · MTTR {fmtHours(featured.MTTR_m)}
           </div>

@@ -14,6 +14,7 @@ import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { toExportTable, toFileSlug } from "@/lib/tableExport.js";
+import { MACHINE_NAME_COLUMN } from "./machineName.js";
 import {
   meanRepairMinutes,
   pooledBreakdownPct,
@@ -1066,21 +1067,24 @@ function DrillLevelTable({
   // One column per key dimension: a plain level has one, the date-wise
   // Failure level has two (the failure and the day it happened).
   const dims = level.groupBy.split(",");
-  const groupColumns = dims.map((dim, i) => ({
-    key: dim,
-    label:
-      dim === "status"
-        ? "Machine Category"
-        : (level.groupLabels?.[i] ?? level.groupLabel),
-    render: (r) => {
-      if (dim === "status") return <GradeChip grade={r[dim]} />;
-      if (dim === "date") return r.date ? formatDayLabel(r.date) : "—";
-      return r[dim] ?? "—";
+  const groupColumns = dims.flatMap((dim, i) => [
+    {
+      key: dim,
+      label:
+        dim === "status"
+          ? "Machine Category"
+          : (level.groupLabels?.[i] ?? level.groupLabel),
+      render: (r) => {
+        if (dim === "status") return <GradeChip grade={r[dim]} />;
+        if (dim === "date") return r.date ? formatDayLabel(r.date) : "—";
+        return r[dim] ?? "—";
+      },
+      // Sorted on the raw ISO string, which is already chronological — the
+      // rendered "4 Aug 2026" is not.
+      sortValue: dim === "date" ? (r) => r.date ?? null : undefined,
     },
-    // Sorted on the raw ISO string, which is already chronological — the
-    // rendered "4 Aug 2026" is not.
-    sortValue: dim === "date" ? (r) => r.date ?? null : undefined,
-  }));
+    ...(dim === "machine" ? [MACHINE_NAME_COLUMN] : []),
+  ]);
   // Single-dim levels keep the RAW group value as their key — the parent
   // highlights a drilled-through row by comparing it against the value it
   // clicked, and a stringified numeric machine code would never match.

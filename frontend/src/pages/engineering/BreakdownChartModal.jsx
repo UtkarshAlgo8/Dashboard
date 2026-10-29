@@ -67,6 +67,7 @@ import {
   useReliabilityTrendRange,
 } from "./reliabilityTrendRange.jsx";
 import { monthRangeFromKey } from "./reliabilityShared.jsx";
+import { machineLabel } from "./machineName.js";
 import ExportButton from "./ExportButton.jsx";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
@@ -514,6 +515,7 @@ function ParetoLevel({
         tooltip: [
           ...(r.section && groupLabel === "Machine"
             ? [
+                ["Name", r.eqname || "—"],
                 ["Section", r.section],
                 ["Category", r.status],
               ]
@@ -819,8 +821,16 @@ function ParetoView({
   }, [picked, dailyQuery.data, periodKey, viewBy, inScope]);
 
   const pick = useCallback(
-    (row) => setPicked({ key: row.key, label: row.label }),
-    [],
+    (row) =>
+      setPicked({
+        key: row.key,
+        // A picked machine is titled with its name; a failure is its own label.
+        label:
+          viewBy === "machine"
+            ? machineLabel({ machine: row.label, eqname: row.eqname })
+            : row.label,
+      }),
+    [viewBy],
   );
 
   // Bring the drill panel into view whenever a bar or row opens it.
