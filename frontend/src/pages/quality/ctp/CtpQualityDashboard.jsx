@@ -1,12 +1,12 @@
 /**
- * CTP Quality dashboard — Process tab (Process Audit Logbook gold).
+ * CTP Quality dashboard — Process and Product tabs (CTP Quality gold).
  *
- * One request per view: the summary call returns the five cards, their
- * sparklines and every drill table for the selected tyre type and period,
- * so opening a card or a process row is instant. Views map 1:1 to stored
- * gold grains (Today / a day / a shift of that day, a month, this year);
- * there is no free date range because PQR and CPC are averages that cannot
- * be rebuilt from daily rows.
+ * One request per tab and view: the summary call returns the tab's cards,
+ * their sparklines and every drill table for the selected tyre type and
+ * period, so opening a card or a row is instant. The Product request runs
+ * only when its tab opens. Views map 1:1 to stored gold grains (Today / a
+ * day / a shift of that day, a month, this year); there is no free date
+ * range because most KPIs are ratios that cannot be rebuilt from daily rows.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, Typography } from "@mui/material";
@@ -16,9 +16,10 @@ import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
 import { LiveProcessTrendPanel } from "@/components/quality/shared/LiveProcessTrendPanel.jsx";
 import { PrintStyles } from "@/components/quality/shared/PrintStyles.jsx";
 import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
-import { getCtpProcessSummary, getCtpProcessTrend } from "@/api/ctpQuality.js";
-import { buildProcessCards } from "./ctpProcessCards.js";
+import { getCtpQualitySummary, getCtpQualityTrend } from "@/api/ctpQuality.js";
+import { CTP_TAB_CARDS, buildCtpCards } from "./ctpCards.js";
 import CtpProcessDrillPanel from "./CtpProcessDrillPanel.jsx";
+import CtpProductDrillPanel from "./CtpProductDrillPanel.jsx";
 
 const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -91,15 +92,29 @@ function trendGranularity(from, to) {
   return "YEAR";
 }
 
+const TAB_VIEW = {
+  process: {
+    Panel: CtpProcessDrillPanel,
+    emptyReason: "No audits for this period",
+    errorLabel: "Process",
+  },
+  product: {
+    Panel: CtpProductDrillPanel,
+    emptyReason: "No data for this period",
+    errorLabel: "Product",
+  },
+};
+
 const SUB_TABS = [
   { id: "process", label: "Process" },
-  { id: "product", label: "Product", enabled: false },
+  { id: "product", label: "Product" },
   { id: "complaint", label: "Customer Complaint", enabled: false },
   { id: "spc", label: "SPC", enabled: false },
 ];
 
 export default function CtpQualityDashboard({ plant }) {
   const today = todayInIst();
+  const [tab, setTab] = useState("process");
   const [tyre, setTyre] = useState("All");
   // "today" | "day" | "month" | "year" — BTP opens on the current month.
   const [preset, setPreset] = useState("month");
@@ -131,7 +146,12 @@ export default function CtpQualityDashboard({ plant }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
-    getCtpProcessSummary({ tyre, granularity: grain, date, shift: activeShift })
+    getCtpQualitySummary(tab, {
+      tyre,
+      granularity: grain,
+      date,
+      shift: activeShift,
+    })
       .then((res) => {
         if (cancelled) return;
         setSummary(res);
@@ -146,23 +166,36 @@ export default function CtpQualityDashboard({ plant }) {
     return () => {
       cancelled = true;
     };
-  }, [tyre, grain, date, activeShift]);
+  }, [tab, tyre, grain, date, activeShift]);
 
-  const { live, pending } = useMemo(
+  const view = TAB_VIEW[tab];
+  const cards = useMemo(
     () =>
-      buildProcessCards(summary?.cards, {
+      buildCtpCards(CTP_TAB_CARDS[tab], summary?.cards, {
         grain,
         isShift: activeShift !== "All",
         periodLabel,
+        emptyReason: TAB_VIEW[tab].emptyReason,
       }),
-    [summary, grain, activeShift, periodLabel],
+    [tab, summary, grain, activeShift, periodLabel],
   );
-  const openObj = openKpi ? live.find((k) => k.id === openKpi) : null;
+  const openObj = openKpi
+    ? cards.find((k) => k.id === openKpi && !k.greyed)
+    : null;
 
   const fetchTrend = useCallback(
-    (params) => getCtpProcessTrend({ ...params, tyre }),
-    [tyre],
+    (params) => getCtpQualityTrend(tab, { ...params, tyre }),
+    [tab, tyre],
   );
+
+  const onTabChange = (next) => {
+    if (next === tab || !TAB_VIEW[next]) return;
+    setTab(next);
+    setSummary(null);
+    setLoading(true);
+    setOpenKpi(null);
+    setTrendKpi(null);
+  };
 
   const timeRangeForHeader = {
     preset: preset === "day" ? "day" : preset,
@@ -184,20 +217,20 @@ export default function CtpQualityDashboard({ plant }) {
     }
   };
 
-  const renderCard = (kpi) => (
-    <QKpiCard
-      key={kpi.id}
-      kpi={kpi}
-      isOpen={openKpi === kpi.id}
-      onToggle={() => setOpenKpi(openKpi === kpi.id ? null : kpi.id)}
-      onTrend={setTrendKpi}
-    />
-  );
-  const renderPendingCard = (kpi) => (
-    <Box key={kpi.id} sx={{ opacity: 0.55 }} title="Awaiting gold KPI">
-      <QKpiCard kpi={kpi} isOpen={false} onToggle={() => {}} />
-    </Box>
-  );
+  const renderCard = (kpi) =>
+    kpi.greyed ? (
+      <Box key={kpi.id} sx={{ opacity: 0.55 }} title={kpi.emptyReason}>
+        <QKpiCard kpi={kpi} isOpen={false} onToggle={() => {}} />
+      </Box>
+    ) : (
+      <QKpiCard
+        key={kpi.id}
+        kpi={kpi}
+        isOpen={openKpi === kpi.id}
+        onToggle={() => setOpenKpi(openKpi === kpi.id ? null : kpi.id)}
+        onTrend={setTrendKpi}
+      />
+    );
 
   const trendRange = trendWindow(grain, date);
   // Pills inside the trend pop-up centre on the selected day; for a month or
@@ -245,8 +278,8 @@ export default function CtpQualityDashboard({ plant }) {
         asOf={today}
         lastUpdatedAt={lastUpdatedAt}
         categoryTabs={SUB_TABS}
-        activeCategory="process"
-        onCategoryChange={() => {}}
+        activeCategory={tab}
+        onCategoryChange={onTabChange}
         tyreTypes={["All", "PCR", "TBR"]}
         tyreType={tyre}
         onTyreTypeChange={setTyre}
@@ -274,20 +307,15 @@ export default function CtpQualityDashboard({ plant }) {
           </Box>
         ) : error ? (
           <Typography color="error" sx={{ p: 2 }}>
-            Could not load Process Audit data:{" "}
+            Could not load {view.errorLabel} data:{" "}
             {error.message || "Request failed"}
           </Typography>
         ) : (
           <KpiSplitLayout
             open={Boolean(openObj)}
-            cards={
-              <>
-                {live.map(renderCard)}
-                {pending.map(renderPendingCard)}
-              </>
-            }
+            cards={<>{cards.map(renderCard)}</>}
             panel={
-              <CtpProcessDrillPanel
+              <view.Panel
                 kpi={openObj}
                 drills={summary?.drills}
                 periodLabel={periodLabel}
