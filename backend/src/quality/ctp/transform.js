@@ -40,11 +40,14 @@ const ascBy = (field) => (a, b) =>
 const descBy = (field) => (a, b) =>
   (b[field] ?? -Infinity) - (a[field] ?? -Infinity);
 
-/** kpi_name → rows, for the selected period only. */
-function groupAtAnchor(rows, anchor) {
+/**
+ * kpi_name → rows, for the selected period only. Dated KPIs keep every row:
+ * the query already limits them to the period, one row per violation date.
+ */
+function groupAtAnchor(rows, anchor, dated = []) {
   const out = new Map();
   for (const r of rows) {
-    if (r.date !== anchor) continue;
+    if (r.date !== anchor && !dated.includes(r.kpi_name)) continue;
     if (!out.has(r.kpi_name)) out.set(r.kpi_name, []);
     out.get(r.kpi_name).push(r);
   }
@@ -113,6 +116,24 @@ function detailRows(groups, kpiName, subKey) {
       count: num(r.actual_value) ?? 0,
     }))
     .sort((a, b) => b.count - a.count || byProcess(a, b));
+}
+
+/** Dated violation rows (one per violation date), latest first. */
+function datedDetailRows(groups, kpiName, subKey) {
+  return rowsOf(groups, kpiName)
+    .map((r) => ({
+      date: r.date,
+      process: blank(r.section),
+      machine: blank(r.machine),
+      machineName: blank(r.itemcode),
+      checkpoint: blank(r.remarks),
+      [subKey]: blank(r.sub_section),
+      count: num(r.actual_value) ?? 0,
+    }))
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) || b.count - a.count || byProcess(a, b),
+    );
 }
 
 function cardsFrom(rows, groups, { anchor, grain }, tab) {
@@ -204,12 +225,20 @@ function capaItems(groups) {
  * @param {{ anchor: string, grain: string }} period
  */
 export function toProcessSummary(rows, period) {
-  const groups = groupAtAnchor(rows, period.anchor);
+  const groups = groupAtAnchor(
+    rows,
+    period.anchor,
+    CTP_QUALITY_TABS.process.dated,
+  );
 
-  const mqvViolations = detailRows(groups, "MQV_Violation", "capa");
+  const mqvViolations = datedDetailRows(groups, "MQV_Violation", "capa");
   const topByProcess = topViolations(mqvViolations);
 
-  const deviations = detailRows(groups, "Audit_Deviation_Parameter", "status");
+  const deviations = datedDetailRows(
+    groups,
+    "Audit_Deviation_Parameter",
+    "status",
+  );
   const devByProcess = new Map();
   for (const d of deviations) {
     const row = devByProcess.get(d.process) ?? {

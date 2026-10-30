@@ -84,6 +84,7 @@ test("tabSummaryQuery: one scoped query for cards + drills", () => {
   const sql = tabSummaryQuery("process", {
     goldTyreType: "Both",
     goldGranularity: "MONTH",
+    grain: "MONTH",
     anchor: "2026-09-01",
     sparkFrom: "2026-05-01",
   });
@@ -100,7 +101,26 @@ test("tabSummaryQuery: one scoped query for cards + drills", () => {
   );
   assert.match(sql, /\('Open_CAPA_NC_Overdue', 'PQR_Process'/);
   assert.match(sql, /'CAPA_NC_Age_Days'\) AND date = DATE '2026-09-01'/);
+  // Violation rows: day rows over the whole month, so each keeps its date.
+  assert.match(
+    sql,
+    /OR \(granularity = 'DAY' AND kpi_name IN \('MQV_Violation', 'Audit_Deviation_Parameter'\) AND date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30'\)/,
+  );
   assert.doesNotMatch(sql, /ROW_NUMBER/);
+});
+
+test("tabSummaryQuery: shift view reads dated rows of that shift and day", () => {
+  const sql = tabSummaryQuery("process", {
+    goldTyreType: "PCR",
+    goldGranularity: "SHIFT B",
+    grain: "DAY",
+    anchor: "2026-10-27",
+    sparkFrom: "2026-10-23",
+  });
+  assert.match(
+    sql,
+    /OR \(granularity = 'SHIFT B' AND kpi_name IN \('MQV_Violation', 'Audit_Deviation_Parameter'\) AND date BETWEEN DATE '2026-10-27' AND DATE '2026-10-27'\)/,
+  );
 });
 
 test("tabSummaryQuery: product tab reads the Product category", () => {
@@ -111,6 +131,7 @@ test("tabSummaryQuery: product tab reads the Product category", () => {
     sparkFrom: "2026-10-23",
   });
   assert.match(sql, /category = 'Product'/);
+  assert.doesNotMatch(sql, /MQV_Violation/);
   assert.match(sql, /'Uniformity_Yield', 'First_Line_VI_Yield'/);
   assert.match(sql, /'GT_Weight_Within_2pct', 'GT_Weight_Within_3pct'/);
 });
@@ -240,6 +261,34 @@ test("toProcessSummary: MQV top violation sums across machines", () => {
   assert.equal(drills.mqv.processes[0].topViolation, "Dirty sidewall");
   assert.equal(drills.mqv.processes[0].capaOpen, 27);
   assert.equal(drills.mqv.violations.length, 3);
+});
+
+test("toProcessSummary: violation rows keep their date, latest first", () => {
+  const rows = [
+    ...ROWS,
+    row("2026-09-14", "MQV_Violation", 1, {
+      section: "Curing",
+      sub_section: "Open",
+      machine: "5104",
+      remarks: "Dirty sidewall",
+    }),
+    row("2026-09-20", "Audit_Deviation_Parameter", 1, {
+      section: "Mixing",
+      sub_section: "Open",
+      machine: "2103",
+      remarks: "Dump temp",
+    }),
+  ];
+  const { drills } = toProcessSummary(rows, { anchor: SEP, grain: "MONTH" });
+  assert.deepEqual(
+    drills.mqv.violations.map((v) => v.date),
+    ["2026-09-14", SEP, SEP, SEP],
+  );
+  assert.equal(drills.mqv.processes[0].topViolation, "Dirty sidewall");
+  assert.equal(drills.ndev.details[0].date, "2026-09-20");
+  assert.deepEqual(drills.ndev.processes, [
+    { process: "Mixing", deviations: 4, open: 3, closed: 1 },
+  ]);
 });
 
 test("toProcessSummary: deviations grouped by process, CPC worst first", () => {

@@ -33,6 +33,9 @@ export function DTable({
     let s = cell;
     if (s && typeof s === "object" && s.props) return null;
     s = String(s == null ? "" : s);
+    // dd-mm-yyyy display dates sort by calendar order, not by day number.
+    const d = /^(\d{2})-(\d{2})-(\d{4})$/.exec(s.trim());
+    if (d) return Number(d[3] + d[2] + d[1]);
     const n = parseFloat(s.replace(/[^0-9.-]/g, ""));
     return /[0-9]/.test(s) && !isNaN(n) ? n : null;
   };

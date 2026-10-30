@@ -46,10 +46,13 @@ export function getTabSummary(tab) {
       const period = resolvePeriod(req.query);
       if (period.error) return badRequest(res, period.error);
 
+      // Bump `version` when the payload shape changes, so old entries are
+      // not served (2: dated MQV / deviation rows).
       const key = buildCacheKey(`/quality/ctp/${tab}/summary`, {
         tyre,
         granularity: period.goldGranularity,
         anchor: period.anchor,
+        version: 2,
       });
       const body = await cached(
         key,

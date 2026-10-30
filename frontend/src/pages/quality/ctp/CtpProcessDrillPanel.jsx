@@ -5,8 +5,10 @@
  * a row never waits on the network. Flow per card (handoff Drill Down Map):
  *   PQR        → process rating table → failed checkpoints of the process
  *   Compliance → section compliance table (to-date counts + whole period)
- *   Critical Deviation → process MQV / CAPA table → violations of the process
- *   Non Critical Deviation → process deviation table → machine × checkpoint
+ *   Critical Deviation → process MQV / CAPA table → dated violations of
+ *                        the process, latest first
+ *   Non Critical Deviation → process deviation table → dated machine ×
+ *                            checkpoint rows, latest first
  *   CPC        → process × machine × parameter table, worst first
  *   FTQ / SPR  → count strip + SKU table, worst first
  *   Open CAPA  → open NC items, overdue first
@@ -19,6 +21,7 @@ import { DTable } from "@/components/quality/shared/DTable.jsx";
 import { SelectFilter } from "@/components/quality/shared/SelectFilter.jsx";
 import { StatusPill } from "@/components/quality/shared/StatusPill.jsx";
 import { C } from "@/components/quality/shared/theme.js";
+import { toDisplayDate } from "@/lib/dateFormat.js";
 import { CountStrip, Empty, GroupDrill, Hint } from "./CtpDrillParts.jsx";
 import { count, pct, text } from "./ctpFormat.js";
 
@@ -278,9 +281,17 @@ export default function CtpProcessDrillPanel({
           count(r.capaClosed),
         ]}
         detailTitle="Critical Deviation Violations"
-        detailCols={["Machine", "Machine Name", "Checkpoint", "CAPA", "Count"]}
+        detailCols={[
+          "Date",
+          "Machine",
+          "Machine Name",
+          "Checkpoint",
+          "CAPA",
+          "Count",
+        ]}
         detailRows={drills.mqv.violations}
         toDetailCells={(d) => [
+          toDisplayDate(d.date) ?? "—",
           text(d.machine),
           text(d.machineName),
           text(d.checkpoint),
@@ -310,6 +321,7 @@ export default function CtpProcessDrillPanel({
         ]}
         detailTitle="Non Critical Deviation Parameters"
         detailCols={[
+          "Date",
           "Machine",
           "Machine Name",
           "Checkpoint",
@@ -318,6 +330,7 @@ export default function CtpProcessDrillPanel({
         ]}
         detailRows={drills.ndev.details}
         toDetailCells={(d) => [
+          toDisplayDate(d.date) ?? "—",
           text(d.machine),
           text(d.machineName),
           text(d.checkpoint),

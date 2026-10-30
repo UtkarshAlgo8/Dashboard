@@ -22,7 +22,10 @@ export const TYRE_TYPE_TO_GOLD = Object.freeze({
 /**
  * Per tab: the gold `category`, the landing-card KPIs (drill level 1, keyed
  * by the card id the UI uses), the card companions (extra values a card
- * shows for the selected period only) and the drill KPIs (levels 2 and 3).
+ * shows for the selected period only), the drill KPIs (levels 2 and 3) and
+ * the dated drill KPIs: logbook violation rows whose date is the violation
+ * date. Those are read at DAY grain (or the selected shift) over the whole
+ * period, so the drill can show when each violation happened.
  *
  * Drill KPIs ride along with the landing query: for one period they are a
  * few hundred to a few thousand rows, and loading them up front makes every
@@ -59,8 +62,6 @@ export const CTP_QUALITY_TABS = Object.freeze({
       "MQV_Process",
       "MQV_CAPA_Open_Process",
       "MQV_CAPA_Closed_Process",
-      "MQV_Violation",
-      "Audit_Deviation_Parameter",
       "CPC_Parameter",
       "FTQ_Inspected",
       "FTQ_Rejected",
@@ -73,6 +74,7 @@ export const CTP_QUALITY_TABS = Object.freeze({
       "CAPA_NC_Overdue",
       "CAPA_NC_Age_Days",
     ],
+    dated: ["MQV_Violation", "Audit_Deviation_Parameter"],
   },
   product: {
     category: "Product",
