@@ -52,6 +52,8 @@ export function CountStrip({ items }) {
 /**
  * Group table that opens a detail table for the clicked row. The first cell
  * of each group row is its key; `detailRows` are matched on `detailKey`.
+ * `toolbar` (e.g. a View by toggle) renders inside the card, under the
+ * breadcrumb.
  */
 export function GroupDrill({
   kpi,
@@ -70,6 +72,7 @@ export function GroupDrill({
   detailKey = "process",
   emptyRows = "No audits for this period.",
   searchable = false,
+  toolbar = null,
 }) {
   const [selected, setSelected] = useState("");
   const detail = selected
@@ -85,6 +88,7 @@ export function GroupDrill({
           path={selected ? [kpi.n, title, selected] : [kpi.n, title]}
           onNav={(i) => i < 2 && setSelected("")}
         />
+        {toolbar}
         {rows.length === 0 ? (
           <Empty>{emptyRows}</Empty>
         ) : (

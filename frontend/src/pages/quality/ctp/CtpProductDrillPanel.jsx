@@ -104,32 +104,30 @@ function ScrapDrill({ kpi, periodLabel, skus, defects }) {
     );
   }
   return (
-    <div style={{ display: "grid", gap: 10 }}>
-      {pills}
-      <GroupDrill
-        kpi={kpi}
-        periodLabel={periodLabel}
-        title="Scrap % by SKU"
-        accent={C.rd}
-        cols={["SKU", "Scrap %"]}
-        rows={skus}
-        toCells={(s) => [s.sku, pct(s.scrapPct)]}
-        detailTitle="Defect Pareto"
-        detailCols={["Defect Area", "Defect", "Curing Press", "Scrap Tyres"]}
-        detailRows={defects}
-        detailKey="sku"
-        toDetailCells={(d) => [
-          text(d.defectArea),
-          text(d.defect),
-          text(d.press),
-          count(d.count),
-        ]}
-        emptyDetail="No defect detail for this SKU."
-        groupLabel="SKU"
-        emptyRows={NO_DATA}
-        searchable
-      />
-    </div>
+    <GroupDrill
+      kpi={kpi}
+      periodLabel={periodLabel}
+      title="Scrap % by SKU"
+      accent={C.rd}
+      cols={["SKU", "Scrap %"]}
+      rows={skus}
+      toCells={(s) => [s.sku, pct(s.scrapPct)]}
+      detailTitle="Defect Pareto"
+      detailCols={["Defect Area", "Defect", "Curing Press", "Scrap Tyres"]}
+      detailRows={defects}
+      detailKey="sku"
+      toDetailCells={(d) => [
+        text(d.defectArea),
+        text(d.defect),
+        text(d.press),
+        count(d.count),
+      ]}
+      emptyDetail="No defect detail for this SKU."
+      groupLabel="SKU"
+      emptyRows={NO_DATA}
+      searchable
+      toolbar={pills}
+    />
   );
 }
 
