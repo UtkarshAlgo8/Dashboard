@@ -30,6 +30,8 @@ import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
 import { PrintStyles } from "@/components/quality/shared/PrintStyles.jsx";
 import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
 import { StatusPill } from "@/components/quality/shared/StatusPill.jsx";
+import { StatTile } from "@/components/quality/shared/StatTile.jsx";
+import { ViewToggle } from "@/components/quality/shared/ViewToggle.jsx";
 import {
   TrendBar,
   TrendChart,
@@ -1271,41 +1273,7 @@ function TechTrendPanel({ kpi, onClose, initialRange }) {
   const badTop = inv ? padT : yT,
     badH = inv ? yT - padT : padT + ph - yT;
   const tile = (label, val, sub2, col) => (
-    <div
-      style={{
-        flex: 1,
-        minWidth: 118,
-        background: C.c2,
-        border: "1px solid " + C.bd,
-        borderRadius: 8,
-        padding: "9px 11px",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 10.5,
-          color: C.mu,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: ".3px",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 18,
-          fontWeight: 700,
-          color: col || C.tx,
-          marginTop: 2,
-        }}
-      >
-        {val}
-      </div>
-      {sub2 && (
-        <div style={{ fontSize: 10.5, color: C.mu, marginTop: 1 }}>{sub2}</div>
-      )}
-    </div>
+    <StatTile label={label} value={val} sub={sub2} color={col} />
   );
   return (
     <div
@@ -5219,40 +5187,14 @@ function ProcessDrillPanel({
               flexWrap: "wrap",
             }}
           >
-            <span
-              style={{
-                fontSize: 11.5,
-                color: C.mu,
-                fontWeight: 700,
-                textTransform: "uppercase",
-              }}
-            >
-              View by
-            </span>
-            {[
-              ["recipe", "Recipe / SKU"],
-              ["machine", "Machine"],
-            ].map((o) => {
-              const a = ftqView === o[0];
-              return (
-                <button
-                  key={o[0]}
-                  onClick={() => setFtqView(o[0])}
-                  style={{
-                    padding: "5px 14px",
-                    borderRadius: 999,
-                    border: "1px solid " + (a ? C.tl : C.bd),
-                    background: a ? C.tl + "15" : C.c2,
-                    color: a ? C.tl : C.tx,
-                    fontSize: 12.5,
-                    fontWeight: a ? 700 : 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  {o[1]}
-                </button>
-              );
-            })}
+            <ViewToggle
+              options={[
+                { value: "recipe", label: "Recipe / SKU" },
+                { value: "machine", label: "Machine" },
+              ]}
+              value={ftqView}
+              onChange={setFtqView}
+            />
             <span style={{ fontSize: 11.5, color: C.mu, marginLeft: 4 }}>
               {ftqView === "recipe"
                 ? "Click a recipe for its machine-wise scrap"

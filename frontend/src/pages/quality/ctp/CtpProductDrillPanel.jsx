@@ -2,7 +2,7 @@
  * CTP Quality — Product tab drill panel (right side of the split layout).
  *
  * Every table comes from the one Product summary payload. Cards with more
- * than one first-level table show "View by" pills; SKU tables are searchable
+ * than one first-level table show a "View by" toggle; SKU tables are searchable
  * and sorted worst first. Flow per card (handoff Drill Down Map):
  *   Uniformity → by machine | by SKU
  *   1st Line VI / Dispatch → by SKU
@@ -18,13 +18,8 @@ import { Breadcrumb } from "@/components/quality/shared/Breadcrumb.jsx";
 import { Card } from "@/components/quality/shared/Card.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
 import { C } from "@/components/quality/shared/theme.js";
-import {
-  Empty,
-  GroupDrill,
-  Hint,
-  SearchTable,
-  ViewPills,
-} from "./CtpDrillParts.jsx";
+import { ViewToggle } from "@/components/quality/shared/ViewToggle.jsx";
+import { Empty, GroupDrill, Hint } from "./CtpDrillParts.jsx";
 import { count, pct, text } from "./ctpFormat.js";
 
 const NO_DATA = "No data for this period.";
@@ -37,24 +32,23 @@ function ViewsDrill({ kpi, periodLabel, accent, views }) {
     <Card title={`${current.title} — ${periodLabel}`} accent={accent}>
       <Breadcrumb path={[kpi.n, current.label]} />
       {views.length > 1 && (
-        <ViewPills
-          options={views.map((v) => [v.id, v.label])}
+        <ViewToggle
+          options={views.map((v) => ({ value: v.id, label: v.label }))}
           value={current.id}
           onChange={setView}
-          accent={accent}
+          sx={{ mb: 1.25 }}
         />
       )}
       {current.rows.length === 0 ? (
         <Empty>{NO_DATA}</Empty>
-      ) : current.search ? (
-        <SearchTable
+      ) : (
+        <DTable
           key={current.id}
           cols={current.cols}
           rows={current.rows}
-          placeholder={current.search}
+          searchable={Boolean(current.search)}
+          searchPlaceholder={current.search}
         />
-      ) : (
-        <DTable cols={current.cols} rows={current.rows} />
       )}
       {current.hint && <Hint>{current.hint}</Hint>}
     </Card>
@@ -77,14 +71,14 @@ function ScrapDrill({ kpi, periodLabel, skus, defects }) {
   }
   const plantPareto = [...pareto.values()].sort((a, b) => b.count - a.count);
   const pills = (
-    <ViewPills
+    <ViewToggle
       options={[
-        ["sku", "By SKU"],
-        ["pareto", "Defect Pareto (all)"],
+        { value: "sku", label: "By SKU" },
+        { value: "pareto", label: "Defect Pareto (all)" },
       ]}
       value={view}
       onChange={setView}
-      accent={C.rd}
+      sx={{ mb: 1.25 }}
     />
   );
   if (view === "pareto") {
@@ -95,14 +89,15 @@ function ScrapDrill({ kpi, periodLabel, skus, defects }) {
         {plantPareto.length === 0 ? (
           <Empty>{NO_DATA}</Empty>
         ) : (
-          <SearchTable
+          <DTable
             cols={["Defect Area", "Defect", "Scrap Tyres"]}
             rows={plantPareto.map((d) => [
               text(d.defectArea),
               text(d.defect),
               count(d.count),
             ])}
-            placeholder="Search defect"
+            searchable
+            searchPlaceholder="Search defect"
           />
         )}
       </Card>

@@ -12,19 +12,14 @@
  *   Open CAPA  → open NC items, overdue first
  */
 import { useState } from "react";
-import { FormControlLabel, MenuItem, Select, Switch } from "@mui/material";
+import { FormControlLabel, Switch } from "@mui/material";
 import { Breadcrumb } from "@/components/quality/shared/Breadcrumb.jsx";
 import { Card } from "@/components/quality/shared/Card.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
+import { SelectFilter } from "@/components/quality/shared/SelectFilter.jsx";
 import { StatusPill } from "@/components/quality/shared/StatusPill.jsx";
 import { C } from "@/components/quality/shared/theme.js";
-import {
-  CountStrip,
-  Empty,
-  GroupDrill,
-  Hint,
-  SearchTable,
-} from "./CtpDrillParts.jsx";
+import { CountStrip, Empty, GroupDrill, Hint } from "./CtpDrillParts.jsx";
 import { count, pct, text } from "./ctpFormat.js";
 
 /** Gold class (logbook wording) → the page's KPI names. */
@@ -35,19 +30,14 @@ const CAPA_CLASS = {
 
 function ProcessFilter({ processes, value, onChange }) {
   return (
-    <Select
-      size="small"
+    <SelectFilter
+      options={processes}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      sx={{ fontSize: 13, minWidth: 180, mb: 1 }}
-    >
-      <MenuItem value="All">All processes</MenuItem>
-      {processes.map((p) => (
-        <MenuItem key={p} value={p}>
-          {p}
-        </MenuItem>
-      ))}
-    </Select>
+      onChange={onChange}
+      allLabel="All processes"
+      ariaLabel="Filter by process"
+      sx={{ mb: 1 }}
+    />
   );
 }
 
@@ -102,10 +92,11 @@ function SkuRatioDrill({ kpi, periodLabel, title, strip, skus, field }) {
       {skus.length === 0 ? (
         <Empty>No cured tyres for this period.</Empty>
       ) : (
-        <SearchTable
+        <DTable
           cols={["SKU", kpi.kpiName]}
           rows={skus.map((s) => [s.sku, pct(s[field])])}
-          placeholder="Search SKU"
+          searchable
+          searchPlaceholder="Search SKU"
         />
       )}
       <Hint>Lowest {kpi.kpiName} first.</Hint>
