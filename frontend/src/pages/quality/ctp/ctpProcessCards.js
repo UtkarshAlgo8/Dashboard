@@ -30,7 +30,7 @@ export const CTP_PROCESS_CARDS = [
   {
     id: "mqv",
     kpiName: "MQV",
-    n: "MQV (Major Quality Violation)",
+    n: "Critical Deviation",
     u: "nos",
     target: 5,
     targetLabel: "≤ 5",
@@ -40,7 +40,7 @@ export const CTP_PROCESS_CARDS = [
   {
     id: "ndev",
     kpiName: "Audit_Deviation",
-    n: "Audit Deviation (non-MQV)",
+    n: "Non Critical Deviation",
     u: "nos",
     target: null,
     targetLabel: null,

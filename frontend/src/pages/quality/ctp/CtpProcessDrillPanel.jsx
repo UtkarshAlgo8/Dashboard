@@ -5,8 +5,8 @@
  * a process row never waits on the network. Flow per card (KPI List sheet):
  *   PQR        → process rating table → failed checkpoints of the process
  *   Compliance → process compliance table
- *   MQV        → process MQV / CAPA table → violations of the process
- *   Deviation  → process deviation table → machine × checkpoint list
+ *   Critical Deviation → process MQV / CAPA table → violations of the process
+ *   Non Critical Deviation → process deviation table → machine × checkpoint list
  *   CPC        → process × machine × parameter table, worst first
  */
 import { useState } from "react";
@@ -214,9 +214,15 @@ export default function CtpProcessDrillPanel({
         key={key}
         kpi={kpi}
         periodLabel={periodLabel}
-        title="Process-wise MQV"
+        title="Process-wise Critical Deviation"
         accent={C.rd}
-        cols={["Process", "MQV", "Top Violation", "CAPA Open", "CAPA Closed"]}
+        cols={[
+          "Process",
+          "Critical Deviations",
+          "Top Violation",
+          "CAPA Open",
+          "CAPA Closed",
+        ]}
         rows={drills.mqv.processes}
         toCells={(r) => [
           r.process,
@@ -225,7 +231,7 @@ export default function CtpProcessDrillPanel({
           count(r.capaOpen),
           count(r.capaClosed),
         ]}
-        detailTitle="MQV Violations"
+        detailTitle="Critical Deviation Violations"
         detailCols={["Machine", "Checkpoint", "CAPA", "Count"]}
         detailRows={drills.mqv.violations}
         toDetailCells={(d) => [
@@ -234,7 +240,7 @@ export default function CtpProcessDrillPanel({
           text(d.capa),
           count(d.count),
         ]}
-        emptyDetail="No checkpoint-level MQV detail for this process."
+        emptyDetail="No checkpoint-level critical deviation detail for this process."
       />
     );
   }
@@ -245,9 +251,9 @@ export default function CtpProcessDrillPanel({
         key={key}
         kpi={kpi}
         periodLabel={periodLabel}
-        title="Process-wise Audit Deviation"
+        title="Process-wise Non Critical Deviation"
         accent={C.am}
-        cols={["Process", "Deviations", "Open", "Closed"]}
+        cols={["Process", "Non Critical Deviations", "Open", "Closed"]}
         rows={drills.ndev.processes}
         toCells={(r) => [
           r.process,
@@ -255,7 +261,7 @@ export default function CtpProcessDrillPanel({
           count(r.open),
           count(r.closed),
         ]}
-        detailTitle="Deviation Parameters"
+        detailTitle="Non Critical Deviation Parameters"
         detailCols={["Machine", "Checkpoint", "Status", "Count"]}
         detailRows={drills.ndev.details}
         toDetailCells={(d) => [
@@ -264,7 +270,7 @@ export default function CtpProcessDrillPanel({
           text(d.status),
           count(d.count),
         ]}
-        emptyDetail="No deviations for this process."
+        emptyDetail="No non critical deviations for this process."
       />
     );
   }
