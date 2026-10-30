@@ -16,6 +16,7 @@ import { FormControlLabel, MenuItem, Select, Switch } from "@mui/material";
 import { Breadcrumb } from "@/components/quality/shared/Breadcrumb.jsx";
 import { Card } from "@/components/quality/shared/Card.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
+import { StatusPill } from "@/components/quality/shared/StatusPill.jsx";
 import { C } from "@/components/quality/shared/theme.js";
 import {
   CountStrip,
@@ -112,23 +113,6 @@ function SkuRatioDrill({ kpi, periodLabel, title, strip, skus, field }) {
   );
 }
 
-function OverdueCell({ overdue }) {
-  return (
-    <span
-      style={{
-        padding: "2px 6px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        background: (overdue ? C.rd : C.am) + "18",
-        color: overdue ? C.rd : C.am,
-      }}
-    >
-      {overdue ? "Overdue" : "Open"}
-    </span>
-  );
-}
-
 function CapaDrill({ kpi, periodLabel, items }) {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [process, setProcess] = useState("All");
@@ -198,7 +182,7 @@ function CapaDrill({ kpi, periodLabel, items }) {
             text(i.violation),
             CAPA_CLASS[i.cls] ?? text(i.cls),
             count(i.ageDays),
-            <OverdueCell key={i.nc} overdue={i.overdue} />,
+            <StatusPill key={i.nc} status={i.overdue ? "Overdue" : "Open"} />,
           ])}
         />
       )}
