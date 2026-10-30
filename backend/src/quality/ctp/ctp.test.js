@@ -11,8 +11,12 @@ import {
   periodsBack,
   resolvePeriod,
 } from "./periods.js";
-import { processSummaryQuery, processTrendQuery } from "./queries.js";
-import { toProcessSummary, toProcessTrend } from "./transform.js";
+import { tabSummaryQuery, trendQuery } from "./queries.js";
+import {
+  toProcessSummary,
+  toProcessTrend,
+  toProductSummary,
+} from "./transform.js";
 
 /* ---------------------------- periods ---------------------------- */
 
@@ -76,8 +80,8 @@ test("isIsoDate", () => {
 
 /* ----------------------------- queries ----------------------------- */
 
-test("processSummaryQuery: one scoped query for cards + drills", () => {
-  const sql = processSummaryQuery({
+test("tabSummaryQuery: one scoped query for cards + drills", () => {
+  const sql = tabSummaryQuery("process", {
     goldTyreType: "Both",
     goldGranularity: "MONTH",
     anchor: "2026-09-01",
@@ -85,19 +89,34 @@ test("processSummaryQuery: one scoped query for cards + drills", () => {
   });
   assert.match(sql, /FROM gold\.ctp_gold/);
   assert.match(sql, /UPPER\(plant\) = 'CHENNAI'/);
-  assert.match(sql, /product_type = 'Process Audit'/);
+  assert.match(sql, /department = 'Quality'/);
+  assert.match(sql, /category = 'Process'/);
+  assert.doesNotMatch(sql, /product_type/);
   assert.match(sql, /tyre_type = 'Both'/);
   assert.match(sql, /granularity = 'MONTH'/);
   assert.match(
     sql,
-    /kpi_name IN \('PQR', 'Audit_Compliance', 'MQV', 'Audit_Deviation', 'CPC'\) AND date BETWEEN DATE '2026-05-01' AND DATE '2026-09-01'/,
+    /kpi_name IN \('PQR', 'Audit_Compliance', 'MQV', 'Audit_Deviation', 'CPC', 'FTQ', 'SPR', 'Open_CAPA_NC'\) AND date BETWEEN DATE '2026-05-01' AND DATE '2026-09-01'/,
   );
-  assert.match(sql, /'CPC_Parameter'\) AND date = DATE '2026-09-01'/);
+  assert.match(sql, /\('Open_CAPA_NC_Overdue', 'PQR_Process'/);
+  assert.match(sql, /'CAPA_NC_Age_Days'\) AND date = DATE '2026-09-01'/);
   assert.doesNotMatch(sql, /ROW_NUMBER/);
 });
 
-test("processTrendQuery escapes literals", () => {
-  const sql = processTrendQuery({
+test("tabSummaryQuery: product tab reads the Product category", () => {
+  const sql = tabSummaryQuery("product", {
+    goldTyreType: "TBR",
+    goldGranularity: "DAY",
+    anchor: "2026-10-27",
+    sparkFrom: "2026-10-23",
+  });
+  assert.match(sql, /category = 'Product'/);
+  assert.match(sql, /'Uniformity_Yield', 'First_Line_VI_Yield'/);
+  assert.match(sql, /'GT_Weight_Within_2pct', 'GT_Weight_Within_3pct'/);
+});
+
+test("trendQuery escapes literals", () => {
+  const sql = trendQuery({
     kpiName: "PQR",
     goldTyreType: "PCR",
     goldGranularity: "SHIFT A",
@@ -202,27 +221,15 @@ test("toProcessSummary: cards carry value, previous and sparkline", () => {
   assert.equal(cpc.value, null); // no row → not measured, never 0
   assert.deepEqual(
     cards.map((c) => c.id),
-    ["pqr", "audit", "mqv", "ndev", "cpc"],
+    ["pqr", "audit", "mqv", "ndev", "cpc", "ftq", "spr", "capa"],
   );
 });
 
 test("toProcessSummary: PQR drill orders processes and zero-fills counts", () => {
   const { drills } = toProcessSummary(ROWS, { anchor: SEP, grain: "MONTH" });
   assert.deepEqual(drills.pqr.processes, [
-    {
-      process: "RMS",
-      rating: 97.46,
-      violations: 0,
-      scheduled: 0,
-      completed: 0,
-    },
-    {
-      process: "Curing",
-      rating: 88.15,
-      violations: 68,
-      scheduled: 60,
-      completed: 59,
-    },
+    { process: "RMS", rating: 97.46, violations: 0 },
+    { process: "Curing", rating: 88.15, violations: 68 },
   ]);
   assert.equal(drills.pqr.failedCheckpoints[0].count, 3);
   assert.equal(drills.pqr.failedCheckpoints[0].severity, "Minor");
@@ -283,6 +290,165 @@ test("toProcessSummary: a null checkpoint never becomes 'null'", () => {
   ];
   const { drills } = toProcessSummary(rows, { anchor: SEP, grain: "MONTH" });
   assert.equal(drills.mqv.processes[0].topViolation, null);
+});
+
+test("toProcessSummary: audit drill pairs compliance with to-date counts", () => {
+  const rows = [
+    row(SEP, "Audit_Compliance_Process", 82.76, { section: "Calendaring" }),
+    row(SEP, "Audit_Scheduled_MTD_Process", 58, { section: "Calendaring" }),
+    row(SEP, "Audit_Completed_MTD_Process", 48, { section: "Calendaring" }),
+    row(SEP, "Audit_Scheduled_Process", 60, { section: "Calendaring" }),
+  ];
+  const { drills } = toProcessSummary(rows, { anchor: SEP, grain: "MONTH" });
+  assert.deepEqual(drills.audit.processes, [
+    {
+      process: "Calendaring",
+      compliance: 82.76,
+      scheduledToDate: 58,
+      completedToDate: 48,
+      pendingToDate: 0,
+      scheduled: 60,
+    },
+  ]);
+});
+
+test("toProcessSummary: FTQ / SPR counts, SKUs worst first, CAPA card extra", () => {
+  const rows = [
+    row(SEP, "FTQ", 92.72, { section: "Curing" }),
+    row(SEP, "FTQ_Inspected", 491485, { section: "Curing" }),
+    row(SEP, "FTQ_Rejected", 35763, { section: "Curing" }),
+    row(SEP, "FTQ_SKU", 100, { itemcode: "CTCP1326" }),
+    row(SEP, "FTQ_SKU", 81.5, { itemcode: "CTCP1700" }),
+    row(SEP, "SPR_Production", 491594),
+    row(SEP, "Open_CAPA_NC", 145),
+    row(SEP, "Open_CAPA_NC_Overdue", 120),
+  ];
+  const { cards, drills } = toProcessSummary(rows, {
+    anchor: SEP,
+    grain: "MONTH",
+  });
+  assert.equal(cards.find((c) => c.id === "ftq").value, 92.72);
+  assert.deepEqual(cards.find((c) => c.id === "capa").extra, { overdue: 120 });
+  assert.equal(drills.ftq.inspected, 491485);
+  assert.deepEqual(
+    drills.ftq.skus.map((s) => s.sku),
+    ["CTCP1700", "CTCP1326"],
+  );
+  assert.equal(drills.spr.production, 491594);
+  assert.equal(drills.spr.scrap, null);
+});
+
+test("toProcessSummary: CAPA items are open NCs, overdue first, then oldest", () => {
+  const nc = (no, kpi, v, extra = {}) =>
+    row(SEP, kpi, v, {
+      itemcode: no,
+      section: "Mixing",
+      sub_section: "MQV",
+      remarks: `Violation ${no}`,
+      machine: "883A00CB-OWNER",
+      ...extra,
+    });
+  const rows = [
+    nc("NC-1", "CAPA_NC_Open", 1),
+    nc("NC-1", "CAPA_NC_Overdue", 0),
+    nc("NC-1", "CAPA_NC_Age_Days", 3),
+    nc("NC-2", "CAPA_NC_Open", 1),
+    nc("NC-2", "CAPA_NC_Overdue", 1),
+    nc("NC-2", "CAPA_NC_Age_Days", 20),
+    nc("NC-3", "CAPA_NC_Open", 0),
+    nc("NC-3", "CAPA_NC_Age_Days", 40),
+  ];
+  const { drills } = toProcessSummary(rows, { anchor: SEP, grain: "MONTH" });
+  assert.deepEqual(drills.capa.items, [
+    {
+      nc: "NC-2",
+      process: "Mixing",
+      violation: "Violation NC-2",
+      cls: "MQV",
+      open: 1,
+      overdue: true,
+      ageDays: 20,
+    },
+    {
+      nc: "NC-1",
+      process: "Mixing",
+      violation: "Violation NC-1",
+      cls: "MQV",
+      open: 1,
+      overdue: false,
+      ageDays: 3,
+    },
+  ]);
+});
+
+const prow = (kpi_name, actual_value, extra = {}) =>
+  row(SEP, kpi_name, actual_value, {
+    sub_section: "Product Quality",
+    ...extra,
+  });
+
+test("toProductSummary: cards, GT companions and waiting KPIs", () => {
+  const rows = [
+    row("2026-08-01", "Uniformity_Yield", 92.5),
+    prow("Uniformity_Yield", 93.62),
+    prow("GT_Weight_Within_1pct", 64.65),
+    prow("GT_Weight_Within_2pct", 91.97),
+    prow("GT_Weight_Within_3pct", 98.14),
+  ];
+  const { cards } = toProductSummary(rows, { anchor: SEP, grain: "MONTH" });
+  assert.deepEqual(
+    cards.map((c) => c.id),
+    ["uy", "fvi", "sl", "eg", "sc", "gtw", "dbm", "dy", "oe", "bay"],
+  );
+  const uy = cards.find((c) => c.id === "uy");
+  assert.equal(uy.value, 93.62);
+  assert.equal(uy.previous, 92.5);
+  assert.deepEqual(cards.find((c) => c.id === "gtw").extra, {
+    within2: 91.97,
+    within3: 98.14,
+  });
+  const dbm = cards.find((c) => c.id === "dbm");
+  assert.equal(dbm.value, null);
+  assert.deepEqual(dbm.spark, []); // waiting for silver: no rows at all
+});
+
+test("toProductSummary: machine and SKU drills", () => {
+  const rows = [
+    prow("Uniformity_Yield_Machine", 95.21, { machine: "30-349" }),
+    prow("Uniformity_Tested_Machine", 74759, { machine: "30-349" }),
+    prow("Uniformity_Yield_Machine", 99.5, { machine: "TBRTUO" }),
+    prow("E_Grade_Machine_SKU", 1302, { machine: "30-350", itemcode: "1503" }),
+    prow("E_Grade_Machine_SKU", 853, { machine: "30-350", itemcode: "1513" }),
+    prow("E_Grade_Machine_SKU", 401, { machine: "30-349", itemcode: "1513" }),
+    prow("Second_Line_Defect", 5966, {
+      sub_section: "Downgrade",
+      itemcode: "CTCP1325",
+      remarks: "TREADLIGHTNESS\r\n",
+    }),
+    prow("Product_Scrap_Pct_SKU", 0.2, { itemcode: "A" }),
+    prow("Product_Scrap_Pct_SKU", 1.4, { itemcode: "B" }),
+    prow("GT_Weight_SKU", 97.5, { itemcode: "GT-1" }),
+    prow("GT_Weighed_SKU", 120, { itemcode: "GT-1" }),
+  ];
+  const { drills } = toProductSummary(rows, { anchor: SEP, grain: "MONTH" });
+  assert.deepEqual(drills.uy.machines[0], {
+    machine: "30-349",
+    yield: 95.21,
+    tested: 74759,
+    passed: 0,
+  });
+  assert.deepEqual(drills.eg.machines, [
+    { machine: "30-350", count: 2155, sizes: 2 },
+    { machine: "30-349", count: 401, sizes: 1 },
+  ]);
+  assert.equal(drills.sl.defects[0].defect, "TREADLIGHTNESS");
+  assert.deepEqual(
+    drills.sc.skus.map((s) => s.sku),
+    ["B", "A"],
+  );
+  assert.deepEqual(drills.gtw.skus, [
+    { sku: "GT-1", weighed: 120, within1: 97.5, within2: null, within3: null },
+  ]);
 });
 
 test("toProcessTrend drops empty values", () => {
