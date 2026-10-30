@@ -144,6 +144,7 @@ export function LiveProcessTrendPanel({
     : parseFloat(String(kpi.v).replace(/,/g, ""));
   const target = !isNaN(targetNum) ? targetNum : current;
   const inv =
+    kpi.lowerIsBetter === true ||
     /Violation|Scrap|Reject|Loss|Absent|First|Downtime|NCM|Defect|Reduced|Stoppage|Repeat|Hold|Breakdown/i.test(
       kpi.n,
     );
