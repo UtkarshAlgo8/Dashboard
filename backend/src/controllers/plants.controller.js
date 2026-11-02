@@ -3,6 +3,7 @@ import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
 import { goldSource } from "../queries/gold-source.js";
+import { ymdDaysAgo } from "../queries/sql-date.js";
 import {
   plantDepartmentPredicate,
   normalizePlantId,
@@ -175,13 +176,6 @@ export async function getSummary(req, res, next) {
 }
 
 const AS_OF_RECENT_DAYS = 30;
-
-/** Today (UTC) minus `days`, as a "YYYYMMDD" key. */
-function ymdDaysAgo(days) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10).replaceAll("-", "");
-}
 
 /**
  * As-of date — the latest available data date for the plant (BRD §13.5).

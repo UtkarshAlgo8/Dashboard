@@ -3,6 +3,7 @@ import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
 import { goldSource } from "../queries/gold-source.js";
+import { ymdDaysAgo } from "../queries/sql-date.js";
 import {
   normalizePlantId,
   plantDepartmentPredicate,
@@ -196,34 +197,46 @@ function percentOrNull(v) {
   return Math.round(n * 10) / 10;
 }
 
+// Monthly rows are dated on the 1st of their month, so the newest one is
+// almost always inside this window. Scanning it first is much cheaper than
+// the full history.
+const OEE_P_RECENT_DAYS = 60;
+
 /**
  * Current-month plant OEE for the landing card. OEE_p is the whole-plant
  * figure — section / sub_section / machine / product_type are ALL empty, so
  * the OEE_o predicates would never match it. Monthly rows are stored dated on
  * the 1st of their month at granularity MONTH, so the latest such row (rn=1)
- * IS the current month. No date filter: a data-load lag must not blank the
- * card, it should keep showing the newest month that exists.
+ * IS the current month. No date limit on the result: a data-load lag must
+ * not blank the card, it should keep showing the newest month that exists.
  */
 async function landingOeePForPlant(plantId) {
-  const sql = `
+  const latest = (fromKey) => {
+    const since = fromKey ? ` AND ${DATE_YYYYMMDD} >= '${fromKey}'` : "";
+    const sql = `
     SELECT actual_value
     FROM (
       SELECT actual_value,
              ROW_NUMBER() OVER (
                ORDER BY ${DATE_YYYYMMDD} DESC
              ) AS rn
-      FROM ${goldSource({ plantId, fromKey: null, toKey: null, granularity: GRAN_MONTH })}
+      FROM ${goldSource({ plantId, fromKey, toKey: null, granularity: GRAN_MONTH })}
       WHERE ${plantDepartmentPredicate(plantId)}
         AND kpi_name = ${escapeLiteral("OEE_p")}
         AND ${emptyColumnPredicate("machine")}
         AND ${emptyColumnPredicate("section")}
         AND ${emptyColumnPredicate("sub_section")}
         AND ${emptyColumnPredicate("product_type")}
-        AND granularity = ${escapeLiteral(GRAN_MONTH)}
+        AND granularity = ${escapeLiteral(GRAN_MONTH)}${since}
     ) ranked
     WHERE rn = 1
   `.trim();
-  const rows = await runQuery(sql);
+    return runQuery(sql);
+  };
+  // A row in the recent window is the newest overall; only an empty window
+  // needs the full-history scan.
+  let rows = await latest(ymdDaysAgo(OEE_P_RECENT_DAYS));
+  if (!rows.length) rows = await latest(null);
   return rows.length ? percentOrNull(rows[0].actual_value) : null;
 }
 
@@ -290,39 +303,37 @@ async function landingTimeAwareKpisForPlant(plantId, timeRange) {
   }
   const fromEsc = escapeLiteral(from);
   const toEsc = escapeLiteral(to);
-  const table = goldSource({ plantId, fromKey: from, toKey: to });
+  const table = goldSource({
+    plantId,
+    fromKey: from,
+    toKey: to,
+    granularity: GRAN_DAY,
+  });
 
-  const curedTyreSql = `
-    SELECT COALESCE(SUM(actual_value), 0) AS total
+  // One scan for both sums. Each CASE carries the filters its own KPI used
+  // to have in a separate query.
+  const sql = `
+    SELECT
+      COALESCE(SUM(CASE
+        WHEN kpi_name = ${escapeLiteral("Production_product")}
+          AND section = ${escapeLiteral("Curing")}
+          AND product_type = ${escapeLiteral("Cured Tyre")}
+        THEN actual_value END), 0) AS cured_total,
+      COALESCE(SUM(CASE
+        WHEN kpi_name = ${escapeLiteral("Scrap")}
+        THEN actual_value END), 0) AS scrap_total
     FROM ${table}
     WHERE ${plantDepartmentPredicate(plantId)}
-      AND kpi_name = ${escapeLiteral("Production_product")}
-      AND section = ${escapeLiteral("Curing")}
-      AND product_type = ${escapeLiteral("Cured Tyre")}
+      AND kpi_name IN (${escapeLiteral("Production_product")}, ${escapeLiteral("Scrap")})
       AND ${emptyColumnPredicate("machine")}
       AND ${emptyColumnPredicate("sub_section")}
       AND granularity = ${escapeLiteral(GRAN_DAY)}
       AND ${DATE_YYYYMMDD} BETWEEN ${fromEsc} AND ${toEsc}
   `.trim();
 
-  const scrapSql = `
-    SELECT COALESCE(SUM(actual_value), 0) AS total
-    FROM ${table}
-    WHERE ${plantDepartmentPredicate(plantId)}
-      AND kpi_name = ${escapeLiteral("Scrap")}
-      AND ${emptyColumnPredicate("machine")}
-      AND ${emptyColumnPredicate("sub_section")}
-      AND granularity = ${escapeLiteral(GRAN_DAY)}
-      AND ${DATE_YYYYMMDD} BETWEEN ${fromEsc} AND ${toEsc}
-  `.trim();
-
-  const [curedTyreRows, scrapRows] = await Promise.all([
-    runQuery(curedTyreSql),
-    runQuery(scrapSql),
-  ]);
-
-  const curedTyreProduction = Number(curedTyreRows[0]?.total ?? 0);
-  const scrap = Number(scrapRows[0]?.total ?? 0);
+  const rows = await runQuery(sql);
+  const curedTyreProduction = Number(rows[0]?.cured_total ?? 0);
+  const scrap = Number(rows[0]?.scrap_total ?? 0);
   const scrapPct =
     curedTyreProduction > 0
       ? Math.round((scrap / curedTyreProduction) * 1000) / 10
