@@ -10,6 +10,9 @@
 import { useState, useRef, useEffect, Fragment } from "react";
 import {
   Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
   Stack,
   Tooltip,
   Typography,
@@ -19,6 +22,7 @@ import {
   useTheme,
 } from "@mui/material";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import CloseIcon from "@mui/icons-material/Close";
 import UniformityTrendModal from "@/components/quality/UniformityTrendModal.jsx";
 import { C } from "@/components/quality/shared/theme.js";
 import { monthRangeFromKey } from "@/components/quality/shared/dates.js";
@@ -11796,9 +11800,6 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
               accent={C.pp}
             />
           )}
-          {Array.isArray(detail?.alerts) && detail.alerts.length ? (
-            <LiveSpcAlerts alerts={detail.alerts} />
-          ) : null}
           {detail?.r_chart && (
             <LiveSpcChart
               title="R Chart — subgroup range"
@@ -11819,6 +11820,62 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
         </>
       )}
     </div>
+  );
+}
+
+function SpcAlertsModal({ selection, date, shift, onClose }) {
+  const [detail, setDetail] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDetail(null);
+    setError(null);
+    getSpcDetail({ date, shift, ...selection })
+      .then((result) => {
+        if (!cancelled) setDetail(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date, shift, selection.machine, selection.recipe, selection.parameter]);
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      fullWidth
+      maxWidth="lg"
+      aria-labelledby="spc-alerts-title"
+    >
+      <DialogTitle id="spc-alerts-title" sx={{ pr: 7 }}>
+        Nelson Rule Alerts
+        <Typography variant="body2" color="text.secondary">
+          {selection.parameter} · {selection.machine} · {selection.recipe}
+        </Typography>
+        <IconButton
+          aria-label="Close alerts"
+          onClick={onClose}
+          sx={{ position: "absolute", right: 12, top: 12 }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        {error ? (
+          <Typography color="error">
+            Unable to load alerts: {error.message || "Request failed"}
+          </Typography>
+        ) : !detail ? (
+          <QualityLoader minHeight={200} />
+        ) : (
+          <LiveSpcAlerts alerts={detail.alerts} />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -11927,6 +11984,9 @@ function LiveSpcAlerts({ alerts }) {
 
   const severityFilterControl = (
     <Stack direction="row" spacing={1} alignItems="center">
+      <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+        {rows.length} alerts
+      </Typography>
       <Typography
         sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}
       >
@@ -11950,18 +12010,22 @@ function LiveSpcAlerts({ alerts }) {
   );
 
   return (
-    <Card title={`Nelson Rule Alerts (${rows.length})`} accent={C.pp}>
+    <Box>
       <DataTable
         columns={columns}
         rows={rows}
         getRowKey={(row) => row.alert_id}
         searchPlaceholder="Search alerts"
-        emptyMessage="No alerts match this filter."
+        emptyMessage={
+          allAlerts.length
+            ? "No alerts match this filter."
+            : "No Nelson rule alerts for this selection."
+        }
         maxHeight={400}
         stickyHeader
         toolbarRight={severityFilterControl}
       />
-    </Card>
+    </Box>
   );
 }
 
@@ -12265,6 +12329,10 @@ function QualityDashboard({ plant, onBack }) {
   );
   const [trendKpi, setTrendKpi] = useState(null);
   const [spcSel, setSpcSel] = useState(null);
+  const [spcAlertsOpen, setSpcAlertsOpen] = useState(false);
+  useEffect(() => {
+    setSpcAlertsOpen(false);
+  }, [tab, spcSel]);
   // Live Process values from the Excel-backed backend (FRD §1). null until the
   // first fetch; {} on error keeps cards neutral instead of showing mock data.
   const [liveProcess, setLiveProcess] = useState(null);
@@ -12674,6 +12742,14 @@ function QualityDashboard({ plant, onBack }) {
           Row 2 dept tabs + tyre type + time range + export. The dept tabs
           are wired to navigate between Banmore dashboards; Quality is the
           active one. */}
+      {tab === "spc" && spcSel && spcAlertsOpen && (
+        <SpcAlertsModal
+          selection={spcSel}
+          date={processDate}
+          shift={shift}
+          onClose={() => setSpcAlertsOpen(false)}
+        />
+      )}
       <ProductionHeader
         plant={plant}
         timeRange={timeRangeForHeader}
@@ -12726,6 +12802,8 @@ function QualityDashboard({ plant, onBack }) {
         singleDay={tab === "spc" ? processDate : null}
         onSingleDayChange={tab === "spc" ? onHeaderDayChange : undefined}
         showSpcAlertIcon={tab === "spc"}
+        spcAlertsDisabled={!spcSel}
+        onSpcAlertClick={() => setSpcAlertsOpen(true)}
       />
 
       {/* Main content */}
