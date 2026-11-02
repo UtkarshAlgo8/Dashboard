@@ -13,6 +13,8 @@
  *                              Section (pooled) or Machine
  *   Zero Breakdown Machines  → daily line of the clean-run count
  *   Top Machine Breakdowns   → Pareto of BreakdownMin_m by machine, top 10
+ *   Machines Affected        → no trend; the chevron opens category → section
+ *                              bars (Reliability tab only)
  */
 import { useEffect, useState } from "react";
 import { getReliabilityLatestDate } from "@/api/engineering.js";
@@ -32,12 +34,16 @@ import {
   fmtMinHrs,
 } from "./reliabilityShared.jsx";
 import {
+  AffectedBar,
+  MachinesAffectedPanel,
+  useMachinesAffectedGrades,
   ZeroBreakdownPanel,
   TopMachineBreakdownsPanel,
   useTopMachineBreakdowns,
   useZeroBreakdownTotal,
 } from "./reliabilityPanels.jsx";
 import BreakdownChartModal from "./BreakdownChartModal.jsx";
+import { machinesAffectedHeadline } from "./machinesAffected.js";
 import { machineName } from "./machineName.js";
 import MtbfMttrChartModal from "./MtbfMttrChartModal.jsx";
 import ZeroBreakdownTrendModal from "./ZeroBreakdownTrendModal.jsx";
@@ -51,6 +57,7 @@ function SummaryCard({
   unit,
   accent,
   featured,
+  body,
   onTrend,
   expanded,
   onToggle,
@@ -119,7 +126,9 @@ function SummaryCard({
           </span>
         </div>
       </div>
-      {featured ? (
+      {body ? (
+        body
+      ) : featured ? (
         <>
           <div
             style={{
@@ -206,10 +215,50 @@ function SummaryCard({
   );
 }
 
+/** Machines Affected card body: "246 / 314", the bar, and the no-breakdown count. */
+function MachinesAffectedBody({ headline }) {
+  const { affected, total, pct, noBreakdown } = headline;
+  return (
+    <>
+      <div style={{ fontSize: 24, fontWeight: 700, color: C.tx }}>
+        {fmtNum(affected)}
+        <span
+          style={{ fontSize: 13, fontWeight: 600, color: C.mu, marginLeft: 4 }}
+        >
+          / {fmtNum(total)}
+        </span>
+        {pct != null && (
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: C.md,
+              marginLeft: 8,
+            }}
+          >
+            {fmtNum(pct, 0)}%
+          </span>
+        )}
+      </div>
+      <AffectedBar affected={affected ?? 0} total={total} color={C.rd} />
+      <div style={{ fontSize: 11, fontWeight: 600, color: C.mu }}>
+        {noBreakdown == null
+          ? "—"
+          : `${fmtNum(noBreakdown)} machines had no breakdown`}
+      </div>
+    </>
+  );
+}
+
 /**
- * @param {{ values: Record<string, number|null>, period: { kind: string, date: string, granularity: string, from?: string, to?: string }, includeTopMachines?: boolean }} props
+ * @param {{ values: Record<string, number|null>, period: { kind: string, date: string, granularity: string, from?: string, to?: string }, includeTopMachines?: boolean, includeMachinesAffected?: boolean }} props
  */
-function ReliabilityCardsGrid({ values, period, includeTopMachines = false }) {
+function ReliabilityCardsGrid({
+  values,
+  period,
+  includeTopMachines = false,
+  includeMachinesAffected = false,
+}) {
   const { date, granularity } = period;
   // A published period drills through the stored rate rows. A custom window
   // has none, so the Breakdown/MTBF/MTTR drills switch to the *_RANGE_LEVELS,
@@ -227,6 +276,10 @@ function ReliabilityCardsGrid({ values, period, includeTopMachines = false }) {
   const [trendCard, setTrendCard] = useState(null);
   const zeroBreakdown = useZeroBreakdownTotal();
   const topMachines = useTopMachineBreakdowns(period, includeTopMachines);
+  const machineGrades = useMachinesAffectedGrades(
+    period,
+    includeMachinesAffected,
+  );
   const [trendAsOf, setTrendAsOf] = useState(null);
 
   useEffect(() => {
@@ -291,6 +344,21 @@ function ReliabilityCardsGrid({ values, period, includeTopMachines = false }) {
       featured: topMachines.rows[0] ?? {},
     });
   }
+  if (includeMachinesAffected) {
+    cards.push({
+      id: "machinesAffected",
+      label: "Machines Affected",
+      accent: C.rd,
+      body: (
+        <MachinesAffectedBody
+          headline={machinesAffectedHeadline(
+            machineGrades.rows,
+            values?.TotalMachines_Overall,
+          )}
+        />
+      ),
+    });
+  }
 
   return (
     <div>
@@ -298,7 +366,8 @@ function ReliabilityCardsGrid({ values, period, includeTopMachines = false }) {
         style={{
           display: "grid",
           gap: 12,
-          gridTemplateColumns: `repeat(${cards.length >= 5 ? 5 : 4}, minmax(0, 1fr))`,
+          // Six cards sit as two rows of three rather than six narrow tiles.
+          gridTemplateColumns: `repeat(${cards.length >= 6 ? 3 : cards.length >= 5 ? 5 : 4}, minmax(0, 1fr))`,
         }}
       >
         {cards.map((c) => (
@@ -309,12 +378,14 @@ function ReliabilityCardsGrid({ values, period, includeTopMachines = false }) {
             unit={c.unit}
             accent={c.accent}
             featured={c.featured}
+            body={c.body}
             expanded={expanded === c.id}
             onToggle={() => toggle(c.id)}
             // Keep the trend icon gated for custom ranges; the inline Top
             // Machine table and card still cover the selected window.
             onTrend={
-              isRange && (perRowCardIds.has(c.id) || c.id === "topMachines")
+              c.id === "machinesAffected" ||
+              (isRange && (perRowCardIds.has(c.id) || c.id === "topMachines"))
                 ? undefined
                 : () => setTrendCard(c.id)
             }
@@ -362,6 +433,15 @@ function ReliabilityCardsGrid({ values, period, includeTopMachines = false }) {
                 loading={topMachines.loading}
                 error={topMachines.error}
                 totalMinutes={values?.BreakdownMin_Overall}
+              />
+            )}
+            {expanded === "machinesAffected" && (
+              <MachinesAffectedPanel
+                gradeRows={machineGrades.rows}
+                loading={machineGrades.loading}
+                error={machineGrades.error}
+                unavailable={machineGrades.unavailable}
+                period={period}
               />
             )}
           </Card>

@@ -646,6 +646,9 @@ function ParetoView({
         // range it adds the days.
         agg: "sum",
         includeUnmapped: true,
+        // Zero rows are filtered out below anyway; unfiltered, the month is
+        // ~45k rows and the upstream service rejects the response.
+        nonZero: true,
       }).then((res) => ({ key: periodKey, rows: res?.rows ?? [] })),
     { interval: 0, deps: [periodKey] },
   );
@@ -854,8 +857,12 @@ function ParetoView({
     setPicked(null);
   };
 
-  const loading = machineQuery.isLoading || !machineRows || !failureRows;
-  const error = machineQuery.error || failureQuery.error;
+  // A failed query leaves its rows null; that is an error, not loading. The
+  // hook keeps a stale error until the next fetch settles, so ignore it while
+  // one is in flight.
+  const fetching = machineQuery.isLoading || failureQuery.isLoading;
+  const error = fetching ? null : machineQuery.error || failureQuery.error;
+  const loading = !error && (fetching || !machineRows || !failureRows);
   const fetchError = error
     ? `Breakdown chart fetch failed: ${error.message || "Request failed"}`
     : null;

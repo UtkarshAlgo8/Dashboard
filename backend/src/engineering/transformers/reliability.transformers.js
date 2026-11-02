@@ -172,6 +172,32 @@ export function toLossTree(rows, { kpiNames, groupBy }) {
 }
 
 /**
+ * Attach each category's stored % of scheduled time to its Loss Tree row,
+ * read directly from the published rows (one per product_type) — never
+ * summed or derived. A category with no stored row gets null.
+ *
+ * @param {{ group_by: string, rows: Array }} tree - `toLossTree` output
+ * @param {Array} pctRows - raw rows of `pctKpi`
+ * @param {string} pctKpi
+ */
+export function withLossCategoryPct(tree, pctRows, pctKpi) {
+  const byCategory = new Map();
+  for (const r of pctRows ?? []) {
+    if (r.kpi_name !== pctKpi || !r.product_type) continue;
+    if (!byCategory.has(r.product_type)) {
+      byCategory.set(r.product_type, valueOrNull(r.actual_value));
+    }
+  }
+  return {
+    ...tree,
+    rows: tree.rows.map((row) => ({
+      ...row,
+      [pctKpi]: byCategory.get(row.product_type) ?? null,
+    })),
+  };
+}
+
+/**
  * Period summary: rebuilds the four headline cards for a multi-day range
  * from the summed machine-level components (see COMPONENT_KPIS).
  *

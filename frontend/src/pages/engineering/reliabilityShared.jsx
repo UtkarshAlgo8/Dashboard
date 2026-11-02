@@ -154,7 +154,7 @@ export function fmtMinHrs(v, decimals = 0) {
   return `${fmtNum(v, decimals)} min (${fmtNum(v / 60, 1)} hrs)`;
 }
 
-const GRADE_COLOR = {
+export const GRADE_COLOR = {
   A: C.gn,
   B: C.bl,
   C: C.am,
@@ -940,50 +940,6 @@ export const MTTR_RANGE_LEVELS = [
     "Failure",
     "BreakdownMin_m_Failure",
     "BreakdownOcc_m_Failure",
-  ),
-];
-
-function lossLevel(groupBy, groupLabel, timeKpi, occKpi) {
-  const columns = [
-    {
-      key: timeKpi,
-      label: "Lost Time",
-      align: "right",
-      render: (r) => fmtMinHrs(r[timeKpi]),
-    },
-  ];
-  if (occKpi) {
-    columns.push({
-      key: occKpi,
-      label: "Occurrences",
-      align: "right",
-      render: (r) => fmtNum(r[occKpi]),
-    });
-  }
-  // Lost time is a plain total, so its share of the level is the spec's
-  // "share" column at Loss Tree levels 2-4.
-  columns.push(shareColumn(timeKpi));
-  return {
-    groupBy,
-    groupLabel,
-    kpiNames: occKpi ? [timeKpi, occKpi] : [timeKpi],
-    columns,
-  };
-}
-
-export const LOSS_TREE_LEVELS = [
-  lossLevel(
-    "sub_section",
-    "Discipline / Loss Type",
-    "LostTime_LossType",
-    "Occurrences_LossType",
-  ),
-  lossLevel("machine", "Machine", "LostTime_Loss_m", null),
-  lossLevel(
-    "remarks",
-    "Failure",
-    "LostTime_Loss_Failure",
-    "Occurrences_Loss_Failure",
   ),
 ];
 

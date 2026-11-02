@@ -20,6 +20,7 @@ import {
   engineeringScopePredicate,
   excludeUnmappedPredicate,
   hasValuePredicate,
+  nonZeroPredicate,
   DATE_YYYYMMDD,
   isoToYyyymmdd,
 } from "../normalize.js";
@@ -179,6 +180,7 @@ export function kpiChildrenQuery({
   subSection,
   productType,
   includeUnmapped = false,
+  nonZero = false,
 }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
@@ -186,6 +188,10 @@ export function kpiChildrenQuery({
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
+    // Gold publishes Breakdown_Pct_m_Failure for every machine × failure pair,
+    // ~75% of them 0 (pairs that never broke down) — 30k rows a month. A
+    // caller that discards zero rows anyway asks for them not to be sent.
+    (nonZero ? `AND ${nonZeroPredicate()} ` : "") +
     // Every drill table and every chart is fed from here, so this one line
     // is what keeps the 'Unmapped' bucket off all of them — except the
     // Breakdown and MTBF/MTTR plot drills, which show it in grey.

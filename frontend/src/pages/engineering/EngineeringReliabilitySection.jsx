@@ -1,6 +1,6 @@
 /**
- * Engineering "Reliability" tab (spec 16/17): the 5-card grid (Breakdown,
- * MTBF, MTTR, Zero Breakdown, Top Machine Breakdowns), each expanding a
+ * Engineering "Reliability" tab (spec 16/17): the 6-card grid (Breakdown,
+ * MTBF, MTTR, Zero Breakdown, Top Machine Breakdowns, Machines Affected), each expanding a
  * drill panel inline below the grid when clicked.
  */
 import { useEffect, useState } from "react";
@@ -62,6 +62,7 @@ function EngineeringReliabilitySection({ period }) {
         values={result.values}
         period={period}
         includeTopMachines={true}
+        includeMachinesAffected={true}
       />
     </div>
   );

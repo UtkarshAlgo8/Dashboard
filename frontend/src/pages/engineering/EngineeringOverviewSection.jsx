@@ -1,19 +1,14 @@
 /* eslint-disable */
 /**
- * Engineering "Overview" tab (spec 16/17): the Loss Tree (pie + 4-level
- * drill) above the same 4 summary cards used by the Reliability tab
+ * Engineering "Overview" tab (spec 16/17): the Loss Tree pie (no drill)
+ * above the same 4 summary cards used by the Reliability tab
  * (Breakdown, MTBF, MTTR, Zero Breakdown — NOT Top Machine Breakdowns).
  */
 import { useEffect, useState } from "react";
 import { getEngineeringLossTree } from "@/api/engineering.js";
 import { getReliabilitySummary } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import {
-  Card,
-  C,
-  ReliabilityDrillPanel,
-  LOSS_TREE_LEVELS,
-} from "./reliabilityShared.jsx";
+import { Card, C } from "./reliabilityShared.jsx";
 import { LossTreePie } from "./reliabilityPanels.jsx";
 import ReliabilityCardsGrid from "./ReliabilityCardsGrid.jsx";
 import { periodRequestParams } from "@/lib/engineeringPeriod.js";
@@ -23,7 +18,6 @@ function EngineeringOverviewSection({ period }) {
   const [lossRows, setLossRows] = useState([]);
   const [lossLoading, setLossLoading] = useState(true);
   const [lossError, setLossError] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null);
 
   const [summaryValues, setSummaryValues] = useState(null);
   const [summaryError, setSummaryError] = useState(null);
@@ -35,7 +29,6 @@ function EngineeringOverviewSection({ period }) {
     let cancelled = false;
     setLossLoading(true);
     setLossError(null);
-    setSelectedCategory(null);
     getEngineeringLossTree(periodRequestParams(period))
       .then(
         (res) =>
@@ -68,26 +61,7 @@ function EngineeringOverviewSection({ period }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Card accent={C.rd}>
-        <LossTreePie
-          rows={lossRows}
-          loading={lossLoading}
-          error={lossError}
-          onSlice={setSelectedCategory}
-        />
-        {selectedCategory && (
-          <div style={{ marginTop: 12 }}>
-            <ReliabilityDrillPanel
-              levels={LOSS_TREE_LEVELS}
-              date={date}
-              granularity={granularity}
-              range={period.kind === "range" ? { from, to } : null}
-              agg="sum"
-              rootLabel="Loss Tree"
-              initialFilters={{ productType: selectedCategory }}
-              initialLabel={selectedCategory}
-            />
-          </div>
-        )}
+        <LossTreePie rows={lossRows} loading={lossLoading} error={lossError} />
       </Card>
 
       {summaryError && (

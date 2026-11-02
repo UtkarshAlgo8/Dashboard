@@ -3,12 +3,14 @@
  * Engineering Reliability drill panels that don't fit the generic recursive
  * `ReliabilityDrillPanel` shape (spec 16/17):
  *
- *   - LossTreePie: the Overview Loss Tree's L1 pie (Highcharts), click a
- *     slice to open the generic drill panel scoped to that category.
+ *   - LossTreePie: the Overview Loss Tree's L1 pie (Highcharts). Slices are
+ *     not clickable — there is no drill-down below the five categories.
  *   - ZeroBreakdownPanel: section tiles + a per-machine table. Two DAY-grain
  *     KPIs with their own latest dates (resolved via /latest-date), not a
  *     recursive drill.
  *   - TopMachineBreakdownsPanel: flat ranked table, no further drill.
+ *   - MachinesAffectedPanel: affected-of-total bars by category, then by
+ *     section (the last level).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import Highcharts from "highcharts";
@@ -25,8 +27,15 @@ import {
 } from "./topMachineBreakdowns.js";
 import { MACHINE_NAME_COLUMN } from "./machineName.js";
 import {
+  lossTreeSlices,
+  lostMinutesTotal,
+  scheduledPctTotal,
+} from "./lossTreeSlices.js";
+import { UNMAPPED, machinesAffectedBars } from "./machinesAffected.js";
+import {
   C,
   DTable,
+  GRADE_COLOR,
   GradeChip,
   fmtMinHrs,
   fmtNum,
@@ -55,31 +64,35 @@ function InfoDot() {
   );
 }
 
+/** "3.57 % of scheduled time", or nothing when the period has no stored row. */
+const scheduledLabel = (pct) =>
+  pct == null ? "" : `${fmtNum(pct, 2)} % of scheduled time`;
+
 /**
  * Loss Tree L1 pie. `rows` is the loss-tree endpoint's response rows
- * (already summed server-side, one row per product_type category).
- * Renders its own header (title/subtitle/info-dot) plus a pie-and-legend
- * layout so the card matches the design reference exactly.
+ * (one row per product_type category: summed lost minutes plus the stored
+ * LostTime_Pct_LossCategory). Slice size = share of downtime; each slice's
+ * % of scheduled time is shown as read from Gold.
  */
-export function LossTreePie({ rows, loading, error, onSlice }) {
+export function LossTreePie({ rows, loading, error }) {
   const data = useMemo(
     () =>
-      (rows || []).map((r, i) => ({
-        name: r.product_type,
-        y: r.LostTime_LossCategory ?? 0,
+      lossTreeSlices(rows).map((s, i) => ({
+        ...s,
+        y: s.minutes,
         color: PIE_COLORS[i % PIE_COLORS.length],
       })),
     [rows],
   );
-  const total = useMemo(
-    () => data.reduce((sum, d) => sum + (d.y || 0), 0),
-    [data],
-  );
+  const total = lostMinutesTotal(data);
+  const scheduledTotal = scheduledPctTotal(data);
   const pieRef = useRef(null);
   const exportRows = data.map((d) => ({
     Category: d.name,
-    "Lost Time (min)": d.y,
-    "Share (%)": total ? Number(((d.y / total) * 100).toFixed(1)) : null,
+    "Lost Time (min)": d.minutes,
+    "Share of downtime (%)":
+      d.sharePct == null ? null : Number(d.sharePct.toFixed(1)),
+    "% of scheduled time": d.scheduledPct,
   }));
 
   const options = useMemo(
@@ -89,13 +102,23 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
       credits: { enabled: false },
       accessibility: { enabled: false },
       tooltip: {
-        pointFormat: "<b>{point.y:,.0f} min</b> ({point.percentage:.1f}%)",
+        headerFormat: "",
+        formatter: function () {
+          const p = this.point;
+          const parts = [
+            `<b>${p.name}</b>`,
+            `${fmtNum(p.minutes)} min`,
+            `${fmtNum(p.sharePct, 1)} % of downtime`,
+          ];
+          if (p.scheduledPct != null)
+            parts.push(scheduledLabel(p.scheduledPct));
+          return parts.join(" · ");
+        },
       },
       plotOptions: {
         pie: {
-          allowPointSelect: true,
-          cursor: "pointer",
           borderWidth: 0,
+          states: { inactive: { opacity: 1 } },
           dataLabels: {
             enabled: true,
             format: "{point.percentage:.1f}%",
@@ -105,13 +128,6 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
               fontWeight: "700",
               color: "#fff",
               textOutline: "none",
-            },
-          },
-          point: {
-            events: {
-              click: function () {
-                onSlice && onSlice(this.name);
-              },
             },
           },
         },
@@ -155,7 +171,6 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
           {data.map((d, i) => (
             <div
               key={d.name}
-              onClick={() => onSlice && onSlice(d.name)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -163,7 +178,6 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
                 padding: "11px 2px",
                 borderBottom:
                   i < data.length - 1 ? "1px solid " + C.bd : "none",
-                cursor: "pointer",
               }}
             >
               <div
@@ -189,10 +203,16 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>
-                  {fmtNum(total ? (d.y / total) * 100 : 0, 1)}%
+                  {fmtNum(d.sharePct, 1)}%
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.mu }}>
+                    {" "}
+                    of downtime
+                  </span>
                 </div>
                 <div style={{ fontSize: 12, color: C.mu }}>
-                  {fmtNum(d.y)} min
+                  {fmtNum(d.minutes)} min
+                  {d.scheduledPct != null &&
+                    ` · ${scheduledLabel(d.scheduledPct)}`}
                 </div>
               </div>
             </div>
@@ -221,12 +241,17 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
             letterSpacing: ".4px",
           }}
         >
-          Overall Breakdown — Lost Time by Category
+          Lost Time by Category
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <CardDownloadButton
             cardRef={pieRef}
-            headers={["Category", "Lost Time (min)", "Share (%)"]}
+            headers={[
+              "Category",
+              "Lost Time (min)",
+              "Share of downtime (%)",
+              "% of scheduled time",
+            ]}
             rows={exportRows}
             filename="engineering-loss-tree"
             sx={{ width: 26, height: 26, borderRadius: 1 }}
@@ -245,9 +270,13 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
             maxWidth: 640,
           }}
         >
-          Total lost time {fmtNum(total)} min. One taxonomy shared with
-          Production, so Engineering downtime and Production availability loss
-          reconcile. Click a slice to drill into it.
+          <span style={{ fontWeight: 700, color: C.tx }}>
+            Total lost: {fmtNum(total)} min
+            {scheduledTotal != null && ` · ${scheduledLabel(scheduledTotal)}`}
+          </span>
+          . Slice size is each category's share of downtime. One taxonomy shared
+          with Production, so Engineering downtime and Production availability
+          loss reconcile.
         </div>
       )}
       {(loading || error || !rows || rows.length === 0) && (
@@ -588,5 +617,256 @@ export function TopMachineBreakdownsPanel({
       emptyMessage="No breakdowns recorded in this period."
       downloadName="engineering-top-machine-breakdowns"
     />
+  );
+}
+
+const GRADE_BAR_KEYS = {
+  dim: "status",
+  totalKpi: "TotalMachines_Grade",
+  affectedKpi: "BreakdownMachines_Grade",
+};
+const SECTION_BAR_KEYS = {
+  dim: "section",
+  totalKpi: "TotalMachines_Grade_Section",
+  affectedKpi: "BreakdownMachines_Grade_Section",
+};
+
+/**
+ * Machines Affected, by category: TotalMachines_Grade joined with
+ * BreakdownMachines_Grade on status, Unmapped included. Machine counts are
+ * distinct per period and never add across days, so a custom range (no
+ * published row) is `unavailable` rather than summed.
+ */
+export function useMachinesAffectedGrades(period, enabled) {
+  const unavailable = period.kind === "range";
+  const requestKey = `${period.date}|${period.granularity}`;
+  const [result, setResult] = useState({ key: null, rows: [], error: null });
+
+  useEffect(() => {
+    if (!enabled || unavailable) return;
+    let cancelled = false;
+    getReliabilityKpiChildren({
+      kpiNames: [GRADE_BAR_KEYS.totalKpi, GRADE_BAR_KEYS.affectedKpi],
+      date: period.date,
+      granularity: period.granularity,
+      groupBy: GRADE_BAR_KEYS.dim,
+      includeUnmapped: true,
+    })
+      .then(
+        (res) =>
+          !cancelled &&
+          setResult({
+            key: requestKey,
+            rows: Array.isArray(res?.rows) ? res.rows : [],
+            error: null,
+          }),
+      )
+      .catch(
+        (error) =>
+          !cancelled && setResult({ key: requestKey, rows: [], error }),
+      );
+    return () => {
+      cancelled = true;
+    };
+    // The period object is re-created per render; requestKey is its identity.
+  }, [requestKey, enabled, unavailable]);
+
+  if (unavailable) {
+    return { rows: [], error: null, loading: false, unavailable: true };
+  }
+  return result.key === requestKey
+    ? { rows: result.rows, error: result.error, loading: false }
+    : { rows: [], error: null, loading: true };
+}
+
+/** "affected of total" progress bar, used on the card and in the panel. */
+export function AffectedBar({ affected, total, color, height = 8 }) {
+  const pct = total ? Math.min(100, (affected / total) * 100) : 0;
+  return (
+    <div
+      style={{
+        height,
+        borderRadius: height / 2,
+        background: C.bd,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          width: `${pct}%`,
+          height: "100%",
+          background: color,
+          borderRadius: height / 2,
+        }}
+      />
+    </div>
+  );
+}
+
+function AffectedBarRow({ bar, color, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "140px 1fr 110px",
+        alignItems: "center",
+        gap: 14,
+        padding: "8px 4px",
+        cursor: onClick ? "pointer" : "default",
+        borderRadius: 6,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: bar.label === UNMAPPED ? C.mu : C.tx,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        {bar.label}
+        {onClick && <span style={{ color: C.mu, fontSize: 10 }}>▸</span>}
+      </div>
+      <AffectedBar affected={bar.affected} total={bar.total} color={color} />
+      <div style={{ fontSize: 12.5, color: C.md, textAlign: "right" }}>
+        <b style={{ color: C.tx }}>{fmtNum(bar.affected)}</b> of{" "}
+        {fmtNum(bar.total)}
+      </div>
+    </div>
+  );
+}
+
+/** Section bars for one category — the last level, not clickable. */
+function MachinesAffectedSections({ grade, period }) {
+  const requestKey = `${grade}|${period.date}|${period.granularity}`;
+  const [result, setResult] = useState({ key: null, rows: [], error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    getReliabilityKpiChildren({
+      kpiNames: [SECTION_BAR_KEYS.totalKpi, SECTION_BAR_KEYS.affectedKpi],
+      date: period.date,
+      granularity: period.granularity,
+      groupBy: SECTION_BAR_KEYS.dim,
+      status: grade,
+      includeUnmapped: true,
+    })
+      .then(
+        (res) =>
+          !cancelled &&
+          setResult({
+            key: requestKey,
+            rows: Array.isArray(res?.rows) ? res.rows : [],
+            error: null,
+          }),
+      )
+      .catch(
+        (error) =>
+          !cancelled && setResult({ key: requestKey, rows: [], error }),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey]);
+
+  if (result.key !== requestKey) return <JKLoader message="Loading sections" />;
+  if (result.error) {
+    return (
+      <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
+        Section fetch failed: {result.error.message}
+      </div>
+    );
+  }
+  const bars = machinesAffectedBars(result.rows, SECTION_BAR_KEYS);
+  const color = GRADE_COLOR[grade] || C.mu;
+  if (bars.length === 0) {
+    return (
+      <div style={{ padding: 14, color: C.mu, fontSize: 13 }}>
+        No machines ran in {grade} this period.
+      </div>
+    );
+  }
+  return bars.map((b) => (
+    <AffectedBarRow key={b.label} bar={b} color={color} />
+  ));
+}
+
+/**
+ * Machines Affected drill: bars by category (click one) → bars by section.
+ * Affected = BreakdownMachines_*, total = TotalMachines_*, both for the
+ * same single period.
+ */
+export function MachinesAffectedPanel({
+  gradeRows,
+  loading,
+  error,
+  unavailable,
+  period,
+}) {
+  const [grade, setGrade] = useState(null);
+
+  if (unavailable) {
+    return (
+      <div style={{ padding: 14, color: C.mu, fontSize: 13 }}>
+        Machine counts are published per day or month and cannot be added across
+        days. Pick a single day or month to see them.
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: 14, color: C.rd, fontSize: 13 }}>
+        Machines Affected fetch failed: {error.message}
+      </div>
+    );
+  }
+  if (loading) return <JKLoader message="Loading" />;
+
+  const crumb = (label, onClick) => (
+    <span
+      onClick={onClick}
+      style={{
+        cursor: onClick ? "pointer" : "default",
+        color: onClick ? C.bl : C.tx,
+        fontWeight: 700,
+      }}
+    >
+      {label}
+    </span>
+  );
+
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, marginBottom: 8 }}>
+        {crumb("Machine Category", grade ? () => setGrade(null) : null)}
+        {grade && (
+          <>
+            <span style={{ color: C.mu }}> → </span>
+            {crumb(grade, null)}
+          </>
+        )}
+      </div>
+      {grade ? (
+        <MachinesAffectedSections grade={grade} period={period} />
+      ) : (
+        machinesAffectedBars(gradeRows, GRADE_BAR_KEYS).map((b) => (
+          <AffectedBarRow
+            key={b.label}
+            bar={b}
+            color={GRADE_COLOR[b.label] || C.mu}
+            onClick={() => setGrade(b.label)}
+          />
+        ))
+      )}
+      <div style={{ fontSize: 11, color: C.mu, marginTop: 10 }}>
+        Machines that ran in the period (produced anything or logged any delay),
+        including those with no breakdown. Unmapped machines are not in the
+        asset map — do not compare with Zero Breakdown, which counts mapped
+        machines only.
+      </div>
+    </div>
   );
 }
