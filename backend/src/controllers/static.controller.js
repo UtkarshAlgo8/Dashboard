@@ -240,13 +240,26 @@ function resolveLandingWindow(timeRange) {
   const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(today.getUTCDate()).padStart(2, "0");
   const todayKey = `${yyyy}${mm}${dd}`;
-  const monthStart = `${yyyy}01`;
-  const yearStart = `${yyyy}01`;
+  const monthStart = `${yyyy}${mm}01`;
+  const yearStart = `${yyyy}0101`;
+  const norm = (iso) => {
+    if (!iso) return "";
+    // ISO yyyy-mm-dd → yyyymmdd
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso.replaceAll("-", "");
+    // DD-MM-YYYY → yyyymmdd
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(iso);
+    return m ? `${m[3]}${m[2]}${m[1]}` : "";
+  };
 
   if (!timeRange || !timeRange.range || timeRange.range === "today") {
     return { from: todayKey, to: todayKey };
   }
   if (timeRange.range === "month") {
+    // A month picked from the dropdown arrives with its own from/to; the
+    // Month pill sends none and means the current month.
+    if (timeRange.from && timeRange.to) {
+      return { from: norm(timeRange.from), to: norm(timeRange.to) };
+    }
     return { from: monthStart, to: todayKey };
   }
   if (timeRange.range === "year") {
@@ -257,14 +270,6 @@ function resolveLandingWindow(timeRange) {
     timeRange.from &&
     timeRange.to
   ) {
-    const norm = (iso) => {
-      if (!iso) return "";
-      // ISO yyyy-mm-dd → yyyymmdd
-      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso.replaceAll("-", "");
-      // DD-MM-YYYY → yyyymmdd
-      const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(iso);
-      return m ? `${m[3]}${m[2]}${m[1]}` : "";
-    };
     return { from: norm(timeRange.from), to: norm(timeRange.to) };
   }
   return { from: todayKey, to: todayKey };
