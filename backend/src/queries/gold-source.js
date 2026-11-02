@@ -11,6 +11,9 @@
  *   - `config.upstream.dailyFreshDays` (default 2) is the cutoff: dates
  *     >= today - dailyFreshDays read from the daily table; older dates
  *     read from the base table.
+ *   - MONTH snapshots always read the base table, even when their first-of-
+ *     month date falls inside the fresh window. Mixed-grain reads (including
+ *     materializer pulls) keep MONTH rows on the base side of the split.
  *   - Only plants with a daily counterpart configured (Banmore) ever read
  *     the daily table. A plant with none (Chennai) is a no-op passthrough.
  *
@@ -96,16 +99,23 @@ function windowClamp(fromKey, toKey) {
  * @param {string} input.plantId
  * @param {string|null} [input.fromKey] YYYYMMDD digit string, or null (unbounded)
  * @param {string|null} [input.toKey]   YYYYMMDD digit string, or null (unbounded)
+ * @param {string|null} [input.granularity] canonical grain; null reads all grains
  * @returns {string} a table name, or a parenthesized UNION ALL subquery —
  *   either way, a string that can be substituted wherever a table name is
  *   used in SQL.
  */
-export function goldSource({ plantId, fromKey = null, toKey = null } = {}) {
+export function goldSource({
+  plantId,
+  fromKey = null,
+  toKey = null,
+  granularity = null,
+} = {}) {
   return resolveGoldSource({
     baseTable: plantSqlTable(plantId),
     dailyTable: plantDailySqlTable(plantId),
     fromKey,
     toKey,
+    granularity,
   });
 }
 
@@ -120,6 +130,7 @@ export function goldSource({ plantId, fromKey = null, toKey = null } = {}) {
  * @param {string|null} input.dailyTable rolling table, or null/"" to disable
  * @param {string|null} [input.fromKey] YYYYMMDD digit string, or null (unbounded)
  * @param {string|null} [input.toKey]   YYYYMMDD digit string, or null (unbounded)
+ * @param {string|null} [input.granularity] canonical grain; null reads all grains
  * @returns {string} a table name, or a parenthesized UNION ALL subquery.
  */
 export function resolveGoldSource({
@@ -127,7 +138,15 @@ export function resolveGoldSource({
   dailyTable,
   fromKey = null,
   toKey = null,
+  granularity = null,
 }) {
+  const grain = granularity == null
+    ? null
+    : String(granularity).trim().toUpperCase();
+  // Monthly snapshots are published only in the base table. Their date is
+  // the month anchor, not an indication that they belong in the rolling table.
+  if (grain === "MONTH") return baseTable;
+
   // No daily counterpart (Chennai, or Quality with the daily table
   // disabled) — always the base table.
   if (!dailyTable || dailyTable === baseTable) return baseTable;
@@ -138,21 +157,27 @@ export function resolveGoldSource({
   // is zero regression risk for every caller that never reads recent dates.
   if (toKey != null && toKey < cutoff) return baseTable;
 
-  // Entirely fresh: every date in [fromKey, toKey] is in the daily table's
-  // reliable window.
-  if (fromKey != null && fromKey >= cutoff) return dailyTable;
+  // A single non-monthly grain entirely inside the reliable daily window.
+  // Mixed-grain reads still need the base branch for MONTH snapshots.
+  if (grain != null && fromKey != null && fromKey >= cutoff) return dailyTable;
 
-  // Straddles the cutoff, or unbounded on one/both sides. Split into two
-  // disjoint, adjacent branches (< cutoff / >= cutoff) so gold.gold's
-  // incomplete-but-present recent rows are never double-counted against
-  // gold_daily's rows for the same dates.
+  // Mixed-grain readers (notably the materializer) must also retain fresh
+  // MONTH snapshots from base. The branches remain disjoint: daily contributes
+  // only non-monthly fresh rows, so duplicates cannot cross the split.
+  const monthly = "UPPER(TRIM(granularity)) = 'MONTH'";
+  const basePredicate = grain == null
+    ? `(${DATE_YYYYMMDD} < '${cutoff}' OR ${monthly})`
+    : `${DATE_YYYYMMDD} < '${cutoff}'`;
+  const dailyPredicate = grain == null
+    ? `${DATE_YYYYMMDD} >= '${cutoff}' AND (granularity IS NULL OR NOT (${monthly}))`
+    : `${DATE_YYYYMMDD} >= '${cutoff}'`;
   const cols = GOLD_ALL_COLUMNS.join(", ");
   const historicalBranch =
     `SELECT ${cols} FROM ${baseTable} ` +
-    `WHERE ${DATE_YYYYMMDD} < '${cutoff}'${windowClamp(fromKey, toKey)}`;
+    `WHERE ${basePredicate}${windowClamp(fromKey, toKey)}`;
   const freshBranch =
     `SELECT ${cols} FROM ${dailyTable} ` +
-    `WHERE ${DATE_YYYYMMDD} >= '${cutoff}'${windowClamp(fromKey, toKey)}`;
+    `WHERE ${dailyPredicate}${windowClamp(fromKey, toKey)}`;
 
   return `(${historicalBranch} UNION ALL ${freshBranch})`;
 }

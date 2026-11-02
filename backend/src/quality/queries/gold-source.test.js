@@ -57,7 +57,7 @@ test("a historical date reads the base table only", () => {
 
 test("a fresh date reads the daily table only", () => {
   withQualityConfig(DB, () => {
-    const sql = qualitySourceForDate(isoFromCutoff(1));
+    const sql = qualitySourceForDate(isoFromCutoff(1), "DAY");
     assert.equal(sql, "gold.gold_daily");
   });
 });
@@ -81,7 +81,7 @@ test("a range straddling the cutoff unions both tables on disjoint, adjacent pre
 test("the cutoff date itself is fresh, not historical", () => {
   withQualityConfig(DB, () => {
     const at = isoFromCutoff(0);
-    assert.equal(qualitySourceForDate(at), "gold.gold_daily");
+    assert.equal(qualitySourceForDate(at, "DAY"), "gold.gold_daily");
     assert.equal(qualitySourceForDate(isoFromCutoff(-1)), "gold.gold");
   });
 });
