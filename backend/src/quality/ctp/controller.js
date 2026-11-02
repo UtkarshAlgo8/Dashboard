@@ -1,5 +1,5 @@
 /**
- * CTP Quality — Process tab controllers.
+ * CTP Quality — Process and Product tab controllers.
  *
  * validate → build SQL → runQuery (Athena, gold.ctp_gold) → transform, with
  * the shared Redis cache in front. Cache keys use the resolved period start,
@@ -14,9 +14,9 @@ import {
   periodStart,
   resolvePeriod,
 } from "./periods.js";
-import { processSummaryQuery, processTrendQuery } from "./queries.js";
-import { CARD_KPIS, TYRE_TYPE_TO_GOLD } from "./registry.js";
-import { toProcessSummary, toProcessTrend } from "./transform.js";
+import { tabSummaryQuery, trendQuery } from "./queries.js";
+import { TREND_KPIS, TYRE_TYPE_TO_GOLD } from "./registry.js";
+import { TAB_TRANSFORMS, toProcessTrend } from "./transform.js";
 
 function badRequest(res, message) {
   res.status(400).json({ error: { code: "VALIDATION_ERROR", message } });
@@ -30,56 +30,64 @@ const ttlFor = (open) =>
   open ? CACHE_TTL.CTP_QUALITY_CURRENT : CACHE_TTL.CTP_QUALITY_PAST;
 
 /**
- * GET /quality/ctp/process/summary
+ * GET /quality/ctp/{process|product}/summary
  *   ?tyre=All|PCR|TBR &granularity=DAY|MONTH|YEAR &date=yyyy-mm-dd
  *   [&shift=All|A|B|C]   (shift applies to DAY only)
+ *
+ * @param {"process"|"product"} tab
  */
-export async function getProcessSummary(req, res, next) {
-  try {
-    const { tyre = "All" } = req.query;
-    const goldTyreType = goldTyreTypeOf(tyre);
-    if (!goldTyreType) return badRequest(res, `Unsupported tyre: ${tyre}`);
-    const period = resolvePeriod(req.query);
-    if (period.error) return badRequest(res, period.error);
+export function getTabSummary(tab) {
+  const transform = TAB_TRANSFORMS[tab];
+  return async function getSummary(req, res, next) {
+    try {
+      const { tyre = "All" } = req.query;
+      const goldTyreType = goldTyreTypeOf(tyre);
+      if (!goldTyreType) return badRequest(res, `Unsupported tyre: ${tyre}`);
+      const period = resolvePeriod(req.query);
+      if (period.error) return badRequest(res, period.error);
 
-    const key = buildCacheKey("/quality/ctp/process/summary", {
-      tyre,
-      granularity: period.goldGranularity,
-      anchor: period.anchor,
-    });
-    const body = await cached(
-      key,
-      async () =>
-        toProcessSummary(
-          await runQuery(processSummaryQuery({ goldTyreType, ...period })),
-          period,
-        ),
-      ttlFor(isCurrentPeriod(period.anchor, period.grain)),
-    );
-
-    res.json({
-      context: {
+      // Bump `version` when the payload shape changes, so old entries are
+      // not served (2: dated MQV / deviation rows).
+      const key = buildCacheKey(`/quality/ctp/${tab}/summary`, {
         tyre,
-        granularity: period.grain,
-        goldGranularity: period.goldGranularity,
+        granularity: period.goldGranularity,
         anchor: period.anchor,
-      },
-      ...body,
-    });
-  } catch (err) {
-    next(err);
-  }
+        version: 2,
+      });
+      const body = await cached(
+        key,
+        async () =>
+          transform(
+            await runQuery(tabSummaryQuery(tab, { goldTyreType, ...period })),
+            period,
+          ),
+        ttlFor(isCurrentPeriod(period.anchor, period.grain)),
+      );
+
+      res.json({
+        context: {
+          tyre,
+          granularity: period.grain,
+          goldGranularity: period.goldGranularity,
+          anchor: period.anchor,
+        },
+        ...body,
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
 }
 
 /**
- * GET /quality/ctp/process/trend
+ * GET /quality/ctp/{process|product}/trend
  *   ?kpi=<card kpi_name> &tyre= &granularity= [&shift=]
  *   &date_from=yyyy-mm-dd &date_to=yyyy-mm-dd
  */
-export async function getProcessTrend(req, res, next) {
+export async function getTrend(req, res, next) {
   try {
     const { kpi, tyre = "All", date_from: from, date_to: to } = req.query;
-    if (!Object.values(CARD_KPIS).includes(kpi)) {
+    if (!TREND_KPIS.has(kpi)) {
       return badRequest(res, `Unsupported kpi: ${kpi}`);
     }
     const goldTyreType = goldTyreTypeOf(tyre);
@@ -91,7 +99,7 @@ export async function getProcessTrend(req, res, next) {
     if (period.error) return badRequest(res, period.error);
     const rangeFrom = periodStart(from, period.grain);
 
-    const key = buildCacheKey("/quality/ctp/process/trend", {
+    const key = buildCacheKey("/quality/ctp/trend", {
       kpi,
       tyre,
       granularity: period.goldGranularity,
@@ -103,7 +111,7 @@ export async function getProcessTrend(req, res, next) {
       async () =>
         toProcessTrend(
           await runQuery(
-            processTrendQuery({
+            trendQuery({
               kpiName: kpi,
               goldTyreType,
               goldGranularity: period.goldGranularity,

@@ -2,7 +2,8 @@
  * Quality KPI card shared by the BTP and CTP Quality pages. The caller passes
  * the display value in `kpi.v`; any tyre-type adjustment happens upstream.
  * `kpi.ragInfo` (lines of text) adds an info icon that explains the card's
- * colour rule.
+ * colour rule. `kpi.subLine` ({ text, alert? }) adds a second value line
+ * under the main value, red when `alert` is set.
  */
 import {
   Box,
@@ -214,6 +215,24 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
               }}
             >
               {caption}
+            </Typography>
+          )}
+          {hasValue && kpi.subLine?.text && (
+            <Typography
+              title={kpi.subLine.text}
+              sx={{
+                mt: 0.25,
+                fontSize: 11.5,
+                fontWeight: 600,
+                color: kpi.subLine.alert
+                  ? theme.custom.status.red
+                  : "text.secondary",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {kpi.subLine.text}
             </Typography>
           )}
         </Stack>

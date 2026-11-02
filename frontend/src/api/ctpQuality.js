@@ -1,10 +1,10 @@
 import client from "./client.js";
 
 /**
- * CTP Quality (Process Audit) API client. The backend caches each answer in
- * Redis (10 min for open periods, 1 h for closed ones); this module keeps a
- * 2-minute browser copy so tab switches and back-clicks cost nothing, and
- * collapses concurrent identical requests into one.
+ * CTP Quality (Process + Product tabs) API client. The backend caches each
+ * answer in Redis (10 min for open periods, 1 h for closed ones); this
+ * module keeps a 2-minute browser copy so tab switches and back-clicks cost
+ * nothing, and collapses concurrent identical requests into one.
  */
 
 const CTP_QUALITY_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -37,12 +37,13 @@ function cachedGet(path, params) {
 }
 
 /**
- * Landing cards, sparklines and every drill table for one period.
+ * Landing cards, sparklines and every drill table of one tab for one period.
+ * @param {"process"|"product"} tab
  * @param {{ tyre: "All"|"PCR"|"TBR", granularity: "DAY"|"MONTH"|"YEAR",
  *   date: string, shift?: "All"|"A"|"B"|"C" }} params
  */
-export function getCtpProcessSummary({ tyre, granularity, date, shift }) {
-  return cachedGet("/quality/ctp/process/summary", {
+export function getCtpQualitySummary(tab, { tyre, granularity, date, shift }) {
+  return cachedGet(`/quality/ctp/${tab}/summary`, {
     tyre,
     granularity,
     date,
@@ -53,16 +54,13 @@ export function getCtpProcessSummary({ tyre, granularity, date, shift }) {
 /**
  * One landing KPI over a date range (trend pop-up). Same argument shape as
  * the BTP `getProcessKpiHistory`, so the shared trend panel can call it.
+ * @param {"process"|"product"} tab
  */
-export function getCtpProcessTrend({
-  kpiName,
-  dateFrom,
-  dateTo,
-  shift,
-  granularity,
-  tyre,
-}) {
-  return cachedGet("/quality/ctp/process/trend", {
+export function getCtpQualityTrend(
+  tab,
+  { kpiName, dateFrom, dateTo, shift, granularity, tyre },
+) {
+  return cachedGet(`/quality/ctp/${tab}/trend`, {
     kpi: kpiName,
     tyre,
     granularity,

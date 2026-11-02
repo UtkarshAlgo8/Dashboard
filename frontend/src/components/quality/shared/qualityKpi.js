@@ -1,6 +1,9 @@
 /** Value, tier and icon helpers for the Quality KPI card. */
+import AssignmentLateOutlinedIcon from "@mui/icons-material/AssignmentLateOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
+import ScaleOutlinedIcon from "@mui/icons-material/ScaleOutlined";
 import { C } from "./theme.js";
 
 export const numericKpiValue = (value) => {
@@ -25,4 +28,8 @@ export const QUALITY_KPI_ICON = {
   audit: FactCheckOutlinedIcon,
   mqv: ReportProblemOutlinedIcon,
   ndev: ReportProblemOutlinedIcon,
+  capa: AssignmentLateOutlinedIcon,
+  eg: ReportProblemOutlinedIcon,
+  sc: DeleteOutlineIcon,
+  gtw: ScaleOutlinedIcon,
 };

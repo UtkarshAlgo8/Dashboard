@@ -1,12 +1,15 @@
 /**
- * CTP Quality — Process tab routes. Mounted at /api/v1/quality/ctp/process
- * by app.js.
+ * CTP Quality routes. app.js mounts `router` at /api/v1/quality/ctp/process
+ * and `productRouter` at /api/v1/quality/ctp/product.
  */
 import { Router } from "express";
 
-import { getProcessSummary, getProcessTrend } from "./controller.js";
+import { getTabSummary, getTrend } from "./controller.js";
 
 export const router = Router();
+router.get("/summary", getTabSummary("process"));
+router.get("/trend", getTrend);
 
-router.get("/summary", getProcessSummary);
-router.get("/trend", getProcessTrend);
+export const productRouter = Router();
+productRouter.get("/summary", getTabSummary("product"));
+productRouter.get("/trend", getTrend);
