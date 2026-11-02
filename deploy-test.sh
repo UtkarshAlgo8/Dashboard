@@ -10,11 +10,13 @@
 #   backend  8814  jk-dashboard-backend       8815  jk-dashboard-backend-test
 #   frontend 3014  jk-dashboard-frontend      3015  jk-dashboard-frontend-test
 #   cache    in-process memory                redis (jk-redis on jk-net)
+#   rca pdf  —                                jk-rca-pdf on jk-net (no host port)
 #
 # Usage (on the VM, from the repo root):
 #   ./deploy-test.sh            # deploy both
 #   ./deploy-test.sh backend    # backend only
 #   ./deploy-test.sh frontend   # frontend only
+#   ./deploy-test.sh rca        # RCA PDF service only
 #
 set -euo pipefail
 
@@ -33,6 +35,7 @@ FE_NAME="jk-dashboard-frontend-test"
 NETWORK="jk-net"
 REDIS_NAME="jk-redis"
 REDIS_CONF="/opt/jk-redis/redis.conf"
+RCA_NAME="jk-rca-pdf"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="${1:-all}"
@@ -98,6 +101,25 @@ EOF
   echo "$REDIS_NAME started"
 }
 
+# -------------------------------------------------------------- rca pdf ----
+# RCA Why-Why export service (rca-service/): fills the official UTQM.00.SQ-156
+# sheet and prints it to PDF with LibreOffice. Only the backend calls it, over
+# $NETWORK, so it publishes no host port. Rebuilt every deploy; the LibreOffice
+# layer is cached, so an unchanged service rebuilds in seconds.
+deploy_rca() {
+  log "RCA PDF service (${RCA_NAME})"
+  cd "$REPO_ROOT/rca-service"
+  recreate "$RCA_NAME"
+  sudo docker build -t "$RCA_NAME" .
+  sudo docker run -d \
+    --name "$RCA_NAME" \
+    --network "$NETWORK" \
+    --restart always \
+    --memory 1g \
+    "$RCA_NAME" >/dev/null
+  echo "started"
+}
+
 # -------------------------------------------------------------- backend ----
 deploy_backend() {
   log "Backend -> :${BE_PORT} (${BE_NAME})"
@@ -112,6 +134,7 @@ deploy_backend() {
     -e PORT="$BE_PORT" \
     -e CACHE_DRIVER=redis \
     -e REDIS_URL="redis://${REDIS_NAME}:6379" \
+    -e RCA_SERVICE_URL="http://${RCA_NAME}:8010" \
     -e FRONTEND_ORIGIN="http://${VM_HOST}:${FE_PORT}" \
     -e RESET_PASSWORD_REDIRECT_URL="http://${VM_HOST}:${FE_PORT}/reset-password" \
     "$BE_NAME" >/dev/null
@@ -148,13 +171,15 @@ ensure_redis
 case "$TARGET" in
   backend)  deploy_backend ;;
   frontend) deploy_frontend ;;
-  all)      deploy_backend; deploy_frontend ;;
-  *) echo "unknown target: $TARGET (expected: all | backend | frontend)" >&2; exit 1 ;;
+  rca)      deploy_rca ;;
+  all)      deploy_rca; deploy_backend; deploy_frontend ;;
+  *) echo "unknown target: $TARGET (expected: all | backend | frontend | rca)" >&2; exit 1 ;;
 esac
 
 log "Done"
 echo "  frontend : http://${VM_HOST}:${FE_PORT}"
 echo "  backend  : http://${VM_HOST}:${BE_PORT}/api/v1/health"
+echo "  rca pdf  : sudo docker exec ${BE_NAME} node -e \"fetch('http://${RCA_NAME}:8010/api/rca/health').then(r => r.text()).then(console.log)\""
 echo
 echo "Verify Redis is actually in use (not silently degraded to memory):"
 echo "  curl -s localhost:${BE_PORT}/api/v1/admin/cache/stats | jq '.data | {driver, degraded, entries, memoryBytes}'"

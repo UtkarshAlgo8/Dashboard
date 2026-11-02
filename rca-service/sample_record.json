@@ -1,0 +1,10 @@
+{"header":{"date":"2026-09-13","shift":"B","dept":"EE&I","machineArea":"Banbury 4","mpcp":""},
+"physicalPhenomena":"Hydraulic motor not running; HPP tripped repeatedly during B and C shift causing Banbury 4 stoppage of about 3.5 hours and loss of 42 batches. Oil temperature observed at 68 °C against normal 45–50 °C.",
+"immediateCorrection":"Tripped has been reset, also checked all 3 phase current with load and no load and external fan provided for HPP motor cooling",
+"impacts":["Productivity","Cost","Delivery"],
+"cft":{"prod":"Vinay Shetty","mech":"Ramdev Bhati","eei":"Bharat Gupta","othersName":"Anil Verma","othersFunction":"Utility"},
+"chains":[{"whys":["Hydraulic motor not running","Hydraulic pump tripped on overload","Pump motor current increased due to inadequate cooling","Cooling was not effective due to blower issue","Blower belt slipping and impeller choked with dust","Blower not covered in weekly PM checklist","PM checklist made before blower was added to the HPP"],
+"rootCause":"HPP blower not part of the PM checklist, so belt slip and choking went undetected",
+"correctiveAction":"Tripped reset, all 3 phase currents checked with load and no load, external fan provided for HPP motor cooling. Blower belt replaced and impeller cleaned.",
+"preventiveAction":"Compensating valve to be replaced; HPP blower added to weekly PM checklist with belt tension and impeller cleaning points.","completionDate":"2026-09-20"}],
+"countermeasureModes":["Kaizen","OPL","Other"],"countermeasureOther":"Poka-yoke","rootCauseStatus":"Repeated","documentsStandardized":{"document":"HPP weekly PM checklist","refNo":"EEI/BB4/PM-012"}}
