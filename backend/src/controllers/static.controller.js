@@ -428,27 +428,36 @@ export async function getPlants(req, res, next) {
       from: typeof req.query.from === "string" ? req.query.from : "",
       to: typeof req.query.to === "string" ? req.query.to : "",
     };
+    // `part` lets the landing page load the card counts and the slower
+    // OEE / OTIF / Yield snapshot as two requests: "counts" leaves the
+    // snapshot fields null, "snapshot" leaves the counts at their defaults.
+    // No `part` returns both, as before.
+    const part = req.query.part;
     const enabled = PLANTS.filter((p) => p.enabled);
     // Independent — the static and the time-aware KPIs load side by side.
     const [staticSummaries, timeAwareSummaries] = await Promise.all([
-      cached(
-        buildCacheKey("/plants:landing-live-kpis", {}),
-        () => perPlantSummaries(enabled, landingKpisForPlant),
-        CACHE_TTL.STATIC_LOOKUPS,
-      ),
+      part === "counts"
+        ? {}
+        : cached(
+            buildCacheKey("/plants:landing-live-kpis", {}),
+            () => perPlantSummaries(enabled, landingKpisForPlant),
+            CACHE_TTL.STATIC_LOOKUPS,
+          ),
       // Time-aware KPIs are cached per plant AND per resolved window, with
       // the short KPI TTL. A failed plant is not cached (cached() never
       // stores a rejection), so the next request retries it.
-      perPlantSummaries(enabled, (plantId) =>
-        cached(
-          buildCacheKey("/plants:landing-time-aware-kpis", {
-            plantId,
-            ...resolveLandingWindow(timeRange),
-          }),
-          () => landingTimeAwareKpisForPlant(plantId, timeRange),
-          CACHE_TTL.KPI_ROWS,
-        ),
-      ),
+      part === "snapshot"
+        ? {}
+        : perPlantSummaries(enabled, (plantId) =>
+            cached(
+              buildCacheKey("/plants:landing-time-aware-kpis", {
+                plantId,
+                ...resolveLandingWindow(timeRange),
+              }),
+              () => landingTimeAwareKpisForPlant(plantId, timeRange),
+              CACHE_TTL.KPI_ROWS,
+            ),
+          ),
     ]);
     const data = PLANTS.map((p) => ({
       ...p,

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box } from "@mui/material";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
@@ -60,12 +60,27 @@ function LandingPage() {
     setTo(window.to);
   }, []);
 
-  const { data: rawPlants, isLoading: plantsLoading } = usePolledQuery(
-    () => getPlants({ range, from, to }),
+  // The cards need only the counts, which are quick; OEE / OTIF / Yield
+  // (map hover and plant modal) are slower full-history reads. Two requests,
+  // so the cards do not wait for the snapshot. Both keep their last result
+  // for a while, so coming back to this page shows it at once and refreshes
+  // in the background.
+  const { data: countRows, isLoading: countsLoading } = usePolledQuery(
+    () => getPlants({ range, from, to, part: "counts" }),
     {
       // Re-fetch when the time range changes; otherwise no polling.
       interval: 0,
       deps: [range, from, to],
+      cacheKey: `plants:counts:${range}:${from}:${to}`,
+      staleTime: 2 * 60 * 1000,
+    },
+  );
+  const { data: snapshotRows } = usePolledQuery(
+    () => getPlants({ part: "snapshot" }),
+    {
+      interval: 0,
+      cacheKey: "plants:snapshot",
+      staleTime: 30 * 60 * 1000,
     },
   );
   const { data: functions } = usePolledQuery(getFunctions, { interval: 0 });
@@ -89,16 +104,29 @@ function LandingPage() {
     }, 120);
   }, []);
 
-  // Enrich raw plants with coordinates and display metadata
-  const plants = Array.isArray(rawPlants)
-    ? rawPlants.map((p) => ({
+  // Enrich raw plants with coordinates and display metadata. The counts
+  // response is the base; OEE / OTIF / Yield come from the snapshot. Memoised
+  // so the map does not rebuild its markers on every hover.
+  const plants = useMemo(() => {
+    const rawPlants = countRows ?? snapshotRows;
+    if (!Array.isArray(rawPlants)) return null;
+    const snapshotById = new Map(
+      (Array.isArray(snapshotRows) ? snapshotRows : []).map((p) => [p.id, p]),
+    );
+    return rawPlants.map((p) => {
+      const snapshot = snapshotById.get(p.id);
+      return {
         ...p,
+        oee: snapshot?.oee ?? null,
+        otif: snapshot?.otif ?? null,
+        yield: snapshot?.yield ?? null,
         lat: p.lat ?? PLANT_GEO[p.id]?.lat,
         lng: p.lng ?? PLANT_GEO[p.id]?.lng,
         badgeSide: p.badgeSide ?? PLANT_GEO[p.id]?.badgeSide ?? "right",
         code: p.code ?? PLANT_GEO[p.id]?.code ?? p.id.toUpperCase(),
-      }))
-    : null;
+      };
+    });
+  }, [countRows, snapshotRows]);
 
   const modalPlant =
     modalPlantId && Array.isArray(plants)
@@ -162,57 +190,55 @@ function LandingPage() {
           overflow: "hidden",
         }}
       >
-        {plantsLoading ||
-        !Array.isArray(plants) ||
-        !Array.isArray(functions) ? (
-          <LandingSkeleton />
-        ) : (
-          <>
-            {/* Map Container (fills viewport / left section) */}
-            <Box
-              sx={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 0,
-              }}
-            >
-              <SatelliteIndiaMap
-                plants={plants}
-                activePlantIds={PHASE_1_ACTIVE_PLANTS}
-                hov={hov}
-                sel={modalPlantId}
-                onHover={handleHover}
-                onLeave={handleLeave}
-                onSelect={openModalFor}
-              />
-            </Box>
+        <>
+          {/* Map Container (fills viewport / left section) */}
+          <Box
+            sx={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 0,
+            }}
+          >
+            <SatelliteIndiaMap
+              plants={plants ?? []}
+              activePlantIds={PHASE_1_ACTIVE_PLANTS}
+              hov={hov}
+              sel={modalPlantId}
+              onHover={handleHover}
+              onLeave={handleLeave}
+              onSelect={openModalFor}
+            />
+          </Box>
 
-            {/* Right Side Floating Panel for Plant Cards */}
-            <Box
-              sx={{
-                position: "relative",
-                zIndex: 1,
-                marginLeft: "auto",
-                width: { xs: "100%", md: "560px", lg: "640px", xl: "720px" },
-                height: "100%",
-                overflowY: "auto",
-                p: { xs: 2, md: 2.5, lg: 3 },
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
-                background: "transparent",
-                "&::-webkit-scrollbar": {
-                  width: "6px",
-                },
-                "&::-webkit-scrollbar-thumb": {
-                  backgroundColor: "rgba(255,255,255,0.2)",
-                  borderRadius: "4px",
-                },
-              }}
-            >
+          {/* Right Side Floating Panel for Plant Cards */}
+          <Box
+            sx={{
+              position: "relative",
+              zIndex: 1,
+              marginLeft: "auto",
+              width: { xs: "100%", md: "560px", lg: "640px", xl: "720px" },
+              height: "100%",
+              overflowY: "auto",
+              p: { xs: 2, md: 2.5, lg: 3 },
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              background: "transparent",
+              "&::-webkit-scrollbar": {
+                width: "6px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                backgroundColor: "rgba(255,255,255,0.2)",
+                borderRadius: "4px",
+              },
+            }}
+          >
+            {countsLoading || !Array.isArray(countRows) ? (
+              <LandingSkeleton />
+            ) : (
               <PlantCardList
                 plants={plants}
                 activePlantIds={PHASE_1_ACTIVE_PLANTS}
@@ -222,9 +248,9 @@ function LandingPage() {
                 onLeave={handleLeave}
                 onSelect={openModalFor}
               />
-            </Box>
-          </>
-        )}
+            )}
+          </Box>
+        </>
       </Box>
 
       <PlantFunctionModal

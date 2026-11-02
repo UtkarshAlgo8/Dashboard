@@ -34,7 +34,10 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== "false";
  * pass `{ range, from, to }` to scope Cured Tire Production and
  * Scrap Percentage. OEE / OTIF / Yield stay current-snapshot.
  *
- * @param {{ range?: string, from?: string, to?: string }} [timeRange]
+ * `part` asks for half of the KPIs: "counts" (Cured Tire Production,
+ * Scrap) or "snapshot" (OEE / OTIF / Yield). Omit it for both.
+ *
+ * @param {{ range?: string, from?: string, to?: string, part?: "counts" | "snapshot" }} [timeRange]
  * @returns {Promise<typeof PLANTS>}
  */
 export function getPlants(timeRange = {}) {
@@ -47,6 +50,7 @@ export function getPlants(timeRange = {}) {
     range: rangeVal,
     from: timeRange.from ?? "",
     to: timeRange.to ?? "",
+    part: timeRange.part,
   });
   return client.get(`/plants${q}`);
 }
