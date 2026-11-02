@@ -71,8 +71,8 @@ const scheduledLabel = (pct) =>
 /**
  * Loss Tree L1 pie. `rows` is the loss-tree endpoint's response rows
  * (one row per product_type category: summed lost minutes plus the stored
- * LostTime_Pct_LossCategory). Slice size = share of downtime; each slice's
- * % of scheduled time is shown as read from Gold.
+ * LostTime_Pct_LossCategory). Slice size = share of downtime; each slice is
+ * labelled with its % of scheduled time as read from Gold.
  */
 export function LossTreePie({ rows, loading, error }) {
   const data = useMemo(
@@ -97,7 +97,7 @@ export function LossTreePie({ rows, loading, error }) {
 
   const options = useMemo(
     () => ({
-      chart: { type: "pie", height: 260, backgroundColor: "transparent" },
+      chart: { type: "pie", height: 280, backgroundColor: "transparent" },
       title: { text: null },
       credits: { enabled: false },
       accessibility: { enabled: false },
@@ -121,12 +121,21 @@ export function LossTreePie({ rows, loading, error }) {
           states: { inactive: { opacity: 1 } },
           dataLabels: {
             enabled: true,
-            format: "{point.percentage:.1f}%",
-            distance: -32,
+            // Both figures, outside the slice so small slices fit them: the
+            // stored % of scheduled time, then the share of downtime. A custom
+            // range has no stored row, so it shows the share alone.
+            formatter: function () {
+              const p = this.point;
+              const share = `${fmtNum(p.sharePct, 1)}% of downtime`;
+              if (p.scheduledPct == null) return share;
+              return `<b>${fmtNum(p.scheduledPct, 2)}%</b> of scheduled<br/>${share}`;
+            },
+            distance: 14,
+            connectorWidth: 1,
             style: {
-              fontSize: "12px",
-              fontWeight: "700",
-              color: "#fff",
+              fontSize: "11px",
+              fontWeight: "400",
+              color: C.tx,
               textOutline: "none",
             },
           },
@@ -164,7 +173,7 @@ export function LossTreePie({ rows, loading, error }) {
           flexWrap: "wrap",
         }}
       >
-        <div style={{ flex: "0 0 260px", width: 260 }}>
+        <div style={{ flex: "0 1 420px", width: 420, maxWidth: "100%" }}>
           <HighchartsReact highcharts={Highcharts} options={options} />
         </div>
         <div style={{ flex: "1 1 320px", minWidth: 260 }}>
@@ -274,7 +283,8 @@ export function LossTreePie({ rows, loading, error }) {
             Total lost: {fmtNum(total)} min
             {scheduledTotal != null && ` · ${scheduledLabel(scheduledTotal)}`}
           </span>
-          . Slice size is each category's share of downtime. One taxonomy shared
+          . Slice size is each category's share of downtime; its label gives the
+          % of scheduled time and the share of downtime. One taxonomy shared
           with Production, so Engineering downtime and Production availability
           loss reconcile.
         </div>
