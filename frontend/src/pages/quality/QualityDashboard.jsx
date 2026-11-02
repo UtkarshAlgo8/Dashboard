@@ -10732,11 +10732,11 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
   );
   const tiles = [
     ["Processes", baseCounts.total, C.tx, "All"],
-    ["Out of specification", baseCounts.critical, C.rd, "Critical"],
-    ["Marginal", baseCounts.major, C.ac, "Major"],
-    ["Not capable", baseCounts.warning, C.am, "Warning"],
-    ["Capable", baseCounts.healthy, C.gn, "Healthy"],
-    ["Insufficient", baseCounts.insufficient, C.mu, "Insufficient Data"],
+    ["Critical", baseCounts.critical, C.rd, "Critical"],
+    ["Major", baseCounts.major, C.ac, "Major"],
+    ["Warning", baseCounts.warning, C.am, "Warning"],
+    ["Healthy", baseCounts.healthy, C.gn, "Healthy"],
+    ["Insufficient Data", baseCounts.insufficient, C.mu, "Insufficient Data"],
   ];
   const sel = {
     padding: "5px 10px",
