@@ -26,6 +26,7 @@ import { router as snapshotRouter } from "./routes/snapshot.js";
 import { router as adminRouter } from "./routes/admin.js";
 import { router as chatRouter } from "./routes/chat.js";
 import { router as mailRouter } from "./routes/mail.js";
+import { router as rcaRouter } from "./routes/rca.js";
 import { router as qualityProcessRouter } from "./quality/routes/process.routes.js";
 import { router as qualityProductRouter } from "./quality/routes/product.routes.js";
 import { router as qualitySpcRouter } from "./quality/routes/spc.routes.js";
@@ -118,6 +119,9 @@ app.use("/api/v1/chat", gate, chatRouter);
 // Report mail sent from the dashboard navbar.
 //   /api/v1/mail/scheduler-adherence/{preview,send}
 app.use("/api/v1/mail", gate, mailRouter);
+// RCA Why-Why form → PDF of the official sheet (proxies the RCA export service).
+//   /api/v1/rca/pdf
+app.use("/api/v1/rca", gate, rcaRouter);
 
 // Quality Dashboard (additive; separate data family — FRD §A).
 //   /api/v1/quality/process/{kpi-value,kpi-value-batch,kpi-children,kpi-history}
