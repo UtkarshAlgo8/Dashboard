@@ -1028,7 +1028,7 @@ function buildScopeWhere({
     where.push(`${key} = ${escapeLiteral(value)}`);
   }
 
-  return { where, timeScope };
+  return { where, timeScope, granularity: granPredicate };
 }
 
 /**
@@ -1096,7 +1096,7 @@ export function buildFetchQuery({
     const gran = normalizeGranularity(context.granularity);
     scopeContext.granularity = gran?.startsWith("SHIFT") ? gran : "DAY";
   }
-  const { where, timeScope } = buildScopeWhere({
+  const { where, timeScope, granularity } = buildScopeWhere({
     plantId,
     context: scopeContext,
     parentFilters,
@@ -1125,7 +1125,7 @@ export function buildFetchQuery({
     return (
       `SELECT ${dateCol} AS date, section, granularity, ` +
       "'Total_Downtime' AS kpi_name, 'min' AS unit_of_measurement, " +
-      `SUM(actual_value) AS actual_value FROM ${goldSource({ plantId, fromKey, toKey })} ` +
+      `SUM(actual_value) AS actual_value FROM ${goldSource({ plantId, fromKey, toKey, granularity })} ` +
       `WHERE ${where.join(" AND ")} GROUP BY ${dateCol}, section, granularity ` +
       `ORDER BY date DESC, section, granularity ${page}`
     )
@@ -1224,7 +1224,7 @@ export function buildFetchQuery({
     Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 5000;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
 
-  const table = goldSource({ plantId, fromKey, toKey });
+  const table = goldSource({ plantId, fromKey, toKey, granularity });
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   // Athena (Trino) has no `* EXCLUDE(...)` syntax and serializes a DATE
   // column to an ISO yyyy-mm-dd string natively, so a plain `SELECT *`
@@ -1378,7 +1378,7 @@ export function buildDrillAggregateQuery({
     }
   }
 
-  const { where, timeScope } = buildScopeWhere({
+  const { where, timeScope, granularity } = buildScopeWhere({
     plantId,
     context,
     parentFilters,
@@ -1400,7 +1400,7 @@ export function buildDrillAggregateQuery({
   const lim = Number.isInteger(limit) && limit > 0 && limit <= 10000 ? limit : 100;
   const off = Number.isInteger(offset) && offset > 0 ? offset : 0;
   const { fromKey, toKey } = timeScopeWindow(timeScope);
-  const table = goldSource({ plantId, fromKey, toKey });
+  const table = goldSource({ plantId, fromKey, toKey, granularity });
   const dateCol =
     config.upstream.engine === "databricks"
       ? "CAST(date AS VARCHAR) AS date"
@@ -1527,7 +1527,7 @@ export function buildProductOptionsQuery({
   const productType = cleanedColumn("product_type");
   const unit = cleanedColumn("unit_of_measurement");
   const { fromKey, toKey } = timeScopeWindow(timeScope);
-  const table = goldSource({ plantId, fromKey, toKey });
+  const table = goldSource({ plantId, fromKey, toKey, granularity: gran });
 
   return (
     `SELECT DISTINCT ${productType} AS product_type, ${unit} AS unit_of_measurement ` +

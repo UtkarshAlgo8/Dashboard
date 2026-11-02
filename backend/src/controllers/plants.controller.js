@@ -251,7 +251,7 @@ export async function getSectionOee(req, res, next) {
   // Scope to the selected window so the rings track the chosen month.
   const { fromKey, toKey } = windowKeys(from, to);
   const windowSql = dateWindowSql(fromKey, toKey);
-  const table = goldSource({ plantId: req.plantId, fromKey, toKey });
+  const table = goldSource({ plantId: req.plantId, fromKey, toKey, granularity: gran });
   try {
     const data = await cached(key, async () => {
       // changes.md §2: the left section column shows each section's OVERALL

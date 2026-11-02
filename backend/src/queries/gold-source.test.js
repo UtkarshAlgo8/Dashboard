@@ -86,7 +86,7 @@ test("a window entirely before the cutoff returns the bare base table, unchanged
 test("a window entirely at/after the cutoff returns the bare daily table", () => {
   const fromKey = CUTOFF;
   const toKey = shiftKey(CUTOFF, 2);
-  const sql = goldSource({ plantId: "banmore", fromKey, toKey });
+  const sql = goldSource({ plantId: "banmore", fromKey, toKey, granularity: "DAY" });
   assert.equal(sql, "gold.gold_daily");
 });
 

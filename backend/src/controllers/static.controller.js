@@ -212,7 +212,7 @@ async function landingOeePForPlant(plantId) {
              ROW_NUMBER() OVER (
                ORDER BY ${DATE_YYYYMMDD} DESC
              ) AS rn
-      FROM ${goldSource({ plantId, fromKey: null, toKey: null })}
+      FROM ${goldSource({ plantId, fromKey: null, toKey: null, granularity: GRAN_MONTH })}
       WHERE ${plantDepartmentPredicate(plantId)}
         AND kpi_name = ${escapeLiteral("OEE_p")}
         AND ${emptyColumnPredicate("machine")}

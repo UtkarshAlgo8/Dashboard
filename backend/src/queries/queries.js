@@ -55,8 +55,8 @@ import { DATE_YYYYMMDD } from "./sql-date.js";
  * query's own filters already narrowed it to (YYYYMMDD digit strings, or
  * null for an open bound). See queries/gold-source.js.
  */
-const TABLE = (plantId = "banmore", fromKey = null, toKey = null) =>
-  goldSource({ plantId, fromKey, toKey });
+const TABLE = (plantId = "banmore", fromKey = null, toKey = null, granularity = null) =>
+  goldSource({ plantId, fromKey, toKey, granularity });
 
 /**
  * Format-robust YYYYMMDD ordering key over the real `date` DATE column
@@ -278,7 +278,7 @@ export function kpiGridQuery({
                PARTITION BY kpi_name
                ORDER BY ${DATE_KEY} DESC
              ) AS rn
-      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
+      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to), normGran(granularity))}
       ${innerWhere}
         AND ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
@@ -311,7 +311,7 @@ export function oeeDrillQuery({ plant, section, granularity, tyreType, from, to 
                PARTITION BY machine, drill_down_attribute
                ORDER BY ${DATE_KEY} DESC
              ) AS rn
-      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
+      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to), normGran(granularity))}
       ${innerWhere}
         AND NOT ${emptyColumnPredicate("machine")}
         ${dateRangeFilter(from, to)}
@@ -353,7 +353,7 @@ export function productionDrillQuery({
                PARTITION BY kpi_name, machine, itemcode, product_type
                ORDER BY ${dateExpr} DESC
              ) AS rn
-      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
+      FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to), normGran(granularity))}
       ${innerWhere}
         AND kpi_name IN (
           ${escapeLiteral("Production_m")},
@@ -381,7 +381,7 @@ export function downtimeDrillQuery({
 }) {
   return `
     SELECT machine, drill_down_attribute, actual_value, CAST(date AS VARCHAR) AS date
-    FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
+    FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to), normGran(granularity))}
     ${whereClause({
       plant,
       department: "Production",
@@ -407,7 +407,7 @@ export function planComplianceDrillQuery({
 }) {
   return `
     SELECT machine, itemcode, drill_down_attribute, actual_value
-    FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to))}
+    FROM ${TABLE(plant, dateKeyOrNull(from), dateKeyOrNull(to), normGran(granularity))}
     ${whereClause({
       plant,
       department: "Production",
@@ -549,7 +549,7 @@ export function trendQuery({
                  PARTITION BY SUBSTRING(${dateExpr}, 1, 6)
                  ORDER BY ${dateExpr} DESC
                ) AS rn
-        FROM ${TABLE(plant, null, null)}
+        FROM ${TABLE(plant, null, null, GRAN_MONTH)}
         ${pinnedFilters(GRAN_MONTH)}
       ) ranked
       WHERE rn = 1
@@ -592,7 +592,7 @@ export function trendQuery({
 
   return `
     SELECT CAST(date AS VARCHAR) AS date, actual_value
-    FROM ${TABLE(plant, dateKeyOrNull(effectiveFrom), dateKeyOrNull(effectiveTo))}
+    FROM ${TABLE(plant, dateKeyOrNull(effectiveFrom), dateKeyOrNull(effectiveTo), normGran(granularity) ?? GRAN_DAY)}
     ${baseFilters}
       ${dateRangeFilter(effectiveFrom, effectiveTo)}
     ORDER BY ${DATE_KEY}

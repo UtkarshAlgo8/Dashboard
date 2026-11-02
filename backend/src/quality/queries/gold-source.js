@@ -67,7 +67,7 @@ export function qualitySource({
       ? null
       : config.quality.dailySqlTable;
 
-  return resolveGoldSource({ baseTable, dailyTable, fromKey, toKey });
+  return resolveGoldSource({ baseTable, dailyTable, fromKey, toKey, granularity });
 }
 
 /** qualitySource() for a single ISO date (the common single-day read). */
