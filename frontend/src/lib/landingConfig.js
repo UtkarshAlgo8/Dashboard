@@ -9,6 +9,17 @@ export const PHASE_1_NAVIGABLE_FUNCTIONS = new Set([
 
 export const PRODUCTION_ONLY_FUNCTIONS = new Set(["prod"]);
 
+// The function list the plant modal shows (disabled, with a loading note)
+// until GET /functions answers. Same ids and names as FUNCTIONS in
+// backend/src/controllers/static.controller.js.
+export const DEFAULT_FUNCTIONS = [
+  { id: "ph", name: "Plant Head" },
+  { id: "prod", name: "Production" },
+  { id: "qual", name: "Quality" },
+  { id: "tech", name: "Technical" },
+  { id: "eng", name: "Engineering" },
+];
+
 // Chennai (CTP): Production plus the Quality Process tab.
 export const CTP_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
 

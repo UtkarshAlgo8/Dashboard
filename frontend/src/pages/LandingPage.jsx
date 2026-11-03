@@ -13,6 +13,7 @@ import {
   PHASE_1_ACTIVE_PLANTS,
   PHASE_1_NAVIGABLE_FUNCTIONS,
   PLANT_GEO,
+  DEFAULT_FUNCTIONS,
   PRODUCTION_ONLY_FUNCTIONS,
   CTP_NAVIGABLE_FUNCTIONS,
 } from "@/lib/landingConfig.js";
@@ -83,7 +84,18 @@ function LandingPage() {
       staleTime: 30 * 60 * 1000,
     },
   );
-  const { data: functions } = usePolledQuery(getFunctions, { interval: 0 });
+  const {
+    data: functions,
+    error: functionsError,
+    refetch: refetchFunctions,
+  } = usePolledQuery(getFunctions, { interval: 0 });
+  // Until /functions answers, the modal lists every function disabled with a
+  // loading note, so it is never empty and never looks finally disabled.
+  const functionsStatus = Array.isArray(functions)
+    ? "ready"
+    : functionsError
+      ? "error"
+      : "loading";
 
   const [hov, setHov] = useState(null);
   const [modalPlantId, setModalPlantId] = useState(null);
@@ -257,7 +269,9 @@ function LandingPage() {
         open={Boolean(modalPlant)}
         onClose={() => setModalPlantId(null)}
         plant={modalPlant}
-        functions={Array.isArray(functions) ? functions : []}
+        functions={Array.isArray(functions) ? functions : DEFAULT_FUNCTIONS}
+        functionsStatus={functionsStatus}
+        onRetryFunctions={refetchFunctions}
         activeFunctionIds={modalActiveIds}
         onSelectFunction={handleFunctionSelect}
       />

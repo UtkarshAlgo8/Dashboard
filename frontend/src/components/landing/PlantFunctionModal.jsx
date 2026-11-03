@@ -1,5 +1,7 @@
 import {
   Box,
+  Button,
+  CircularProgress,
   Dialog,
   DialogContent,
   Divider,
@@ -32,6 +34,9 @@ const FUNCTION_ICONS = {
  *
  * Designed with a solid, high-contrast, clean aesthetic matching
  * ModernPlantCard (no glassy blurs or translucent see-through masks).
+ *
+ * `functionsStatus` is "loading" or "error" while the function list has not
+ * arrived: every row is then disabled and the header says why.
  */
 function PlantFunctionModal({
   open,
@@ -40,6 +45,8 @@ function PlantFunctionModal({
   functions = [],
   activeFunctionIds = new Set(),
   onSelectFunction,
+  functionsStatus = "ready",
+  onRetryFunctions,
 }) {
   if (!plant) return null;
 
@@ -186,27 +193,61 @@ function PlantFunctionModal({
         </Box>
 
         {/* Function Selection List Header */}
-        <Typography
-          sx={{
-            fontSize: 11,
-            color: "#64748B",
-            textTransform: "uppercase",
-            letterSpacing: 0.8,
-            fontWeight: 700,
-            mb: 1.25,
-          }}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mb: 1.25, minHeight: 22 }}
         >
-          Select Function
-        </Typography>
+          <Typography
+            sx={{
+              fontSize: 11,
+              color: "#64748B",
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+              fontWeight: 700,
+            }}
+          >
+            Select Function
+          </Typography>
+          {functionsStatus === "loading" && (
+            <Stack direction="row" alignItems="center" spacing={0.75}>
+              <CircularProgress size={12} thickness={5} />
+              <Typography
+                sx={{ fontSize: 11, color: "#2563EB", fontWeight: 600 }}
+              >
+                Loading functions…
+              </Typography>
+            </Stack>
+          )}
+          {functionsStatus === "error" && (
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <Typography
+                sx={{ fontSize: 11, color: "#DC2626", fontWeight: 600 }}
+              >
+                Couldn't load functions
+              </Typography>
+              <Button
+                size="small"
+                onClick={onRetryFunctions}
+                sx={{ minWidth: 0, fontSize: 11, fontWeight: 700, py: 0 }}
+              >
+                Retry
+              </Button>
+            </Stack>
+          )}
+        </Stack>
 
         <Stack spacing={1}>
           {functions.map((fn) => {
-            const active = activeFunctionIds.has(fn.id);
+            const active =
+              functionsStatus === "ready" && activeFunctionIds.has(fn.id);
             return (
               <FunctionRow
                 key={fn.id}
                 fn={fn}
                 active={active}
+                pending={functionsStatus !== "ready"}
                 onClick={active ? () => onSelectFunction(fn) : undefined}
               />
             );
@@ -265,7 +306,7 @@ function KpiPill({ label, value }) {
   );
 }
 
-function FunctionRow({ fn, active, onClick }) {
+function FunctionRow({ fn, active, pending = false, onClick }) {
   const icon = FUNCTION_ICONS[fn.id] || (
     <span style={{ fontSize: 18 }}>{fn.icon || "⚙"}</span>
   );
@@ -323,7 +364,7 @@ function FunctionRow({ fn, active, onClick }) {
         >
           {fn.name}
         </Typography>
-        {!active && (
+        {!active && !pending && (
           <Typography sx={{ fontSize: 11, color: "#94A3B8", fontWeight: 500 }}>
             Under Phase 2
           </Typography>
@@ -332,7 +373,7 @@ function FunctionRow({ fn, active, onClick }) {
 
       {active ? (
         <ChevronRightRoundedIcon sx={{ color: "#2563EB", fontSize: 22 }} />
-      ) : (
+      ) : pending ? null : (
         <Box
           sx={{
             fontSize: 10,
