@@ -10977,8 +10977,7 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
       </div>
       {warnings.map((warning) => (
         <div key={warning} style={{ color: C.am, fontSize: 12 }}>
-          {warning}. Live measurements could not be verified; temporary Excel
-          data may be retained.
+          {warning}. Live measurements could not be verified.
         </div>
       ))}
       {from &&
@@ -10998,13 +10997,6 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
           date.
         </div>
       ) : null}
-      {baseWidgets.some((w) => w.source?.kind === "static_excel") && (
-        <div style={{ fontSize: 11.5, color: C.mu }}>
-          Temporary Excel cards use their published snapshot values (not range
-          averages) and all supporting readings. Global shift filtering does not
-          apply to these cards.
-        </div>
-      )}
       {!loading && widgets.length === 0 ? (
         <div
           style={{
@@ -11087,9 +11079,6 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
                     >
                       {w.machine + " · " + w.recipe}
                     </div>
-                    {w.source?.kind === "static_excel" && (
-                      <SpcExcelSource source={w.source} />
-                    )}
                   </div>
                   <StatusPill status={spcStatus(w.headline_status).pill} />
                 </div>
@@ -11451,14 +11440,7 @@ function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
   );
 }
 
-function SPCCapabilityTrendModal({
-  selection,
-  metric,
-  date,
-  shift,
-  source,
-  onClose,
-}) {
+function SPCCapabilityTrendModal({ selection, metric, date, shift, onClose }) {
   const initialTo = date || todayInIST();
   const [view, setView] = useState("daily");
   const [points, setPoints] = useState([]);
@@ -11677,15 +11659,6 @@ function SPCCapabilityTrendModal({
         </div>
 
         <div style={{ padding: "18px 24px 22px", overflowX: "auto" }}>
-          {source?.kind === "static_excel" && (
-            <>
-              <SpcExcelSource source={source} />
-              <Typography variant="caption">
-                Only one published capability snapshot is available; no daily
-                history is inferred.
-              </Typography>
-            </>
-          )}
           {loading ? (
             <QualityLoader minHeight={420} />
           ) : error ? (
@@ -11803,18 +11776,6 @@ function TrendSummary({ label, value, note, color }) {
   );
 }
 
-function SpcExcelSource({ source }) {
-  return (
-    <div style={{ color: C.mu, fontSize: 11, marginTop: 4 }}>
-      <b style={{ color: C.pp }}>Temporary Excel</b> · Snapshot{" "}
-      {source.snapshot_date} · All shifts
-      <div>
-        Readings {source.coverage?.from} — {source.coverage?.to}
-      </div>
-    </div>
-  );
-}
-
 function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
   const [detail, setDetail] = useState(null);
   const [trendMetric, setTrendMetric] = useState(null);
@@ -11904,7 +11865,6 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
               ? " · All shifts (shift filter not applied)"
               : ""}
           </div>
-          {isExcel && <SpcExcelSource source={detail.source} />}
         </div>
         <span style={{ marginLeft: "auto" }}>
           {loading ? (
@@ -11951,8 +11911,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
           {isExcel && (
             <Typography variant="caption" color="text.secondary">
               Deviation = actual − setpoint · LSL {_spcFmt(detail.x_chart?.lsl)}{" "}
-              · USL {_spcFmt(detail.x_chart?.usl)} · Published capability
-              snapshot, not recalculated.
+              · USL {_spcFmt(detail.x_chart?.usl)}
             </Typography>
           )}
           {detail?.insufficient ? (
@@ -11993,7 +11952,6 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
               metric={trendMetric}
               date={snapshotDate || date}
               shift={shift}
-              source={detail?.source}
               onClose={() => setTrendMetric(null)}
             />
           )}
@@ -12060,12 +12018,7 @@ function SpcAlertsModal({ selection, date, from, to, shift, onClose }) {
         ) : !detail ? (
           <QualityLoader minHeight={200} />
         ) : (
-          <>
-            {detail.source?.kind === "static_excel" && (
-              <SpcExcelSource source={detail.source} />
-            )}
-            <LiveSpcAlerts alerts={detail.alerts} />
-          </>
+          <LiveSpcAlerts alerts={detail.alerts} />
         )}
       </DialogContent>
     </Dialog>

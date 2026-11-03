@@ -113,7 +113,7 @@ export function deviationHistogram(values, { lsl, usl }, centre, sigma) {
     sigma_minus_3: sigma == null ? null : centre - 3 * sigma,
     sigma_plus_3: sigma == null ? null : centre + 3 * sigma,
     spec_limits_available: true,
-    spec_source: "Excel LSL / USL on deviation",
+    spec_source: "LSL / USL on deviation",
     tolerance_provenance: "documented",
     out_of_spec: {
       count: values.filter((v) => v < lsl || v > usl).length,
@@ -222,7 +222,7 @@ export function toIndividualDetail(combo, provenance) {
           ? null
           : "Nelson rules not evaluated: no positive within-run moving-range sigma.",
       limits_source:
-        "Excel LSL / USL (specification); Nelson zones use mean ± sigma",
+        "LSL / USL (specification); Nelson zones use mean ± sigma",
       zones:
         sigma > 0
           ? [1, 2, 3].flatMap((n) => [
