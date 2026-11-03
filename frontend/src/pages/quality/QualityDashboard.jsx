@@ -57,6 +57,7 @@ import { toDrillRows, toKpiGrid } from "@/lib/kpi-transformer.js";
 import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
+import { spcLinePath, spcChartGuides } from "@/lib/spcCharts.js";
 import {
   PAINT_WEIGHT_COLUMNS,
   PAINT_WEIGHT_DRILL_KPIS,
@@ -9969,8 +9970,13 @@ function LiveSpcMini({ chart }) {
     padB = 6;
   const pw = W - padL - padR,
     ph = H - padT - padB;
-  const lo = values.reduce((m, v) => (v < m ? v : m), chart.lcl ?? Infinity),
-    hi = values.reduce((m, v) => (v > m ? v : m), chart.ucl ?? -Infinity),
+  const guides = spcChartGuides(chart);
+  const linePoints = values.map((value, i) => ({
+    value,
+    segment: chart.segments?.[i],
+  }));
+  const lo = Math.min(...values, ...guides.map((g) => g.value)),
+    hi = Math.max(...values, ...guides.map((g) => g.value)),
     pad = (hi - lo) * 0.15 || 1;
   const X = (i) =>
     padL + (values.length <= 1 ? pw / 2 : i * (pw / (values.length - 1)));
@@ -10016,8 +10022,22 @@ function LiveSpcMini({ chart }) {
           opacity="0.7"
         />
       )}
-      <polyline
-        points={values.map((v, i) => X(i) + "," + Y(v)).join(" ")}
+      {guides
+        .filter((g) => g.kind === "spec")
+        .map((g) => (
+          <line
+            key={g.key}
+            x1={padL}
+            y1={Y(g.value)}
+            x2={W - padR}
+            y2={Y(g.value)}
+            stroke={C.rd}
+            strokeWidth="0.8"
+            strokeDasharray="3 2"
+          />
+        ))}
+      <path
+        d={spcLinePath(linePoints, X, Y)}
         fill="none"
         stroke={C.bl}
         strokeWidth="1.4"
@@ -10047,7 +10067,10 @@ function LiveSpcChart({ title, chart, accent }) {
   const points = Array.isArray(chart?.points) ? chart.points : [];
   const [hover, setHover] = useState(null);
   const scrollRef = useRef(null);
-  const plotPoints = points.filter((p) => typeof p.value === "number");
+  const plotPoints = points
+    .map((p, position) => ({ ...p, position }))
+    .filter((p) => Number.isFinite(p.value));
+  const guides = spcChartGuides(chart || {});
   const values = plotPoints.map((p) => p.value);
   useEffect(() => {
     const el = scrollRef.current;
@@ -10068,7 +10091,9 @@ function LiveSpcChart({ title, chart, accent }) {
         </div>
       </Card>
     );
-  const timeAxis = /\bX\b|X Chart|X Control/i.test(title || "");
+  const timeAxis =
+    chart.chart_method === "individuals_moving_range" ||
+    /\bX\b|X Chart|X Control/i.test(title || "");
   const POINT_GAP = 34,
     VIEW_W = 720,
     H = timeAxis ? 262 : 230,
@@ -10076,26 +10101,35 @@ function LiveSpcChart({ title, chart, accent }) {
     padR = 70,
     padT = 18,
     padB = timeAxis ? 60 : 28;
-  const W = Math.max(VIEW_W, padL + padR + (values.length - 1) * POINT_GAP);
+  const W = Math.max(VIEW_W, padL + padR + (points.length - 1) * POINT_GAP);
   const pw = W - padL - padR,
     ph = H - padT - padB;
   // reduce, not Math.min(...values): a whole-history chart can carry tens of
   // thousands of points, and spreading them as arguments can overflow.
-  const lo0 = values.reduce((m, v) => (v < m ? v : m), chart.lcl ?? Infinity),
-    hi0 = values.reduce((m, v) => (v > m ? v : m), chart.ucl ?? -Infinity),
+  const lo0 = guides.reduce(
+      (m, g) => Math.min(m, g.value),
+      values.reduce((m, v) => Math.min(m, v), Infinity),
+    ),
+    hi0 = guides.reduce(
+      (m, g) => Math.max(m, g.value),
+      values.reduce((m, v) => Math.max(m, v), -Infinity),
+    ),
     pad = (hi0 - lo0) * 0.14 || 1,
     lo = lo0 - pad,
     hi = hi0 + pad;
   const X = (i) =>
-    padL + (values.length <= 1 ? pw / 2 : i * (pw / (values.length - 1)));
+    padL + (points.length <= 1 ? pw / 2 : i * (pw / (points.length - 1)));
   const Y = (v) => padT + ph - ((v - lo) / (hi - lo)) * ph;
-  const hoverPoint = hover != null ? plotPoints[hover] : null;
+  const hoverPoint = hover != null && hover >= 0 ? plotPoints[hover] : null;
+  const hoverX = hoverPoint ? X(hoverPoint.position) : 0;
   const hoverRules = hoverPoint?.rules || [];
-  const hoverClass = spcPointClass(hoverRules);
+  const hoverClass = hoverPoint?.out_of_spec
+    ? { label: "Outside LSL / USL", color: C.rd }
+    : spcPointClass(hoverRules);
   const BOX_W = 224;
   const tx =
     hover != null
-      ? Math.min(Math.max(X(hover) - BOX_W / 2, padL), padL + pw - BOX_W)
+      ? Math.min(Math.max(hoverX - BOX_W / 2, padL), padL + pw - BOX_W)
       : 0;
   const ty = hoverPoint ? Math.max(Y(hoverPoint.value) - 82, padT + 4) : 0;
   return (
@@ -10144,15 +10178,39 @@ function LiveSpcChart({ title, chart, accent }) {
               strokeDasharray="6 3"
             />
           )}
-          <polyline
-            points={values.map((v, i) => X(i) + "," + Y(v)).join(" ")}
+          {guides
+            .filter((g) => g.kind === "spec" || g.kind === "zone")
+            .map((g) => (
+              <g key={g.key}>
+                <line
+                  x1={padL}
+                  y1={Y(g.value)}
+                  x2={padL + pw}
+                  y2={Y(g.value)}
+                  stroke={g.kind === "spec" ? C.rd : C.mu}
+                  strokeWidth={g.kind === "spec" ? 1.3 : 0.7}
+                  strokeDasharray={g.kind === "spec" ? "6 3" : "2 4"}
+                  opacity={g.kind === "spec" ? 1 : 0.5}
+                />
+                <text
+                  x={padL + pw + 5}
+                  y={Y(g.value) + 3}
+                  fontSize="9"
+                  fill={g.kind === "spec" ? C.rd : C.mu}
+                >
+                  {g.label + " " + _spcFmt(g.value)}
+                </text>
+              </g>
+            ))}
+          <path
+            d={spcLinePath(points, X, Y)}
             fill="none"
             stroke={C.bl}
             strokeWidth="2"
           />
           {plotPoints.map((p, i) => {
             const pc = spcPointClass(p.rules);
-            const flagged = Boolean(p.rules?.length);
+            const flagged = Boolean(p.rules?.length) || p.out_of_spec;
             // A whole-history chart can hold ~24k points; one circle each
             // froze the page. The line already passes through every point,
             // so past SPC_DENSE_POINTS only rule-flagged points get a marker.
@@ -10160,10 +10218,10 @@ function LiveSpcChart({ title, chart, accent }) {
             return (
               <circle
                 key={p.index}
-                cx={X(i)}
+                cx={X(p.position)}
                 cy={Y(p.value)}
                 r={flagged ? 4.6 : 3}
-                fill={flagged ? pc.color : C.bl}
+                fill={p.out_of_spec ? C.rd : flagged ? pc.color : C.bl}
                 stroke="#fff"
                 strokeWidth={flagged ? 1.3 : 0}
               />
@@ -10182,9 +10240,12 @@ function LiveSpcChart({ title, chart, accent }) {
               const box =
                 e.currentTarget.ownerSVGElement.getBoundingClientRect();
               const svgX = ((e.clientX - box.left) / box.width) * W;
-              const step = values.length <= 1 ? 1 : pw / (values.length - 1);
-              const i = Math.round((svgX - padL) / step);
-              setHover(Math.min(Math.max(i, 0), values.length - 1));
+              const step = points.length <= 1 ? 1 : pw / (points.length - 1);
+              const i = Math.min(
+                Math.max(Math.round((svgX - padL) / step), 0),
+                points.length - 1,
+              );
+              setHover(plotPoints.findIndex((p) => p.position === i));
             }}
           />
           {plotPoints.map((p, i) => {
@@ -10196,13 +10257,15 @@ function LiveSpcChart({ title, chart, accent }) {
             return (
               <text
                 key={"t" + p.index}
-                x={X(i)}
+                x={X(p.position)}
                 y={ly}
                 fontSize="9.5"
                 fontWeight={timeAxis ? "600" : "400"}
                 fill={C.tx}
                 textAnchor={timeAxis ? "end" : "middle"}
-                transform={timeAxis ? `rotate(35 ${X(i)} ${ly})` : undefined}
+                transform={
+                  timeAxis ? `rotate(35 ${X(p.position)} ${ly})` : undefined
+                }
               >
                 {label}
               </text>
@@ -10241,9 +10304,9 @@ function LiveSpcChart({ title, chart, accent }) {
           {hoverPoint && (
             <g pointerEvents="none">
               <line
-                x1={X(hover)}
+                x1={hoverX}
                 y1={padT}
-                x2={X(hover)}
+                x2={hoverX}
                 y2={padT + ph}
                 stroke={C.mu}
                 strokeWidth="0.8"
@@ -10281,7 +10344,15 @@ function LiveSpcChart({ title, chart, accent }) {
                 fill={hoverClass.color}
                 fontWeight="700"
               >
-                {hoverRules.length ? hoverClass.label : "No Nelson violation"}
+                {hoverPoint.out_of_spec
+                  ? "Outside LSL / USL"
+                  : hoverRules.length
+                    ? hoverClass.label
+                    : chart.value_basis === "moving_range_of_deviation"
+                      ? "Moving range (no Nelson rules)"
+                      : chart.nelson_evaluated === false
+                        ? "Nelson rules not evaluated"
+                        : "No Nelson violation"}
               </text>
               {hoverRules.length > 0 && (
                 <text x={tx + 9} y={ty + 63} fontSize="9.5" fill={C.md}>
@@ -10305,14 +10376,25 @@ function LiveSpcChart({ title, chart, accent }) {
           flexWrap: "wrap",
         }}
       >
-        <span>
-          {plotPoints.filter((p) => p.rules?.length).length} points with
-          Nelson-rule markers.
-        </span>
+        {chart.value_basis !== "moving_range_of_deviation" && (
+          <span>
+            {plotPoints.filter((p) => p.rules?.length).length} points with
+            Nelson-rule markers.
+          </span>
+        )}
         {timeAxis && <span>X-axis: sampling time</span>}
-        <span style={{ color: C.rd }}>R1 Out of Control</span>
-        <span style={{ color: C.am }}>R5/R6/R8 Warning</span>
-        <span style={{ color: C.bl }}>R2/R3/R4/R7 Run / Trend</span>
+        {chart.value_basis === "deviation" && (
+          <span>
+            Deviation = actual − setpoint · red points: outside LSL / USL
+          </span>
+        )}
+        {chart.value_basis !== "moving_range_of_deviation" && (
+          <>
+            <span style={{ color: C.rd }}>R1 Out of Control</span>
+            <span style={{ color: C.am }}>R5/R6/R8 Warning</span>
+            <span style={{ color: C.bl }}>R2/R3/R4/R7 Run / Trend</span>
+          </>
+        )}
       </div>
       {/* Where the limits came from. The dots are silver readings but the
           band judging them is a gold baseline, and the two can disagree —
@@ -10329,9 +10411,12 @@ function LiveSpcChart({ title, chart, accent }) {
         }}
       >
         {chart.limits_source && <span>Limits: {chart.limits_source}</span>}
-        {chart.subgroup_size != null && (
+        {chart.chart_method === "individuals_moving_range" ? (
+          <span>Individual readings · production runs separated</span>
+        ) : chart.subgroup_size != null ? (
           <span>Subgroup n = {chart.subgroup_size}</span>
-        )}
+        ) : null}
+        {chart.nelson_note && <span>{chart.nelson_note}</span>}
         {chart.sigma != null && <span>&sigma; {_spcFmt(chart.sigma)}</span>}
         {chart.baseline_date && (
           <span>
@@ -10356,10 +10441,14 @@ function LiveHistogram({ histogram }) {
   const bins = Array.isArray(histogram?.bins) ? histogram.bins : [];
   const [hoverBin, setHoverBin] = useState(null);
   if (!bins.length) return null;
-  const max = Math.max(...bins.map((b) => b.count || 0), 1);
   const curveX = Array.isArray(histogram?.curve?.x) ? histogram.curve.x : [];
   const curveY = Array.isArray(histogram?.curve?.y) ? histogram.curve.y : [];
   const curveMax = Math.max(...curveY, 0);
+  const max = Math.max(
+    ...bins.map((b) => b.count || 0),
+    histogram.value_basis === "deviation" ? curveMax : 0,
+    1,
+  );
   const refs = [
     { key: "lsl", label: "LSL", value: histogram.lsl, color: C.rd },
     { key: "target", label: "Target", value: histogram.target, color: C.pp },
@@ -10424,7 +10513,9 @@ function LiveHistogram({ histogram }) {
   const H = padT + ph + padB;
   const Y = (c) => padT + ph - (c / max) * ph;
   const YCurve = (v) =>
-    padT + ph - (curveMax > 0 ? (v / curveMax) * ph * 0.92 : 0);
+    histogram.value_basis === "deviation"
+      ? Y(v)
+      : padT + ph - (curveMax > 0 ? (v / curveMax) * ph * 0.92 : 0);
   const curvePoints =
     curveX.length && curveY.length
       ? curveX
@@ -10620,7 +10711,15 @@ function LiveHistogram({ histogram }) {
         Sample size {histogram.sample_size ?? "—"} · Mean{" "}
         {histogram.mean != null ? _spcFmt(histogram.mean) : "—"} · Median{" "}
         {histogram.median != null ? _spcFmt(histogram.median) : "—"} · Std{" "}
-        {histogram.std != null ? _spcFmt(histogram.std) : "—"} · OOS{" "}
+        {histogram.std != null ? _spcFmt(histogram.std) : "—"}
+        {histogram.value_basis === "deviation" && (
+          <>
+            {" "}
+            · Deviation · σ within {_spcFmt(histogram.sigma_within)} (MR̄ /
+            1.128)
+          </>
+        )}
+        {" · OOS "}
         {/* With no spec window there is nothing to be out of, so the count is
             unknown rather than zero — "OOS 0" would read as a clean process. */}
         {histogram.spec_limits_available
@@ -10664,6 +10763,7 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
   const [baseWidgets, setBaseWidgets] = useState([]);
   const [widgets, setWidgets] = useState([]);
   const [snapshotDate, setSnapshotDate] = useState(null);
+  const [warnings, setWarnings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   // Cards rendered so far. Every card draws a sparkline now that chart points
@@ -10675,7 +10775,7 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
     setError(null);
     setShown(SPC_CARDS_PER_PAGE);
     Promise.all([
-      getSpcFilterOptions({ date: to || date, shift }),
+      getSpcFilterOptions({ date, from, to, shift, machine }),
       getSpcWidgets({ date, from, to, shift, machine, recipe }),
       getSpcWidgets({
         date,
@@ -10690,6 +10790,13 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
       .then(([opt, baseBoard, board]) => {
         if (cancelled) return;
         setOptions(opt || { machines: [], recipes: [] });
+        setWarnings(board?.context?.warnings || []);
+        if (machine !== "All" && !opt?.machines?.includes(machine)) {
+          setMachine("All");
+          setRecipe("All");
+        } else if (recipe !== "All" && !opt?.recipes?.includes(recipe)) {
+          setRecipe("All");
+        }
         setBaseWidgets(
           Array.isArray(baseBoard?.widgets) ? baseBoard.widgets : [],
         );
@@ -10813,7 +10920,10 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
           Machine
           <select
             value={machine}
-            onChange={(e) => setMachine(e.target.value)}
+            onChange={(e) => {
+              setMachine(e.target.value);
+              setRecipe("All");
+            }}
             style={sel}
           >
             <option>All</option>
@@ -10865,20 +10975,36 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
             : `Showing ${widgets.length} of ${baseCounts.total} charts`}
         </span>
       </div>
-      {from && to ? (
+      {warnings.map((warning) => (
+        <div key={warning} style={{ color: C.am, fontSize: 12 }}>
+          {warning}. Live measurements could not be verified; temporary Excel
+          data may be retained.
+        </div>
+      ))}
+      {from &&
+      to &&
+      baseWidgets.some((w) => w.source?.kind !== "static_excel") ? (
         <div style={{ fontSize: 11.5, color: C.mu }}>
-          Cp / Cpk / Pp / Ppk are averaged over {from} to {to} — gold publishes
-          SPC capability per day only, so a range has no snapshot of its own.
-          Charts show each combination's latest 300 subgroups (1,500 readings),
-          whatever their date.
+          Live Cp / Cpk / Pp / Ppk are averaged over {from} to {to} — gold
+          publishes SPC capability per day only, so a range has no snapshot of
+          its own. Charts show each combination's latest 300 subgroups (1,500
+          readings), whatever their date.
         </div>
       ) : snapshotDate ? (
         <div style={{ fontSize: 11.5, color: C.mu }}>
-          Snapshot {snapshotDate}. SPC rows use the latest available snapshot on
-          or before the selected date. Charts show each combination's latest 300
-          subgroups (1,500 readings), whatever their date.
+          Live snapshot {snapshotDate}. Live SPC rows use the latest available
+          snapshot on or before the selected date. Charts show each
+          combination's latest 300 subgroups (1,500 readings), whatever their
+          date.
         </div>
       ) : null}
+      {baseWidgets.some((w) => w.source?.kind === "static_excel") && (
+        <div style={{ fontSize: 11.5, color: C.mu }}>
+          Temporary Excel cards use their published snapshot values (not range
+          averages) and all supporting readings. Global shift filtering does not
+          apply to these cards.
+        </div>
+      )}
       {!loading && widgets.length === 0 ? (
         <div
           style={{
@@ -10961,6 +11087,9 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
                     >
                       {w.machine + " · " + w.recipe}
                     </div>
+                    {w.source?.kind === "static_excel" && (
+                      <SpcExcelSource source={w.source} />
+                    )}
                   </div>
                   <StatusPill status={spcStatus(w.headline_status).pill} />
                 </div>
@@ -10995,19 +11124,21 @@ function LiveSPCOverview({ date, from, to, shift, onSelect }) {
                 >
                   <span style={{ color: C.mu }}>
                     Cp{" "}
-                    <b style={{ color: col }}>
+                    <b style={{ color: spcStatus(w.cp_status).col }}>
                       {typeof w.cp === "number" ? w.cp.toFixed(2) : "—"}
                     </b>
                   </span>
                   <span style={{ color: C.mu }}>
                     Cpk{" "}
-                    <b style={{ color: col }}>
+                    <b style={{ color: spcStatus(w.cpk_status).col }}>
                       {typeof w.cpk === "number" ? w.cpk.toFixed(2) : "—"}
                     </b>
                   </span>
                   <span style={{ color: C.mu, marginLeft: "auto" }}>
-                    {w.subgroups ?? "—"} subgroups · {w.sample_size ?? "—"}{" "}
-                    readings
+                    {w.source?.kind === "static_excel"
+                      ? `${w.segments} runs`
+                      : `${w.subgroups ?? "—"} subgroups`}{" "}
+                    · {w.sample_size ?? "—"} readings
                   </span>
                 </div>
               </div>
@@ -11320,7 +11451,14 @@ function SPCCapabilityTrendChart({ points, target, baseline, view, endDate }) {
   );
 }
 
-function SPCCapabilityTrendModal({ selection, metric, date, shift, onClose }) {
+function SPCCapabilityTrendModal({
+  selection,
+  metric,
+  date,
+  shift,
+  source,
+  onClose,
+}) {
   const initialTo = date || todayInIST();
   const [view, setView] = useState("daily");
   const [points, setPoints] = useState([]);
@@ -11539,6 +11677,15 @@ function SPCCapabilityTrendModal({ selection, metric, date, shift, onClose }) {
         </div>
 
         <div style={{ padding: "18px 24px 22px", overflowX: "auto" }}>
+          {source?.kind === "static_excel" && (
+            <>
+              <SpcExcelSource source={source} />
+              <Typography variant="caption">
+                Only one published capability snapshot is available; no daily
+                history is inferred.
+              </Typography>
+            </>
+          )}
           {loading ? (
             <QualityLoader minHeight={420} />
           ) : error ? (
@@ -11656,6 +11803,18 @@ function TrendSummary({ label, value, note, color }) {
   );
 }
 
+function SpcExcelSource({ source }) {
+  return (
+    <div style={{ color: C.mu, fontSize: 11, marginTop: 4 }}>
+      <b style={{ color: C.pp }}>Temporary Excel</b> · Snapshot{" "}
+      {source.snapshot_date} · All shifts
+      <div>
+        Readings {source.coverage?.from} — {source.coverage?.to}
+      </div>
+    </div>
+  );
+}
+
 function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
   const [detail, setDetail] = useState(null);
   const [trendMetric, setTrendMetric] = useState(null);
@@ -11702,8 +11861,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
       </div>
     );
   const cap = detail?.capability || {};
-  const capCol = (v) =>
-    v == null ? C.mu : v < 1 ? C.rd : v < 1.33 ? C.am : C.gn;
+  const isExcel = detail?.source?.kind === "static_excel";
   const snapshotDate = detail?.context?.snapshot_date;
   const shiftSupported = detail?.context?.shift_supported;
   return (
@@ -11737,13 +11895,16 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
           </div>
           <div style={{ fontSize: 12, color: C.mu }}>
             {selection.machine + " · " + selection.recipe}
-            {from && to
+            {from && to && !isExcel
               ? ` · Average ${from} to ${to}`
               : snapshotDate
                 ? ` · Snapshot ${snapshotDate}`
                 : ""}
-            {shiftSupported === false ? " · All shifts" : ""}
+            {shiftSupported === false
+              ? " · All shifts (shift filter not applied)"
+              : ""}
           </div>
+          {isExcel && <SpcExcelSource source={detail.source} />}
         </div>
         <span style={{ marginLeft: "auto" }}>
           {loading ? (
@@ -11774,7 +11935,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
                         : (cell.value ?? "—")
                   }
                   sub={cell.status || ""}
-                  col={capCol(cell.value)}
+                  col={spcStatus(cell.status).col}
                   onTrend={() =>
                     setTrendMetric(k[0].toUpperCase() + k.slice(1))
                   }
@@ -11782,6 +11943,18 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
               );
             })}
           </div>
+          {detail?.context?.warnings?.map((warning) => (
+            <div key={warning} style={{ color: C.am }}>
+              {warning}
+            </div>
+          ))}
+          {isExcel && (
+            <Typography variant="caption" color="text.secondary">
+              Deviation = actual − setpoint · LSL {_spcFmt(detail.x_chart?.lsl)}{" "}
+              · USL {_spcFmt(detail.x_chart?.usl)} · Published capability
+              snapshot, not recalculated.
+            </Typography>
+          )}
           {detail?.insufficient ? (
             <Card title="Insufficient Data" accent={C.am}>
               <div style={{ fontSize: 13, color: C.md }}>
@@ -11795,14 +11968,20 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
           ) : null}
           {detail?.x_chart && (
             <LiveSpcChart
-              title="Interactive Process Control — X Chart with Nelson Rules"
+              title={
+                isExcel
+                  ? "X Chart — individual deviation readings with Nelson Rules"
+                  : "Interactive Process Control — X Chart with Nelson Rules"
+              }
               chart={detail.x_chart}
               accent={C.pp}
             />
           )}
           {detail?.r_chart && (
             <LiveSpcChart
-              title="R Chart — subgroup range"
+              title={
+                isExcel ? "R Chart — moving range" : "R Chart — subgroup range"
+              }
               chart={detail.r_chart}
               accent={C.pp}
             />
@@ -11814,6 +11993,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
               metric={trendMetric}
               date={snapshotDate || date}
               shift={shift}
+              source={detail?.source}
               onClose={() => setTrendMetric(null)}
             />
           )}
@@ -11823,7 +12003,7 @@ function LiveSPCDetail({ selection, date, from, to, shift, onBack }) {
   );
 }
 
-function SpcAlertsModal({ selection, date, shift, onClose }) {
+function SpcAlertsModal({ selection, date, from, to, shift, onClose }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
 
@@ -11831,7 +12011,7 @@ function SpcAlertsModal({ selection, date, shift, onClose }) {
     let cancelled = false;
     setDetail(null);
     setError(null);
-    getSpcDetail({ date, shift, ...selection })
+    getSpcDetail({ date, from, to, shift, ...selection })
       .then((result) => {
         if (!cancelled) setDetail(result);
       })
@@ -11841,7 +12021,15 @@ function SpcAlertsModal({ selection, date, shift, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [date, shift, selection.machine, selection.recipe, selection.parameter]);
+  }, [
+    date,
+    from,
+    to,
+    shift,
+    selection.machine,
+    selection.recipe,
+    selection.parameter,
+  ]);
 
   return (
     <Dialog
@@ -11872,7 +12060,12 @@ function SpcAlertsModal({ selection, date, shift, onClose }) {
         ) : !detail ? (
           <QualityLoader minHeight={200} />
         ) : (
-          <LiveSpcAlerts alerts={detail.alerts} />
+          <>
+            {detail.source?.kind === "static_excel" && (
+              <SpcExcelSource source={detail.source} />
+            )}
+            <LiveSpcAlerts alerts={detail.alerts} />
+          </>
         )}
       </DialogContent>
     </Dialog>
@@ -12746,6 +12939,8 @@ function QualityDashboard({ plant, onBack }) {
         <SpcAlertsModal
           selection={spcSel}
           date={processDate}
+          from={spcFrom}
+          to={spcTo}
           shift={shift}
           onClose={() => setSpcAlertsOpen(false)}
         />

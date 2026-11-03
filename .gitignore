@@ -36,6 +36,11 @@ backend/data/*
 # TEMPORARY Curing KPI extract for the Scheduler Adherence mail
 # (copy of frontend/public/temp/curing-sku-fulfilment.json).
 !backend/data/curing-sku-fulfilment.json
+# Temporary Calender 4 SPC supplement (validated, reproducible JSON only).
+!backend/data/spc/
+backend/data/spc/*
+!backend/data/spc/calender4.json
+!backend/data/spc/README.md
 
 # Added by code-review-graph
 .code-review-graph/
