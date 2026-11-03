@@ -5841,14 +5841,12 @@ const PRODUCT_KPIS = [
     n: "DBM Balancing Yield",
     sourceKpi: "Dbm_Balancing_Yield",
   },
-  { id: "insp", n: "Inspector Rating" },
   {
     id: "gtw",
     n: "GT Weight Variation",
     metricLabel: "Paint Weight Within 3%",
     sourceKpi: "Paint_Wt_Within3_Pct_overall",
   },
-  { id: "eg", n: "E-Grade Count" },
   // Deliberately mirrors the Curing → Quality → Scrap KPI in Production;
   // this is a gold-backed quantity, not a newly-derived percentage.
   {
@@ -5857,7 +5855,6 @@ const PRODUCT_KPIS = [
     productionSource: "curingScrap",
     lowerIsBetter: true,
   },
-  { id: "cta", n: "CTA Compliance" },
 ];
 
 /* Product drill-downs are rendered by LiveProductDrillPanel below. */

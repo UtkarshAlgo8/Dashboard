@@ -75,7 +75,14 @@ const RCA_FORM_META = {
 };
 
 const SHIFTS = ["A", "B", "C"];
-const IMPACTS = ["Productivity", "Quality", "Cost", "Delivery", "Safety", "Morale"];
+const IMPACTS = [
+  "Productivity",
+  "Quality",
+  "Cost",
+  "Delivery",
+  "Safety",
+  "Morale",
+];
 const CFT_FUNCTIONS = [
   { key: "prod", label: "Prod." },
   { key: "mech", label: "Mech." },
@@ -115,7 +122,15 @@ const blankRecord = () => ({
   physicalPhenomena: "",
   immediateCorrection: "",
   impacts: [],
-  cft: { prod: "", mech: "", eei: "", tech: "", qa: "", othersFunction: "", othersName: "" },
+  cft: {
+    prod: "",
+    mech: "",
+    eei: "",
+    tech: "",
+    qa: "",
+    othersFunction: "",
+    othersName: "",
+  },
   chains: [newChain()],
   countermeasureModes: [],
   countermeasureOther: "",
@@ -127,7 +142,9 @@ const blankRecord = () => ({
 const mergeInitial = (init) => {
   const base = blankRecord();
   if (!init) return base;
-  const chains = (init.chains && init.chains.length ? init.chains : base.chains).map((c) => {
+  const chains = (
+    init.chains && init.chains.length ? init.chains : base.chains
+  ).map((c) => {
     const merged = { ...newChain(), ...c };
     const whys = [...(merged.whys || [])];
     while (whys.length < DEFAULT_WHY_SLOTS) whys.push("");
@@ -138,7 +155,10 @@ const mergeInitial = (init) => {
     ...init,
     header: { ...base.header, ...(init.header || {}) },
     cft: { ...base.cft, ...(init.cft || {}) },
-    documentsStandardized: { ...base.documentsStandardized, ...(init.documentsStandardized || {}) },
+    documentsStandardized: {
+      ...base.documentsStandardized,
+      ...(init.documentsStandardized || {}),
+    },
     evidence: { ...base.evidence, ...(init.evidence || {}) },
     chains,
   };
@@ -146,7 +166,8 @@ const mergeInitial = (init) => {
 
 const filled = (s) => typeof s === "string" && s.trim().length > 0;
 
-const toggleIn = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+const toggleIn = (arr, v) =>
+  arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 
 /* ------------------------------------------------------------------------ */
 /* Validation                                                               */
@@ -158,10 +179,14 @@ function validate(r) {
   if (!r.header.shift) e["header.shift"] = "Select shift";
   if (!filled(r.header.dept)) e["header.dept"] = "Required";
   if (!filled(r.header.machineArea)) e["header.machineArea"] = "Required";
-  if (!filled(r.physicalPhenomena)) e.physicalPhenomena = "Describe what was observed";
+  if (!filled(r.physicalPhenomena))
+    e.physicalPhenomena = "Describe what was observed";
   if (!filled(r.immediateCorrection)) e.immediateCorrection = "Required";
   if (r.impacts.length === 0) e.impacts = "Tick at least one impact";
-  if (!CFT_FUNCTIONS.some((f) => filled(r.cft[f.key])) && !filled(r.cft.othersName))
+  if (
+    !CFT_FUNCTIONS.some((f) => filled(r.cft[f.key])) &&
+    !filled(r.cft.othersName)
+  )
     e.cft = "Name at least one CFT member";
   if (filled(r.cft.othersName) && !filled(r.cft.othersFunction))
     e["cft.othersFunction"] = "Specify function";
@@ -176,7 +201,11 @@ function validate(r) {
       if (filled(w)) lastFilled = j;
     });
     for (let j = 0; j <= Math.max(lastFilled, MIN_FILLED_WHYS - 1); j++) {
-      if (!filled(c.whys[j])) e[`${k}.whys.${j}`] = j < MIN_FILLED_WHYS ? "Required" : "Fill the gap — whys must be continuous";
+      if (!filled(c.whys[j]))
+        e[`${k}.whys.${j}`] =
+          j < MIN_FILLED_WHYS
+            ? "Required"
+            : "Fill the gap — whys must be continuous";
     }
     if (!filled(c.rootCause)) e[`${k}.rootCause`] = "Required";
     if (!filled(c.correctiveAction)) e[`${k}.correctiveAction`] = "Required";
@@ -185,21 +214,31 @@ function validate(r) {
       e[`${k}.completionDate`] = "Cannot be before the incident date";
   });
 
-  if (r.countermeasureModes.length === 0) e.countermeasureModes = "Tick the implementation mode";
+  if (r.countermeasureModes.length === 0)
+    e.countermeasureModes = "Tick the implementation mode";
   if (r.countermeasureModes.includes("Other") && !filled(r.countermeasureOther))
     e.countermeasureOther = "Specify";
   if (!r.rootCauseStatus) e.rootCauseStatus = "Select Eliminated or Repeated";
-  if (filled(r.documentsStandardized.document) && !filled(r.documentsStandardized.refNo))
+  if (
+    filled(r.documentsStandardized.document) &&
+    !filled(r.documentsStandardized.refNo)
+  )
     e["documentsStandardized.refNo"] = "Reference No. required";
   return e;
 }
 
 function toOutput(r, status) {
   return {
-    form: { docNo: RCA_FORM_META.docNo, rev: RCA_FORM_META.rev, revDate: RCA_FORM_META.revDate },
+    form: {
+      docNo: RCA_FORM_META.docNo,
+      rev: RCA_FORM_META.rev,
+      revDate: RCA_FORM_META.revDate,
+    },
     status,
     ...r,
-    countermeasureOther: r.countermeasureModes.includes("Other") ? r.countermeasureOther : "",
+    countermeasureOther: r.countermeasureModes.includes("Other")
+      ? r.countermeasureOther
+      : "",
     chains: r.chains.map((c) => {
       const whys = [...c.whys];
       while (whys.length && !filled(whys[whys.length - 1])) whys.pop();
@@ -317,16 +356,36 @@ function Field({ label, required, error, hint, children, className = "" }) {
 
 function Chip({ on, onClick, children }) {
   return (
-    <button type="button" className="rcad-chip" aria-pressed={on} onClick={onClick}>
-      <span className="rcad-tick" aria-hidden="true">{on ? "✓" : ""}</span>
+    <button
+      type="button"
+      className="rcad-chip"
+      aria-pressed={on}
+      onClick={onClick}
+    >
+      <span className="rcad-tick" aria-hidden="true">
+        {on ? "✓" : ""}
+      </span>
       {children}
     </button>
   );
 }
 
 function PhotoSlot({ label, file, onChange }) {
-  const url = useMemo(() => (file instanceof Blob ? URL.createObjectURL(file) : typeof file === "string" ? file : null), [file]);
-  useEffect(() => () => { if (url && file instanceof Blob) URL.revokeObjectURL(url); }, [url, file]);
+  const url = useMemo(
+    () =>
+      file instanceof Blob
+        ? URL.createObjectURL(file)
+        : typeof file === "string"
+          ? file
+          : null,
+    [file],
+  );
+  useEffect(
+    () => () => {
+      if (url && file instanceof Blob) URL.revokeObjectURL(url);
+    },
+    [url, file],
+  );
   return (
     <div className="rcad-field">
       <span className="rcad-label">{label}</span>
@@ -334,15 +393,35 @@ function PhotoSlot({ label, file, onChange }) {
         {url ? (
           <>
             <img src={url} alt={`${label} photo`} />
-            <button type="button" className="rcad-btn-link" onClick={() => onChange(null)}>Remove photo</button>
+            <button
+              type="button"
+              className="rcad-btn-link"
+              onClick={() => onChange(null)}
+            >
+              Remove photo
+            </button>
           </>
         ) : (
           <>
-            <span style={{ fontSize: 24 }} aria-hidden="true">📷</span>
+            <span style={{ fontSize: 24 }} aria-hidden="true">
+              📷
+            </span>
             <span>Click or drop a photo</span>
-            <span className="rcad-hint">JPG / PNG — mark the defect area before uploading</span>
-            <input type="file" accept="image/*" aria-label={`${label} photo`}
-              onChange={(e) => onChange(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+            <span className="rcad-hint">
+              JPG / PNG — mark the defect area before uploading
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              aria-label={`${label} photo`}
+              onChange={(e) =>
+                onChange(
+                  e.target.files && e.target.files[0]
+                    ? e.target.files[0]
+                    : null,
+                )
+              }
+            />
           </>
         )}
       </div>
@@ -360,7 +439,14 @@ export default function RCAEntryDialog({
   onSubmit,
   onSaveDraft,
   initialValues,
-  deptOptions = ["EE&I", "Electrical", "Mechanical", "Production", "Quality", "Technical"],
+  deptOptions = [
+    "EE&I",
+    "Electrical",
+    "Mechanical",
+    "Production",
+    "Quality",
+    "Technical",
+  ],
   machineOptions = [],
   pdfEndpoint = "/api/rca/pdf",
   onDownloadPdf,
@@ -374,7 +460,9 @@ export default function RCAEntryDialog({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState("");
   // Why1 mirrors Physical Phenomena until the user edits Why1 themselves
-  const [why1Linked, setWhy1Linked] = useState(() => !filled(initialValues?.chains?.[0]?.whys?.[0]));
+  const [why1Linked, setWhy1Linked] = useState(
+    () => !filled(initialValues?.chains?.[0]?.whys?.[0]),
+  );
   const bodyRef = useRef(null);
   const dialogRef = useRef(null);
 
@@ -397,31 +485,66 @@ export default function RCAEntryDialog({
   const errors = useMemo(() => validate(rec), [rec]);
   const errCount = Object.keys(errors).length;
   const err = (k) => (showErrors ? errors[k] : undefined);
-  const chainHasErr = (i) => showErrors && Object.keys(errors).some((k) => k.startsWith(`chains.${i}.`));
+  const chainHasErr = (i) =>
+    showErrors && Object.keys(errors).some((k) => k.startsWith(`chains.${i}.`));
 
   /* ---------- updaters ---------- */
-  const update = (fn) => { setRec((r) => fn(structuredCloneSafe(r))); setDirty(true); setNotice(""); };
-  const setHeader = (k, v) => update((r) => { r.header[k] = v; return r; });
-  const setCft = (k, v) => update((r) => { r.cft[k] = v; return r; });
-  const setChain = (i, k, v) => update((r) => { r.chains[i][k] = v; return r; });
+  const update = (fn) => {
+    setRec((r) => fn(structuredCloneSafe(r)));
+    setDirty(true);
+    setNotice("");
+  };
+  const setHeader = (k, v) =>
+    update((r) => {
+      r.header[k] = v;
+      return r;
+    });
+  const setCft = (k, v) =>
+    update((r) => {
+      r.cft[k] = v;
+      return r;
+    });
+  const setChain = (i, k, v) =>
+    update((r) => {
+      r.chains[i][k] = v;
+      return r;
+    });
   const setWhy = (i, j, v) => {
     if (i === 0 && j === 0) setWhy1Linked(false);
-    update((r) => { r.chains[i].whys[j] = v; return r; });
+    update((r) => {
+      r.chains[i].whys[j] = v;
+      return r;
+    });
   };
-  const setPhenomenon = (v) => update((r) => {
-    r.physicalPhenomena = v;
-    if (why1Linked) r.chains[0].whys[0] = v;
-    return r;
-  });
-  const addWhy = (i) => update((r) => { if (r.chains[i].whys.length < MAX_WHYS) r.chains[i].whys.push(""); return r; });
-  const removeWhy = (i, j) => update((r) => { r.chains[i].whys.splice(j, 1); return r; });
+  const setPhenomenon = (v) =>
+    update((r) => {
+      r.physicalPhenomena = v;
+      if (why1Linked) r.chains[0].whys[0] = v;
+      return r;
+    });
+  const addWhy = (i) =>
+    update((r) => {
+      if (r.chains[i].whys.length < MAX_WHYS) r.chains[i].whys.push("");
+      return r;
+    });
+  const removeWhy = (i, j) =>
+    update((r) => {
+      r.chains[i].whys.splice(j, 1);
+      return r;
+    });
   const addChain = () => {
     if (rec.chains.length >= MAX_CHAINS) return;
-    update((r) => { r.chains.push(newChain()); return r; });
+    update((r) => {
+      r.chains.push(newChain());
+      return r;
+    });
     setActiveChain(rec.chains.length);
   };
   const removeChain = (i) => {
-    update((r) => { r.chains.splice(i, 1); return r; });
+    update((r) => {
+      r.chains.splice(i, 1);
+      return r;
+    });
     setActiveChain((a) => Math.max(0, a >= i ? a - 1 : a));
   };
   const applyLastWhy = (i) => {
@@ -441,15 +564,28 @@ export default function RCAEntryDialog({
   });
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); closeRef.current(); } };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRef.current();
+      }
+    };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const t = setTimeout(() => {
-      const el = dialogRef.current && dialogRef.current.querySelector(".rcad-body input, .rcad-body textarea");
+      const el =
+        dialogRef.current &&
+        dialogRef.current.querySelector(
+          ".rcad-body input, .rcad-body textarea",
+        );
       if (el) el.focus();
     }, 0);
-    return () => { clearTimeout(t); document.removeEventListener("keydown", onKey); document.body.style.overflow = prevOverflow; };
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [open]);
 
   /* ---------- actions ---------- */
@@ -459,19 +595,26 @@ export default function RCAEntryDialog({
     const m = first.match(/^chains\.(\d+)\./);
     if (m) setActiveChain(Number(m[1]));
     setTimeout(() => {
-      const el = bodyRef.current && bodyRef.current.querySelector(".rcad-bad, .rcad-err");
+      const el =
+        bodyRef.current &&
+        bodyRef.current.querySelector(".rcad-bad, .rcad-err");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 30);
   };
 
   const handleSubmit = async () => {
     setShowErrors(true);
-    if (errCount) { scrollToFirstError(errors); return; }
+    if (errCount) {
+      scrollToFirstError(errors);
+      return;
+    }
     try {
       setBusy(true);
       await (onSubmit && onSubmit(toOutput(rec, "submitted")));
       setDirty(false);
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDraft = async () => {
@@ -481,14 +624,21 @@ export default function RCAEntryDialog({
       setBusy(true);
       await fn(toOutput(rec, "draft"));
       setDirty(false);
-      setNotice(`Draft saved ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
-    } finally { setBusy(false); }
+      setNotice(
+        `Draft saved ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDownloadPdf = async () => {
     setShowErrors(true);
     setPdfError("");
-    if (errCount) { scrollToFirstError(errors); return; }
+    if (errCount) {
+      scrollToFirstError(errors);
+      return;
+    }
     const record = toOutput(rec, "submitted");
     try {
       setPdfBusy(true);
@@ -497,10 +647,18 @@ export default function RCAEntryDialog({
       if (onDownloadPdf) {
         blob = await onDownloadPdf(record);
       } else {
-        const res = await fetch(pdfEndpoint, { method: "POST", body: toPdfFormData(record) });
+        const res = await fetch(pdfEndpoint, {
+          method: "POST",
+          body: toPdfFormData(record),
+        });
         if (!res.ok) {
           let msg = `${res.status} ${res.statusText}`;
-          try { const j = await res.json(); if (j && j.detail) msg = j.detail; } catch { /* not JSON */ }
+          try {
+            const j = await res.json();
+            if (j && j.detail) msg = j.detail;
+          } catch {
+            /* not JSON */
+          }
           throw new Error(msg);
         }
         const cd = res.headers.get("Content-Disposition") || "";
@@ -511,7 +669,9 @@ export default function RCAEntryDialog({
       if (blob) saveBlob(blob, filename);
     } catch (e) {
       setPdfError(`PDF download failed: ${e && e.message ? e.message : e}`);
-    } finally { setPdfBusy(false); }
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   if (!open) return null;
@@ -522,112 +682,241 @@ export default function RCAEntryDialog({
   const ck = `chains.${ci}`;
 
   return (
-    <div className="rcad-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+    <div
+      className="rcad-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) requestClose();
+      }}
+    >
       <style>{CSS}</style>
-      <div className="rcad-dialog" role="dialog" aria-modal="true" aria-labelledby="rcad-title" ref={dialogRef}>
+      <div
+        className="rcad-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rcad-title"
+        ref={dialogRef}
+      >
         {/* ---------------- Header ---------------- */}
         <div className="rcad-head">
           <div className="rcad-headtext">
-            <h2 className="rcad-title" id="rcad-title">{RCA_FORM_META.title} — Why-Why Analysis</h2>
-            <p className="rcad-sub">Fields marked <span className="rcad-req">*</span> are required. Why1 starts from the observed phenomenon.</p>
+            <h2 className="rcad-title" id="rcad-title">
+              {RCA_FORM_META.title} — Why-Why Analysis
+            </h2>
+            <p className="rcad-sub">
+              Fields marked <span className="rcad-req">*</span> are required.
+              Why1 starts from the observed phenomenon.
+            </p>
           </div>
           <div className="rcad-meta">
             <span className="rcad-tag">Doc No: {RCA_FORM_META.docNo}</span>
             <span className="rcad-tag">Rev: {RCA_FORM_META.rev}</span>
             <span className="rcad-tag">Rev. Date: {RCA_FORM_META.revDate}</span>
           </div>
-          <button type="button" className="rcad-x" aria-label="Close" onClick={requestClose}>×</button>
+          <button
+            type="button"
+            className="rcad-x"
+            aria-label="Close"
+            onClick={requestClose}
+          >
+            ×
+          </button>
         </div>
 
         <div className="rcad-body" ref={bodyRef}>
           {/* ---------------- 1. Incident details ---------------- */}
           <section className="rcad-sec">
-            <h3><span className="rcad-num">1</span>Incident details</h3>
+            <h3>
+              <span className="rcad-num">1</span>Incident details
+            </h3>
             <div className="rcad-grid rcad-g4">
               <Field label="Date" required error={err("header.date")}>
-                <input type="date" className="rcad-input" value={rec.header.date} max={today()}
-                  onChange={(e) => setHeader("date", e.target.value)} />
+                <input
+                  type="date"
+                  className="rcad-input"
+                  value={rec.header.date}
+                  max={today()}
+                  onChange={(e) => setHeader("date", e.target.value)}
+                />
               </Field>
-              <div className={`rcad-field ${err("header.shift") ? "rcad-bad" : ""}`}>
-                <span className="rcad-label">Shift<span className="rcad-req">*</span></span>
+              <div
+                className={`rcad-field ${err("header.shift") ? "rcad-bad" : ""}`}
+              >
+                <span className="rcad-label">
+                  Shift<span className="rcad-req">*</span>
+                </span>
                 <div className="rcad-seg" role="group" aria-label="Shift">
                   {SHIFTS.map((s, i) => (
-                    <button key={s} type="button" className={i === 0 ? "rcad-seg-first" : ""}
-                      aria-pressed={rec.header.shift === s} onClick={() => setHeader("shift", s)}>{s}</button>
+                    <button
+                      key={s}
+                      type="button"
+                      className={i === 0 ? "rcad-seg-first" : ""}
+                      aria-pressed={rec.header.shift === s}
+                      onClick={() => setHeader("shift", s)}
+                    >
+                      {s}
+                    </button>
                   ))}
                 </div>
-                {err("header.shift") && <span className="rcad-err">{err("header.shift")}</span>}
+                {err("header.shift") && (
+                  <span className="rcad-err">{err("header.shift")}</span>
+                )}
               </div>
               <Field label="Dept" required error={err("header.dept")}>
-                <input className="rcad-input" list="rcad-dept-list" value={rec.header.dept}
-                  placeholder="e.g. EE&I" onChange={(e) => setHeader("dept", e.target.value)} />
-                <datalist id="rcad-dept-list">{deptOptions.map((d) => <option key={d} value={d} />)}</datalist>
+                <input
+                  className="rcad-input"
+                  list="rcad-dept-list"
+                  value={rec.header.dept}
+                  placeholder="e.g. EE&I"
+                  onChange={(e) => setHeader("dept", e.target.value)}
+                />
+                <datalist id="rcad-dept-list">
+                  {deptOptions.map((d) => (
+                    <option key={d} value={d} />
+                  ))}
+                </datalist>
               </Field>
-              <Field label="Machine No / Area" required error={err("header.machineArea")}>
-                <input className="rcad-input" list="rcad-machine-list" value={rec.header.machineArea}
-                  placeholder="e.g. Banbury 4" onChange={(e) => setHeader("machineArea", e.target.value)} />
-                <datalist id="rcad-machine-list">{machineOptions.map((m) => <option key={m} value={m} />)}</datalist>
+              <Field
+                label="Machine No / Area"
+                required
+                error={err("header.machineArea")}
+              >
+                <input
+                  className="rcad-input"
+                  list="rcad-machine-list"
+                  value={rec.header.machineArea}
+                  placeholder="e.g. Banbury 4"
+                  onChange={(e) => setHeader("machineArea", e.target.value)}
+                />
+                <datalist id="rcad-machine-list">
+                  {machineOptions.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
               </Field>
             </div>
             <div className="rcad-grid rcad-g4" style={{ marginTop: 12 }}>
               <Field label="MP / CP" hint="reference, if applicable">
-                <input className="rcad-input" value={rec.header.mpcp} placeholder="e.g. 2.8E.2.8.2"
-                  onChange={(e) => setHeader("mpcp", e.target.value)} />
+                <input
+                  className="rcad-input"
+                  value={rec.header.mpcp}
+                  placeholder="e.g. 2.8E.2.8.2"
+                  onChange={(e) => setHeader("mpcp", e.target.value)}
+                />
               </Field>
             </div>
           </section>
 
           {/* ---------------- 2. Problem ---------------- */}
           <section className="rcad-sec">
-            <h3><span className="rcad-num">2</span>Problem</h3>
+            <h3>
+              <span className="rcad-num">2</span>Problem
+            </h3>
             <div className="rcad-grid rcad-g2">
-              <Field label="Physical Phenomena (Explain)" required error={err("physicalPhenomena")}
-                hint="what was seen / measured, no causes">
-                <textarea className="rcad-ta" rows={3} value={rec.physicalPhenomena}
+              <Field
+                label="Physical Phenomena (Explain)"
+                required
+                error={err("physicalPhenomena")}
+                hint="what was seen / measured, no causes"
+              >
+                <textarea
+                  className="rcad-ta"
+                  rows={3}
+                  value={rec.physicalPhenomena}
                   placeholder="e.g. Compound not coming in proper sheet form; TSS getting empty batch to batch"
-                  onChange={(e) => setPhenomenon(e.target.value)} />
+                  onChange={(e) => setPhenomenon(e.target.value)}
+                />
               </Field>
-              <Field label="Immediate Correction" required error={err("immediateCorrection")}
-                hint="containment done on the spot">
-                <textarea className="rcad-ta" rows={3} value={rec.immediateCorrection}
+              <Field
+                label="Immediate Correction"
+                required
+                error={err("immediateCorrection")}
+                hint="containment done on the spot"
+              >
+                <textarea
+                  className="rcad-ta"
+                  rows={3}
+                  value={rec.immediateCorrection}
                   placeholder="e.g. Tripped motor reset, external fan provided for HPP motor cooling"
-                  onChange={(e) => update((r) => { r.immediateCorrection = e.target.value; return r; })} />
+                  onChange={(e) =>
+                    update((r) => {
+                      r.immediateCorrection = e.target.value;
+                      return r;
+                    })
+                  }
+                />
               </Field>
             </div>
           </section>
 
           {/* ---------------- 3. Impact & CFT ---------------- */}
           <section className="rcad-sec">
-            <h3><span className="rcad-num">3</span>Impact &amp; cross-functional team</h3>
+            <h3>
+              <span className="rcad-num">3</span>Impact &amp; cross-functional
+              team
+            </h3>
             <div className="rcad-grid rcad-g2">
               <div className="rcad-field">
-                <span className="rcad-label">Impacts on (tick applicable)<span className="rcad-req">*</span></span>
+                <span className="rcad-label">
+                  Impacts on (tick applicable)
+                  <span className="rcad-req">*</span>
+                </span>
                 <div className="rcad-chips">
                   {IMPACTS.map((x) => (
-                    <Chip key={x} on={rec.impacts.includes(x)}
-                      onClick={() => update((r) => { r.impacts = toggleIn(r.impacts, x); return r; })}>{x}</Chip>
+                    <Chip
+                      key={x}
+                      on={rec.impacts.includes(x)}
+                      onClick={() =>
+                        update((r) => {
+                          r.impacts = toggleIn(r.impacts, x);
+                          return r;
+                        })
+                      }
+                    >
+                      {x}
+                    </Chip>
                   ))}
                 </div>
-                {err("impacts") && <span className="rcad-err">{err("impacts")}</span>}
+                {err("impacts") && (
+                  <span className="rcad-err">{err("impacts")}</span>
+                )}
               </div>
               <div className="rcad-field">
-                <span className="rcad-label">CFT (Cross Function Team) details<span className="rcad-req">*</span></span>
+                <span className="rcad-label">
+                  CFT (Cross Function Team) details
+                  <span className="rcad-req">*</span>
+                </span>
                 <div className="rcad-cft">
                   {CFT_FUNCTIONS.map((f) => (
                     <React.Fragment key={f.key}>
                       <span className="rcad-label">{f.label}</span>
-                      <input className="rcad-input" value={rec.cft[f.key]} placeholder="Name"
-                        aria-label={`${f.label} member name`} onChange={(e) => setCft(f.key, e.target.value)} />
+                      <input
+                        className="rcad-input"
+                        value={rec.cft[f.key]}
+                        placeholder="Name"
+                        aria-label={`${f.label} member name`}
+                        onChange={(e) => setCft(f.key, e.target.value)}
+                      />
                     </React.Fragment>
                   ))}
-                  <input className={`rcad-input ${err("cft.othersFunction") ? "rcad-bad" : ""}`}
-                    value={rec.cft.othersFunction} placeholder="Others (specify)"
-                    aria-label="Other function" onChange={(e) => setCft("othersFunction", e.target.value)} />
-                  <input className="rcad-input" value={rec.cft.othersName} placeholder="Name"
-                    aria-label="Other member name" onChange={(e) => setCft("othersName", e.target.value)} />
+                  <input
+                    className={`rcad-input ${err("cft.othersFunction") ? "rcad-bad" : ""}`}
+                    value={rec.cft.othersFunction}
+                    placeholder="Others (specify)"
+                    aria-label="Other function"
+                    onChange={(e) => setCft("othersFunction", e.target.value)}
+                  />
+                  <input
+                    className="rcad-input"
+                    value={rec.cft.othersName}
+                    placeholder="Name"
+                    aria-label="Other member name"
+                    onChange={(e) => setCft("othersName", e.target.value)}
+                  />
                 </div>
                 {(err("cft") || err("cft.othersFunction")) && (
-                  <span className="rcad-err">{err("cft") || err("cft.othersFunction")}</span>
+                  <span className="rcad-err">
+                    {err("cft") || err("cft.othersFunction")}
+                  </span>
                 )}
               </div>
             </div>
@@ -637,20 +926,37 @@ export default function RCAEntryDialog({
           <section className="rcad-sec">
             <h3>
               <span className="rcad-num">4</span>Why-Why analysis
-              <span className="rcad-hint">each Why answers the one above it</span>
+              <span className="rcad-hint">
+                each Why answers the one above it
+              </span>
             </h3>
 
             {(multi || rec.chains.length < MAX_CHAINS) && (
               <div className="rcad-tabs" role="tablist">
                 {rec.chains.map((c, i) => (
-                  <button key={i} type="button" role="tab" className="rcad-tab" aria-selected={i === ci}
-                    onClick={() => setActiveChain(i)}>
-                    {multi ? `Cause-${i + 1}${filled(c.cause) ? `: ${c.cause.slice(0, 24)}${c.cause.length > 24 ? "…" : ""}` : ""}` : "Cause chain"}
-                    {chainHasErr(i) && <span className="rcad-dot" aria-label="has errors" />}
+                  <button
+                    key={i}
+                    type="button"
+                    role="tab"
+                    className="rcad-tab"
+                    aria-selected={i === ci}
+                    onClick={() => setActiveChain(i)}
+                  >
+                    {multi
+                      ? `Cause-${i + 1}${filled(c.cause) ? `: ${c.cause.slice(0, 24)}${c.cause.length > 24 ? "…" : ""}` : ""}`
+                      : "Cause chain"}
+                    {chainHasErr(i) && (
+                      <span className="rcad-dot" aria-label="has errors" />
+                    )}
                   </button>
                 ))}
                 {rec.chains.length < MAX_CHAINS && (
-                  <button type="button" className="rcad-tab" onClick={addChain} title="Use when one event has several separate effects to analyse (e.g. failure, collateral damage, risk of repeat)">
+                  <button
+                    type="button"
+                    className="rcad-tab"
+                    onClick={addChain}
+                    title="Use when one event has several separate effects to analyse (e.g. failure, collateral damage, risk of repeat)"
+                  >
                     + Add cause chain
                   </button>
                 )}
@@ -658,13 +964,31 @@ export default function RCAEntryDialog({
             )}
 
             {multi && (
-              <div className="rcad-row" style={{ marginBottom: 12, alignItems: "flex-end" }}>
-                <Field label={`Cause-${ci + 1}`} required error={err(`${ck}.cause`)} className="" >
-                  <input className="rcad-input" style={{ minWidth: 320 }} value={chain.cause}
+              <div
+                className="rcad-row"
+                style={{ marginBottom: 12, alignItems: "flex-end" }}
+              >
+                <Field
+                  label={`Cause-${ci + 1}`}
+                  required
+                  error={err(`${ck}.cause`)}
+                  className=""
+                >
+                  <input
+                    className="rcad-input"
+                    style={{ minWidth: 320 }}
+                    value={chain.cause}
                     placeholder="e.g. Equipment damage nearby"
-                    onChange={(e) => setChain(ci, "cause", e.target.value)} />
+                    onChange={(e) => setChain(ci, "cause", e.target.value)}
+                  />
                 </Field>
-                <button type="button" className="rcad-btn" onClick={() => removeChain(ci)}>Remove this chain</button>
+                <button
+                  type="button"
+                  className="rcad-btn"
+                  onClick={() => removeChain(ci)}
+                >
+                  Remove this chain
+                </button>
               </div>
             )}
 
@@ -675,123 +999,285 @@ export default function RCAEntryDialog({
                 <React.Fragment key={j}>
                   <div className="rcad-why">
                     <div className="rcad-whylab">
-                      Why{j + 1}{j < MIN_FILLED_WHYS && <span className="rcad-req">*</span>}
+                      Why{j + 1}
+                      {j < MIN_FILLED_WHYS && (
+                        <span className="rcad-req">*</span>
+                      )}
                       {j === 0 && <small>start with phenomenon</small>}
                     </div>
                     <div className={`rcad-field ${e ? "rcad-bad" : ""}`}>
-                      <textarea className="rcad-ta" rows={1} style={{ minHeight: 40 }} value={w}
+                      <textarea
+                        className="rcad-ta"
+                        rows={1}
+                        style={{ minHeight: 40 }}
+                        value={w}
                         aria-label={`Why ${j + 1}`}
-                        placeholder={j === 0 ? "Restate the phenomenon" : `Why did Why${j} happen?`}
-                        onChange={(ev) => setWhy(ci, j, ev.target.value)} />
-                      {linked && filled(w) && <span className="rcad-hint">Copied from Physical Phenomena — edit to override</span>}
+                        placeholder={
+                          j === 0
+                            ? "Restate the phenomenon"
+                            : `Why did Why${j} happen?`
+                        }
+                        onChange={(ev) => setWhy(ci, j, ev.target.value)}
+                      />
+                      {linked && filled(w) && (
+                        <span className="rcad-hint">
+                          Copied from Physical Phenomena — edit to override
+                        </span>
+                      )}
                       {e && <span className="rcad-err">{e}</span>}
                     </div>
                     {j >= DEFAULT_WHY_SLOTS ? (
-                      <button type="button" className="rcad-btn-icon" aria-label={`Remove Why ${j + 1}`}
-                        onClick={() => removeWhy(ci, j)}>✕</button>
-                    ) : <span style={{ width: 32 }} />}
+                      <button
+                        type="button"
+                        className="rcad-btn-icon"
+                        aria-label={`Remove Why ${j + 1}`}
+                        onClick={() => removeWhy(ci, j)}
+                      >
+                        ✕
+                      </button>
+                    ) : (
+                      <span style={{ width: 32 }} />
+                    )}
                   </div>
                 </React.Fragment>
               );
             })}
-            <div className="rcad-addwhy" style={{ marginLeft: 120, marginTop: 6 }}>
-              <button type="button" className="rcad-btn-link" disabled={chain.whys.length >= MAX_WHYS}
-                onClick={() => addWhy(ci)}>+ Add more Why</button>
+            <div
+              className="rcad-addwhy"
+              style={{ marginLeft: 120, marginTop: 6 }}
+            >
+              <button
+                type="button"
+                className="rcad-btn-link"
+                disabled={chain.whys.length >= MAX_WHYS}
+                onClick={() => addWhy(ci)}
+              >
+                + Add more Why
+              </button>
             </div>
 
             <h3 style={{ marginTop: 20 }}>
-              <span className="rcad-num">5</span>Root cause &amp; action{multi ? ` — Cause-${ci + 1}` : ""}
+              <span className="rcad-num">5</span>Root cause &amp; action
+              {multi ? ` — Cause-${ci + 1}` : ""}
             </h3>
             <div className="rcad-grid rcad-g2">
               <Field label="Root Cause" required error={err(`${ck}.rootCause`)}>
-                <textarea className="rcad-ta" rows={3} value={chain.rootCause}
+                <textarea
+                  className="rcad-ta"
+                  rows={3}
+                  value={chain.rootCause}
                   placeholder="The actionable cause — normally the last Why"
-                  onChange={(e) => setChain(ci, "rootCause", e.target.value)} />
+                  onChange={(e) => setChain(ci, "rootCause", e.target.value)}
+                />
                 <span>
-                  <button type="button" className="rcad-btn-link" onClick={(e) => { e.preventDefault(); applyLastWhy(ci); }}>
+                  <button
+                    type="button"
+                    className="rcad-btn-link"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      applyLastWhy(ci);
+                    }}
+                  >
                     Use last Why as root cause
                   </button>
                 </span>
               </Field>
               <div className="rcad-grid">
-                <Field label="Corrective Action" required error={err(`${ck}.correctiveAction`)}
-                  hint="permanent fix for this root cause">
-                  <textarea className="rcad-ta" rows={2} value={chain.correctiveAction}
-                    onChange={(e) => setChain(ci, "correctiveAction", e.target.value)} />
+                <Field
+                  label="Corrective Action"
+                  required
+                  error={err(`${ck}.correctiveAction`)}
+                  hint="permanent fix for this root cause"
+                >
+                  <textarea
+                    className="rcad-ta"
+                    rows={2}
+                    value={chain.correctiveAction}
+                    onChange={(e) =>
+                      setChain(ci, "correctiveAction", e.target.value)
+                    }
+                  />
                 </Field>
-                <Field label="Preventive Action" hint="stops recurrence elsewhere / horizontal deployment">
-                  <textarea className="rcad-ta" rows={2} value={chain.preventiveAction}
-                    onChange={(e) => setChain(ci, "preventiveAction", e.target.value)} />
+                <Field
+                  label="Preventive Action"
+                  hint="stops recurrence elsewhere / horizontal deployment"
+                >
+                  <textarea
+                    className="rcad-ta"
+                    rows={2}
+                    value={chain.preventiveAction}
+                    onChange={(e) =>
+                      setChain(ci, "preventiveAction", e.target.value)
+                    }
+                  />
                 </Field>
               </div>
             </div>
             <div className="rcad-grid rcad-g4" style={{ marginTop: 12 }}>
-              <Field label="Date of Completion" required error={err(`${ck}.completionDate`)}>
-                <input type="date" className="rcad-input" value={chain.completionDate}
+              <Field
+                label="Date of Completion"
+                required
+                error={err(`${ck}.completionDate`)}
+              >
+                <input
+                  type="date"
+                  className="rcad-input"
+                  value={chain.completionDate}
                   min={rec.header.date || undefined}
-                  onChange={(e) => setChain(ci, "completionDate", e.target.value)} />
+                  onChange={(e) =>
+                    setChain(ci, "completionDate", e.target.value)
+                  }
+                />
               </Field>
             </div>
           </section>
 
           {/* ---------------- 6. Countermeasure & closure ---------------- */}
           <section className="rcad-sec">
-            <h3><span className="rcad-num">6</span>Countermeasure &amp; closure</h3>
+            <h3>
+              <span className="rcad-num">6</span>Countermeasure &amp; closure
+            </h3>
             <div className="rcad-grid rcad-g2">
               <div className="rcad-field">
-                <span className="rcad-label">Counter Measure implementation Mode (tick appropriate)<span className="rcad-req">*</span></span>
+                <span className="rcad-label">
+                  Counter Measure implementation Mode (tick appropriate)
+                  <span className="rcad-req">*</span>
+                </span>
                 <div className="rcad-chips">
                   {COUNTERMEASURE_MODES.map((m) => (
-                    <Chip key={m} on={rec.countermeasureModes.includes(m)}
-                      onClick={() => update((r) => { r.countermeasureModes = toggleIn(r.countermeasureModes, m); return r; })}>{m}</Chip>
+                    <Chip
+                      key={m}
+                      on={rec.countermeasureModes.includes(m)}
+                      onClick={() =>
+                        update((r) => {
+                          r.countermeasureModes = toggleIn(
+                            r.countermeasureModes,
+                            m,
+                          );
+                          return r;
+                        })
+                      }
+                    >
+                      {m}
+                    </Chip>
                   ))}
                 </div>
                 {rec.countermeasureModes.includes("Other") && (
-                  <input className={`rcad-input ${err("countermeasureOther") ? "rcad-bad" : ""}`} style={{ marginTop: 8 }}
-                    value={rec.countermeasureOther} placeholder="Specify other mode"
+                  <input
+                    className={`rcad-input ${err("countermeasureOther") ? "rcad-bad" : ""}`}
+                    style={{ marginTop: 8 }}
+                    value={rec.countermeasureOther}
+                    placeholder="Specify other mode"
                     aria-label="Other implementation mode"
-                    onChange={(e) => update((r) => { r.countermeasureOther = e.target.value; return r; })} />
+                    onChange={(e) =>
+                      update((r) => {
+                        r.countermeasureOther = e.target.value;
+                        return r;
+                      })
+                    }
+                  />
                 )}
                 {(err("countermeasureModes") || err("countermeasureOther")) && (
-                  <span className="rcad-err">{err("countermeasureModes") || err("countermeasureOther")}</span>
+                  <span className="rcad-err">
+                    {err("countermeasureModes") || err("countermeasureOther")}
+                  </span>
                 )}
               </div>
               <div className="rcad-field">
-                <span className="rcad-label">Root Cause Eliminated / Repeated<span className="rcad-req">*</span></span>
-                <div className="rcad-row" role="radiogroup" aria-label="Root cause status">
+                <span className="rcad-label">
+                  Root Cause Eliminated / Repeated
+                  <span className="rcad-req">*</span>
+                </span>
+                <div
+                  className="rcad-row"
+                  role="radiogroup"
+                  aria-label="Root cause status"
+                >
                   {ROOT_CAUSE_STATUS.map((s) => (
                     <label key={s} className="rcad-radio">
-                      <input type="radio" name="rcad-status" checked={rec.rootCauseStatus === s}
-                        onChange={() => update((r) => { r.rootCauseStatus = s; return r; })} />
+                      <input
+                        type="radio"
+                        name="rcad-status"
+                        checked={rec.rootCauseStatus === s}
+                        onChange={() =>
+                          update((r) => {
+                            r.rootCauseStatus = s;
+                            return r;
+                          })
+                        }
+                      />
                       {s}
                     </label>
                   ))}
                 </div>
-                {err("rootCauseStatus") && <span className="rcad-err">{err("rootCauseStatus")}</span>}
+                {err("rootCauseStatus") && (
+                  <span className="rcad-err">{err("rootCauseStatus")}</span>
+                )}
               </div>
             </div>
             <div className="rcad-grid rcad-g2" style={{ marginTop: 12 }}>
-              <Field label="Documents Standardized" hint="SOP / OPL / checksheet updated">
-                <input className="rcad-input" value={rec.documentsStandardized.document}
+              <Field
+                label="Documents Standardized"
+                hint="SOP / OPL / checksheet updated"
+              >
+                <input
+                  className="rcad-input"
+                  value={rec.documentsStandardized.document}
                   placeholder="e.g. TSS replacement checklist"
-                  onChange={(e) => update((r) => { r.documentsStandardized.document = e.target.value; return r; })} />
+                  onChange={(e) =>
+                    update((r) => {
+                      r.documentsStandardized.document = e.target.value;
+                      return r;
+                    })
+                  }
+                />
               </Field>
-              <Field label="Reference No." error={err("documentsStandardized.refNo")}>
-                <input className="rcad-input" value={rec.documentsStandardized.refNo}
+              <Field
+                label="Reference No."
+                error={err("documentsStandardized.refNo")}
+              >
+                <input
+                  className="rcad-input"
+                  value={rec.documentsStandardized.refNo}
                   placeholder="Document reference number"
-                  onChange={(e) => update((r) => { r.documentsStandardized.refNo = e.target.value; return r; })} />
+                  onChange={(e) =>
+                    update((r) => {
+                      r.documentsStandardized.refNo = e.target.value;
+                      return r;
+                    })
+                  }
+                />
               </Field>
             </div>
           </section>
 
           {/* ---------------- 7. Evidence ---------------- */}
           <section className="rcad-sec">
-            <h3><span className="rcad-num">7</span>Evidence <span className="rcad-hint">optional</span></h3>
+            <h3>
+              <span className="rcad-num">7</span>Evidence{" "}
+              <span className="rcad-hint">optional</span>
+            </h3>
             <div className="rcad-grid rcad-g2">
-              <PhotoSlot label="Before" file={rec.evidence.before}
-                onChange={(f) => update((r) => { r.evidence.before = f; return r; })} />
-              <PhotoSlot label="After" file={rec.evidence.after}
-                onChange={(f) => update((r) => { r.evidence.after = f; return r; })} />
+              <PhotoSlot
+                label="Before"
+                file={rec.evidence.before}
+                onChange={(f) =>
+                  update((r) => {
+                    r.evidence.before = f;
+                    return r;
+                  })
+                }
+              />
+              <PhotoSlot
+                label="After"
+                file={rec.evidence.after}
+                onChange={(f) =>
+                  update((r) => {
+                    r.evidence.after = f;
+                    return r;
+                  })
+                }
+              />
             </div>
           </section>
         </div>
@@ -800,22 +1286,48 @@ export default function RCAEntryDialog({
         <div className="rcad-foot">
           <div aria-live="polite">
             {showErrors && errCount > 0 && (
-              <span className="rcad-summary">{errCount} field{errCount > 1 ? "s" : ""} need attention</span>
+              <span className="rcad-summary">
+                {errCount} field{errCount > 1 ? "s" : ""} need attention
+              </span>
             )}
             {notice && <span className="rcad-saved">{notice}</span>}
             {pdfError && <span className="rcad-summary">{pdfError}</span>}
           </div>
           <div className="rcad-row">
-            <button type="button" className="rcad-btn" onClick={handleDownloadPdf} disabled={busy || pdfBusy}
-              title="Download this RCA on the official UTQM.00.SQ-156 sheet">
+            <button
+              type="button"
+              className="rcad-btn"
+              onClick={handleDownloadPdf}
+              disabled={busy || pdfBusy}
+              title="Download this RCA on the official UTQM.00.SQ-156 sheet"
+            >
               {pdfBusy ? "Preparing PDF…" : "Download PDF"}
             </button>
-            <button type="button" className="rcad-btn" onClick={requestClose} disabled={busy}>Cancel</button>
+            <button
+              type="button"
+              className="rcad-btn"
+              onClick={requestClose}
+              disabled={busy}
+            >
+              Cancel
+            </button>
             {(onSaveDraft || onSubmit) && (
-              <button type="button" className="rcad-btn" onClick={handleDraft} disabled={busy || pdfBusy}>Save draft</button>
+              <button
+                type="button"
+                className="rcad-btn"
+                onClick={handleDraft}
+                disabled={busy || pdfBusy}
+              >
+                Save draft
+              </button>
             )}
             {onSubmit && (
-              <button type="button" className="rcad-btn rcad-primary" onClick={handleSubmit} disabled={busy || pdfBusy}>
+              <button
+                type="button"
+                className="rcad-btn rcad-primary"
+                onClick={handleSubmit}
+                disabled={busy || pdfBusy}
+              >
                 {busy ? "Saving…" : "Submit RCA"}
               </button>
             )}
@@ -829,7 +1341,9 @@ export default function RCAEntryDialog({
 /* PDF helpers */
 function pdfFileName(record) {
   const h = record.header || {};
-  const stem = ["RCA", h.machineArea, h.date].filter((x) => x && String(x).trim()).join("_")
+  const stem = ["RCA", h.machineArea, h.date]
+    .filter((x) => x && String(x).trim())
+    .join("_")
     .replace(/[^A-Za-z0-9_-]+/g, "_");
   return `${stem || "RCA"}.pdf`;
 }

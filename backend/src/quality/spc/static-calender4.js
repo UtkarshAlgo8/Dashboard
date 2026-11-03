@@ -12,7 +12,8 @@ const METRICS = ["Cp", "Cpk", "Pp", "Ppk"];
 // Fail loudly for a malformed deployment artifact rather than displaying partial KPIs.
 if (
   calender4Fixture.schema_version !== 1 ||
-  calender4Fixture.combinations.length !== 8
+  !Array.isArray(calender4Fixture.combinations) ||
+  calender4Fixture.combinations.length === 0
 ) {
   throw new Error("Invalid Calender 4 SPC fixture schema");
 }
