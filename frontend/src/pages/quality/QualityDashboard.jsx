@@ -67,6 +67,7 @@ import {
 } from "@/lib/paintWeight.js";
 import {
   getProcessKpiChildren,
+  getProcessKpiHistory,
   getProcessSummary,
   getProductChildren,
   getProductHistory,
@@ -3029,6 +3030,7 @@ const PROCESS_KPIS = [
   {
     id: "mqv",
     n: "MQV (Major Quality Violation)",
+    lowerIsBetter: true,
     v: "15",
     u: "nos",
     target: "<5",
@@ -5915,6 +5917,35 @@ function productTrendFromPoints(points, date) {
   return {
     sp,
     trendPct: prev === 0 ? null : ((curr - prev) / Math.abs(prev)) * 100,
+  };
+}
+
+/** Compare only adjacent published periods, never a stale or skipped period. */
+function processTrendFromPoints(points, date, granularity) {
+  const valid = (Array.isArray(points) ? points : [])
+    .filter((p) => p.value != null && Number.isFinite(Number(p.value)))
+    .map((p) => ({ date: String(p.date).slice(0, 10), value: Number(p.value) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const sp = valid.map((p) => p.value);
+  let previousDate;
+  if (granularity === "MONTH") {
+    const [year, month] = date.split("-").map(Number);
+    previousDate = new Date(Date.UTC(year, month - 2, 1))
+      .toISOString()
+      .slice(0, 10);
+  } else if (granularity === "YEAR") {
+    previousDate = `${Number(date.slice(0, 4)) - 1}-01-01`;
+  } else {
+    previousDate = offsetIsoDate(date, -1);
+  }
+  const current = valid.find((p) => p.date === date);
+  const previous = valid.find((p) => p.date === previousDate);
+  return {
+    sp: sp.length >= 2 ? sp : null,
+    trendPct:
+      current && previous && previous.value !== 0
+        ? ((current.value - previous.value) / Math.abs(previous.value)) * 100
+        : null,
   };
 }
 
@@ -12481,6 +12512,7 @@ function QualityDashboard({ plant, onBack }) {
   const [liveProcess, setLiveProcess] = useState(null);
   const [processLoading, setProcessLoading] = useState(true);
   const [processSummary, setProcessSummary] = useState(null);
+  const [processHistory, setProcessHistory] = useState({});
   const [productSummary, setProductSummary] = useState(null);
   const [curingScrapRows, setCuringScrapRows] = useState(null);
   const [productHistory, setProductHistory] = useState({});
@@ -12544,6 +12576,44 @@ function QualityDashboard({ plant, onBack }) {
   }, [tab, processDate, shift, processGranularity]);
 
   useEffect(() => {
+    if (tab !== "process") return;
+    let cancelled = false;
+    setProcessHistory({});
+    Promise.allSettled(
+      Object.entries(PROCESS_KPI_NAME).map(async ([id, kpiName]) => {
+        const result = await getProcessKpiHistory({
+          kpiName,
+          dateFrom: productWindow.from,
+          dateTo: productWindow.to,
+          shift,
+          granularity: processGranularity,
+        });
+        return [id, result?.points || []];
+      }),
+    ).then((results) => {
+      if (!cancelled) {
+        setProcessHistory(
+          Object.fromEntries(
+            results
+              .filter((result) => result.status === "fulfilled")
+              .map((result) => result.value),
+          ),
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    tab,
+    processDate,
+    productWindow.from,
+    productWindow.to,
+    shift,
+    processGranularity,
+  ]);
+
+  useEffect(() => {
     if (tab !== "product") return;
     let cancelled = false;
     setProductLoading(true);
@@ -12604,6 +12674,18 @@ function QualityDashboard({ plant, onBack }) {
     };
   }, [tab, processDate, shift, processGranularity]);
 
+  const periodLabel = productPeriodLabel(
+    processDate,
+    processGranularity,
+    shift,
+  );
+  const trendBaseline =
+    processGranularity === "MONTH"
+      ? "vs prev month"
+      : processGranularity === "YEAR"
+        ? "vs prev year"
+        : "vs prev day";
+
   // Merge live overall values onto supported Process cards. KPI cards without
   // an API-backed value render as NA so the quality dashboard never shows dummy
   // KPI data as production data.
@@ -12615,7 +12697,13 @@ function QualityDashboard({ plant, onBack }) {
       ...k,
       v: live.value == null ? "—" : String(live.value),
       status: null,
-      sp: null,
+      ...processTrendFromPoints(
+        processHistory[k.id],
+        processDate,
+        processGranularity,
+      ),
+      periodLabel,
+      trendBaseline,
       live: true,
       na: false,
       trendApi: true,
@@ -12640,17 +12728,6 @@ function QualityDashboard({ plant, onBack }) {
         kpiDefs: [CURING_SCRAP_KPI],
       })[0]
     : null;
-  const periodLabel = productPeriodLabel(
-    processDate,
-    processGranularity,
-    shift,
-  );
-  const trendBaseline =
-    processGranularity === "MONTH"
-      ? "vs prev month"
-      : processGranularity === "YEAR"
-        ? "vs prev year"
-        : "vs prev day";
   const productCards = PRODUCT_KPIS.map((kpi) => {
     if (kpi.productionSource === "curingScrap") {
       if (!curingScrapCard || curingScrapCard.value == null) {
