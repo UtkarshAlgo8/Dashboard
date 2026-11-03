@@ -82,6 +82,8 @@ function ProductionHeader({
   singleDay = null,
   onSingleDayChange,
   showSpcAlertIcon = false,
+  onSpcAlertClick,
+  spcAlertsDisabled = false,
   // Overrides the page name the navbar derives from the route.
   pageTitle = null,
 }) {
@@ -302,25 +304,33 @@ function ProductionHeader({
 
           <Stack direction="row" alignItems="center" spacing={1}>
             {showSpcAlertIcon && (
-              <Tooltip title="SPC alerts">
-                <Box
-                  component="span"
-                  role="img"
-                  aria-label="SPC alerts"
-                  sx={{
-                    width: 34,
-                    height: 34,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "50%",
-                    color: "error.dark",
-                    backgroundColor: "rgba(215, 0, 20, 0.08)",
-                    border: "1px solid rgba(215, 0, 20, 0.22)",
-                  }}
-                >
-                  <ReportProblemOutlinedIcon sx={{ fontSize: 21 }} />
-                </Box>
+              <Tooltip
+                title={
+                  spcAlertsDisabled
+                    ? "Select an SPC card to view alerts"
+                    : "SPC alerts"
+                }
+              >
+                <span>
+                  <IconButton
+                    aria-label="SPC alerts"
+                    onClick={onSpcAlertClick}
+                    disabled={spcAlertsDisabled}
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "50%",
+                      color: "error.dark",
+                      backgroundColor: "rgba(215, 0, 20, 0.08)",
+                      border: "1px solid rgba(215, 0, 20, 0.22)",
+                    }}
+                  >
+                    <ReportProblemOutlinedIcon sx={{ fontSize: 21 }} />
+                  </IconButton>
+                </span>
               </Tooltip>
             )}
             <SendMailButton />

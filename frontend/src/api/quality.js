@@ -272,13 +272,26 @@ export function getSpcSummary({ date, shift = "All", machine } = {}) {
   const params = new URLSearchParams({ plant: "BANMORE", shift });
   if (date) params.set("date", date);
   if (machine && machine !== "All") params.set("machine", machine);
-  return cachedQualityGet(`/quality/spc/summary?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/summary?${params.toString()}`, 30_000);
 }
 
-export function getSpcFilterOptions({ date, shift = "All" } = {}) {
+export function getSpcFilterOptions({
+  date,
+  from,
+  to,
+  machine,
+  shift = "All",
+} = {}) {
   const params = new URLSearchParams({ plant: "BANMORE", shift });
-  if (date) params.set("date", date);
-  return cachedQualityGet(`/quality/spc/filter-options?${params.toString()}`);
+  if (from && to) {
+    params.set("from", from);
+    params.set("to", to);
+  } else if (date) params.set("date", date);
+  if (machine && machine !== "All") params.set("machine", machine);
+  return cachedQualityGet(
+    `/quality/spc/filter-options?${params.toString()}`,
+    30_000,
+  );
 }
 
 // `from`/`to` request the whole range's SPC data (month/year view) instead of
@@ -305,7 +318,7 @@ export function getSpcWidgets({
   if (headlineStatus && headlineStatus !== "All") {
     params.set("headline_status", headlineStatus);
   }
-  return cachedQualityGet(`/quality/spc/widgets?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/widgets?${params.toString()}`, 30_000);
 }
 
 export function getSpcDetail({
@@ -330,7 +343,7 @@ export function getSpcDetail({
   } else if (date) {
     params.set("date", date);
   }
-  return cachedQualityGet(`/quality/spc/detail?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/detail?${params.toString()}`, 30_000);
 }
 
 export function getSpcTrend({
@@ -352,7 +365,7 @@ export function getSpcTrend({
     parameter,
     metric,
   });
-  return cachedQualityGet(`/quality/spc/trend?${params.toString()}`);
+  return cachedQualityGet(`/quality/spc/trend?${params.toString()}`, 30_000);
 }
 
 /**

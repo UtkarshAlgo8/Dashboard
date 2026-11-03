@@ -430,11 +430,11 @@ function CtpInventoryBody({ m, tyreType, shift, filter, setFilter }) {
         ))}
 
         <Typography sx={{ fontSize: 11.5, color: "text.disabled" }}>
-          Total Inventory = SUM(quantity) · MHE = Gold MHE_Count (status-independent;
-          headline may include counts without item mapping). Status,
-          section, product type, item code and the header PCR/TBR filter all
-          combine; Days cover ignores the status filter because Expired and On
-          Hold stock cannot be issued.
+          Total Inventory = SUM(quantity) · MHE = Gold MHE_Count
+          (status-independent; headline may include counts without item
+          mapping). Status, section, product type, item code and the header
+          PCR/TBR filter all combine; Days cover ignores the status filter
+          because Expired and On Hold stock cannot be issued.
         </Typography>
       </Stack>
     </Box>

@@ -1,4 +1,7 @@
-import { canonicalizeSubSection, denanDimension } from "./dashboardRowScopes.js";
+import {
+  canonicalizeSubSection,
+  denanDimension,
+} from "./dashboardRowScopes.js";
 import { DOWNTIME_REASONS } from "./downtime.js";
 
 export const CTP_TOTAL_DOWNTIME_KPI = "Total_Downtime";

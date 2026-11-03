@@ -99,7 +99,10 @@ test("MHE_Count uses Gold item counts, honors non-status filters, and ignores st
         {
           name: "PCR Belt",
           items: [
-            { ...item("PCR-1", "PCR", [lot("READY", 10), lot("HOLD", 4)]), mhe_count: 3 },
+            {
+              ...item("PCR-1", "PCR", [lot("READY", 10), lot("HOLD", 4)]),
+              mhe_count: 3,
+            },
             { ...item("PCR-2", "PCR", [lot("READY", 5)]), mhe_count: 2 },
           ],
         },
@@ -119,7 +122,10 @@ test("MHE_Count uses Gold item counts, honors non-status filters, and ignores st
 
   assert.equal(sumCtpMheCounts(m, f), 5);
   const rows = aggregateByItem(m, selectCtpLots(m, f), f);
-  assert.deepEqual(rows.map(({ item, mhe }) => [item, mhe]), [["PCR-1", 3]]);
+  assert.deepEqual(
+    rows.map(({ item, mhe }) => [item, mhe]),
+    [["PCR-1", 3]],
+  );
   const statusCard = computeInsightCard(m, f, selectCtpLots(m, f), {
     type: "status_qty",
     status: "HOLD",
@@ -128,12 +134,39 @@ test("MHE_Count uses Gold item counts, honors non-status filters, and ignores st
 });
 
 test("unassigned MHE counts contribute to the headline only within their known filter scope", () => {
-  const m = model([], [
-    { section: "Stock", product_type: null, itemcode: null, tyre_type: "PCR", mhe_count: 3 },
-    { section: "Stock", product_type: "PCR Belt", itemcode: null, tyre_type: "PCR", mhe_count: 2 },
-    { section: "Stock", product_type: "TBR Belt", itemcode: null, tyre_type: "TBR", mhe_count: 5 },
-    { section: null, product_type: null, itemcode: null, tyre_type: "PCR", mhe_count: 7 },
-  ]);
+  const m = model(
+    [],
+    [
+      {
+        section: "Stock",
+        product_type: null,
+        itemcode: null,
+        tyre_type: "PCR",
+        mhe_count: 3,
+      },
+      {
+        section: "Stock",
+        product_type: "PCR Belt",
+        itemcode: null,
+        tyre_type: "PCR",
+        mhe_count: 2,
+      },
+      {
+        section: "Stock",
+        product_type: "TBR Belt",
+        itemcode: null,
+        tyre_type: "TBR",
+        mhe_count: 5,
+      },
+      {
+        section: null,
+        product_type: null,
+        itemcode: null,
+        tyre_type: "PCR",
+        mhe_count: 7,
+      },
+    ],
+  );
   const f = { ...emptyCtpFilter("PCR"), st: ["HOLD"], sec: "Stock" };
 
   assert.equal(sumCtpUnassignedMheCounts(m, f), 5);

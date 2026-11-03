@@ -46,13 +46,19 @@ test("CTP reason scope excludes unassigned dimensions and preserves shared-line 
     subSection: "Trench1",
     tyreType: "PCR",
   });
-  assert.deepEqual(scoped.map((r) => r.actual_value), [10, 15]);
+  assert.deepEqual(
+    scoped.map((r) => r.actual_value),
+    [10, 15],
+  );
 
   const alias = scopeCtpDowntimeReasonRows(
     [row(50, { sub_section: "Three Roll", tyre_type: "TBR" })],
     { section: "Curing", subSection: "3 Roll", tyreType: "TBR" },
   );
-  assert.deepEqual(alias.map((r) => r.actual_value), [50]);
+  assert.deepEqual(
+    alias.map((r) => r.actual_value),
+    [50],
+  );
 });
 
 test("CTP reason breakdown sums raw machine values and filters a selected machine", () => {

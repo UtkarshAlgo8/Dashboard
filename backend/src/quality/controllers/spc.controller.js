@@ -9,15 +9,24 @@
  * the combo's whole history — see silver.queries.js for why. The shift
  * selector drives both: gold granularity (Day | Shift A/B/C) and the silver
  * clock hours (A 07–15, B 15–23, C 23–07) on every date.
+ *
+ * Exception: the temporary Calender 4 JSON source is exact-snapshot/date-range
+ * gated, all-shifts, and uses individual deviation readings (not subgroups).
  */
 import { cached, buildCacheKey } from "../../utils/cache.js";
+import { config } from "../../config.js";
+import {
+  eligibleCalender4,
+  calender4Fixture,
+  calender4Provenance,
+  summaryFromWidgets,
+} from "../spc/static-calender4.js";
+import { mergeSpcSources, staticSelection } from "../spc/sources.js";
+import { toIndividualDetail } from "../spc/individuals.js";
 import { runQuery } from "../datasource/index.js";
 import {
   spcSnapshotQuery,
   spcCapabilityRowsQuery,
-  spcMachinesQuery,
-  spcRecipesQuery,
-  spcProductTypesQuery,
   spcDetailRowsQuery,
   spcCapabilityTrendQuery,
   spcCapabilityRangeQuery,
@@ -30,12 +39,7 @@ import {
   silverPointsQuery,
   silverBoardQuery,
 } from "../queries/silver.queries.js";
-import {
-  toSpcSummary,
-  toSpcFilterOptions,
-  toSpcWidgets,
-  toSpcDetail,
-} from "../transformers/spc.transformers.js";
+import { toSpcDetail } from "../transformers/spc.transformers.js";
 import {
   resolveSilver,
   sourceForMachine,
@@ -101,7 +105,12 @@ async function loadLimitsIndex({ machine, parameter, isoDate }) {
   const index = new Map();
   for (const [key, group] of byKey) {
     const picked = pickBaseline(group, isoDate);
-    const entry = { ucl: null, lcl: null, baseline_date: picked.baseline_date, on_or_before: picked.on_or_before };
+    const entry = {
+      ucl: null,
+      lcl: null,
+      baseline_date: picked.baseline_date,
+      on_or_before: picked.on_or_before,
+    };
     for (const r of picked.rows) {
       const { bound } = splitLimitName(r.kpi_name);
       if (bound === "UCL") entry.ucl = r.actual_value;
@@ -118,7 +127,8 @@ function splitLimitName(kpiName) {
   const i = s.lastIndexOf(" ");
   if (i === -1) return { parameter: null, bound: null };
   const bound = s.slice(i + 1).toUpperCase();
-  if (bound !== "UCL" && bound !== "LCL") return { parameter: null, bound: null };
+  if (bound !== "UCL" && bound !== "LCL")
+    return { parameter: null, bound: null };
   return { parameter: s.slice(0, i).trim(), bound };
 }
 
@@ -180,10 +190,16 @@ async function loadBoardSeries({ machine, recipe, shift }) {
         // silently swallowed, an upstream failure is indistinguishable from
         // a combo with no history, and the board just looks like no data.
         console.warn(`[spc] board series ${src.table}: ${err.message}`);
-        return { src, params, rows: [] };
+        return {
+          src,
+          params,
+          rows: [],
+          error: `Measurements unavailable from ${src.table}`,
+        };
       }
     }),
   );
+  index.failures = results.flatMap((r) => (r.error ? [r.error] : []));
   for (const { params, rows } of results) {
     for (const row of rows) {
       for (const [parameter, p] of Object.entries(params)) {
@@ -256,44 +272,129 @@ async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
       key,
       () =>
         runQuery(
-          silverPointsQuery(src, { machine, recipe, shift, readings: CHART_READINGS }),
+          silverPointsQuery(src, {
+            machine,
+            recipe,
+            shift,
+            readings: CHART_READINGS,
+          }),
         ),
       SILVER_CACHE_TTL_MS,
     );
   } catch (err) {
-    console.warn(`[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.message}`);
+    console.warn(
+      `[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.message}`,
+    );
     return [];
   }
 }
 
 /** What the silver dots cover, echoed in place of the old date window. */
 function silverScope(shift) {
-  return { latest_subgroups: CHART_SUBGROUPS, latest_readings: CHART_READINGS, shift: shift ?? "All" };
+  return {
+    latest_subgroups: CHART_SUBGROUPS,
+    latest_readings: CHART_READINGS,
+    shift: shift ?? "All",
+  };
+}
+
+// Scope/version belong in every merged-response cache key, including Redis after redeploy.
+function spcKey(route, query) {
+  return buildCacheKey(route, {
+    ...query,
+    overlay: config.quality.spcCalender4StaticEnabled
+      ? calender4Fixture.version
+      : "disabled-v1",
+  });
+}
+
+function staticCombos(query) {
+  return eligibleCalender4(query, config.quality.spcCalender4StaticEnabled);
+}
+
+async function loadSpcBoard(query) {
+  const { date, from, to, machine, recipe, shift, plant } = query;
+  const scope = { date, from, to, machine, recipe, shift, plant };
+  return cached(spcKey("/quality/spc/resolved-board", scope), async () => {
+    const granularity = spcGranularity(shift);
+    const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
+    const [rows, limitsIndex, seriesIndex] = snapshot
+      ? await Promise.all([
+          from && to
+            ? runQuery(
+                spcCapabilityRangeQuery({
+                  from,
+                  to,
+                  granularity,
+                  machine,
+                  recipe,
+                }),
+              ).then(gradeRangeRows)
+            : runQuery(
+                spcCapabilityRowsQuery({
+                  snapshot,
+                  granularity,
+                  machine,
+                  recipe,
+                }),
+              ),
+          loadLimitsIndex({ machine, isoDate: snapshot }),
+          loadBoardSeries({ machine, recipe, shift }),
+        ])
+      : [[], new Map(), new Map()];
+    return {
+      snapshot,
+      widgets: mergeSpcSources(rows, staticCombos(scope), {
+        limitsIndex,
+        seriesIndex,
+      }),
+      warnings: seriesIndex.failures ?? [],
+    };
+  });
+}
+
+async function selectedStatic(query) {
+  const eligible = staticCombos(query);
+  if (!eligible.length) return null;
+  const board = await loadSpcBoard(query);
+  const combo = staticSelection(board.widgets, eligible, query);
+  return combo ? { combo, warnings: board.warnings } : null;
+}
+
+function staticContext(query, combo, warnings = []) {
+  return {
+    plant: query.plant,
+    machine: combo.machine,
+    recipe: combo.recipe,
+    parameter: combo.parameter,
+    snapshot_date: combo.snapshot_date,
+    granularity: "Day",
+    shift: "All",
+    requested_shift: query.shift ?? "All",
+    shift_supported: false,
+    silver_scope: null,
+    measurement_scope: {
+      shift: "All",
+      readings: combo.readings.length,
+      coverage: combo.coverage,
+    },
+    source: calender4Provenance(combo),
+    warnings,
+  };
 }
 
 /** GET /quality/spc/summary  ?date= [&shift= &machine=] */
 export async function getSpcSummary(req, res, next) {
   try {
-    const { date, machine, plant, shift } = req.query;
-    const granularity = spcGranularity(shift);
-    const key = buildCacheKey("/quality/spc/summary", req.query);
-    const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date, granularity);
-      if (!snapshot) return { snapshot: null, summary: null };
-      const rows = await runQuery(
-        spcCapabilityRowsQuery({ snapshot, granularity, machine }),
-      );
-      return { snapshot, summary: toSpcSummary(rows) };
-    });
-    if (!body.snapshot) {
-      return res.json({
-        context: { plant, snapshot_date: null, granularity },
-        total_parameters: 0,
-      });
-    }
+    const board = await loadSpcBoard(req.query);
     res.json({
-      context: { plant, snapshot_date: body.snapshot, granularity },
-      ...body.summary,
+      context: {
+        plant: req.query.plant,
+        snapshot_date: board.snapshot,
+        granularity: spcGranularity(req.query.shift),
+        warnings: board.warnings,
+      },
+      ...summaryFromWidgets(board.widgets),
     });
   } catch (err) {
     next(err);
@@ -303,33 +404,34 @@ export async function getSpcSummary(req, res, next) {
 /** GET /quality/spc/filter-options  ?date= [&shift= &machine=] */
 export async function getSpcFilterOptions(req, res, next) {
   try {
-    const { date, plant, shift, machine } = req.query;
-    const granularity = spcGranularity(shift);
-    const key = buildCacheKey("/quality/spc/filter-options", req.query);
-    const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(date, granularity);
-      if (!snapshot) return null;
-      const [machines, recipes, productTypes] = await Promise.all([
-        runQuery(spcMachinesQuery({ snapshot, granularity })),
-        runQuery(spcRecipesQuery({ snapshot, granularity, machine })),
-        runQuery(spcProductTypesQuery({ snapshot, granularity })),
-      ]);
-      return {
-        snapshot,
-        options: toSpcFilterOptions({ machines, recipes, productTypes }),
-      };
+    // Machines stay selectable; recipe options depend on the selected machine.
+    const board = await loadSpcBoard({
+      ...req.query,
+      machine: undefined,
+      recipe: undefined,
     });
-    if (!body) {
-      return res.json({
-        context: { plant, snapshot_date: null, granularity },
-        machines: [],
-        recipes: [],
-        product_types: [],
-      });
-    }
+    const selected =
+      req.query.machine && req.query.machine !== "All"
+        ? board.widgets.filter(
+            (w) => w.machine.toUpperCase() === req.query.machine.toUpperCase(),
+          )
+        : board.widgets;
+    const distinct = (rows, field) =>
+      [
+        ...new Set(
+          rows.map((w) => w[field]).filter((v) => v != null && v !== ""),
+        ),
+      ].sort();
     res.json({
-      context: { plant, snapshot_date: body.snapshot, granularity },
-      ...body.options,
+      context: {
+        plant: req.query.plant,
+        snapshot_date: board.snapshot,
+        granularity: spcGranularity(req.query.shift),
+        warnings: board.warnings,
+      },
+      machines: distinct(board.widgets, "machine"),
+      recipes: distinct(selected, "recipe"),
+      product_types: distinct(board.widgets, "product_type"),
     });
   } catch (err) {
     next(err);
@@ -345,43 +447,23 @@ export async function getSpcFilterOptions(req, res, next) {
  */
 export async function getSpcWidgets(req, res, next) {
   try {
-    const { date, from, to, machine, recipe, headline_status: headline, plant, shift } = req.query;
+    const {
+      machine,
+      recipe,
+      headline_status: headline,
+      plant,
+      shift,
+    } = req.query;
     const granularity = spcGranularity(shift);
-    const key = buildCacheKey("/quality/spc/widgets", req.query);
-    const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
-      if (!snapshot) return { snapshot: null };
-      // Month / date-range views average the days in the range; a single-day
-      // view reads that day's published rows.
-      const capabilityRows =
-        from && to
-          ? runQuery(
-              spcCapabilityRangeQuery({ from, to, granularity, machine, recipe }),
-            ).then(gradeRangeRows)
-          : runQuery(spcCapabilityRowsQuery({ snapshot, granularity, machine, recipe }));
-      const [rows, limitsIndex, seriesIndex] = await Promise.all([
-        capabilityRows,
-        loadLimitsIndex({ machine, isoDate: snapshot }),
-        loadBoardSeries({ machine, recipe, shift }),
-      ]);
-      let { count, widgets } = toSpcWidgets(rows, { limitsIndex, seriesIndex });
-      if (headline) {
-        widgets = widgets.filter((w) => w.headline_status === headline);
-        count = widgets.length;
-      }
-      return { snapshot, count, widgets };
-    });
-    if (!body.snapshot) {
-      return res.json({
-        context: { plant, snapshot_date: null, machine, recipe, granularity },
-        count: 0,
-        widgets: [],
-      });
-    }
+    const body = await loadSpcBoard(req.query);
+    const widgets = headline
+      ? body.widgets.filter((w) => w.headline_status === headline)
+      : body.widgets;
     res.json({
       context: {
         plant,
         snapshot_date: body.snapshot,
+        warnings: body.warnings,
         machine,
         recipe,
         granularity,
@@ -389,8 +471,8 @@ export async function getSpcWidgets(req, res, next) {
         silver_scope: silverScope(shift),
         ...(headline ? { headline_status: headline } : {}),
       },
-      count: body.count,
-      widgets: body.widgets,
+      count: widgets.length,
+      widgets,
     });
   } catch (err) {
     next(err);
@@ -404,27 +486,61 @@ export async function getSpcWidgets(req, res, next) {
  */
 export async function getSpcDetail(req, res, next) {
   try {
-    const { date, from, to, machine, recipe, parameter, shift, plant } = req.query;
+    const { date, from, to, machine, recipe, parameter, shift, plant } =
+      req.query;
     if (
       !hasQueryValue(req.query, "machine") ||
       !hasQueryValue(req.query, "recipe") ||
       !hasQueryValue(req.query, "parameter")
     ) {
-      return badRequest(res, "`machine`, `recipe`, and `parameter` are required.");
+      return badRequest(
+        res,
+        "`machine`, `recipe`, and `parameter` are required.",
+      );
     }
     const granularity = spcGranularity(shift);
-    const key = buildCacheKey("/quality/spc/detail", req.query);
+    const key = spcKey("/quality/spc/detail", req.query);
     const body = await cached(key, async () => {
-      const snapshot = await resolveSnapshot(from && to ? to : date, granularity);
+      const selected = await selectedStatic(req.query);
+      if (selected)
+        return {
+          snapshot: selected.combo.snapshot_date,
+          static_context: staticContext(
+            req.query,
+            selected.combo,
+            selected.warnings,
+          ),
+          detail: toIndividualDetail(
+            selected.combo,
+            calender4Provenance(selected.combo),
+          ),
+        };
+      const snapshot = await resolveSnapshot(
+        from && to ? to : date,
+        granularity,
+      );
       if (!snapshot) return { snapshot: null };
       const src = resolveSilver(machine, parameter);
       const capabilityRows =
         from && to
           ? runQuery(
-              spcDetailRangeQuery({ from, to, granularity, machine, recipe, parameter }),
+              spcDetailRangeQuery({
+                from,
+                to,
+                granularity,
+                machine,
+                recipe,
+                parameter,
+              }),
             ).then(gradeRangeRows)
           : runQuery(
-              spcDetailRowsQuery({ snapshot, granularity, machine, recipe, parameter }),
+              spcDetailRowsQuery({
+                snapshot,
+                granularity,
+                machine,
+                recipe,
+                parameter,
+              }),
             );
       const [rows, limitsIndex, points] = await Promise.all([
         capabilityRows,
@@ -433,7 +549,9 @@ export async function getSpcDetail(req, res, next) {
           ? loadSilverReadings({ src, machine, recipe, parameter, shift })
           : Promise.resolve([]),
       ]);
-      const limitsEntry = limitsIndex.get(`${String(machine).toUpperCase()}|||${parameter}`);
+      const limitsEntry = limitsIndex.get(
+        `${String(machine).toUpperCase()}|||${parameter}`,
+      );
       const detail = toSpcDetail(rows, {
         points,
         limits: {
@@ -472,6 +590,7 @@ export async function getSpcDetail(req, res, next) {
         silver_scope: silverScope(shift),
         // Shift narrows both the gold granularity and the silver clock hours.
         shift_supported: true,
+        ...body.static_context,
       },
       ...body.detail,
     });
@@ -501,7 +620,26 @@ export async function getSpcTrend(req, res, next) {
     if (from > to) return badRequest(res, "`from` must not be after `to`.");
 
     const granularity = spcGranularity(shift);
-    const key = buildCacheKey("/quality/spc/trend", req.query);
+    const selected = await selectedStatic(req.query);
+    if (selected) {
+      const cell = selected.combo.metrics[metric];
+      return res.json({
+        context: {
+          ...staticContext(req.query, selected.combo, selected.warnings),
+          from,
+          to,
+          metric,
+        },
+        points: [
+          {
+            date: selected.combo.snapshot_date,
+            value: cell.value,
+            status: cell.status,
+          },
+        ],
+      });
+    }
+    const key = spcKey("/quality/spc/trend", req.query);
     const rows = await cached(key, () =>
       runQuery(
         spcCapabilityTrendQuery({
@@ -557,7 +695,31 @@ export async function getHistogramObservations(req, res, next) {
       !hasQueryValue(req.query, "parameter") ||
       !Number.isFinite(binIndex)
     ) {
-      return badRequest(res, "`machine`, `recipe`, `parameter`, `bin_index` are required.");
+      return badRequest(
+        res,
+        "`machine`, `recipe`, `parameter`, `bin_index` are required.",
+      );
+    }
+    const selected = await selectedStatic(req.query);
+    if (selected) {
+      const detail = toIndividualDetail(
+        selected.combo,
+        calender4Provenance(selected.combo),
+      );
+      const bins = detail.histogram.bins;
+      const bin = bins[binIndex];
+      if (!bin) return res.json({ observations_available: false, bin: null });
+      const observations = detail.x_chart.points.filter(
+        (p) =>
+          p.value >= bin.from &&
+          (binIndex === bins.length - 1 ? p.value <= bin.to : p.value < bin.to),
+      );
+      return res.json({
+        context: staticContext(req.query, selected.combo, selected.warnings),
+        observations_available: true,
+        bin,
+        observations,
+      });
     }
     const granularity = spcGranularity(shift);
     const snapshot = await resolveSnapshot(date, granularity);
@@ -565,8 +727,16 @@ export async function getHistogramObservations(req, res, next) {
     if (!snapshot || !src) {
       return res.json({ observations_available: false, bin: null });
     }
-    const points = await loadSilverReadings({ src, machine, recipe, parameter, shift });
-    const values = points.map((p) => toNumber(p.value)).filter((v) => v != null);
+    const points = await loadSilverReadings({
+      src,
+      machine,
+      recipe,
+      parameter,
+      shift,
+    });
+    const values = points
+      .map((p) => toNumber(p.value))
+      .filter((v) => v != null);
     if (values.length === 0) {
       return res.json({ observations_available: false, bin: null });
     }
@@ -574,12 +744,17 @@ export async function getHistogramObservations(req, res, next) {
     const bin = dist.bins[binIndex];
     if (!bin) return res.json({ observations_available: false, bin: null });
     const inBin = points
-      .map((p) => ({ time: normalizeTime(p.event_time), value: toNumber(p.value) }))
+      .map((p) => ({
+        time: normalizeTime(p.event_time),
+        value: toNumber(p.value),
+      }))
       .filter(
         (p) =>
           p.value != null &&
           p.value >= bin.from &&
-          (binIndex === dist.bins.length - 1 ? p.value <= bin.to : p.value < bin.to),
+          (binIndex === dist.bins.length - 1
+            ? p.value <= bin.to
+            : p.value < bin.to),
       );
     res.json({
       observations_available: true,
@@ -607,7 +782,28 @@ export async function getPointObservations(req, res, next) {
       !hasQueryValue(req.query, "parameter") ||
       !Number.isFinite(pointIndex)
     ) {
-      return badRequest(res, "`machine`, `recipe`, `parameter`, `point_index` are required.");
+      return badRequest(
+        res,
+        "`machine`, `recipe`, `parameter`, `point_index` are required.",
+      );
+    }
+    const selected = await selectedStatic(req.query);
+    if (selected) {
+      const detail = toIndividualDetail(
+        selected.combo,
+        calender4Provenance(selected.combo),
+      );
+      const i = pointIndex - 1;
+      const point = (chart === "R" ? detail.r_chart : detail.x_chart).points[i];
+      const available = point != null && point.value != null;
+      return res.json({
+        context: staticContext(req.query, selected.combo, selected.warnings),
+        observations_available: available,
+        point: point ? { ...point, chart, subgroup_size: 1 } : null,
+        observations: available
+          ? detail.x_chart.points.slice(chart === "R" ? i - 1 : i, i + 1)
+          : [],
+      });
     }
     const granularity = spcGranularity(shift);
     const snapshot = await resolveSnapshot(date, granularity);
@@ -615,7 +811,13 @@ export async function getPointObservations(req, res, next) {
     if (!snapshot || !src) {
       return res.json({ observations_available: false, point: null });
     }
-    const rows = await loadSilverReadings({ src, machine, recipe, parameter, shift });
+    const rows = await loadSilverReadings({
+      src,
+      machine,
+      recipe,
+      parameter,
+      shift,
+    });
     const clean = rows
       .map((p) => ({ event_time: p.event_time, value: toNumber(p.value) }))
       .filter((p) => p.value != null);
@@ -624,7 +826,10 @@ export async function getPointObservations(req, res, next) {
     if (i < 0 || i >= sg.means.length) {
       return res.json({ observations_available: false, point: null });
     }
-    const members = clean.slice(i * SUBGROUP_SIZE, i * SUBGROUP_SIZE + SUBGROUP_SIZE);
+    const members = clean.slice(
+      i * SUBGROUP_SIZE,
+      i * SUBGROUP_SIZE + SUBGROUP_SIZE,
+    );
     res.json({
       observations_available: true,
       point: {
@@ -634,7 +839,10 @@ export async function getPointObservations(req, res, next) {
         time: sg.times[i],
         subgroup_size: SUBGROUP_SIZE,
       },
-      observations: members.map((m) => ({ time: normalizeTime(m.event_time), value: m.value })),
+      observations: members.map((m) => ({
+        time: normalizeTime(m.event_time),
+        value: m.value,
+      })),
     });
   } catch (err) {
     next(err);

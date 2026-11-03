@@ -122,6 +122,8 @@ export function toSpcWidgets(rows, { limitsIndex, seriesIndex } = {}) {
       headline_status: c.headline_status,
       cp,
       cpk,
+      cp_status: c.metrics.Cp?.status ?? "Insufficient Data",
+      cpk_status: c.metrics.Cpk?.status ?? "Insufficient Data",
       // Readings that actually back the chart (whole subgroups only). The
       // sparkline itself is thinned for transport, so `subgroups` reports
       // how many were computed, not how many are drawn.

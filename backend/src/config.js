@@ -110,6 +110,8 @@ export const config = {
   // controllers — is unchanged across the switch.
   quality: {
     dataSource: optional("QUALITY_DATA_SOURCE", "db"), // "excel" | "db"
+    // Temporary, date-scoped Calender 4 supplement; never replaces a complete live combo.
+    spcCalender4StaticEnabled: optional("SPC_CALENDER4_STATIC_ENABLED", "true") !== "false",
     // Reference workbook (FRD §B): sheet `result`, 23 columns.
     excelPath: optional(
       "QUALITY_EXCEL_PATH",
