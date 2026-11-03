@@ -34,11 +34,13 @@ export function importCalender4(buffer, filename) {
   const combos = new Map();
   const identity = (r, parameter) => {
     assert(
-      r.plant === "BANMORE" && r.machine === "ROLL_CALENDER_4_0501_1",
+      r.plant === "BANMORE" && r.machine === "ROLL_CALENDER_4_0501",
       "Unexpected plant/machine",
     );
     assert(
-      ["BHARAT", "CAP 66", "CPJ114", "EHT1000"].includes(r.itemcode),
+      typeof r.itemcode === "string" &&
+        r.itemcode.trim() === r.itemcode &&
+        r.itemcode.length > 0,
       `Unexpected recipe ${r.itemcode}`,
     );
     assert(
@@ -130,10 +132,7 @@ export function importCalender4(buffer, filename) {
     });
   }
   const combinations = [...combos.values()];
-  assert(
-    combinations.length === 8,
-    `Expected 8 combinations, got ${combinations.length}`,
-  );
+  assert(combinations.length > 0, "No KPI combinations found");
   for (const c of combinations) {
     assert(
       METRICS.every((m) => c.metrics[m]),

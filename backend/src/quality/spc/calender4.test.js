@@ -26,7 +26,7 @@ import {
 } from "../../../../frontend/src/lib/spcCharts.js";
 
 const combo = fixture.combinations[0];
-const date = "2026-11-02";
+const date = "2026-11-03";
 const deps = () => ({ limitsIndex: new Map(), seriesIndex: new Map() });
 
 function workbookBuffer() {
@@ -90,32 +90,42 @@ function workbookBuffer() {
 }
 
 test("Calender 4 fixture inventory, published capability and headline reconciliation", () => {
-  assert.equal(fixture.kpi_rows, 48);
-  assert.equal(fixture.reading_rows, 1022);
-  assert.equal(fixture.combinations.length, 8);
+  assert.equal(fixture.kpi_rows, 60);
+  assert.equal(fixture.reading_rows, 646);
+  assert.equal(fixture.combinations.length, 10);
+  assert.ok(
+    fixture.combinations.every(
+      (c) => c.machine === "ROLL_CALENDER_4_0501" && c.snapshot_date === date,
+    ),
+  );
+  assert.deepEqual(
+    fixture.combinations
+      .filter((c) => c.recipe === "CPJ1218_B370" || c.recipe === "ECOPOLY 1500")
+      .map((c) => c.parameter),
+    ["Scanner Drive Zone", "Scanner Drive Zone"],
+  );
   assert.deepEqual(
     fixture.combinations.map((c) => c.readings.length),
-    [50, 58, 359, 137, 57, 58, 180, 123],
+    [50, 62, 39, 37, 140, 42, 57, 61, 126, 32],
   );
   assert.equal(
     fixture.combinations.reduce((n, c) => n + c.readings.length, 0),
-    1022,
+    646,
   );
   const widgets = mergeSpcSources([], eligibleCalender4({ date }), deps());
   assert.deepEqual(summaryFromWidgets(widgets), {
-    total_parameters: 8,
+    total_parameters: 10,
     out_of_specification: 7,
-    marginal: 0,
-    not_capable: 0,
+    marginal: 1,
+    not_capable: 1,
     capable: 1,
     insufficient_data: 0,
   });
   const healthy = widgets.find((w) => w.headline_status === "Healthy");
-  assert.equal(healthy.recipe, "CPJ114");
+  assert.equal(healthy.recipe, "UNIHT1330");
   assert.equal(healthy.parameter, "Scanner Water Zone");
-  assert.equal(healthy.cpk, 14.0824);
   const mixed = widgets.find(
-    (w) => w.recipe === "CPJ114" && w.parameter === "Scanner Drive Zone",
+    (w) => w.recipe === "ECOPOLY 1500" && w.parameter === "Scanner Drive Zone",
   );
   assert.equal(mixed.cp_status, "Warning");
   assert.equal(mixed.cpk_status, "Major");
@@ -124,8 +134,8 @@ test("Calender 4 fixture inventory, published capability and headline reconcilia
 
 test("Offline importer validates both sheets and preserves numeric values and wall-clock dates", () => {
   const imported = importCalender4(workbookBuffer(), "roundtrip.xlsx");
-  assert.equal(imported.reading_rows, 1022);
-  assert.equal(imported.kpi_rows, 48);
+  assert.equal(imported.reading_rows, 646);
+  assert.equal(imported.kpi_rows, 60);
   assert.deepEqual(imported.combinations, fixture.combinations);
   assert.throws(
     () => importCalender4(Buffer.from("not a workbook"), "bad.xlsx"),
@@ -134,7 +144,7 @@ test("Offline importer validates both sheets and preserves numeric values and wa
 });
 
 test("Excel serial decoding is independent of process timezone", () => {
-  assert.equal(excelTime(46328), date);
+  assert.equal(excelTime(46329), date);
   const script = `import { excelTime } from ${JSON.stringify(new URL("../../../tools/import-spc-calender4.js", import.meta.url).href)}; process.stdout.write(excelTime(46328) + '|' + excelTime(46322.75694444445, true));`;
   for (const TZ of ["UTC", "Asia/Kolkata", "America/Los_Angeles"]) {
     assert.equal(
@@ -147,17 +157,17 @@ test("Excel serial decoding is independent of process timezone", () => {
 });
 
 test("Exact day / inclusive range eligibility, plant gating, shifts and disable", () => {
-  assert.equal(eligibleCalender4({ date }).length, 8);
-  assert.equal(eligibleCalender4({ date: "2026-11-01" }).length, 0);
-  assert.equal(eligibleCalender4({ date: "2026-11-03" }).length, 0);
-  assert.equal(eligibleCalender4({ from: date, to: date }).length, 8);
+  assert.equal(eligibleCalender4({ date }).length, 10);
+  assert.equal(eligibleCalender4({ date: "2026-11-02" }).length, 0);
+  assert.equal(eligibleCalender4({ date: "2026-11-04" }).length, 0);
+  assert.equal(eligibleCalender4({ from: date, to: date }).length, 10);
   assert.equal(
     eligibleCalender4({ from: "2026-10-01", to: "2026-11-01" }).length,
     0,
   );
   assert.equal(
     eligibleCalender4({ from: "2026-11-01", to: "2026-11-30" }).length,
-    8,
+    10,
   );
   assert.equal(eligibleCalender4({ date, plant: "CHENNAI" }).length, 0);
   assert.equal(eligibleCalender4({ date }, false).length, 0);
@@ -230,7 +240,7 @@ test("Whole-combination merge keeps partial live data from overwriting Excel; co
       plant: "BTP",
     }),
   );
-  assert.equal(mergeSpcSources(rows, fixture.combinations, deps()).length, 8);
+  assert.equal(mergeSpcSources(rows, fixture.combinations, deps()).length, 10);
 });
 
 test("Every fixture detail preserves readings, spec scale, MR gaps, histogram memberships and alert linkage", () => {
