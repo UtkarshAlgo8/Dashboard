@@ -3,6 +3,7 @@ import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
 import { DATE_YYYYMMDD } from "../queries/dashboard-query.js";
 import { goldSource } from "../queries/gold-source.js";
+import { ymdDaysAgo } from "../queries/sql-date.js";
 import {
   normalizePlantId,
   plantDepartmentPredicate,
@@ -196,34 +197,46 @@ function percentOrNull(v) {
   return Math.round(n * 10) / 10;
 }
 
+// Monthly rows are dated on the 1st of their month, so the newest one is
+// almost always inside this window. Scanning it first is much cheaper than
+// the full history.
+const OEE_P_RECENT_DAYS = 60;
+
 /**
  * Current-month plant OEE for the landing card. OEE_p is the whole-plant
  * figure — section / sub_section / machine / product_type are ALL empty, so
  * the OEE_o predicates would never match it. Monthly rows are stored dated on
  * the 1st of their month at granularity MONTH, so the latest such row (rn=1)
- * IS the current month. No date filter: a data-load lag must not blank the
- * card, it should keep showing the newest month that exists.
+ * IS the current month. No date limit on the result: a data-load lag must
+ * not blank the card, it should keep showing the newest month that exists.
  */
 async function landingOeePForPlant(plantId) {
-  const sql = `
+  const latest = (fromKey) => {
+    const since = fromKey ? ` AND ${DATE_YYYYMMDD} >= '${fromKey}'` : "";
+    const sql = `
     SELECT actual_value
     FROM (
       SELECT actual_value,
              ROW_NUMBER() OVER (
                ORDER BY ${DATE_YYYYMMDD} DESC
              ) AS rn
-      FROM ${goldSource({ plantId, fromKey: null, toKey: null, granularity: GRAN_MONTH })}
+      FROM ${goldSource({ plantId, fromKey, toKey: null, granularity: GRAN_MONTH })}
       WHERE ${plantDepartmentPredicate(plantId)}
         AND kpi_name = ${escapeLiteral("OEE_p")}
         AND ${emptyColumnPredicate("machine")}
         AND ${emptyColumnPredicate("section")}
         AND ${emptyColumnPredicate("sub_section")}
         AND ${emptyColumnPredicate("product_type")}
-        AND granularity = ${escapeLiteral(GRAN_MONTH)}
+        AND granularity = ${escapeLiteral(GRAN_MONTH)}${since}
     ) ranked
     WHERE rn = 1
   `.trim();
-  const rows = await runQuery(sql);
+    return runQuery(sql);
+  };
+  // A row in the recent window is the newest overall; only an empty window
+  // needs the full-history scan.
+  let rows = await latest(ymdDaysAgo(OEE_P_RECENT_DAYS));
+  if (!rows.length) rows = await latest(null);
   return rows.length ? percentOrNull(rows[0].actual_value) : null;
 }
 
@@ -240,13 +253,26 @@ function resolveLandingWindow(timeRange) {
   const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(today.getUTCDate()).padStart(2, "0");
   const todayKey = `${yyyy}${mm}${dd}`;
-  const monthStart = `${yyyy}01`;
-  const yearStart = `${yyyy}01`;
+  const monthStart = `${yyyy}${mm}01`;
+  const yearStart = `${yyyy}0101`;
+  const norm = (iso) => {
+    if (!iso) return "";
+    // ISO yyyy-mm-dd → yyyymmdd
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso.replaceAll("-", "");
+    // DD-MM-YYYY → yyyymmdd
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(iso);
+    return m ? `${m[3]}${m[2]}${m[1]}` : "";
+  };
 
   if (!timeRange || !timeRange.range || timeRange.range === "today") {
     return { from: todayKey, to: todayKey };
   }
   if (timeRange.range === "month") {
+    // A month picked from the dropdown arrives with its own from/to; the
+    // Month pill sends none and means the current month.
+    if (timeRange.from && timeRange.to) {
+      return { from: norm(timeRange.from), to: norm(timeRange.to) };
+    }
     return { from: monthStart, to: todayKey };
   }
   if (timeRange.range === "year") {
@@ -257,14 +283,6 @@ function resolveLandingWindow(timeRange) {
     timeRange.from &&
     timeRange.to
   ) {
-    const norm = (iso) => {
-      if (!iso) return "";
-      // ISO yyyy-mm-dd → yyyymmdd
-      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso.replaceAll("-", "");
-      // DD-MM-YYYY → yyyymmdd
-      const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(iso);
-      return m ? `${m[3]}${m[2]}${m[1]}` : "";
-    };
     return { from: norm(timeRange.from), to: norm(timeRange.to) };
   }
   return { from: todayKey, to: todayKey };
@@ -285,39 +303,37 @@ async function landingTimeAwareKpisForPlant(plantId, timeRange) {
   }
   const fromEsc = escapeLiteral(from);
   const toEsc = escapeLiteral(to);
-  const table = goldSource({ plantId, fromKey: from, toKey: to });
+  const table = goldSource({
+    plantId,
+    fromKey: from,
+    toKey: to,
+    granularity: GRAN_DAY,
+  });
 
-  const curedTyreSql = `
-    SELECT COALESCE(SUM(actual_value), 0) AS total
+  // One scan for both sums. Each CASE carries the filters its own KPI used
+  // to have in a separate query.
+  const sql = `
+    SELECT
+      COALESCE(SUM(CASE
+        WHEN kpi_name = ${escapeLiteral("Production_product")}
+          AND section = ${escapeLiteral("Curing")}
+          AND product_type = ${escapeLiteral("Cured Tyre")}
+        THEN actual_value END), 0) AS cured_total,
+      COALESCE(SUM(CASE
+        WHEN kpi_name = ${escapeLiteral("Scrap")}
+        THEN actual_value END), 0) AS scrap_total
     FROM ${table}
     WHERE ${plantDepartmentPredicate(plantId)}
-      AND kpi_name = ${escapeLiteral("Production_product")}
-      AND section = ${escapeLiteral("Curing")}
-      AND product_type = ${escapeLiteral("Cured Tyre")}
+      AND kpi_name IN (${escapeLiteral("Production_product")}, ${escapeLiteral("Scrap")})
       AND ${emptyColumnPredicate("machine")}
       AND ${emptyColumnPredicate("sub_section")}
       AND granularity = ${escapeLiteral(GRAN_DAY)}
       AND ${DATE_YYYYMMDD} BETWEEN ${fromEsc} AND ${toEsc}
   `.trim();
 
-  const scrapSql = `
-    SELECT COALESCE(SUM(actual_value), 0) AS total
-    FROM ${table}
-    WHERE ${plantDepartmentPredicate(plantId)}
-      AND kpi_name = ${escapeLiteral("Scrap")}
-      AND ${emptyColumnPredicate("machine")}
-      AND ${emptyColumnPredicate("sub_section")}
-      AND granularity = ${escapeLiteral(GRAN_DAY)}
-      AND ${DATE_YYYYMMDD} BETWEEN ${fromEsc} AND ${toEsc}
-  `.trim();
-
-  const [curedTyreRows, scrapRows] = await Promise.all([
-    runQuery(curedTyreSql),
-    runQuery(scrapSql),
-  ]);
-
-  const curedTyreProduction = Number(curedTyreRows[0]?.total ?? 0);
-  const scrap = Number(scrapRows[0]?.total ?? 0);
+  const rows = await runQuery(sql);
+  const curedTyreProduction = Number(rows[0]?.cured_total ?? 0);
+  const scrap = Number(rows[0]?.scrap_total ?? 0);
   const scrapPct =
     curedTyreProduction > 0
       ? Math.round((scrap / curedTyreProduction) * 1000) / 10
@@ -412,27 +428,36 @@ export async function getPlants(req, res, next) {
       from: typeof req.query.from === "string" ? req.query.from : "",
       to: typeof req.query.to === "string" ? req.query.to : "",
     };
+    // `part` lets the landing page load the card counts and the slower
+    // OEE / OTIF / Yield snapshot as two requests: "counts" leaves the
+    // snapshot fields null, "snapshot" leaves the counts at their defaults.
+    // No `part` returns both, as before.
+    const part = req.query.part;
     const enabled = PLANTS.filter((p) => p.enabled);
     // Independent — the static and the time-aware KPIs load side by side.
     const [staticSummaries, timeAwareSummaries] = await Promise.all([
-      cached(
-        buildCacheKey("/plants:landing-live-kpis", {}),
-        () => perPlantSummaries(enabled, landingKpisForPlant),
-        CACHE_TTL.STATIC_LOOKUPS,
-      ),
+      part === "counts"
+        ? {}
+        : cached(
+            buildCacheKey("/plants:landing-live-kpis", {}),
+            () => perPlantSummaries(enabled, landingKpisForPlant),
+            CACHE_TTL.STATIC_LOOKUPS,
+          ),
       // Time-aware KPIs are cached per plant AND per resolved window, with
       // the short KPI TTL. A failed plant is not cached (cached() never
       // stores a rejection), so the next request retries it.
-      perPlantSummaries(enabled, (plantId) =>
-        cached(
-          buildCacheKey("/plants:landing-time-aware-kpis", {
-            plantId,
-            ...resolveLandingWindow(timeRange),
-          }),
-          () => landingTimeAwareKpisForPlant(plantId, timeRange),
-          CACHE_TTL.KPI_ROWS,
-        ),
-      ),
+      part === "snapshot"
+        ? {}
+        : perPlantSummaries(enabled, (plantId) =>
+            cached(
+              buildCacheKey("/plants:landing-time-aware-kpis", {
+                plantId,
+                ...resolveLandingWindow(timeRange),
+              }),
+              () => landingTimeAwareKpisForPlant(plantId, timeRange),
+              CACHE_TTL.KPI_ROWS,
+            ),
+          ),
     ]);
     const data = PLANTS.map((p) => ({
       ...p,

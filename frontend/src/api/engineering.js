@@ -102,6 +102,8 @@ export function getReliabilityKpiChildren({
   agg,
   // The plot drills show the 'Unmapped' bucket (grey); everything else hides it.
   includeUnmapped = false,
+  // Drop Gold's zero-valued rows server-side, for callers that ignore them.
+  nonZero = false,
 }) {
   const params = withScope({
     kpi_names: kpiNames.join(","),
@@ -120,6 +122,7 @@ export function getReliabilityKpiChildren({
     limit,
     agg,
     include_unmapped: includeUnmapped ? "1" : null,
+    nonzero: nonZero ? "1" : null,
   });
   return cachedEngineeringGet(
     `/engineering/reliability/kpi-children?${params}`,

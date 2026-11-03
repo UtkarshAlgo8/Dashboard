@@ -33,6 +33,8 @@ backend/data/
 backend/data/*
 !backend/data/Quality_Dashboard_Gold_Layer_3Months.xlsx
 !backend/data/gold_mock.xlsx
+# Blank RCA form (UTQM.00.SQ-156) the PDF service fills in.
+!rca-service/RCA_Master_Template.xlsx
 # TEMPORARY Curing KPI extract for the Scheduler Adherence mail
 # (copy of frontend/public/temp/curing-sku-fulfilment.json).
 !backend/data/curing-sku-fulfilment.json

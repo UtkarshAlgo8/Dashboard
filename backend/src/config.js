@@ -157,6 +157,13 @@ export const config = {
     ),
     sqlTable: optional("ENGINEERING_SQL_TABLE", "gold.gold"),
   },
+  // RCA Why-Why export service (FastAPI + LibreOffice, RCA_WhyWhy_Module):
+  // fills the official UTQM.00.SQ-156 sheet and returns it as a PDF.
+  rca: {
+    serviceUrl: optional("RCA_SERVICE_URL", "http://localhost:8010"),
+    // The service times out at 90 s itself; leave it room to answer.
+    timeoutMs: asInt("RCA_TIMEOUT_MS", 120000),
+  },
   // Daily Infiniti Scheduler (Scheduler Adherence) mail — sent on demand from
   // the dashboard navbar. See backend/src/mail/.
   mail: {

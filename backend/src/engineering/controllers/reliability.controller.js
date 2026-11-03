@@ -28,6 +28,7 @@ import {
   toLatestDate,
   toAggregatedSummary,
   toZeroBreakdownCount,
+  withLossCategoryPct,
 } from "../transformers/reliability.transformers.js";
 
 function badRequest(res, message) {
@@ -75,12 +76,18 @@ const SUMMARY_KPIS = [
   "BreakdownMin_Overall",
   "MTBF_Overall",
   "MTTR_Overall",
+  // Machines Affected card denominator: every machine that ran in the period.
+  "TotalMachines_Overall",
 ];
 
 // Loss Tree L1 (pie): the 5 loss categories, summed across ALL status +
 // section rows and grouped by product_type (the category name lives there,
 // not in `remarks`, at this level — confirmed against the real workbook).
 const LOSS_TREE_L1_KPIS = ["LostTime_LossCategory", "Occurrences_LossCategory"];
+
+// Each loss category as a % of scheduled time — read as stored, one row per
+// category per period, never summed (it is a rate).
+const LOSS_TREE_PCT_KPI = "LostTime_Pct_LossCategory";
 
 /**
  * GET /engineering/reliability/summary
@@ -133,6 +140,7 @@ export async function getSummary(req, res, next) {
  *   [&date_from= &date_to=]
  *   [&status= &section= &machine= &sub_section= &product_type=]
  *   [&sort= &order=asc|desc &limit=] [&agg=sum] [&include_unmapped=1]
+ *   [&nonzero=1]
  *
  * `group_by` is one dimension, or a comma-separated tuple ("remarks,date")
  * for a level keyed by more than one — with `date_from`/`date_to` and
@@ -162,6 +170,7 @@ export async function getKpiChildren(req, res, next) {
       limit,
       agg,
       include_unmapped: includeUnmapped,
+      nonzero,
     } = req.query;
     if (kpiNames.length === 0 || !date || !groupBy) {
       return badRequest(res, "`kpi_names`, `date`, and `group_by` are required.");
@@ -175,24 +184,34 @@ export async function getKpiChildren(req, res, next) {
     const body = await cached(
       key,
       async () => {
-        const rows = await runQuery(
-          kpiChildrenQuery({
-            kpiNames,
-            date,
-            // Optional window: `date_from`/`date_to` widen the level from one
-            // published date to every published date in the range — the
-            // date-wise Failure level's `granularity=DAY` over a month.
-            from,
-            to,
-            granularity,
-            status,
-            section,
-            machine,
-            subSection,
-            productType,
-            includeUnmapped: includeUnmapped === "1" || includeUnmapped === "true",
-          }),
+        // One upstream query per kpi_name, in parallel: the upstream service
+        // fails (HTTP 500) once a response passes ~6 MB (~22k rows), and the
+        // failure-level Pareto alone is ~45k rows a month when batched.
+        // Same rows either way — the transforms below don't depend on order.
+        const perKpi = await Promise.all(
+          kpiNames.map((kpiName) =>
+            runQuery(
+              kpiChildrenQuery({
+                kpiNames: [kpiName],
+                date,
+                // Optional window: `date_from`/`date_to` widen the level from
+                // one published date to every published date in the range —
+                // the date-wise Failure level's `granularity=DAY` over a month.
+                from,
+                to,
+                granularity,
+                status,
+                section,
+                machine,
+                subSection,
+                productType,
+                includeUnmapped: includeUnmapped === "1" || includeUnmapped === "true",
+                nonZero: nonzero === "1" || nonzero === "true",
+              }),
+            ),
+          ),
         );
+        const rows = perKpi.flat();
         const result =
           agg === "sum"
             ? toLossTree(rows, { kpiNames, groupBy })
@@ -341,15 +360,25 @@ export async function getLossTree(req, res, next) {
         // Lost time and occurrences are additive, so a period needs no
         // recomputation — the same SUM-by-group transform covers both the
         // single-day and the multi-day row set.
-        const rows = await runQuery(
+        // The % of scheduled time is a rate, so an arbitrary range has no
+        // stored row to read and the field stays null there.
+        const [rows, pctRows] = await Promise.all([
+          runQuery(
+            isRange
+              ? lossTreeRangeQuery({ kpiNames: LOSS_TREE_L1_KPIS, from, to })
+              : kpiChildrenQuery({ kpiNames: LOSS_TREE_L1_KPIS, date, granularity }),
+          ),
           isRange
-            ? lossTreeRangeQuery({ kpiNames: LOSS_TREE_L1_KPIS, from, to })
-            : kpiChildrenQuery({ kpiNames: LOSS_TREE_L1_KPIS, date, granularity }),
-        );
-        return toLossTree(rows, {
+            ? []
+            : runQuery(
+                kpiValueBatchQuery({ kpiNames: [LOSS_TREE_PCT_KPI], date, granularity }),
+              ),
+        ]);
+        const tree = toLossTree(rows, {
           kpiNames: LOSS_TREE_L1_KPIS,
           groupBy: "product_type",
         });
+        return withLossCategoryPct(tree, pctRows, LOSS_TREE_PCT_KPI);
       },
       CACHE_TTL.ENGINEERING_RELIABILITY,
     );

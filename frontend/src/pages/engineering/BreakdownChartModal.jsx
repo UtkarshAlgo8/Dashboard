@@ -39,10 +39,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Stack, Typography, useTheme } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import { getReliabilityKpiChildren } from "@/api/engineering.js";
+import { downloadRcaPdf } from "@/api/rca.js";
 import DataTable from "@/components/tables/DataTable.jsx";
 import {
   ChartPanel,
@@ -69,6 +71,7 @@ import {
 import { monthRangeFromKey } from "./reliabilityShared.jsx";
 import { machineLabel } from "./machineName.js";
 import ExportButton from "./ExportButton.jsx";
+import RCAEntryDialog from "./rca/RCAEntryDialog.jsx";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
@@ -646,6 +649,9 @@ function ParetoView({
         // range it adds the days.
         agg: "sum",
         includeUnmapped: true,
+        // Zero rows are filtered out below anyway; unfiltered, the month is
+        // ~45k rows and the upstream service rejects the response.
+        nonZero: true,
       }).then((res) => ({ key: periodKey, rows: res?.rows ?? [] })),
     { interval: 0, deps: [periodKey] },
   );
@@ -854,8 +860,12 @@ function ParetoView({
     setPicked(null);
   };
 
-  const loading = machineQuery.isLoading || !machineRows || !failureRows;
-  const error = machineQuery.error || failureQuery.error;
+  // A failed query leaves its rows null; that is an error, not loading. The
+  // hook keeps a stale error until the next fetch settles, so ignore it while
+  // one is in flight.
+  const fetching = machineQuery.isLoading || failureQuery.isLoading;
+  const error = fetching ? null : machineQuery.error || failureQuery.error;
+  const loading = !error && (fetching || !machineRows || !failureRows);
   const fetchError = error
     ? `Breakdown chart fetch failed: ${error.message || "Request failed"}`
     : null;
@@ -1089,6 +1099,8 @@ function BreakdownChartModal({
 }) {
   // No Daily view here: Monthly and a custom Date Range only.
   const trend = useReliabilityTrendRange({ open, hiddenPresets: ["today"] });
+  // RCA Why-Why form (UTQM.00.SQ-156), filled here and downloaded as a PDF.
+  const [rcaOpen, setRcaOpen] = useState(false);
   const request = reliabilityTrendRequest({
     preset: trend.preset,
     from: trend.from,
@@ -1105,10 +1117,35 @@ function BreakdownChartModal({
   return (
     <ModalFrame
       open={open}
-      onClose={onClose}
+      // While the RCA form is up, Esc belongs to it, not to this modal.
+      onClose={rcaOpen ? () => {} : onClose}
       kpi={{ name: title }}
-      headerExtras={trend.control}
+      headerExtras={
+        <Stack
+          direction="row"
+          alignItems="flex-start"
+          justifyContent="space-between"
+          spacing={2}
+        >
+          {trend.control}
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<AssignmentOutlinedIcon fontSize="small" />}
+            onClick={() => setRcaOpen(true)}
+            sx={{ flexShrink: 0, textTransform: "none" }}
+          >
+            RCA
+          </Button>
+        </Stack>
+      }
     >
+      {/* Inside the modal so its focus trap keeps the form's inputs typeable. */}
+      <RCAEntryDialog
+        open={rcaOpen}
+        onClose={() => setRcaOpen(false)}
+        onDownloadPdf={downloadRcaPdf}
+      />
       {/* Remounted per opening so every opening starts at level 1. */}
       {open && (
         <ParetoView

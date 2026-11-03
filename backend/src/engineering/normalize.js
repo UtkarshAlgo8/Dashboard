@@ -160,6 +160,11 @@ export function hasValuePredicate(column = "actual_value") {
   return `${column} IS NOT NULL`;
 }
 
+/** Rows with a non-zero value only (drops Gold's zero-filled pairs). */
+export function nonZeroPredicate(column = "actual_value") {
+  return `${column} <> 0`;
+}
+
 /**
  * Parse a stored `drill_down_attribute` into the next kpi_name to query.
  *

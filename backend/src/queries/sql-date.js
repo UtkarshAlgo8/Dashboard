@@ -26,6 +26,13 @@ export const DATE_YYYYMMDD =
   `THEN SUBSTRING(${DATE_STR}, 1, 4) || SUBSTRING(${DATE_STR}, 6, 2) || SUBSTRING(${DATE_STR}, 9, 2) ` +
   `ELSE SUBSTRING(${DATE_STR}, 7, 4) || SUBSTRING(${DATE_STR}, 4, 2) || SUBSTRING(${DATE_STR}, 1, 2) END)`;
 
+/** Today (UTC) minus `days`, as a "YYYYMMDD" key. */
+export function ymdDaysAgo(days) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10).replaceAll("-", "");
+}
+
 /** ISO yyyy-mm-dd → YYYYMMDD digit string for comparison literals. */
 export function isoToYyyymmdd(iso) {
   return iso.replaceAll("-", "");
