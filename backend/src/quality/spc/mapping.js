@@ -63,7 +63,7 @@ const PAINTING = {
 };
 
 // Version the response and reading caches when source mappings change.
-export const SPC_SOURCE_VERSION = "silver-v2-painting";
+export const SPC_SOURCE_VERSION = "silver-v3-painting-setpoint";
 
 /* ----------------------------------------------------------------- *
  * Tolerances — the ONE place spec limits come from                   *
@@ -126,10 +126,10 @@ const TUO_PARAMS = {
   RFV: { valueColumn: "rfv", setpointColumn: null, tolerance: null, unit: null, provenance: null },
 };
 
-// No verified weight unit, setpoint table or tolerance is available yet.
-// Raw weights still support the existing charts with GOLD control limits.
+// Setpoints are joined by SAP code from silver.dim_tyre_spec_weight.
+// Unit/tolerance remain unconfirmed: draw the target, not an invented spec window.
 const PAINTING_PARAMS = {
-  "Painted Tyre Weight": { valueColumn: "weight", setpointColumn: null, tolerance: null, unit: null, provenance: null },
+  "Painted Tyre Weight": { valueColumn: "weight", setpointColumn: "spec_weight", tolerance: null, unit: null, provenance: null },
 };
 
 /** machine (gold id, upper) → { source, params } */

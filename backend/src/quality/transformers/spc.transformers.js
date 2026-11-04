@@ -331,7 +331,9 @@ export function toSpcDetail(rows, { points = [], limits, snapshot, scope, select
       usl != null
         ? null
         : src?.setpointColumn
-          ? "no tolerance defined for this parameter — spec limits not drawn"
+          ? target == null
+            ? "no positive setpoint available for this combination — target and spec limits not drawn"
+            : "no tolerance defined for this parameter — spec limits not drawn"
           : "parameter has no setpoint in silver and no fixed spec window — spec limits not drawn",
     capability,
   };
