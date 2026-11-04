@@ -57,7 +57,11 @@ import { toDrillRows, toKpiGrid } from "@/lib/kpi-transformer.js";
 import SharedUserMenu from "@/components/user-menu/UserMenu.jsx";
 import { MOCK_USER } from "@/lib/mockData.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
-import { spcLinePath, spcChartGuides } from "@/lib/spcCharts.js";
+import {
+  spcLinePath,
+  spcChartGuides,
+  spcGuideLabelLayout,
+} from "@/lib/spcCharts.js";
 import {
   PAINT_WEIGHT_COLUMNS,
   PAINT_WEIGHT_DRILL_KPIS,
@@ -10124,11 +10128,15 @@ function LiveSpcChart({ title, chart, accent }) {
     /\bX\b|X Chart|X Control/i.test(title || "");
   const POINT_GAP = 34,
     VIEW_W = 720,
-    H = timeAxis ? 262 : 230,
     padL = 48,
-    padR = 70,
+    padR = 132,
     padT = 18,
-    padB = timeAxis ? 60 : 28;
+    padB = timeAxis ? 60 : 28,
+    labelGap = 16,
+    H = Math.max(
+      timeAxis ? 262 : 230,
+      padT + padB + guides.length * labelGap + 12,
+    );
   const W = Math.max(VIEW_W, padL + padR + (points.length - 1) * POINT_GAP);
   const pw = W - padL - padR,
     ph = H - padT - padB;
@@ -10148,6 +10156,12 @@ function LiveSpcChart({ title, chart, accent }) {
   const X = (i) =>
     padL + (points.length <= 1 ? pw / 2 : i * (pw / (points.length - 1)));
   const Y = (v) => padT + ph - ((v - lo) / (hi - lo)) * ph;
+  const guideLabels = spcGuideLabelLayout(guides, Y, {
+    top: padT + 6,
+    bottom: padT + ph - 6,
+    gap: labelGap,
+  });
+  const guideLabelX = padL + pw + 24;
   const hoverPoint = hover != null && hover >= 0 ? plotPoints[hover] : null;
   const hoverX = hoverPoint ? X(hoverPoint.position) : 0;
   const hoverRules = hoverPoint?.rules || [];
@@ -10220,14 +10234,6 @@ function LiveSpcChart({ title, chart, accent }) {
                   strokeDasharray={g.kind === "spec" ? "6 3" : "2 4"}
                   opacity={g.kind === "spec" ? 1 : 0.5}
                 />
-                <text
-                  x={padL + pw + 5}
-                  y={Y(g.value) + 3}
-                  fontSize="9"
-                  fill={g.kind === "spec" ? C.rd : C.mu}
-                >
-                  {g.label + " " + _spcFmt(g.value)}
-                </text>
               </g>
             ))}
           <path
@@ -10299,36 +10305,32 @@ function LiveSpcChart({ title, chart, accent }) {
               </text>
             );
           })}
-          {chart.ucl != null && (
-            <text
-              x={padL + pw + 5}
-              y={Y(chart.ucl) + 3}
-              fontSize="10"
-              fill={C.rd}
-            >
-              {"UCL " + _spcFmt(chart.ucl)}
-            </text>
-          )}
-          {chart.cl != null && (
-            <text
-              x={padL + pw + 5}
-              y={Y(chart.cl) + 3}
-              fontSize="10"
-              fill={C.gn}
-            >
-              {"CL " + _spcFmt(chart.cl)}
-            </text>
-          )}
-          {chart.lcl != null && (
-            <text
-              x={padL + pw + 5}
-              y={Y(chart.lcl) + 3}
-              fontSize="10"
-              fill={C.rd}
-            >
-              {"LCL " + _spcFmt(chart.lcl)}
-            </text>
-          )}
+          {guideLabels.map((g) => {
+            const color =
+              g.kind === "centre" ? C.gn : g.kind === "zone" ? C.mu : C.rd;
+            return (
+              <g key={g.key} data-spc-guide-label={g.key} pointerEvents="none">
+                <path
+                  d={`M${padL + pw},${g.anchorY} H${padL + pw + 6} L${guideLabelX - 7},${g.labelY} H${guideLabelX - 3}`}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="0.8"
+                  opacity={g.kind === "zone" ? 0.55 : 0.8}
+                />
+                <text
+                  x={guideLabelX}
+                  y={g.labelY}
+                  dominantBaseline="middle"
+                  fontSize="10"
+                  fontWeight={g.kind === "zone" ? "400" : "600"}
+                  style={{ fontVariantNumeric: "tabular-nums" }}
+                  fill={color}
+                >
+                  {g.label + " " + _spcFmt(g.value)}
+                </text>
+              </g>
+            );
+          })}
           {hoverPoint && (
             <g pointerEvents="none">
               <line
