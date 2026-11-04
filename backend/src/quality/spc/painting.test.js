@@ -36,6 +36,7 @@ db.create_function('HOUR', 1, lambda value: int(value[11:13]))
 db.executescript('''
 CREATE TABLE silver.dim_wcmaster (record_id INTEGER, plant_code TEXT, source_machine TEXT, database_name TEXT, name TEXT, _bronze_ingest_ts TEXT);
 CREATE TABLE silver.dim_recipemaster (record_id INTEGER, plant_code TEXT, source_machine TEXT, database_name TEXT, description TEXT, _bronze_ingest_ts TEXT);
+CREATE TABLE silver.dim_tyre_spec_weight (sap_code TEXT, spec_weight REAL, plant_code TEXT, database_name TEXT, _bronze_ingest_ts TEXT);
 CREATE TABLE silver.fct_paintingdata (record_id INTEGER, event_time TEXT, weight REAL, wc_id INTEGER, recipe_id INTEGER, plant_code TEXT, source_machine TEXT, database_name TEXT);
 ''')
 for table, rows in payload['tables'].items():
@@ -44,7 +45,23 @@ for table, rows in payload['tables'].items():
 print(json.dumps([[dict(r) for r in db.execute(sql)] for sql in payload['queries']]))
 `;
 
-function execute(queries) {
+const specRow = (
+  weight,
+  stamp = "2026-11-04",
+  plant = "BTP",
+  database = "sap",
+  code = recipe,
+) => [code, weight, plant, database, stamp];
+const defaultSpecs = [
+  specRow(9, "2026-10-01"),
+  specRow(10),
+  specRow(10),
+  specRow(999, "2026-11-05", "CTP"),
+  specRow(888, "2026-11-05", "BTP", "mes"),
+  specRow(500, "2026-11-04", "BTP", "sap", "OTHER-SAP"),
+];
+
+function execute(queries, specs = defaultSpecs) {
   const identity = ["BTP", "dbo", "mes"];
   const wc = (id, name, stamp = "2026-11-01", source = identity) => [
     id,
@@ -76,6 +93,7 @@ function execute(queries) {
       wc(618, "MR_Painting01"),
       wc(748, "MR_Painting01"),
     ],
+    dim_tyre_spec_weight: specs,
     dim_recipemaster: [
       rm(10, "old SAP code", "2026-01-01"),
       rm(10, ` ${recipe} `),
@@ -108,7 +126,7 @@ function execute(queries) {
 test("PAINTING: explicit machine mapping routes to the ID-based weight source", () => {
   assert.equal(src.table, "silver.fct_paintingdata");
   assert.equal(src.valueColumn, "weight");
-  assert.equal(src.setpointColumn, null);
+  assert.equal(src.setpointColumn, "spec_weight");
   assert.equal(src.unit, null);
   assert.equal(src.tolerance, null);
   assert.equal(SILVER_SOURCES.filter((s) => s.kind === "painting").length, 1);
@@ -127,7 +145,7 @@ test("PAINTING: explicit machine mapping routes to the ID-based weight source", 
   assert.equal(resolveSilver(machine, "Unknown Parameter"), null);
 });
 
-test("PAINTING SQL uses verified ID/SAP joins, full source identity, and no setpoint table", () => {
+test("PAINTING SQL uses verified machine/recipe joins and a left-joined BTP SAP setpoint", () => {
   for (const sql of [
     silverPointsQuery(src, scope),
     silverBoardQuery(src, params, scope),
@@ -143,8 +161,23 @@ test("PAINTING SQL uses verified ID/SAP joins, full source identity, and no setp
     assert.match(sql, /p\.database_name = r\.database_name/);
     assert.match(sql, /w\.version_rank = 1/);
     assert.match(sql, /r\.version_rank = 1/);
-    assert.doesNotMatch(sql, /dim_tyre_spec_weight|setpoint/);
   }
+  const detail = silverPointsQuery(src, scope);
+  assert.match(detail, /LEFT JOIN/);
+  assert.match(detail, /silver\.dim_tyre_spec_weight/);
+  assert.match(detail, /TRIM\(r\.description\) = s\.sap_code/);
+  assert.match(detail, /p\.plant_code = s\.plant_code/);
+  assert.match(detail, /database_name = 'sap'/);
+  assert.match(detail, /spec_weight AS setpoint/);
+  // Board/count queries do not depend on the setpoint table or pay for its join.
+  assert.doesNotMatch(
+    silverBoardQuery(src, params, scope),
+    /dim_tyre_spec_weight/,
+  );
+  assert.doesNotMatch(
+    silverSampleSizeQuery(src, params, scope),
+    /dim_tyre_spec_weight/,
+  );
 });
 
 test("PAINTING detail reads the right machine and SAP recipe once, with stable timestamp ties", () => {
@@ -157,7 +190,65 @@ test("PAINTING detail reads the right machine and SAP recipe once, with stable t
     rows.map((r) => r.reading_id),
     [3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   );
-  assert.ok(rows.every((r) => !("setpoint" in r)));
+  assert.ok(rows.every((r) => r.setpoint === 10));
+});
+
+test("PAINTING missing, invalid and foreign setpoints never drop weight readings or reuse older specs", () => {
+  for (const specs of [
+    [],
+    [specRow(null)],
+    [specRow(0)],
+    [specRow(-1)],
+    [specRow(9, "2026-10-01"), specRow(0)],
+    [specRow(999, "2026-11-04", "CTP")],
+    [specRow(888, "2026-11-04", "BTP", "mes")],
+  ]) {
+    const [points] = execute([silverPointsQuery(src, scope)], specs);
+    assert.equal(points.length, 10);
+    assert.deepEqual(
+      points.map((p) => p.value),
+      [3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    );
+    assert.ok(points.every((p) => p.setpoint == null));
+    const detail = toSpcDetail([], {
+      points,
+      limits: { valid: true, ucl: 20, cl: 10, lcl: 0 },
+      snapshot: "2026-11-04",
+      scope,
+      selection: { machine, recipe, parameter },
+    });
+    assert.equal(detail.histogram.target, null);
+    assert.equal(detail.histogram.sample_size, 10);
+    assert.match(detail.histogram.spec_note, /no positive setpoint available/);
+  }
+});
+
+test("PAINTING duplicate latest specs do not multiply weights; conflicting latest weights have no target", () => {
+  for (const specs of [
+    [specRow(10), specRow(11)],
+    [specRow(10), specRow(null)],
+  ]) {
+    const [points] = execute([silverPointsQuery(src, scope)], specs);
+    assert.equal(points.length, 10);
+    assert.ok(points.every((p) => p.setpoint == null));
+  }
+  const [points] = execute(
+    [silverPointsQuery(src, scope)],
+    [specRow(10), specRow(10)],
+  );
+  assert.deepEqual(
+    points.map((p) => p.reading_id),
+    [3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  );
+  assert.ok(points.every((p) => p.setpoint === 10));
+});
+
+test("PAINTING setpoint SAP codes are trimmed consistently with the recipe master", () => {
+  const [points] = execute(
+    [silverPointsQuery(src, scope)],
+    [specRow(10, "2026-11-04", "BTP", "sap", ` ${recipe} `)],
+  );
+  assert.ok(points.length === 10 && points.every((p) => p.setpoint === 10));
 });
 
 test("PAINTING board sparklines agree with the same latest detail subgroups", () => {
@@ -254,9 +345,10 @@ test("PAINTING transformer draws X/R/histogram from weights and keeps GOLD value
   assert.equal(detail.x_chart.ucl, 20);
   assert.equal(detail.r_chart.points.length, 2);
   assert.equal(detail.histogram.sample_size, 10);
-  assert.equal(detail.histogram.target, null);
+  assert.equal(detail.histogram.target, 10);
   assert.equal(detail.histogram.usl, null);
   assert.equal(detail.histogram.lsl, null);
   assert.equal(detail.histogram.spec_limits_available, false);
+  assert.match(detail.histogram.spec_note, /no tolerance defined/);
   assert.equal(detail.x_chart.unit, null);
 });

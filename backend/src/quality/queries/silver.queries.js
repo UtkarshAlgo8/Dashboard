@@ -26,11 +26,27 @@ function paintingDimension(table, column) {
     `FROM ${table} WHERE plant_code = 'BTP')`;
 }
 
-/** A named-column view over ID-based PAINTING measurements. No setpoint lookup. */
-function measurementRelation(src) {
+/** One current setpoint per BTP SAP code; ambiguous/invalid latest specs stay null. */
+function paintingSetpoints() {
+  return `(SELECT sap_code, plant_code, ` +
+    `CASE WHEN MIN(spec_weight) = MAX(spec_weight) AND MIN(spec_weight) > 0 ` +
+    `AND COUNT(spec_weight) = COUNT(*) THEN MAX(spec_weight) ELSE NULL END AS spec_weight ` +
+    `FROM (SELECT TRIM(sap_code) AS sap_code, plant_code, spec_weight, ` +
+    `DENSE_RANK() OVER (PARTITION BY plant_code, TRIM(sap_code) ` +
+    `ORDER BY _bronze_ingest_ts DESC NULLS LAST) AS spec_rank ` +
+    `FROM silver.dim_tyre_spec_weight WHERE plant_code = 'BTP' AND database_name = 'sap') current_specs ` +
+    `WHERE spec_rank = 1 GROUP BY sap_code, plant_code) s`;
+}
+
+/** Resolve ID-based weights; only detail reads need the optional setpoint join. */
+function measurementRelation(src, withSetpoint = false) {
   if (src.kind !== "painting") return src.table;
+  const setpoint = withSetpoint && src.setpointColumn ? ", s.spec_weight" : "";
+  const specJoin = setpoint
+    ? `LEFT JOIN ${paintingSetpoints()} ON TRIM(r.description) = s.sap_code AND p.plant_code = s.plant_code `
+    : "";
   return `(SELECT p.record_id, p.event_time, p.weight, ` +
-    `TRIM(w.name) AS machine_name, TRIM(r.description) AS item_code ` +
+    `TRIM(w.name) AS machine_name, TRIM(r.description) AS item_code${setpoint} ` +
     `FROM silver.fct_paintingdata p ` +
     `JOIN ${paintingDimension("silver.dim_wcmaster", "name")} w ` +
     `ON p.wc_id = w.record_id AND p.plant_code = w.plant_code ` +
@@ -38,6 +54,7 @@ function measurementRelation(src) {
     `JOIN ${paintingDimension("silver.dim_recipemaster", "description")} r ` +
     `ON p.recipe_id = r.record_id AND p.plant_code = r.plant_code ` +
     `AND p.source_machine = r.source_machine AND p.database_name = r.database_name AND r.version_rank = 1 ` +
+    specJoin +
     `WHERE p.plant_code = 'BTP' AND p.weight IS NOT NULL ` +
     `AND w.name IS NOT NULL AND TRIM(w.name) <> '' ` +
     `AND r.description IS NOT NULL AND TRIM(r.description) <> '') painting_measurements`;
@@ -96,7 +113,7 @@ export function silverPointsQuery(src, { machine, recipe, shift, readings }) {
   return (
     `SELECT * FROM (` +
     `SELECT ${cols.join(", ")} ` +
-    `FROM ${measurementRelation(src)} ` +
+    `FROM ${measurementRelation(src, true)} ` +
     `WHERE ${machinePredicate(src.machineColumn, machine)}` +
     `${recipeClause(src.itemColumn, recipe)}` +
     `${shiftClause(src.timeColumn, shift)} ` +
