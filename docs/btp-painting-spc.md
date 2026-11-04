@@ -1,0 +1,41 @@
+# BTP SPC — PAINTING measurements
+
+## Verified source contract
+
+- Weights: `silver.fct_paintingdata.weight`; reading identity/time: `record_id`, `event_time`.
+- Machine: `wc_id = silver.dim_wcmaster.record_id` → `name`.
+- SAP recipe: `recipe_id = silver.dim_recipemaster.record_id` → `description` (not the human-readable recipe `name`).
+- Joins also match `plant_code`, `source_machine` and `database_name`; restrict to BTP.
+- Dimension versions are ranked by ingestion time per full identity before joining, preventing multiplication of measurements.
+- Machine names are compared case-insensitively; no guessed numeric-ID mapping is stored.
+
+Supported gold machine names:
+- `GISLOTICA-PAINTINGMACHINE`
+- `NEWCHINAPAINTING`
+- `OLDCHINAPAINTING`
+- `MR_PAINTING01` (both observed work-centre IDs resolve through the master)
+- `MANUAL PAINTING`
+
+Parameter: `Painted Tyre Weight`.
+
+## Charts and limits
+
+The normal live SPC path is used: latest 1,500 readings, subgroups of five, latest 60 subgroup means on the overview, X/R charts, histogram, and Nelson alerts in detail. Existing shift-hour filtering applies. Timestamp ties use record ID consistently in overview and detail.
+
+Published capability values/statuses remain gold-backed. PAINTING gold UCL/LCL baselines are **recipe-specific**, unlike legacy source baselines; their index key includes machine + SAP recipe + parameter. Limits are never taken from another recipe. Other sources retain their existing machine + parameter lookup.
+
+## Setpoint work on hold
+
+The supplied setpoint contract is SAP code → `silver.dim_tyre_spec_weight.sap_code` → `spec_weight`, but the table currently returns `TABLE_NOT_FOUND`. Per user instruction, this lookup is not implemented or queried by application requests. There is no substitute setpoint, unit or tolerance inferred from another table. Weight charts and gold control limits still render; the histogram target/USL/LSL remain absent. Confirm availability, weight unit and specification-window rules before enabling this separately.
+
+## Validation and deployment
+
+```sh
+node --test backend/src/quality/spc.test.js backend/src/quality/spc/*.test.js
+```
+
+SQL execution tests cover dimension versions, foreign plants/source identities, recipe isolation, null weights, deterministic ties, shift C, recipe-specific limits and overview/detail consistency.
+
+Read-only live verification returned all five machines on the unfiltered PAINTING board. A GISLOTICA recipe detail returned 1,500 readings, 300 X/R points, histogram data, gold capability and the matching valid gold UCL/LCL pair.
+
+Normal backend deployment is sufficient for this change. SPC source/reading/response cache keys include a new source version, so no global Redis flush is required. Browser SPC request caching is short-lived; reload after deployment to discard any old response held in the current page.

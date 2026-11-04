@@ -1,6 +1,6 @@
 /** One whole-combination precedence policy shared by every SPC endpoint. */
 import { groupCombos, validateLimits, STATUS_SEVERITY } from "./engine.js";
-import { resolveSilver } from "./mapping.js";
+import { resolveSilver, baselineKey } from "./mapping.js";
 import { toSpcWidgets } from "../transformers/spc.transformers.js";
 import { toIndividualWidget } from "./individuals.js";
 import { spcIdentity, calender4Provenance } from "./static-calender4.js";
@@ -9,9 +9,7 @@ export function completeLiveCombo(
   combo,
   { limitsIndex, seriesIndex, mapped = resolveSilver },
 ) {
-  const limit = limitsIndex.get(
-    `${combo.machine.toUpperCase()}|||${combo.parameter}`,
-  );
+  const limit = limitsIndex.get(baselineKey(combo.machine, combo.parameter, combo.recipe));
   const series = seriesIndex.get(
     `${combo.machine.toUpperCase()}|||${combo.recipe}|||${combo.parameter}`,
   );

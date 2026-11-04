@@ -42,8 +42,10 @@ import {
 import { toSpcDetail } from "../transformers/spc.transformers.js";
 import {
   resolveSilver,
+  baselineKey,
   sourceForMachine,
   SILVER_SOURCES,
+  SPC_SOURCE_VERSION,
   paramsForSource,
 } from "../spc/mapping.js";
 import {
@@ -86,7 +88,8 @@ function gradeRangeRows(rows) {
 }
 
 /**
- * Baseline UCL/LCL index: `MACHINE|||Parameter` → {ucl, lcl, baseline_date}.
+ * Baseline UCL/LCL index: mapping-defined key → {ucl, lcl, baseline_date}.
+ * Legacy sources use MACHINE|||Parameter; PAINTING also includes recipe.
  *
  * One query for every machine in scope, then the newest baseline on or
  * before the chart date is chosen per machine+parameter in JS (see
@@ -98,7 +101,7 @@ async function loadLimitsIndex({ machine, parameter, isoDate }) {
   for (const r of rows) {
     const { parameter: param } = splitLimitName(r.kpi_name);
     if (!param) continue;
-    const key = `${String(r.machine).toUpperCase()}|||${param}`;
+    const key = baselineKey(r.machine, param, r.itemcode);
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(r);
   }
@@ -162,6 +165,7 @@ async function loadBoardSeries({ machine, recipe, shift }) {
         // them) and shared by every headline filter of the same scope: the
         // whole-history scan takes 10–30 s per table.
         const key = buildCacheKey("/quality/spc/silver-board", {
+          source_version: SPC_SOURCE_VERSION,
           table: src.table,
           machine: machine ?? "All",
           recipe: recipe ?? "All",
@@ -260,6 +264,8 @@ const SILVER_CACHE_TTL_MS = 15 * 60 * 1000;
  */
 async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
   const key = buildCacheKey("/quality/spc/silver-readings", {
+    source_version: SPC_SOURCE_VERSION,
+    table: src.table,
     machine,
     recipe,
     parameter,
@@ -302,6 +308,7 @@ function silverScope(shift) {
 function spcKey(route, query) {
   return buildCacheKey(route, {
     ...query,
+    source_version: SPC_SOURCE_VERSION,
     overlay: config.quality.spcCalender4StaticEnabled
       ? calender4Fixture.version
       : "disabled-v1",
@@ -549,9 +556,7 @@ export async function getSpcDetail(req, res, next) {
           ? loadSilverReadings({ src, machine, recipe, parameter, shift })
           : Promise.resolve([]),
       ]);
-      const limitsEntry = limitsIndex.get(
-        `${String(machine).toUpperCase()}|||${parameter}`,
-      );
+      const limitsEntry = limitsIndex.get(baselineKey(machine, parameter, recipe));
       const detail = toSpcDetail(rows, {
         points,
         limits: {

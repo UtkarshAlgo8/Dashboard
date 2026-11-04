@@ -26,7 +26,7 @@ import {
   toNumber,
   SUBGROUP_SIZE,
 } from "../spc/engine.js";
-import { resolveSilver } from "../spc/mapping.js";
+import { resolveSilver, baselineKey } from "../spc/mapping.js";
 
 const METRIC_ORDER = ["Cp", "Cpk", "Pp", "Ppk"];
 
@@ -89,8 +89,8 @@ function buildCapability(combo, sample) {
  * Resolve one combo's X-chart limits from the baseline index.
  * @param {Map<string, {ucl:*, lcl:*, baseline_date:string, on_or_before:boolean}>} index
  */
-function limitsFor(index, machine, parameter) {
-  const entry = index?.get(`${String(machine).toUpperCase()}|||${parameter}`);
+function limitsFor(index, machine, parameter, recipe) {
+  const entry = index?.get(baselineKey(machine, parameter, recipe));
   const v = validateLimits(entry?.ucl, entry?.lcl);
   return {
     ...v,
@@ -145,7 +145,7 @@ export function toSpcWidgets(rows, { limitsIndex, seriesIndex } = {}) {
         },
       };
     }
-    const lim = limitsFor(limitsIndex, c.machine, c.parameter);
+    const lim = limitsFor(limitsIndex, c.machine, c.parameter, c.recipe);
     return {
       ...base,
       control_chart: {
