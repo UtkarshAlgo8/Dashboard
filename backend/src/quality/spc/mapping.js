@@ -50,6 +50,21 @@ const TUO = {
   timeColumn: "event_time",
 };
 
+// PAINTING stores IDs, not the machine name / SAP item code used by gold.
+// silver.queries.js resolves them through the plant-scoped dimension joins.
+const PAINTING = {
+  table: "silver.fct_paintingdata",
+  kind: "painting",
+  baselineByRecipe: true,
+  machineColumn: "machine_name",
+  itemColumn: "item_code",
+  timeColumn: "event_time",
+  tieBreakColumn: "record_id",
+};
+
+// Version the response and reading caches when source mappings change.
+export const SPC_SOURCE_VERSION = "silver-v2-painting";
+
 /* ----------------------------------------------------------------- *
  * Tolerances — the ONE place spec limits come from                   *
  * ----------------------------------------------------------------- *
@@ -111,6 +126,12 @@ const TUO_PARAMS = {
   RFV: { valueColumn: "rfv", setpointColumn: null, tolerance: null, unit: null, provenance: null },
 };
 
+// No verified weight unit, setpoint table or tolerance is available yet.
+// Raw weights still support the existing charts with GOLD control limits.
+const PAINTING_PARAMS = {
+  "Painted Tyre Weight": { valueColumn: "weight", setpointColumn: null, tolerance: null, unit: null, provenance: null },
+};
+
 /** machine (gold id, upper) → { source, params } */
 const MACHINES = new Map();
 for (const m of ["VMI_MAXX_01", "VMI_MAXX_02", "VMI_MAXX_03", "VMI_MAXX_04"]) {
@@ -124,8 +145,12 @@ for (const m of ["30-0224", "30-0297", "MICROPOISE"]) {
   MACHINES.set(m, { source: TUO, params: TUO_PARAMS });
 }
 
+for (const m of ["GISLOTICA-PAINTINGMACHINE", "NEWCHINAPAINTING", "OLDCHINAPAINTING", "MR_PAINTING01", "MANUAL PAINTING"]) {
+  MACHINES.set(m, { source: PAINTING, params: PAINTING_PARAMS });
+}
+
 /** Every silver table the SPC page can read, de-duplicated. */
-export const SILVER_SOURCES = [VMI_MAXX, VMI_EXXIUM, DATAPARAM, TUO];
+export const SILVER_SOURCES = [VMI_MAXX, VMI_EXXIUM, DATAPARAM, TUO, PAINTING];
 
 /** Machines served by one silver table (gold ids). */
 export function machinesForSource(source) {
@@ -150,6 +175,14 @@ export function resolveSilver(machine, parameter) {
   const p = entry.params[String(parameter ?? "").trim()];
   if (!p) return null;
   return { ...entry.source, ...p };
+}
+
+/** PAINTING gold baselines are per recipe; legacy sources remain machine-level. */
+export function baselineKey(machine, parameter, recipe) {
+  const id = String(machine ?? "").trim().toUpperCase();
+  return resolveSilver(id, parameter)?.baselineByRecipe
+    ? `${id}|||${String(recipe ?? "").trim()}|||${parameter}`
+    : `${id}|||${parameter}`;
 }
 
 /** The silver table that serves a gold machine, or null if unmapped. */

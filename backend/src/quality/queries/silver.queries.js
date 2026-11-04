@@ -18,6 +18,31 @@
 import { escapeLiteral } from "../normalize.js";
 import { shiftHours } from "../spc/mapping.js";
 
+/** Latest lookup per full identity: never multiply readings by dimension versions. */
+function paintingDimension(table, column) {
+  return `(SELECT record_id, plant_code, source_machine, database_name, ${column}, ` +
+    `ROW_NUMBER() OVER (PARTITION BY record_id, plant_code, source_machine, database_name ` +
+    `ORDER BY _bronze_ingest_ts DESC NULLS LAST, ${column}) AS version_rank ` +
+    `FROM ${table} WHERE plant_code = 'BTP')`;
+}
+
+/** A named-column view over ID-based PAINTING measurements. No setpoint lookup. */
+function measurementRelation(src) {
+  if (src.kind !== "painting") return src.table;
+  return `(SELECT p.record_id, p.event_time, p.weight, ` +
+    `TRIM(w.name) AS machine_name, TRIM(r.description) AS item_code ` +
+    `FROM silver.fct_paintingdata p ` +
+    `JOIN ${paintingDimension("silver.dim_wcmaster", "name")} w ` +
+    `ON p.wc_id = w.record_id AND p.plant_code = w.plant_code ` +
+    `AND p.source_machine = w.source_machine AND p.database_name = w.database_name AND w.version_rank = 1 ` +
+    `JOIN ${paintingDimension("silver.dim_recipemaster", "description")} r ` +
+    `ON p.recipe_id = r.record_id AND p.plant_code = r.plant_code ` +
+    `AND p.source_machine = r.source_machine AND p.database_name = r.database_name AND r.version_rank = 1 ` +
+    `WHERE p.plant_code = 'BTP' AND p.weight IS NOT NULL ` +
+    `AND w.name IS NOT NULL AND TRIM(w.name) <> '' ` +
+    `AND r.description IS NOT NULL AND TRIM(r.description) <> '') painting_measurements`;
+}
+
 /**
  * Machine match. Gold ids are upper snake; silver stores them lower or mixed
  * case ("vmi_maxx_01", "QuintuPlex"), so always compare on UPPER().
@@ -65,17 +90,20 @@ export function silverPointsQuery(src, { machine, recipe, shift, readings }) {
     `${src.valueColumn} AS value`,
   ];
   if (src.setpointColumn) cols.push(`${src.setpointColumn} AS setpoint`);
+  if (src.tieBreakColumn) cols.push(`${src.tieBreakColumn} AS reading_id`);
+  const tieDesc = src.tieBreakColumn ? `, ${src.tieBreakColumn} DESC` : "";
+  const tieAsc = src.tieBreakColumn ? ", reading_id" : "";
   return (
     `SELECT * FROM (` +
     `SELECT ${cols.join(", ")} ` +
-    `FROM ${src.table} ` +
+    `FROM ${measurementRelation(src)} ` +
     `WHERE ${machinePredicate(src.machineColumn, machine)}` +
     `${recipeClause(src.itemColumn, recipe)}` +
     `${shiftClause(src.timeColumn, shift)} ` +
     `AND ${src.valueColumn} IS NOT NULL ` +
-    `ORDER BY ${src.timeColumn} DESC ` +
+    `ORDER BY ${src.timeColumn} DESC${tieDesc} ` +
     `LIMIT ${Math.max(1, Math.trunc(Number(readings)) || 1)}` +
-    `) ORDER BY event_time`
+    `) ORDER BY event_time${tieAsc}`
   );
 }
 
@@ -128,20 +156,23 @@ export function silverBoardQuery(
     ? ` AND ${machinePredicate(src.machineColumn, machine)}`
     : "";
   const grp = `CAST((rn - 1) / ${size} AS INTEGER)`;
+  const tieSelect = src.tieBreakColumn ? `${src.tieBreakColumn} AS reading_id, ` : "";
+  const tieDesc = src.tieBreakColumn ? `, ${src.tieBreakColumn} DESC` : "";
+  const tieAsc = src.tieBreakColumn ? ", reading_id" : "";
   return (
     `WITH r AS (` +
     `SELECT UPPER(${src.machineColumn}) AS machine, ${src.itemColumn} AS recipe, ` +
-    `${src.timeColumn} AS event_time, ${valueCols}, ` +
+    `${src.timeColumn} AS event_time, ${valueCols}, ${tieSelect}` +
     `ROW_NUMBER() OVER (PARTITION BY UPPER(${src.machineColumn}), ${src.itemColumn} ` +
-    `ORDER BY ${src.timeColumn} DESC) AS rd ` +
-    `FROM ${src.table} ` +
+    `ORDER BY ${src.timeColumn} DESC${tieDesc}) AS rd ` +
+    `FROM ${measurementRelation(src)} ` +
     `WHERE TRUE${machineFilter}${recipeClause(src.itemColumn, recipe)}` +
     `${shiftClause(src.timeColumn, shift)}` +
     `), ` +
     // Latest `readings` rows, renumbered oldest-first so subgroups match the
     // detail chart's.
     `w AS (` +
-    `SELECT *, ROW_NUMBER() OVER (PARTITION BY machine, recipe ORDER BY event_time) AS rn ` +
+    `SELECT *, ROW_NUMBER() OVER (PARTITION BY machine, recipe ORDER BY event_time${tieAsc}) AS rn ` +
     `FROM r WHERE rd <= ${readings}` +
     `), ` +
     `g AS (` +
@@ -178,7 +209,7 @@ export function silverSampleSizeQuery(src, params, { machine, recipe, shift }) {
     : "";
   return (
     `SELECT UPPER(${src.machineColumn}) AS machine, ${src.itemColumn} AS recipe, ${counts} ` +
-    `FROM ${src.table} ` +
+    `FROM ${measurementRelation(src)} ` +
     `WHERE TRUE${machineFilter}${recipeClause(src.itemColumn, recipe)}` +
     `${shiftClause(src.timeColumn, shift)} ` +
     `GROUP BY UPPER(${src.machineColumn}), ${src.itemColumn}`

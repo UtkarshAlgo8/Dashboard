@@ -12,9 +12,10 @@
  *   baseline rows    granularity 'Baseline', status 'Reference',
  *                    kpi_name '<parameter> <UCL|LCL>' — the control limits.
  *                    Written per (machine, parameter); the itemcode on these
- *                    rows is incidental (the UCL and LCL of one parameter
- *                    carry DIFFERENT itemcodes), so limits are looked up on
- *                    machine + parameter only.
+ *                    rows is incidental for legacy sources (UCL/LCL can carry
+ *                    DIFFERENT itemcodes). PAINTING is the exception: its
+ *                    weight baselines are per machine + recipe + parameter.
+ *                    The caller uses the mapping's baselineKey to distinguish them.
  *
  * Every capability query is granularity-scoped. Without it a single date
  * returns Day and all three shifts at once and the four metric rows of a
@@ -205,7 +206,8 @@ export function spcCapabilityTrendQuery({
  * functions) and lets the caller fall back honestly when the only baseline
  * post-dates the chart.
  *
- * No itemcode filter: baseline rows are per machine + parameter.
+ * No itemcode predicate: preserve legacy machine-level pairs, while returning
+ * itemcode so the caller can index PAINTING baselines per recipe.
  */
 export function spcLimitsQuery({ machine, parameter } = {}) {
   const mc = machine ? ` AND machine = ${escapeLiteral(machine)}` : "";
@@ -213,7 +215,7 @@ export function spcLimitsQuery({ machine, parameter } = {}) {
     ? ` AND kpi_name IN (${LIMITS.map((l) => escapeLiteral(`${parameter} ${l}`)).join(", ")})`
     : ` AND (${LIMITS.map((l) => `kpi_name LIKE ${escapeLiteral(`% ${l}`)}`).join(" OR ")})`;
   return (
-    `SELECT machine, kpi_name, actual_value, date AS baseline_date ` +
+    `SELECT machine, itemcode, kpi_name, actual_value, date AS baseline_date ` +
     `FROM ${qualitySource()} ` +
     `WHERE ${spcScope()} AND ${granularityPredicate(GRAN_BASELINE)}${mc}${pc}`
   );
