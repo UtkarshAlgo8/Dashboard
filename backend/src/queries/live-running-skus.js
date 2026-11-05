@@ -1,19 +1,21 @@
-/** Silver table names consumed by the upstream DuckDB/Delta engine. */
+/** Required Athena/Glue tables; never substitute incomplete Bronze sources. */
 export const LIVE_RUNNING_SKU_TABLES = Object.freeze([
-  'databricks_table/silver/fct_o_production',
-  'databricks_table/silver/fct_tbmpcr',
-  'databricks_table/silver/fct_curingpcr',
-  'databricks_table/silver/dim_wcmaster',
-  'databricks_table/silver/dim_recipemaster',
-  'databricks_table/silver/dim_tblitemmaster',
-  'databricks_table/silver/dim_bom',
+  'silver.fct_o_production',
+  'silver.fct_tbmpcr',
+  'silver.fct_curingpcr',
+  'silver.dim_wcmaster',
+  'silver.dim_recipemaster',
+  'silver.dim_tblitemmaster',
+  'silver.dim_bom',
 ]);
 
 /**
  * The Word specification's seven-day machine roster and freshness inference.
- * Silver event_time is an IST wall-clock timestamp; timezone() gives the same
- * timestamp type independently of the SQL session timezone. Dashboard date and
- * shift filters intentionally play no part in this live snapshot.
+ * The specification treats Silver event_time as IST wall-clock time. Athena
+ * exposes these values as timestamp with time zone, so strip the source zone
+ * without shifting the recorded clock. Build the IST clock through a formatted
+ * string: Athena's direct zoned-to-timestamp cast can normalize back to UTC.
+ * Dashboard date and shift filters play no part in this live snapshot.
  *
  * Feed heads include every non-future source row, including excluded machines.
  * Running windows are source-specific; unknown/idle machines retain audit SKU
@@ -25,7 +27,7 @@ export function liveRunningSkusQuery() {
   return String.raw`SELECT * FROM (
 WITH
   clock AS (
-    SELECT timezone('Asia/Kolkata', current_timestamp) AS as_of
+    SELECT CAST(format_datetime(current_timestamp AT TIME ZONE 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss.SSS') AS timestamp) AS as_of
   ),
   cfg AS (
     SELECT * FROM (VALUES
@@ -77,26 +79,26 @@ WITH
       END AS machine_id,
       TRIM(TRANSLATE(p.item_code, CHR(13) || CHR(10) || CHR(9), '')) AS sku,
       TRIM(TRANSLATE(p.item_name, CHR(13) || CHR(10) || CHR(9), '')) AS sku_name,
-      p.event_time AS event_time,
+      CAST(p.event_time AS timestamp) AS event_time,
       try_cast(p.record_id AS BIGINT) AS rid
-    FROM fct_o_production AS p
+    FROM silver.fct_o_production AS p
     CROSS JOIN clock AS k
     INNER JOIN cfg AS c
       ON c.source_machine = LOWER(TRIM(p.source_machine))
     WHERE
-      p.event_time > k.as_of - INTERVAL '168 hours'
-      AND p.event_time <= k.as_of
+      CAST(p.event_time AS timestamp) > k.as_of - INTERVAL '168' HOUR
+      AND CAST(p.event_time AS timestamp) <= k.as_of
       AND p.machine_no IS NOT NULL
       AND LOWER(TRIM(p.machine_no)) NOT LIKE 'ncm%'
       AND NULLIF(TRIM(p.item_code), '') IS NOT NULL
       AND LOWER(TRIM(p.item_code)) <> 'reset'
   ),
   op_feed AS (
-    SELECT MAX(p.event_time) AS feed_last
-    FROM fct_o_production AS p
+    SELECT MAX(CAST(p.event_time AS timestamp)) AS feed_last
+    FROM silver.fct_o_production AS p
     CROSS JOIN clock AS k
-    WHERE p.event_time > k.as_of - INTERVAL '168 hours'
-      AND p.event_time <= k.as_of
+    WHERE CAST(p.event_time AS timestamp) > k.as_of - INTERVAL '168' HOUR
+      AND CAST(p.event_time AS timestamp) <= k.as_of
   ),
   op_last AS (
     SELECT o.*
@@ -110,7 +112,7 @@ WITH
     SELECT
       LOWER(REPLACE(TRANSLATE(im.item_code, CHR(13) || CHR(10) || CHR(9), ''), ' ', '')) AS mat_key,
       MIN(NULLIF(TRIM(im.description), '')) AS descr
-    FROM dim_tblitemmaster AS im
+    FROM silver.dim_tblitemmaster AS im
     WHERE LOWER(CAST(im.is_current AS VARCHAR)) IN ('true', '1')
     GROUP BY 1
   ),
@@ -121,7 +123,7 @@ WITH
         LOWER(REPLACE(TRANSLATE(b.plcbomname, CHR(13) || CHR(10) || CHR(9), ''), ' ', '')) AS item_key,
         LOWER(REPLACE(TRANSLATE(b.materialcode_o, CHR(13) || CHR(10) || CHR(9), ''), ' ', '')) AS mat_key,
         DENSE_RANK() OVER (PARTITION BY LOWER(REPLACE(TRANSLATE(b.plcbomname, CHR(13) || CHR(10) || CHR(9), ''), ' ', '')) ORDER BY try_cast(b.revision AS DOUBLE) DESC) AS rk
-      FROM dim_bom AS b
+      FROM silver.dim_bom AS b
       WHERE b.materialcode_o IS NOT NULL
     ) AS r
     WHERE r.rk = 1
@@ -160,26 +162,26 @@ WITH
       TRIM(wc.name) AS machine_id,
       NULLIF(TRIM(rm.description), '') AS sku,
       NULLIF(TRIM(rm.name), '') AS sku_name,
-      p.event_time AS event_time,
+      CAST(p.event_time AS timestamp) AS event_time,
       p.barcode AS barcode
-    FROM fct_tbmpcr AS p
+    FROM silver.fct_tbmpcr AS p
     CROSS JOIN clock AS k
-    INNER JOIN dim_wcmaster AS wc
+    INNER JOIN silver.dim_wcmaster AS wc
       ON wc.record_id = p.wc_id
-    LEFT JOIN dim_recipemaster AS rm
+    LEFT JOIN silver.dim_recipemaster AS rm
       ON rm.record_id = p.recipe_id
     WHERE
-      p.event_time > k.as_of - INTERVAL '168 hours'
-      AND p.event_time <= k.as_of
+      CAST(p.event_time AS timestamp) > k.as_of - INTERVAL '168' HOUR
+      AND CAST(p.event_time AS timestamp) <= k.as_of
       AND LOWER(TRIM(wc.name)) NOT LIKE '%stage1'
       AND LOWER(TRIM(wc.name)) NOT IN ('unknown', 'bjtest', 'classification')
   ),
   tbm_feed AS (
-    SELECT MAX(p.event_time) AS feed_last
-    FROM fct_tbmpcr AS p
+    SELECT MAX(CAST(p.event_time AS timestamp)) AS feed_last
+    FROM silver.fct_tbmpcr AS p
     CROSS JOIN clock AS k
-    WHERE p.event_time > k.as_of - INTERVAL '168 hours'
-      AND p.event_time <= k.as_of
+    WHERE CAST(p.event_time AS timestamp) > k.as_of - INTERVAL '168' HOUR
+      AND CAST(p.event_time AS timestamp) <= k.as_of
   ),
   tbm_machines AS (
     SELECT
@@ -206,29 +208,29 @@ WITH
       REGEXP_REPLACE(TRIM(wc.name), '(LH|RH)$', '') AS machine_id,
       NULLIF(TRIM(rm.description), '') AS sku,
       NULLIF(TRIM(rm.name), '') AS sku_name,
-      c.event_time AS event_time,
+      CAST(c.event_time AS timestamp) AS event_time,
       c.barcode AS barcode
-    FROM fct_curingpcr AS c
+    FROM silver.fct_curingpcr AS c
     CROSS JOIN clock AS k
-    INNER JOIN dim_wcmaster AS wc
+    INNER JOIN silver.dim_wcmaster AS wc
       ON wc.record_id = c.wc_id
-    LEFT JOIN dim_recipemaster AS rm
+    LEFT JOIN silver.dim_recipemaster AS rm
       ON rm.record_id = c.recipe_id
     WHERE
-      c.event_time > k.as_of - INTERVAL '168 hours'
-      AND c.event_time <= k.as_of
+      CAST(c.event_time AS timestamp) > k.as_of - INTERVAL '168' HOUR
+      AND CAST(c.event_time AS timestamp) <= k.as_of
   ),
   cur_feed AS (
-    SELECT MAX(c.event_time) AS feed_last
-    FROM fct_curingpcr AS c
+    SELECT MAX(CAST(c.event_time AS timestamp)) AS feed_last
+    FROM silver.fct_curingpcr AS c
     CROSS JOIN clock AS k
-    WHERE c.event_time > k.as_of - INTERVAL '168 hours'
-      AND c.event_time <= k.as_of
+    WHERE CAST(c.event_time AS timestamp) > k.as_of - INTERVAL '168' HOUR
+      AND CAST(c.event_time AS timestamp) <= k.as_of
   ),
   cur_machines AS (
     SELECT
       cf.section,
-      CASE WHEN regexp_matches(t.machine_id, '^[0-9]{5}$') THEN concat('Trench ', substr(t.machine_id, 1, 1)) ELSE 'BOM Presses' END AS sub_section,
+      CASE WHEN regexp_like(t.machine_id, '^[0-9]{5}$') THEN concat('Trench ', substr(t.machine_id, 1, 1)) ELSE 'BOM Presses' END AS sub_section,
       'curingpcr' AS source_machine,
       t.machine_id,
       t.sku AS last_sku,
@@ -256,9 +258,9 @@ WITH
     SELECT
       m.*,
       k.as_of,
-      ROUND((epoch(k.as_of) - epoch(m.last_event_time)) / 60.0, 1) AS minutes_since_update,
-      ROUND((epoch(m.feed_last) - epoch(m.last_event_time)) / 60.0, 1) AS minutes_behind_feed,
-      ROUND((epoch(k.as_of) - epoch(m.feed_last)) / 60.0, 1) AS feed_lag_min,
+      ROUND((to_unixtime(k.as_of) - to_unixtime(m.last_event_time)) / 60.0, 1) AS minutes_since_update,
+      ROUND((to_unixtime(m.feed_last) - to_unixtime(m.last_event_time)) / 60.0, 1) AS minutes_behind_feed,
+      ROUND((to_unixtime(k.as_of) - to_unixtime(m.feed_last)) / 60.0, 1) AS feed_lag_min,
       pr.feed_stale_min
     FROM machines AS m
     CROSS JOIN clock AS k
@@ -292,7 +294,7 @@ SELECT
   c.last_sku AS last_sku,
   c.last_sku_description AS last_sku_description,
   c.last_event_time AS event_time,
-  strftime(c.last_event_time, '%Y-%m-%d %H:%M:%S') AS last_updated,
+  format_datetime(c.last_event_time, 'yyyy-MM-dd HH:mm:ss') AS last_updated,
   c.minutes_since_update AS minutes_since_update,
   c.minutes_behind_feed AS minutes_behind_feed,
   c.feed_last AS feed_last_event,

@@ -1,21 +1,17 @@
 import { cached, cacheGet, cacheSet, buildCacheKey } from "../utils/cache.js";
 import { runQuery, UpstreamError } from "../utils/upstream.js";
-import {
-  liveRunningSkusQuery,
-  LIVE_RUNNING_SKU_TABLES,
-} from "../queries/live-running-skus.js";
+import { liveRunningSkusQuery } from "../queries/live-running-skus.js";
 
 const LIVE_TTL_MS = 60_000;
 
 /**
- * How long a failed snapshot is remembered. The Silver query takes the full
- * ~30 s upstream limit before it fails, and the Technical page re-polls every
- * 60 s per viewer; without this every poll repeats that 30 s wait (and the
- * upstream load) only to fail again. Clients still receive the real error.
+ * How long a failed snapshot is remembered. An unavailable Athena source
+ * must not be queried again for every viewer's 60 s poll. Clients still
+ * receive the real error, never a partial or fabricated snapshot.
  */
 const LIVE_FAILURE_TTL_MS = 5 * 60_000;
 const FAILURE_KEY = buildCacheKey("/dashboard/live-running-skus:failure", {
-  version: 1,
+  version: 2,
 });
 
 /** A live Silver snapshot, deliberately independent of all header filters. */
@@ -29,11 +25,13 @@ export async function getLiveRunningSkus(_req, res, next) {
       });
     }
     const data = await cached(
-      buildCacheKey("/dashboard/live-running-skus", { version: 1 }),
+      buildCacheKey("/dashboard/live-running-skus", { version: 2 }),
       async () => {
         const rows = await runQuery(liveRunningSkusQuery(), {
-          engine: "databricks",
-          tables: LIVE_RUNNING_SKU_TABLES,
+          // This KPI must use Athena even if a legacy engine is configured.
+          // All sources are schema-qualified in SQL; no Delta path loading.
+          engine: "athena",
+          tables: [],
         });
         const machines = rows.map((row) => ({
           ...row,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
+  CircularProgress,
   FormControl,
   MenuItem,
   Select,
@@ -25,7 +26,6 @@ import DonutLargeOutlinedIcon from "@mui/icons-material/DonutLargeOutlined";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import KpiCard from "@/components/production/KpiCard.jsx";
-import JKLoader from "@/components/JKLoader.jsx";
 import { getAsOf, getPlant } from "@/api/plants.js";
 import { getLiveRunningSkus } from "@/api/technical.js";
 import LiveRunningSkusDrill from "@/components/technical/LiveRunningSkusDrill.jsx";
@@ -112,6 +112,7 @@ const STOCK_AREAS = [
   { id: "3roll", label: "3 Roll", section: "stk", subSection: "3 Roll" },
   { id: "cutter", label: "Cutter", section: "stk", subSection: "Cutter" },
   { id: "slitter", label: "Slitter", section: "stk", subSection: "Slitter" },
+  { id: "bead", label: "Bead", section: "stk", subSection: "Bead" },
 ];
 
 const STOCK_KPIS = [
@@ -522,17 +523,15 @@ function BanmoreTechnical() {
     }));
   const displayKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
 
-  // The section shows one loader until every source behind its cards has
-  // answered (data or error), so no card flashes NA while still fetching.
-  // The live snapshot and GT Weight only gate their first answer: their 60 s
-  // re-polls / refetches keep the previous cards on screen.
+  // Period-bound cards wait for their sources, but never gate the live card.
+  // Its first load/error is independent; background polls keep its last answer
+  // visible. Date/shift changes only reload the period cards.
   const hasCard = (id) =>
     displayKpis.some(({ definition }) => definition.id === id);
   const kpisLoading =
     isLiveTab &&
     (isLoading ||
       productivity.isDowntimeLoading ||
-      (hasCard("rsku") && !liveSnapshot.data && !liveSnapshot.error) ||
       (tab === "stock" && !overage.data && !overage.error) ||
       (hasCard("gtw") &&
         Boolean(uniformityDate) &&
@@ -842,6 +841,7 @@ function BanmoreTechnical() {
               title={tab === "stock" ? activeStockArea.label : activeTab?.label}
               kpis={displayKpis}
               isLoading={kpisLoading}
+              isLiveLoading={!liveSnapshot.data && !liveSnapshot.error}
               error={isLiveTab ? error : null}
               openDrillKpiId={openDrillKpiId}
               onDrillKpi={handleDrillKpi}
@@ -928,6 +928,7 @@ function TechnicalKpiSection({
   title,
   kpis,
   isLoading,
+  isLiveLoading,
   error,
   openDrillKpiId,
   onDrillKpi,
@@ -949,16 +950,14 @@ function TechnicalKpiSection({
           Period values unavailable: {error.message}
         </Typography>
       )}
-      {isLoading ? (
-        <JKLoader message="Loading KPIs" />
-      ) : (
-        <KpiGrid
-          kpis={kpis}
-          openDrillKpiId={openDrillKpiId}
-          onDrillKpi={onDrillKpi}
-          onCloseDrill={onCloseDrill}
-        />
-      )}
+      <KpiGrid
+        kpis={kpis}
+        isLoading={isLoading}
+        isLiveLoading={isLiveLoading}
+        openDrillKpiId={openDrillKpiId}
+        onDrillKpi={onDrillKpi}
+        onCloseDrill={onCloseDrill}
+      />
     </Box>
   );
 }
@@ -966,6 +965,8 @@ function TechnicalKpiSection({
 function KpiGrid({
   kpis,
   minWidth = 220,
+  isLoading = false,
+  isLiveLoading = false,
   openDrillKpiId = null,
   onDrillKpi,
   onCloseDrill,
@@ -979,7 +980,13 @@ function KpiGrid({
       }}
     >
       {kpis.map(({ definition, live, unavailableReason }) =>
-        live && hasKpiValue(live.value) ? (
+        (definition.id === "rsku" ? isLiveLoading : isLoading) ? (
+          <UnavailableKpiCard
+            key={definition.id}
+            name={definition.name}
+            isLoading
+          />
+        ) : live && hasKpiValue(live.value) ? (
           <KpiCard
             key={definition.id}
             kpi={onDrillKpi ? live : { ...live, drillable: false }}
@@ -1203,7 +1210,11 @@ function AnalysisEmptyState({ label }) {
   );
 }
 
-function UnavailableKpiCard({ name, reason = "Data unavailable" }) {
+function UnavailableKpiCard({
+  name,
+  reason = "Data unavailable",
+  isLoading = false,
+}) {
   const theme = useTheme();
   return (
     <Box
@@ -1241,18 +1252,22 @@ function UnavailableKpiCard({ name, reason = "Data unavailable" }) {
           {name}
         </Typography>
       </Stack>
-      <Typography
-        sx={{
-          fontSize: 28,
-          lineHeight: 1.1,
-          fontWeight: 800,
-          color: "text.disabled",
-        }}
-      >
-        NA
-      </Typography>
+      {isLoading ? (
+        <CircularProgress size={26} aria-label={`Loading ${name}`} />
+      ) : (
+        <Typography
+          sx={{
+            fontSize: 28,
+            lineHeight: 1.1,
+            fontWeight: 800,
+            color: "text.disabled",
+          }}
+        >
+          NA
+        </Typography>
+      )}
       <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-        {reason}
+        {isLoading ? "Loading…" : reason}
       </Typography>
     </Box>
   );
