@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "source_file": "SPC_Calender4_4Nov.xlsx",
-  "source_sha256": "6abb53c7261ffb15f000e9451b83669e66be029fc6260e4b59d933e90d6e0eb2",
-  "version": "calender4-v1-6abb53c7261f",
+  "source_file": "SPC_Calender4_5Nov.xlsx",
+  "source_sha256": "50c7a06e93cf1eec0f9a7facc77aab3a9215b71df358b9d8a89835bd216667be",
+  "version": "calender4-v1-50c7a06e93cf",
   "time_basis": "workbook local wall-clock (timezone unspecified)",
-  "kpi_rows": 72,
-  "reading_rows": 769,
+  "kpi_rows": 60,
+  "reading_rows": 448,
   "combinations": [
     {
       "plant": "BANMORE",
@@ -13,7 +13,7 @@
       "recipe": "BHARAT",
       "parameter": "Scanner Drive Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
@@ -550,23 +550,23 @@
       "recipe": "CAP 66",
       "parameter": "Scanner Drive Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
-          "value": 0.5512,
-          "status": "Critical"
+          "value": 1.1143,
+          "status": "Major"
         },
         "Cpk": {
-          "value": 0.5332,
+          "value": 0.9615,
           "status": "Critical"
         },
         "Pp": {
-          "value": 0.432,
+          "value": 0.8637,
           "status": "Critical"
         },
         "Ppk": {
-          "value": 0.4178,
+          "value": 0.7452,
           "status": "Critical"
         }
       },
@@ -576,361 +576,11 @@
       },
       "readings": [
         {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 23:00:00",
-          "shift": "C",
-          "sample_no": 1,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.027,
-          "setpoint": 1.077
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 23:20:00",
-          "shift": "C",
-          "sample_no": 2,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.038,
-          "setpoint": 1.043
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 23:30:00",
-          "shift": "C",
-          "sample_no": 3,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.032,
-          "setpoint": 0.928
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:10:00",
-          "shift": "C",
-          "sample_no": 4,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.143,
-          "setpoint": 1.105
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:30:00",
-          "shift": "C",
-          "sample_no": 5,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.088,
-          "setpoint": 1.085
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:40:00",
-          "shift": "C",
-          "sample_no": 6,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1155,
-          "setpoint": 1.097
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:50:00",
-          "shift": "C",
-          "sample_no": 7,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1565,
-          "setpoint": 1.219
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:00:00",
-          "shift": "C",
-          "sample_no": 8,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.237666666666667,
-          "setpoint": 1.2262
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:30:00",
-          "shift": "C",
-          "sample_no": 9,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.40075,
-          "setpoint": 1.404
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:40:00",
-          "shift": "C",
-          "sample_no": 10,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.402,
-          "setpoint": 1.415
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:50:00",
-          "shift": "C",
-          "sample_no": 11,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.096,
-          "setpoint": 1.242333333333334
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:00:00",
-          "shift": "C",
-          "sample_no": 12,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.106,
-          "setpoint": 1.101
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:10:00",
-          "shift": "C",
-          "sample_no": 13,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.102,
-          "setpoint": 1.115
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:30:00",
-          "shift": "C",
-          "sample_no": 14,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.354,
-          "setpoint": 2.2835
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:40:00",
-          "shift": "C",
-          "sample_no": 15,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.299,
-          "setpoint": 2.286
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:50:00",
-          "shift": "C",
-          "sample_no": 16,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.304,
-          "setpoint": 2.287
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 03:10:00",
-          "shift": "C",
-          "sample_no": 17,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.169666666666667,
-          "setpoint": 1.20075
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 03:20:00",
-          "shift": "C",
-          "sample_no": 18,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.16,
-          "setpoint": 1.202
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 03:50:00",
-          "shift": "C",
-          "sample_no": 19,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.145,
-          "setpoint": 1.173
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 07:10:00",
-          "shift": "A",
-          "sample_no": 20,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.2668,
-          "setpoint": 1.25325
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 07:30:00",
-          "shift": "A",
-          "sample_no": 21,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.215,
-          "setpoint": 1.233
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 07:40:00",
-          "shift": "A",
-          "sample_no": 22,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.22,
-          "setpoint": 1.249
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:00:00",
-          "shift": "A",
-          "sample_no": 23,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.217,
-          "setpoint": 1.22025
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:10:00",
-          "shift": "A",
-          "sample_no": 24,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.233,
-          "setpoint": 1.258
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:20:00",
-          "shift": "A",
-          "sample_no": 25,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.2445,
-          "setpoint": 1.247
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:30:00",
-          "shift": "A",
-          "sample_no": 26,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.232,
-          "setpoint": 1.2545
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:40:00",
-          "shift": "A",
-          "sample_no": 27,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.216,
-          "setpoint": 1.2265
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:50:00",
-          "shift": "A",
-          "sample_no": 28,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.221,
-          "setpoint": 1.2494
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:00:00",
-          "shift": "A",
-          "sample_no": 29,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.262,
-          "setpoint": 1.266
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:10:00",
-          "shift": "A",
-          "sample_no": 30,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.255666666666667,
-          "setpoint": 1.264
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:20:00",
-          "shift": "A",
-          "sample_no": 31,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.25625,
-          "setpoint": 1.262
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:40:00",
-          "shift": "A",
-          "sample_no": 32,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.251333333333333,
-          "setpoint": 1.265
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:10:00",
-          "shift": "A",
-          "sample_no": 33,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.217,
-          "setpoint": 1.247
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:20:00",
-          "shift": "A",
-          "sample_no": 34,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.254333333333333,
-          "setpoint": 1.226
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:30:00",
-          "shift": "A",
-          "sample_no": 35,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.25,
-          "setpoint": 1.247333333333333
-        },
-        {
           "date": "2026-10-26",
           "event_time": "2026-10-26 23:40:00",
           "shift": "C",
-          "sample_no": 36,
-          "segment": 3,
+          "sample_no": 1,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.832,
           "setpoint": 1.839333333333333
@@ -939,8 +589,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-26 23:50:00",
           "shift": "C",
-          "sample_no": 37,
-          "segment": 3,
+          "sample_no": 2,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.8418,
           "setpoint": 1.8705
@@ -949,8 +599,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 00:00:00",
           "shift": "C",
-          "sample_no": 38,
-          "segment": 3,
+          "sample_no": 3,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.8415,
           "setpoint": 1.847
@@ -959,8 +609,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 00:10:00",
           "shift": "C",
-          "sample_no": 39,
-          "segment": 3,
+          "sample_no": 4,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.829857142857143,
           "setpoint": 1.8276
@@ -969,8 +619,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 00:20:00",
           "shift": "C",
-          "sample_no": 40,
-          "segment": 3,
+          "sample_no": 5,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.79425,
           "setpoint": 1.815333333333333
@@ -979,8 +629,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 00:30:00",
           "shift": "C",
-          "sample_no": 41,
-          "segment": 3,
+          "sample_no": 6,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.826,
           "setpoint": 1.8195
@@ -989,8 +639,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 01:10:00",
           "shift": "C",
-          "sample_no": 42,
-          "segment": 3,
+          "sample_no": 7,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.773666666666667,
           "setpoint": 1.777
@@ -999,8 +649,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 01:20:00",
           "shift": "C",
-          "sample_no": 43,
-          "segment": 3,
+          "sample_no": 8,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.845,
           "setpoint": 1.82
@@ -1009,8 +659,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 01:40:00",
           "shift": "C",
-          "sample_no": 44,
-          "segment": 3,
+          "sample_no": 9,
+          "segment": 1,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.831,
           "setpoint": 1.817
@@ -1019,8 +669,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 03:20:00",
           "shift": "C",
-          "sample_no": 45,
-          "segment": 4,
+          "sample_no": 10,
+          "segment": 2,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.844,
           "setpoint": 0.839
@@ -1029,8 +679,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 03:30:00",
           "shift": "C",
-          "sample_no": 46,
-          "segment": 4,
+          "sample_no": 11,
+          "segment": 2,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.875,
           "setpoint": 0.861
@@ -1039,8 +689,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 04:10:00",
           "shift": "C",
-          "sample_no": 47,
-          "segment": 4,
+          "sample_no": 12,
+          "segment": 2,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.87,
           "setpoint": 0.854
@@ -1049,8 +699,8 @@
           "date": "2026-10-26",
           "event_time": "2026-10-27 04:20:00",
           "shift": "C",
-          "sample_no": 48,
-          "segment": 4,
+          "sample_no": 13,
+          "segment": 2,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.894,
           "setpoint": 0.899
@@ -1059,8 +709,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 11:50:00",
           "shift": "A",
-          "sample_no": 49,
-          "segment": 5,
+          "sample_no": 14,
+          "segment": 3,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.867,
           "setpoint": 0.849
@@ -1069,8 +719,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 13:50:00",
           "shift": "A",
-          "sample_no": 50,
-          "segment": 6,
+          "sample_no": 15,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.109,
           "setpoint": 1.082
@@ -1079,8 +729,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 14:00:00",
           "shift": "A",
-          "sample_no": 51,
-          "segment": 6,
+          "sample_no": 16,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.1065,
           "setpoint": 1.0795
@@ -1089,8 +739,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 14:10:00",
           "shift": "A",
-          "sample_no": 52,
-          "segment": 6,
+          "sample_no": 17,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.151,
           "setpoint": 1.1165
@@ -1099,8 +749,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 14:20:00",
           "shift": "A",
-          "sample_no": 53,
-          "segment": 6,
+          "sample_no": 18,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.9915,
           "setpoint": 0.987
@@ -1109,8 +759,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 14:50:00",
           "shift": "A",
-          "sample_no": 54,
-          "segment": 6,
+          "sample_no": 19,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.938,
           "setpoint": 0.921
@@ -1119,8 +769,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 15:10:00",
           "shift": "B",
-          "sample_no": 55,
-          "segment": 6,
+          "sample_no": 20,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.1955,
           "setpoint": 1.167666666666667
@@ -1129,8 +779,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 15:20:00",
           "shift": "B",
-          "sample_no": 56,
-          "segment": 6,
+          "sample_no": 21,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.1495,
           "setpoint": 1.157666666666667
@@ -1139,8 +789,8 @@
           "date": "2026-10-27",
           "event_time": "2026-10-27 15:30:00",
           "shift": "B",
-          "sample_no": 57,
-          "segment": 6,
+          "sample_no": 22,
+          "segment": 4,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.176,
           "setpoint": 1.195
@@ -1149,8 +799,8 @@
           "date": "2026-10-30",
           "event_time": "2026-10-30 11:40:00",
           "shift": "A",
-          "sample_no": 58,
-          "segment": 7,
+          "sample_no": 23,
+          "segment": 5,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.85025,
           "setpoint": 0.848
@@ -1159,8 +809,8 @@
           "date": "2026-10-30",
           "event_time": "2026-10-30 11:50:00",
           "shift": "A",
-          "sample_no": 59,
-          "segment": 7,
+          "sample_no": 24,
+          "segment": 5,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8740909090909089,
           "setpoint": 0.8813333333333332
@@ -1169,8 +819,8 @@
           "date": "2026-10-30",
           "event_time": "2026-10-30 12:00:00",
           "shift": "A",
-          "sample_no": 60,
-          "segment": 7,
+          "sample_no": 25,
+          "segment": 5,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8633571428571428,
           "setpoint": 0.8799230769230769
@@ -1179,8 +829,8 @@
           "date": "2026-10-30",
           "event_time": "2026-10-30 12:10:00",
           "shift": "A",
-          "sample_no": 61,
-          "segment": 7,
+          "sample_no": 26,
+          "segment": 5,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8586923076923078,
           "setpoint": 0.8691428571428573
@@ -1189,8 +839,8 @@
           "date": "2026-10-30",
           "event_time": "2026-10-30 12:20:00",
           "shift": "A",
-          "sample_no": 62,
-          "segment": 7,
+          "sample_no": 27,
+          "segment": 5,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8526428571428573,
           "setpoint": 0.8516666666666668
@@ -1199,8 +849,8 @@
           "date": "2026-11-03",
           "event_time": "2026-11-04 04:10:00",
           "shift": "C",
-          "sample_no": 63,
-          "segment": 8,
+          "sample_no": 28,
+          "segment": 6,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8704285714285716,
           "setpoint": 0.8607142857142858
@@ -1209,8 +859,8 @@
           "date": "2026-11-03",
           "event_time": "2026-11-04 04:20:00",
           "shift": "C",
-          "sample_no": 64,
-          "segment": 8,
+          "sample_no": 29,
+          "segment": 6,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.854,
           "setpoint": 0.8459285714285715
@@ -1219,8 +869,8 @@
           "date": "2026-11-03",
           "event_time": "2026-11-04 04:30:00",
           "shift": "C",
-          "sample_no": 65,
-          "segment": 8,
+          "sample_no": 30,
+          "segment": 6,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8703333333333333,
           "setpoint": 0.8514545454545455
@@ -1229,8 +879,8 @@
           "date": "2026-11-03",
           "event_time": "2026-11-04 04:40:00",
           "shift": "C",
-          "sample_no": 66,
-          "segment": 8,
+          "sample_no": 31,
+          "segment": 6,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.864625,
           "setpoint": 0.8575
@@ -1239,8 +889,8 @@
           "date": "2026-11-03",
           "event_time": "2026-11-04 04:50:00",
           "shift": "C",
-          "sample_no": 67,
-          "segment": 8,
+          "sample_no": 32,
+          "segment": 6,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8683333333333332,
           "setpoint": 0.85275
@@ -1249,15 +899,15 @@
           "date": "2026-11-03",
           "event_time": "2026-11-04 05:00:00",
           "shift": "C",
-          "sample_no": 68,
-          "segment": 8,
+          "sample_no": 33,
+          "segment": 6,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 0.8693333333333334,
           "setpoint": 0.8570625
         }
       ],
       "coverage": {
-        "from": "2026-10-23 23:00:00",
+        "from": "2026-10-26 23:40:00",
         "to": "2026-11-04 05:00:00"
       }
     },
@@ -1267,7 +917,7 @@
       "recipe": "CPJ1218_B370",
       "parameter": "Scanner Drive Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
@@ -1974,23 +1624,23 @@
       "recipe": "ECOPOLY 1500",
       "parameter": "Scanner Drive Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
-          "value": 1.4934,
-          "status": "Warning"
+          "value": 1.2483,
+          "status": "Major"
         },
         "Cpk": {
-          "value": 1.3641,
-          "status": "Warning"
+          "value": 1.158,
+          "status": "Major"
         },
         "Pp": {
-          "value": 1.0814,
+          "value": 1.0323,
           "status": "Major"
         },
         "Ppk": {
-          "value": 0.9878,
+          "value": 0.9576,
           "status": "Critical"
         }
       },
@@ -2388,1448 +2038,111 @@
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
           "actual_value": 1.083444444444445,
           "setpoint": 1.089454545454545
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 10:30:00",
+          "shift": "A",
+          "sample_no": 40,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 1.163111111111111,
+          "setpoint": 1.171366666666667
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 10:40:00",
+          "shift": "A",
+          "sample_no": 41,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 1.224421052631579,
+          "setpoint": 1.216805555555555
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 10:50:00",
+          "shift": "A",
+          "sample_no": 42,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 1.046846153846154,
+          "setpoint": 1.08176
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:00:00",
+          "shift": "A",
+          "sample_no": 43,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 0.9130869565217392,
+          "setpoint": 0.9187083333333332
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:10:00",
+          "shift": "A",
+          "sample_no": 44,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 0.9277999999999998,
+          "setpoint": 0.9186
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:20:00",
+          "shift": "A",
+          "sample_no": 45,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 0.93875,
+          "setpoint": 0.9200833333333333
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:40:00",
+          "shift": "A",
+          "sample_no": 46,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 1.074666666666667,
+          "setpoint": 1.065
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:50:00",
+          "shift": "A",
+          "sample_no": 47,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 1.106333333333333,
+          "setpoint": 1.108333333333333
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 12:00:00",
+          "shift": "A",
+          "sample_no": 48,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 1.086208333333333,
+          "setpoint": 1.098272727272727
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 12:08:44",
+          "shift": "A",
+          "sample_no": 49,
+          "segment": 11,
+          "source_tag": "Scanner_Drive_Zone_Actual_Value",
+          "actual_value": 1.068111111111111,
+          "setpoint": 1.057111111111111
         }
       ],
       "coverage": {
         "from": "2026-10-29 01:10:00",
-        "to": "2026-11-03 13:10:00"
-      }
-    },
-    {
-      "plant": "BANMORE",
-      "machine": "ROLL_CALENDER_4_0501",
-      "recipe": "EHT1000",
-      "parameter": "Scanner Drive Zone",
-      "section": "Calendering",
-      "snapshot_date": "2026-11-04",
-      "unit": null,
-      "metrics": {
-        "Cp": {
-          "value": 0.5782,
-          "status": "Critical"
-        },
-        "Cpk": {
-          "value": 0.5409,
-          "status": "Critical"
-        },
-        "Pp": {
-          "value": 0.5323,
-          "status": "Critical"
-        },
-        "Ppk": {
-          "value": 0.4979,
-          "status": "Critical"
-        }
-      },
-      "spec": {
-        "lsl": -0.04,
-        "usl": 0.04
-      },
-      "readings": [
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:10:00",
-          "shift": "A",
-          "sample_no": 1,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.869,
-          "setpoint": 0.861
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:20:00",
-          "shift": "A",
-          "sample_no": 2,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8674999999999999,
-          "setpoint": 0.8855
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:30:00",
-          "shift": "A",
-          "sample_no": 3,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8606666666666666,
-          "setpoint": 0.87975
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:40:00",
-          "shift": "A",
-          "sample_no": 4,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.85,
-          "setpoint": 0.871
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:50:00",
-          "shift": "A",
-          "sample_no": 5,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8907499999999999,
-          "setpoint": 0.88125
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 14:00:00",
-          "shift": "A",
-          "sample_no": 6,
-          "segment": 1,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8883333333333333,
-          "setpoint": 0.8849999999999999
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 19:50:00",
-          "shift": "B",
-          "sample_no": 7,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.0405,
-          "setpoint": 1.085
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 20:10:00",
-          "shift": "B",
-          "sample_no": 8,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.041,
-          "setpoint": 1.072
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 21:00:00",
-          "shift": "B",
-          "sample_no": 9,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.101,
-          "setpoint": 1.104
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 21:10:00",
-          "shift": "B",
-          "sample_no": 10,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.077,
-          "setpoint": 1.096
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 21:20:00",
-          "shift": "B",
-          "sample_no": 11,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.037,
-          "setpoint": 1.047
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 21:50:00",
-          "shift": "B",
-          "sample_no": 12,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.929,
-          "setpoint": 0.9705
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 22:00:00",
-          "shift": "B",
-          "sample_no": 13,
-          "segment": 2,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.948,
-          "setpoint": 0.964
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 23:30:00",
-          "shift": "C",
-          "sample_no": 14,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.087,
-          "setpoint": 1.055666666666666
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 23:50:00",
-          "shift": "C",
-          "sample_no": 15,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.04575,
-          "setpoint": 1.0575
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:00:00",
-          "shift": "C",
-          "sample_no": 16,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.0676,
-          "setpoint": 1.0825
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:10:00",
-          "shift": "C",
-          "sample_no": 17,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.092666666666667,
-          "setpoint": 1.102
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:30:00",
-          "shift": "C",
-          "sample_no": 18,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.203428571428571,
-          "setpoint": 1.22525
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:40:00",
-          "shift": "C",
-          "sample_no": 19,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.225,
-          "setpoint": 1.193
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:50:00",
-          "shift": "C",
-          "sample_no": 20,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.098666666666667,
-          "setpoint": 1.136
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 01:10:00",
-          "shift": "C",
-          "sample_no": 21,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.4255,
-          "setpoint": 1.389
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 01:20:00",
-          "shift": "C",
-          "sample_no": 22,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.419,
-          "setpoint": 1.406
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 01:50:00",
-          "shift": "C",
-          "sample_no": 23,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.793,
-          "setpoint": 0.8191666666666667
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 02:00:00",
-          "shift": "C",
-          "sample_no": 24,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.821,
-          "setpoint": 0.8514999999999999
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 02:10:00",
-          "shift": "C",
-          "sample_no": 25,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8759999999999999,
-          "setpoint": 0.9016666666666668
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 02:50:00",
-          "shift": "C",
-          "sample_no": 26,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.889,
-          "setpoint": 0.902
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 03:10:00",
-          "shift": "C",
-          "sample_no": 27,
-          "segment": 3,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.813,
-          "setpoint": 0.866
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 04:20:00",
-          "shift": "C",
-          "sample_no": 28,
-          "segment": 4,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.138,
-          "setpoint": 1.0985
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 04:40:00",
-          "shift": "C",
-          "sample_no": 29,
-          "segment": 4,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.12975,
-          "setpoint": 1.108
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 04:50:00",
-          "shift": "C",
-          "sample_no": 30,
-          "segment": 4,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1195,
-          "setpoint": 1.109
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 07:50:00",
-          "shift": "A",
-          "sample_no": 31,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.0665,
-          "setpoint": 1.098666666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:00:00",
-          "shift": "A",
-          "sample_no": 32,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.132666666666667,
-          "setpoint": 1.120166666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:10:00",
-          "shift": "A",
-          "sample_no": 33,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.143,
-          "setpoint": 1.136
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:20:00",
-          "shift": "A",
-          "sample_no": 34,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.145333333333333,
-          "setpoint": 1.13675
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:30:00",
-          "shift": "A",
-          "sample_no": 35,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.166666666666667,
-          "setpoint": 1.14
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:40:00",
-          "shift": "A",
-          "sample_no": 36,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.132333333333333,
-          "setpoint": 1.1522
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 09:10:00",
-          "shift": "A",
-          "sample_no": 37,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.177,
-          "setpoint": 1.1685
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 09:20:00",
-          "shift": "A",
-          "sample_no": 38,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.181,
-          "setpoint": 1.1555
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 10:20:00",
-          "shift": "A",
-          "sample_no": 39,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.7868,
-          "setpoint": 0.83075
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:10:00",
-          "shift": "A",
-          "sample_no": 40,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.86,
-          "setpoint": 0.882
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:20:00",
-          "shift": "A",
-          "sample_no": 41,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8606666666666666,
-          "setpoint": 0.875
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:30:00",
-          "shift": "A",
-          "sample_no": 42,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8595,
-          "setpoint": 0.8699999999999999
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:50:00",
-          "shift": "A",
-          "sample_no": 43,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.861,
-          "setpoint": 0.8353333333333333
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 12:00:00",
-          "shift": "A",
-          "sample_no": 44,
-          "segment": 5,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.849,
-          "setpoint": 0.904
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 13:10:00",
-          "shift": "A",
-          "sample_no": 45,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.038,
-          "setpoint": 1.055
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 13:20:00",
-          "shift": "A",
-          "sample_no": 46,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.0115,
-          "setpoint": 1.064
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 13:50:00",
-          "shift": "A",
-          "sample_no": 47,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.952,
-          "setpoint": 0.976
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 14:20:00",
-          "shift": "A",
-          "sample_no": 48,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.804,
-          "setpoint": 0.8555
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 14:40:00",
-          "shift": "A",
-          "sample_no": 49,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.3476,
-          "setpoint": 2.339
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 14:50:00",
-          "shift": "A",
-          "sample_no": 50,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.371,
-          "setpoint": 2.3275
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 15:20:00",
-          "shift": "B",
-          "sample_no": 51,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.203,
-          "setpoint": 1.163
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 15:30:00",
-          "shift": "B",
-          "sample_no": 52,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1535,
-          "setpoint": 1.199
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 15:40:00",
-          "shift": "B",
-          "sample_no": 53,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.125333333333333,
-          "setpoint": 1.094
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 15:50:00",
-          "shift": "B",
-          "sample_no": 54,
-          "segment": 6,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.122,
-          "setpoint": 1.1096
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 17:20:00",
-          "shift": "B",
-          "sample_no": 55,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.8255,
-          "setpoint": 1.828666666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 17:30:00",
-          "shift": "B",
-          "sample_no": 56,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.826,
-          "setpoint": 1.8335
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 17:40:00",
-          "shift": "B",
-          "sample_no": 57,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.8355,
-          "setpoint": 1.815
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 18:10:00",
-          "shift": "B",
-          "sample_no": 58,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.842,
-          "setpoint": 1.826
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 18:20:00",
-          "shift": "B",
-          "sample_no": 59,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.813666666666666,
-          "setpoint": 1.8165
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 18:40:00",
-          "shift": "B",
-          "sample_no": 60,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.836,
-          "setpoint": 1.8205
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 19:40:00",
-          "shift": "B",
-          "sample_no": 61,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.827,
-          "setpoint": 0.837
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 19:50:00",
-          "shift": "B",
-          "sample_no": 62,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.872,
-          "setpoint": 0.8626666666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 20:00:00",
-          "shift": "B",
-          "sample_no": 63,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.874,
-          "setpoint": 0.8645
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 20:10:00",
-          "shift": "B",
-          "sample_no": 64,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8565,
-          "setpoint": 0.813
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 20:30:00",
-          "shift": "B",
-          "sample_no": 65,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8466666666666667,
-          "setpoint": 0.903
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 20:40:00",
-          "shift": "B",
-          "sample_no": 66,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.848,
-          "setpoint": 0.877
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 21:00:00",
-          "shift": "B",
-          "sample_no": 67,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1185,
-          "setpoint": 1.086
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 21:10:00",
-          "shift": "B",
-          "sample_no": 68,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.104,
-          "setpoint": 1.112
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 21:20:00",
-          "shift": "B",
-          "sample_no": 69,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1275,
-          "setpoint": 1.124
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 21:30:00",
-          "shift": "B",
-          "sample_no": 70,
-          "segment": 7,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.111666666666667,
-          "setpoint": 1.1
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 22:40:00",
-          "shift": "B",
-          "sample_no": 71,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.095,
-          "setpoint": 1.109
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 23:10:00",
-          "shift": "C",
-          "sample_no": 72,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.486333333333334,
-          "setpoint": 1.4426
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 23:20:00",
-          "shift": "C",
-          "sample_no": 73,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.412,
-          "setpoint": 1.407
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 00:00:00",
-          "shift": "C",
-          "sample_no": 74,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.2265,
-          "setpoint": 1.214
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 00:10:00",
-          "shift": "C",
-          "sample_no": 75,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.215333333333333,
-          "setpoint": 1.241
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 01:00:00",
-          "shift": "C",
-          "sample_no": 76,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.09,
-          "setpoint": 1.097
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 01:40:00",
-          "shift": "C",
-          "sample_no": 77,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.041,
-          "setpoint": 1.051
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 02:00:00",
-          "shift": "C",
-          "sample_no": 78,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.00375,
-          "setpoint": 0.9936666666666666
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 02:10:00",
-          "shift": "C",
-          "sample_no": 79,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.048333333333333,
-          "setpoint": 1.0425
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 02:30:00",
-          "shift": "C",
-          "sample_no": 80,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.9335,
-          "setpoint": 0.9495
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 02:40:00",
-          "shift": "C",
-          "sample_no": 81,
-          "segment": 8,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.901,
-          "setpoint": 0.9245
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 04:40:00",
-          "shift": "C",
-          "sample_no": 82,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1765,
-          "setpoint": 1.165142857142857
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 04:50:00",
-          "shift": "C",
-          "sample_no": 83,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.189,
-          "setpoint": 1.221
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:00:00",
-          "shift": "C",
-          "sample_no": 84,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.171,
-          "setpoint": 1.17975
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:10:00",
-          "shift": "C",
-          "sample_no": 85,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1915,
-          "setpoint": 1.194
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:20:00",
-          "shift": "C",
-          "sample_no": 86,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.167333333333333,
-          "setpoint": 1.180666666666666
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:30:00",
-          "shift": "C",
-          "sample_no": 87,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.205,
-          "setpoint": 1.154
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:40:00",
-          "shift": "C",
-          "sample_no": 88,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.231,
-          "setpoint": 1.186
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:50:00",
-          "shift": "C",
-          "sample_no": 89,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.222,
-          "setpoint": 1.23
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:00:00",
-          "shift": "C",
-          "sample_no": 90,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.209333333333333,
-          "setpoint": 1.2005
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:20:00",
-          "shift": "C",
-          "sample_no": 91,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.240666666666667,
-          "setpoint": 1.198571428571429
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:30:00",
-          "shift": "C",
-          "sample_no": 92,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.22575,
-          "setpoint": 1.2116
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:40:00",
-          "shift": "C",
-          "sample_no": 93,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1885,
-          "setpoint": 1.218
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:50:00",
-          "shift": "C",
-          "sample_no": 94,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.199,
-          "setpoint": 1.1785
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 07:10:00",
-          "shift": "A",
-          "sample_no": 95,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.258,
-          "setpoint": 1.240666666666667
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 07:20:00",
-          "shift": "A",
-          "sample_no": 96,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.257,
-          "setpoint": 1.263
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:10:00",
-          "shift": "A",
-          "sample_no": 97,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.25,
-          "setpoint": 1.243
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:40:00",
-          "shift": "A",
-          "sample_no": 98,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.264666666666667,
-          "setpoint": 1.271
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:50:00",
-          "shift": "A",
-          "sample_no": 99,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.247333333333333,
-          "setpoint": 1.256
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 09:20:00",
-          "shift": "A",
-          "sample_no": 100,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.291333333333333,
-          "setpoint": 1.28
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 09:30:00",
-          "shift": "A",
-          "sample_no": 101,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.299333333333333,
-          "setpoint": 1.2955
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 09:40:00",
-          "shift": "A",
-          "sample_no": 102,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.296,
-          "setpoint": 1.26575
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 10:00:00",
-          "shift": "A",
-          "sample_no": 103,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.257,
-          "setpoint": 1.246333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 10:10:00",
-          "shift": "A",
-          "sample_no": 104,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.25,
-          "setpoint": 1.258
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 10:20:00",
-          "shift": "A",
-          "sample_no": 105,
-          "segment": 9,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.261,
-          "setpoint": 1.237333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:10:00",
-          "shift": "A",
-          "sample_no": 106,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8683333333333333,
-          "setpoint": 0.8625999999999999
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:20:00",
-          "shift": "A",
-          "sample_no": 107,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.855,
-          "setpoint": 0.8393333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:30:00",
-          "shift": "A",
-          "sample_no": 108,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8516666666666666,
-          "setpoint": 0.85575
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:40:00",
-          "shift": "A",
-          "sample_no": 109,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.835,
-          "setpoint": 0.8075
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:20:00",
-          "shift": "A",
-          "sample_no": 110,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.4425,
-          "setpoint": 1.46025
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:30:00",
-          "shift": "A",
-          "sample_no": 111,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.41075,
-          "setpoint": 1.441333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:40:00",
-          "shift": "A",
-          "sample_no": 112,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.411166666666666,
-          "setpoint": 1.408333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:50:00",
-          "shift": "A",
-          "sample_no": 113,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.416875,
-          "setpoint": 1.4255
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:10:00",
-          "shift": "A",
-          "sample_no": 114,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.098,
-          "setpoint": 1.119
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:20:00",
-          "shift": "A",
-          "sample_no": 115,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1055,
-          "setpoint": 1.141833333333334
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:30:00",
-          "shift": "A",
-          "sample_no": 116,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.09675,
-          "setpoint": 1.133
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:40:00",
-          "shift": "A",
-          "sample_no": 117,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.1248,
-          "setpoint": 1.17125
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 15:10:00",
-          "shift": "B",
-          "sample_no": 118,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.0685,
-          "setpoint": 1.0885
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 15:40:00",
-          "shift": "B",
-          "sample_no": 119,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.092,
-          "setpoint": 1.085
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:00:00",
-          "shift": "B",
-          "sample_no": 120,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.096,
-          "setpoint": 1.126
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:10:00",
-          "shift": "B",
-          "sample_no": 121,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.073666666666667,
-          "setpoint": 1.035
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:20:00",
-          "shift": "B",
-          "sample_no": 122,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.03475,
-          "setpoint": 1.0385
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:40:00",
-          "shift": "B",
-          "sample_no": 123,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.057666666666667,
-          "setpoint": 1.017
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:00:00",
-          "shift": "B",
-          "sample_no": 124,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.0385,
-          "setpoint": 1.016
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:10:00",
-          "shift": "B",
-          "sample_no": 125,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.05,
-          "setpoint": 1.042
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:20:00",
-          "shift": "B",
-          "sample_no": 126,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1,
-          "setpoint": 1.0125
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:30:00",
-          "shift": "B",
-          "sample_no": 127,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.388,
-          "setpoint": 2.375
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:40:00",
-          "shift": "B",
-          "sample_no": 128,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.3015,
-          "setpoint": 2.34
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:50:00",
-          "shift": "B",
-          "sample_no": 129,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 2.3195,
-          "setpoint": 2.3455
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:20:00",
-          "shift": "B",
-          "sample_no": 130,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.10925,
-          "setpoint": 1.123
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:30:00",
-          "shift": "B",
-          "sample_no": 131,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.10975,
-          "setpoint": 1.113333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:40:00",
-          "shift": "B",
-          "sample_no": 132,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.111,
-          "setpoint": 1.1066
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:50:00",
-          "shift": "B",
-          "sample_no": 133,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.082,
-          "setpoint": 1.101166666666667
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 19:20:00",
-          "shift": "B",
-          "sample_no": 134,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.263888888888889,
-          "setpoint": 1.236833333333334
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 19:30:00",
-          "shift": "B",
-          "sample_no": 135,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.2435,
-          "setpoint": 1.2175
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 19:50:00",
-          "shift": "B",
-          "sample_no": 136,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.173333333333334,
-          "setpoint": 1.127333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 20:00:00",
-          "shift": "B",
-          "sample_no": 137,
-          "segment": 10,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 1.16,
-          "setpoint": 1.196
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-31 00:50:00",
-          "shift": "C",
-          "sample_no": 138,
-          "segment": 11,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.7081875000000001,
-          "setpoint": 0.7244374999999998
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-31 01:20:00",
-          "shift": "C",
-          "sample_no": 139,
-          "segment": 11,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.83296875,
-          "setpoint": 0.8565
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-31 01:30:00",
-          "shift": "C",
-          "sample_no": 140,
-          "segment": 11,
-          "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.866027027027027,
-          "setpoint": 0.8690857142857142
-        }
-      ],
-      "coverage": {
-        "from": "2026-10-24 13:10:00",
-        "to": "2026-10-31 01:30:00"
+        "to": "2026-11-05 12:08:44"
       }
     },
     {
@@ -3838,7 +2151,7 @@
       "recipe": "UNIHT1330",
       "parameter": "Scanner Drive Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
@@ -4260,7 +2573,7 @@
           "sample_no": 40,
           "segment": 5,
           "source_tag": "Scanner_Drive_Zone_Actual_Value",
-          "actual_value": 0.8051600000000001,
+          "actual_value": 0.8051599999999999,
           "setpoint": 0.83732
         },
         {
@@ -4295,7 +2608,7 @@
       "recipe": "BHARAT",
       "parameter": "Scanner Water Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
@@ -4899,733 +3212,26 @@
     {
       "plant": "BANMORE",
       "machine": "ROLL_CALENDER_4_0501",
-      "recipe": "CAP 66",
-      "parameter": "Scanner Water Zone",
-      "section": "Calendering",
-      "snapshot_date": "2026-11-04",
-      "unit": null,
-      "metrics": {
-        "Cp": {
-          "value": 0.8441,
-          "status": "Critical"
-        },
-        "Cpk": {
-          "value": 0.7414,
-          "status": "Critical"
-        },
-        "Pp": {
-          "value": 0.812,
-          "status": "Critical"
-        },
-        "Ppk": {
-          "value": 0.7131,
-          "status": "Critical"
-        }
-      },
-      "spec": {
-        "lsl": -0.04,
-        "usl": 0.04
-      },
-      "readings": [
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 22:40:00",
-          "shift": "B",
-          "sample_no": 1,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.042,
-          "setpoint": 1.033
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 22:50:00",
-          "shift": "B",
-          "sample_no": 2,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.029,
-          "setpoint": 1.0475
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 23:00:00",
-          "shift": "C",
-          "sample_no": 3,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.056,
-          "setpoint": 1.077
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 23:10:00",
-          "shift": "C",
-          "sample_no": 4,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.055,
-          "setpoint": 1.06
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 23:20:00",
-          "shift": "C",
-          "sample_no": 5,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.077,
-          "setpoint": 1.043
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-23 23:30:00",
-          "shift": "C",
-          "sample_no": 6,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.918,
-          "setpoint": 0.928
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:10:00",
-          "shift": "C",
-          "sample_no": 7,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1035,
-          "setpoint": 1.105
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:20:00",
-          "shift": "C",
-          "sample_no": 8,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.114,
-          "setpoint": 1.0805
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:30:00",
-          "shift": "C",
-          "sample_no": 9,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.0905,
-          "setpoint": 1.085
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:40:00",
-          "shift": "C",
-          "sample_no": 10,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.113,
-          "setpoint": 1.097
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 00:50:00",
-          "shift": "C",
-          "sample_no": 11,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.195,
-          "setpoint": 1.219
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:00:00",
-          "shift": "C",
-          "sample_no": 12,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.24025,
-          "setpoint": 1.2262
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:20:00",
-          "shift": "C",
-          "sample_no": 13,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.139,
-          "setpoint": 1.086666666666667
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:30:00",
-          "shift": "C",
-          "sample_no": 14,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.4416,
-          "setpoint": 1.404
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 01:40:00",
-          "shift": "C",
-          "sample_no": 15,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.416333333333333,
-          "setpoint": 1.415
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:00:00",
-          "shift": "C",
-          "sample_no": 16,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.0945,
-          "setpoint": 1.101
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:10:00",
-          "shift": "C",
-          "sample_no": 17,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.098,
-          "setpoint": 1.115
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:30:00",
-          "shift": "C",
-          "sample_no": 18,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 2.281,
-          "setpoint": 2.2835
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:40:00",
-          "shift": "C",
-          "sample_no": 19,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 2.292,
-          "setpoint": 2.286
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 02:50:00",
-          "shift": "C",
-          "sample_no": 20,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 2.285,
-          "setpoint": 2.287
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 03:10:00",
-          "shift": "C",
-          "sample_no": 21,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.198,
-          "setpoint": 1.20075
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 03:20:00",
-          "shift": "C",
-          "sample_no": 22,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.234,
-          "setpoint": 1.202
-        },
-        {
-          "date": "2026-10-23",
-          "event_time": "2026-10-24 03:30:00",
-          "shift": "C",
-          "sample_no": 23,
-          "segment": 1,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.119,
-          "setpoint": 1.149
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 07:00:00",
-          "shift": "A",
-          "sample_no": 24,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.254714285714286,
-          "setpoint": 1.26275
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 07:10:00",
-          "shift": "A",
-          "sample_no": 25,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.289,
-          "setpoint": 1.25325
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 07:30:00",
-          "shift": "A",
-          "sample_no": 26,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.2365,
-          "setpoint": 1.233
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 07:40:00",
-          "shift": "A",
-          "sample_no": 27,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.237333333333333,
-          "setpoint": 1.249
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:10:00",
-          "shift": "A",
-          "sample_no": 28,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.25,
-          "setpoint": 1.258
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:20:00",
-          "shift": "A",
-          "sample_no": 29,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.276,
-          "setpoint": 1.247
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:30:00",
-          "shift": "A",
-          "sample_no": 30,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.238,
-          "setpoint": 1.2545
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:40:00",
-          "shift": "A",
-          "sample_no": 31,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.233,
-          "setpoint": 1.2265
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 08:50:00",
-          "shift": "A",
-          "sample_no": 32,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.253,
-          "setpoint": 1.2494
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:10:00",
-          "shift": "A",
-          "sample_no": 33,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.277,
-          "setpoint": 1.264
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:20:00",
-          "shift": "A",
-          "sample_no": 34,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.273,
-          "setpoint": 1.262
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:40:00",
-          "shift": "A",
-          "sample_no": 35,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.262,
-          "setpoint": 1.265
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 09:50:00",
-          "shift": "A",
-          "sample_no": 36,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.2325,
-          "setpoint": 1.227333333333333
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:10:00",
-          "shift": "A",
-          "sample_no": 37,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.23,
-          "setpoint": 1.247
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:20:00",
-          "shift": "A",
-          "sample_no": 38,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.244333333333333,
-          "setpoint": 1.226
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:30:00",
-          "shift": "A",
-          "sample_no": 39,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.252,
-          "setpoint": 1.247333333333333
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:40:00",
-          "shift": "A",
-          "sample_no": 40,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.2315,
-          "setpoint": 1.2385
-        },
-        {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 10:50:00",
-          "shift": "A",
-          "sample_no": 41,
-          "segment": 2,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.245,
-          "setpoint": 1.2375
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 23:40:00",
-          "shift": "C",
-          "sample_no": 42,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.8405,
-          "setpoint": 1.839333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 00:00:00",
-          "shift": "C",
-          "sample_no": 43,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.850333333333333,
-          "setpoint": 1.847
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 00:10:00",
-          "shift": "C",
-          "sample_no": 44,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.851333333333333,
-          "setpoint": 1.8276
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 00:20:00",
-          "shift": "C",
-          "sample_no": 45,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.827666666666666,
-          "setpoint": 1.815333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 00:30:00",
-          "shift": "C",
-          "sample_no": 46,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.845,
-          "setpoint": 1.8195
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 01:10:00",
-          "shift": "C",
-          "sample_no": 47,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.797,
-          "setpoint": 1.777
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 01:40:00",
-          "shift": "C",
-          "sample_no": 48,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.827,
-          "setpoint": 1.817
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 01:50:00",
-          "shift": "C",
-          "sample_no": 49,
-          "segment": 3,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.808333333333333,
-          "setpoint": 1.831
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-27 04:10:00",
-          "shift": "C",
-          "sample_no": 50,
-          "segment": 4,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.85,
-          "setpoint": 0.854
-        },
-        {
-          "date": "2026-10-27",
-          "event_time": "2026-10-27 13:40:00",
-          "shift": "A",
-          "sample_no": 51,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.078,
-          "setpoint": 1.085
-        },
-        {
-          "date": "2026-10-27",
-          "event_time": "2026-10-27 13:50:00",
-          "shift": "A",
-          "sample_no": 52,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.116,
-          "setpoint": 1.082
-        },
-        {
-          "date": "2026-10-27",
-          "event_time": "2026-10-27 14:00:00",
-          "shift": "A",
-          "sample_no": 53,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.088,
-          "setpoint": 1.0795
-        },
-        {
-          "date": "2026-10-27",
-          "event_time": "2026-10-27 14:10:00",
-          "shift": "A",
-          "sample_no": 54,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.131333333333333,
-          "setpoint": 1.1165
-        },
-        {
-          "date": "2026-10-27",
-          "event_time": "2026-10-27 14:50:00",
-          "shift": "A",
-          "sample_no": 55,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.949,
-          "setpoint": 0.921
-        },
-        {
-          "date": "2026-10-27",
-          "event_time": "2026-10-27 15:20:00",
-          "shift": "B",
-          "sample_no": 56,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.16625,
-          "setpoint": 1.157666666666667
-        },
-        {
-          "date": "2026-10-27",
-          "event_time": "2026-10-27 16:00:00",
-          "shift": "B",
-          "sample_no": 57,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.402,
-          "setpoint": 1.397
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-30 11:40:00",
-          "shift": "A",
-          "sample_no": 58,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8481666666666666,
-          "setpoint": 0.848
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-30 12:00:00",
-          "shift": "A",
-          "sample_no": 59,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8785,
-          "setpoint": 0.8799230769230769
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-30 12:20:00",
-          "shift": "A",
-          "sample_no": 60,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8520714285714287,
-          "setpoint": 0.8516666666666668
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-30 12:30:00",
-          "shift": "A",
-          "sample_no": 61,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8499333333333333,
-          "setpoint": 0.8514999999999999
-        },
-        {
-          "date": "2026-11-03",
-          "event_time": "2026-11-04 04:10:00",
-          "shift": "C",
-          "sample_no": 62,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8607142857142858,
-          "setpoint": 0.8607142857142858
-        },
-        {
-          "date": "2026-11-03",
-          "event_time": "2026-11-04 04:20:00",
-          "shift": "C",
-          "sample_no": 63,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8459285714285715,
-          "setpoint": 0.8459285714285715
-        },
-        {
-          "date": "2026-11-03",
-          "event_time": "2026-11-04 04:30:00",
-          "shift": "C",
-          "sample_no": 64,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8514545454545455,
-          "setpoint": 0.8514545454545455
-        },
-        {
-          "date": "2026-11-03",
-          "event_time": "2026-11-04 04:40:00",
-          "shift": "C",
-          "sample_no": 65,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8575,
-          "setpoint": 0.8575
-        },
-        {
-          "date": "2026-11-03",
-          "event_time": "2026-11-04 04:50:00",
-          "shift": "C",
-          "sample_no": 66,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.85275,
-          "setpoint": 0.85275
-        },
-        {
-          "date": "2026-11-03",
-          "event_time": "2026-11-04 05:00:00",
-          "shift": "C",
-          "sample_no": 67,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8570625,
-          "setpoint": 0.8570625
-        }
-      ],
-      "coverage": {
-        "from": "2026-10-23 22:40:00",
-        "to": "2026-11-04 05:00:00"
-      }
-    },
-    {
-      "plant": "BANMORE",
-      "machine": "ROLL_CALENDER_4_0501",
       "recipe": "CPJ114",
       "parameter": "Scanner Water Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
-          "value": 43.7243,
+          "value": 52.5173,
           "status": "Healthy"
         },
         "Cpk": {
-          "value": 43.7073,
+          "value": 52.4915,
           "status": "Healthy"
         },
         "Pp": {
-          "value": 25.2166,
+          "value": 26.344,
           "status": "Healthy"
         },
         "Ppk": {
-          "value": 25.2068,
+          "value": 26.331,
           "status": "Healthy"
         }
       },
@@ -5872,7 +3478,7 @@
           "segment": 4,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
           "actual_value": 1.814803571428572,
-          "setpoint": 1.814803571428572
+          "setpoint": 1.814803571428573
         },
         {
           "date": "2026-11-04",
@@ -5943,31 +3549,11 @@
           "source_tag": "Scanner_Water_Zone_Actual_Value",
           "actual_value": 1.812857142857144,
           "setpoint": 1.812857142857144
-        },
-        {
-          "date": "2026-11-04",
-          "event_time": "2026-11-04 11:00:00",
-          "shift": "A",
-          "sample_no": 32,
-          "segment": 4,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.800708333333332,
-          "setpoint": 1.801829787234042
-        },
-        {
-          "date": "2026-11-04",
-          "event_time": "2026-11-04 11:10:00",
-          "shift": "A",
-          "sample_no": 33,
-          "segment": 4,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.776705882352941,
-          "setpoint": 1.776705882352941
         }
       ],
       "coverage": {
         "from": "2026-10-29 16:20:00",
-        "to": "2026-11-04 11:10:00"
+        "to": "2026-11-04 10:50:00"
       }
     },
     {
@@ -5976,7 +3562,7 @@
       "recipe": "CPJ1218_B370",
       "parameter": "Scanner Water Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
@@ -6490,27 +4076,27 @@
     {
       "plant": "BANMORE",
       "machine": "ROLL_CALENDER_4_0501",
-      "recipe": "EHT1000",
+      "recipe": "ECOPOLY 1500",
       "parameter": "Scanner Water Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
-          "value": 1.0731,
-          "status": "Major"
+          "value": 21.9983,
+          "status": "Healthy"
         },
         "Cpk": {
-          "value": 1.0667,
-          "status": "Major"
+          "value": 21.9476,
+          "status": "Healthy"
         },
         "Pp": {
-          "value": 1.0098,
-          "status": "Major"
+          "value": 17.1804,
+          "status": "Healthy"
         },
         "Ppk": {
-          "value": 1.0038,
-          "status": "Major"
+          "value": 17.1408,
+          "status": "Healthy"
         }
       },
       "spec": {
@@ -6519,1269 +4105,399 @@
       },
       "readings": [
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:10:00",
-          "shift": "A",
+          "date": "2026-10-29",
+          "event_time": "2026-10-29 19:00:00",
+          "shift": "B",
           "sample_no": 1,
           "segment": 1,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8706666666666667,
-          "setpoint": 0.861
+          "actual_value": 0.9387307692307691,
+          "setpoint": 0.93784
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:20:00",
-          "shift": "A",
+          "date": "2026-10-29",
+          "event_time": "2026-10-29 19:10:00",
+          "shift": "B",
           "sample_no": 2,
           "segment": 1,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.9,
-          "setpoint": 0.8855
+          "actual_value": 0.8921249999999998,
+          "setpoint": 0.8907857142857143
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:30:00",
-          "shift": "A",
+          "date": "2026-10-29",
+          "event_time": "2026-10-30 00:50:00",
+          "shift": "C",
           "sample_no": 3,
-          "segment": 1,
+          "segment": 2,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8734999999999999,
-          "setpoint": 0.87975
+          "actual_value": 1.097,
+          "setpoint": 1.09775
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:40:00",
-          "shift": "A",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 19:40:00",
+          "shift": "B",
           "sample_no": 4,
-          "segment": 1,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8625,
-          "setpoint": 0.871
+          "actual_value": 1.279333333333333,
+          "setpoint": 1.27825
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 13:50:00",
-          "shift": "A",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 19:50:00",
+          "shift": "B",
           "sample_no": 5,
-          "segment": 1,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8746666666666667,
-          "setpoint": 0.88125
+          "actual_value": 1.191789473684211,
+          "setpoint": 1.191695652173913
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 14:00:00",
-          "shift": "A",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 20:20:00",
+          "shift": "B",
           "sample_no": 6,
-          "segment": 1,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8832500000000001,
-          "setpoint": 0.8849999999999999
+          "actual_value": 1.3967,
+          "setpoint": 1.398454545454546
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 14:10:00",
-          "shift": "A",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 21:00:00",
+          "shift": "B",
           "sample_no": 7,
-          "segment": 1,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8815,
-          "setpoint": 0.8700000000000001
+          "actual_value": 1.159769230769231,
+          "setpoint": 1.15825
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 14:40:00",
-          "shift": "A",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 21:10:00",
+          "shift": "B",
           "sample_no": 8,
-          "segment": 1,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8113333333333334,
-          "setpoint": 0.8225
+          "actual_value": 1.139,
+          "setpoint": 1.138333333333333
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 20:00:00",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 21:30:00",
           "shift": "B",
           "sample_no": 9,
-          "segment": 2,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.063,
-          "setpoint": 1.056
+          "actual_value": 1.108086956521739,
+          "setpoint": 1.107681818181818
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 20:10:00",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 21:40:00",
           "shift": "B",
           "sample_no": 10,
-          "segment": 2,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.056,
-          "setpoint": 1.072
+          "actual_value": 1.136909090909091,
+          "setpoint": 1.1366
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 20:50:00",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 22:10:00",
           "shift": "B",
           "sample_no": 11,
-          "segment": 2,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.136,
-          "setpoint": 1.134
+          "actual_value": 1.198631578947368,
+          "setpoint": 1.19821052631579
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 21:00:00",
+          "date": "2026-10-30",
+          "event_time": "2026-10-30 22:20:00",
           "shift": "B",
           "sample_no": 12,
-          "segment": 2,
+          "segment": 3,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.099,
-          "setpoint": 1.104
+          "actual_value": 1.183,
+          "setpoint": 1.183588235294118
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 22:00:00",
-          "shift": "B",
+          "date": "2026-10-30",
+          "event_time": "2026-10-31 03:40:00",
+          "shift": "C",
           "sample_no": 13,
-          "segment": 2,
+          "segment": 4,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.96,
-          "setpoint": 0.964
+          "actual_value": 1.027058823529412,
+          "setpoint": 1.0272
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 22:10:00",
-          "shift": "B",
+          "date": "2026-10-30",
+          "event_time": "2026-10-31 03:50:00",
+          "shift": "C",
           "sample_no": 14,
-          "segment": 2,
+          "segment": 4,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.957,
-          "setpoint": 0.952
+          "actual_value": 1.026470588235294,
+          "setpoint": 1.027833333333333
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 23:30:00",
+          "date": "2026-10-30",
+          "event_time": "2026-10-31 04:00:00",
           "shift": "C",
           "sample_no": 15,
-          "segment": 3,
+          "segment": 4,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.0475,
-          "setpoint": 1.055666666666666
+          "actual_value": 0.9996111111111112,
+          "setpoint": 0.9983888888888888
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-24 23:50:00",
+          "date": "2026-10-30",
+          "event_time": "2026-10-31 04:20:00",
           "shift": "C",
           "sample_no": 16,
-          "segment": 3,
+          "segment": 4,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.079333333333333,
-          "setpoint": 1.0575
+          "actual_value": 0.9453846153846152,
+          "setpoint": 0.94475
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:00:00",
-          "shift": "C",
+          "date": "2026-10-31",
+          "event_time": "2026-10-31 16:40:00",
+          "shift": "B",
           "sample_no": 17,
-          "segment": 3,
+          "segment": 5,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.08625,
-          "setpoint": 1.0825
+          "actual_value": 0.8662727272727273,
+          "setpoint": 0.8669090909090909
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:20:00",
-          "shift": "C",
+          "date": "2026-10-31",
+          "event_time": "2026-10-31 17:10:00",
+          "shift": "B",
           "sample_no": 18,
-          "segment": 3,
+          "segment": 5,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.2525,
-          "setpoint": 1.233166666666667
+          "actual_value": 0.8484285714285714,
+          "setpoint": 0.8472500000000001
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:30:00",
-          "shift": "C",
+          "date": "2026-10-31",
+          "event_time": "2026-10-31 17:20:00",
+          "shift": "B",
           "sample_no": 19,
-          "segment": 3,
+          "segment": 5,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.239,
-          "setpoint": 1.22525
+          "actual_value": 0.7977500000000001,
+          "setpoint": 0.7996923076923076
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 00:50:00",
-          "shift": "C",
+          "date": "2026-10-31",
+          "event_time": "2026-10-31 17:50:00",
+          "shift": "B",
           "sample_no": 20,
-          "segment": 3,
+          "segment": 5,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.141,
-          "setpoint": 1.136
+          "actual_value": 1.07955,
+          "setpoint": 1.079380952380952
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 01:00:00",
+          "date": "2026-10-31",
+          "event_time": "2026-10-31 23:50:00",
           "shift": "C",
           "sample_no": 21,
-          "segment": 3,
+          "segment": 6,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.4175,
-          "setpoint": 1.4
+          "actual_value": 0.9312,
+          "setpoint": 0.929625
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 01:10:00",
-          "shift": "C",
+          "date": "2026-11-02",
+          "event_time": "2026-11-02 13:40:00",
+          "shift": "A",
           "sample_no": 22,
-          "segment": 3,
+          "segment": 7,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.3955,
-          "setpoint": 1.389
+          "actual_value": 1.105809523809524,
+          "setpoint": 1.106454545454545
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 01:20:00",
-          "shift": "C",
+          "date": "2026-11-03",
+          "event_time": "2026-11-03 12:30:00",
+          "shift": "A",
           "sample_no": 23,
-          "segment": 3,
+          "segment": 8,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.395,
-          "setpoint": 1.406
+          "actual_value": 1.105,
+          "setpoint": 1.105
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 01:40:00",
-          "shift": "C",
+          "date": "2026-11-03",
+          "event_time": "2026-11-03 12:40:00",
+          "shift": "A",
           "sample_no": 24,
-          "segment": 3,
+          "segment": 8,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.881,
-          "setpoint": 0.8775
+          "actual_value": 1.098363636363636,
+          "setpoint": 1.098363636363636
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 02:10:00",
-          "shift": "C",
+          "date": "2026-11-03",
+          "event_time": "2026-11-03 12:50:00",
+          "shift": "A",
           "sample_no": 25,
-          "segment": 3,
+          "segment": 8,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.92,
-          "setpoint": 0.9016666666666668
+          "actual_value": 1.111111111111111,
+          "setpoint": 1.1112
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 02:20:00",
-          "shift": "C",
+          "date": "2026-11-03",
+          "event_time": "2026-11-03 13:00:00",
+          "shift": "A",
           "sample_no": 26,
-          "segment": 3,
+          "segment": 8,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8815,
-          "setpoint": 0.8714999999999999
+          "actual_value": 1.104833333333333,
+          "setpoint": 1.104833333333333
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 02:40:00",
-          "shift": "C",
+          "date": "2026-11-03",
+          "event_time": "2026-11-03 13:10:00",
+          "shift": "A",
           "sample_no": 27,
-          "segment": 3,
+          "segment": 8,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.896,
-          "setpoint": 0.893
+          "actual_value": 1.089454545454545,
+          "setpoint": 1.089454545454545
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 02:50:00",
-          "shift": "C",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 10:20:00",
+          "shift": "A",
           "sample_no": 28,
-          "segment": 3,
+          "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.9,
-          "setpoint": 0.902
+          "actual_value": 0,
+          "setpoint": 0
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 03:00:00",
-          "shift": "C",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 10:30:00",
+          "shift": "A",
           "sample_no": 29,
-          "segment": 3,
+          "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.918,
-          "setpoint": 0.931
+          "actual_value": 1.171366666666667,
+          "setpoint": 1.171366666666667
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 03:10:00",
-          "shift": "C",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 10:40:00",
+          "shift": "A",
           "sample_no": 30,
-          "segment": 3,
+          "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.848,
-          "setpoint": 0.866
+          "actual_value": 1.216805555555555,
+          "setpoint": 1.216805555555555
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 04:20:00",
-          "shift": "C",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 10:50:00",
+          "shift": "A",
           "sample_no": 31,
-          "segment": 4,
+          "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.116,
-          "setpoint": 1.0985
+          "actual_value": 1.08176,
+          "setpoint": 1.08176
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 04:50:00",
-          "shift": "C",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:00:00",
+          "shift": "A",
           "sample_no": 32,
-          "segment": 4,
+          "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.0984,
-          "setpoint": 1.109
+          "actual_value": 0.9187083333333332,
+          "setpoint": 0.9187083333333332
         },
         {
-          "date": "2026-10-24",
-          "event_time": "2026-10-25 05:00:00",
-          "shift": "C",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:10:00",
+          "shift": "A",
           "sample_no": 33,
-          "segment": 4,
+          "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1005,
+          "actual_value": 0.9186,
+          "setpoint": 0.9186
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:20:00",
+          "shift": "A",
+          "sample_no": 34,
+          "segment": 9,
+          "source_tag": "Scanner_Water_Zone_Actual_Value",
+          "actual_value": 0.9200833333333333,
+          "setpoint": 0.9200833333333333
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:30:00",
+          "shift": "A",
+          "sample_no": 35,
+          "segment": 9,
+          "source_tag": "Scanner_Water_Zone_Actual_Value",
+          "actual_value": 0.930076923076923,
+          "setpoint": 0.930076923076923
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:40:00",
+          "shift": "A",
+          "sample_no": 36,
+          "segment": 9,
+          "source_tag": "Scanner_Water_Zone_Actual_Value",
+          "actual_value": 1.065,
+          "setpoint": 1.065
+        },
+        {
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 11:50:00",
+          "shift": "A",
+          "sample_no": 37,
+          "segment": 9,
+          "source_tag": "Scanner_Water_Zone_Actual_Value",
+          "actual_value": 1.108333333333333,
           "setpoint": 1.108333333333333
         },
         {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:00:00",
-          "shift": "A",
-          "sample_no": 34,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.131571428571429,
-          "setpoint": 1.120166666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:20:00",
-          "shift": "A",
-          "sample_no": 35,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.128,
-          "setpoint": 1.13675
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:30:00",
-          "shift": "A",
-          "sample_no": 36,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.163333333333333,
-          "setpoint": 1.14
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 08:40:00",
-          "shift": "A",
-          "sample_no": 37,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.147,
-          "setpoint": 1.1522
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 09:20:00",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 12:00:00",
           "shift": "A",
           "sample_no": 38,
-          "segment": 5,
+          "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.154333333333333,
-          "setpoint": 1.1555
+          "actual_value": 1.098272727272727,
+          "setpoint": 1.098272727272727
         },
         {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 10:20:00",
+          "date": "2026-11-05",
+          "event_time": "2026-11-05 12:08:44",
           "shift": "A",
           "sample_no": 39,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8365,
-          "setpoint": 0.83075
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:20:00",
-          "shift": "A",
-          "sample_no": 40,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8654999999999999,
-          "setpoint": 0.875
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:30:00",
-          "shift": "A",
-          "sample_no": 41,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.86,
-          "setpoint": 0.8699999999999999
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:40:00",
-          "shift": "A",
-          "sample_no": 42,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8554999999999999,
-          "setpoint": 0.861
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 11:50:00",
-          "shift": "A",
-          "sample_no": 43,
-          "segment": 5,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.842,
-          "setpoint": 0.8353333333333333
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 13:20:00",
-          "shift": "A",
-          "sample_no": 44,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.0535,
-          "setpoint": 1.064
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 13:40:00",
-          "shift": "A",
-          "sample_no": 45,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.068333333333333,
-          "setpoint": 1.058
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 14:40:00",
-          "shift": "A",
-          "sample_no": 46,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 2.31925,
-          "setpoint": 2.339
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 14:50:00",
-          "shift": "A",
-          "sample_no": 47,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 2.347,
-          "setpoint": 2.3275
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 15:00:00",
-          "shift": "B",
-          "sample_no": 48,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 2.257,
-          "setpoint": 2.254
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 15:40:00",
-          "shift": "B",
-          "sample_no": 49,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1145,
-          "setpoint": 1.094
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 15:50:00",
-          "shift": "B",
-          "sample_no": 50,
-          "segment": 6,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.0925,
-          "setpoint": 1.1096
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 17:20:00",
-          "shift": "B",
-          "sample_no": 51,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.818333333333333,
-          "setpoint": 1.828666666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 17:30:00",
-          "shift": "B",
-          "sample_no": 52,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.816333333333333,
-          "setpoint": 1.8335
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 17:40:00",
-          "shift": "B",
-          "sample_no": 53,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.824666666666667,
-          "setpoint": 1.815
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 18:20:00",
-          "shift": "B",
-          "sample_no": 54,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.8,
-          "setpoint": 1.8165
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 18:30:00",
-          "shift": "B",
-          "sample_no": 55,
-          "segment": 7,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.791,
-          "setpoint": 1.812666666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 19:40:00",
-          "shift": "B",
-          "sample_no": 56,
-          "segment": 8,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8612499999999998,
-          "setpoint": 0.837
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 19:50:00",
-          "shift": "B",
-          "sample_no": 57,
-          "segment": 8,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.868,
-          "setpoint": 0.8626666666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 20:00:00",
-          "shift": "B",
-          "sample_no": 58,
-          "segment": 8,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8576666666666667,
-          "setpoint": 0.8645
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 20:40:00",
-          "shift": "B",
-          "sample_no": 59,
-          "segment": 8,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.907,
-          "setpoint": 0.877
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 21:00:00",
-          "shift": "B",
-          "sample_no": 60,
-          "segment": 8,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.101,
-          "setpoint": 1.086
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 21:20:00",
-          "shift": "B",
-          "sample_no": 61,
-          "segment": 8,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1132,
-          "setpoint": 1.124
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 21:30:00",
-          "shift": "B",
-          "sample_no": 62,
-          "segment": 8,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.096,
-          "setpoint": 1.1
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 22:40:00",
-          "shift": "B",
-          "sample_no": 63,
           "segment": 9,
           "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.137,
-          "setpoint": 1.109
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 23:10:00",
-          "shift": "C",
-          "sample_no": 64,
-          "segment": 9,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.448666666666667,
-          "setpoint": 1.4426
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 23:20:00",
-          "shift": "C",
-          "sample_no": 65,
-          "segment": 9,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.4095,
-          "setpoint": 1.407
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 23:30:00",
-          "shift": "C",
-          "sample_no": 66,
-          "segment": 9,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.421,
-          "setpoint": 1.425166666666667
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-25 23:40:00",
-          "shift": "C",
-          "sample_no": 67,
-          "segment": 9,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.401,
-          "setpoint": 1.3746
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 00:00:00",
-          "shift": "C",
-          "sample_no": 68,
-          "segment": 9,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.212,
-          "setpoint": 1.214
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 01:30:00",
-          "shift": "C",
-          "sample_no": 69,
-          "segment": 10,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.09,
-          "setpoint": 1.0705
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 01:40:00",
-          "shift": "C",
-          "sample_no": 70,
-          "segment": 10,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.0425,
-          "setpoint": 1.051
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 02:00:00",
-          "shift": "C",
-          "sample_no": 71,
-          "segment": 10,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.9903333333333334,
-          "setpoint": 0.9936666666666666
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 02:10:00",
-          "shift": "C",
-          "sample_no": 72,
-          "segment": 10,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.045,
-          "setpoint": 1.0425
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 02:40:00",
-          "shift": "C",
-          "sample_no": 73,
-          "segment": 10,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.943,
-          "setpoint": 0.9245
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 04:20:00",
-          "shift": "C",
-          "sample_no": 74,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.19,
-          "setpoint": 1.21
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 04:40:00",
-          "shift": "C",
-          "sample_no": 75,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.161166666666667,
-          "setpoint": 1.165142857142857
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 04:50:00",
-          "shift": "C",
-          "sample_no": 76,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.20425,
-          "setpoint": 1.221
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:00:00",
-          "shift": "C",
-          "sample_no": 77,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.193,
-          "setpoint": 1.17975
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:10:00",
-          "shift": "C",
-          "sample_no": 78,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.209,
-          "setpoint": 1.194
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:20:00",
-          "shift": "C",
-          "sample_no": 79,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.197,
-          "setpoint": 1.180666666666666
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 05:40:00",
-          "shift": "C",
-          "sample_no": 80,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1955,
-          "setpoint": 1.186
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:00:00",
-          "shift": "C",
-          "sample_no": 81,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.194,
-          "setpoint": 1.2005
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:10:00",
-          "shift": "C",
-          "sample_no": 82,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.200333333333333,
-          "setpoint": 1.211
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:20:00",
-          "shift": "C",
-          "sample_no": 83,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.167,
-          "setpoint": 1.198571428571429
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:30:00",
-          "shift": "C",
-          "sample_no": 84,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.189,
-          "setpoint": 1.2116
-        },
-        {
-          "date": "2026-10-25",
-          "event_time": "2026-10-26 06:40:00",
-          "shift": "C",
-          "sample_no": 85,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.193714285714286,
-          "setpoint": 1.218
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 07:00:00",
-          "shift": "A",
-          "sample_no": 86,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.216,
-          "setpoint": 1.2265
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 07:10:00",
-          "shift": "A",
-          "sample_no": 87,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.2368,
-          "setpoint": 1.240666666666667
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 07:20:00",
-          "shift": "A",
-          "sample_no": 88,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.25,
-          "setpoint": 1.263
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:00:00",
-          "shift": "A",
-          "sample_no": 89,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.273,
-          "setpoint": 1.245
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:10:00",
-          "shift": "A",
-          "sample_no": 90,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.236333333333334,
-          "setpoint": 1.243
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:20:00",
-          "shift": "A",
-          "sample_no": 91,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.232,
-          "setpoint": 1.237
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:40:00",
-          "shift": "A",
-          "sample_no": 92,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.263,
-          "setpoint": 1.271
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 08:50:00",
-          "shift": "A",
-          "sample_no": 93,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.2615,
-          "setpoint": 1.256
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 09:10:00",
-          "shift": "A",
-          "sample_no": 94,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.255,
-          "setpoint": 1.2705
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 09:40:00",
-          "shift": "A",
-          "sample_no": 95,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.2475,
-          "setpoint": 1.26575
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 10:10:00",
-          "shift": "A",
-          "sample_no": 96,
-          "segment": 11,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.253666666666666,
-          "setpoint": 1.258
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:10:00",
-          "shift": "A",
-          "sample_no": 97,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.869,
-          "setpoint": 0.8625999999999999
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:20:00",
-          "shift": "A",
-          "sample_no": 98,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.85175,
-          "setpoint": 0.8393333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:30:00",
-          "shift": "A",
-          "sample_no": 99,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8494999999999999,
-          "setpoint": 0.85575
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 12:40:00",
-          "shift": "A",
-          "sample_no": 100,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.82,
-          "setpoint": 0.8075
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:10:00",
-          "shift": "A",
-          "sample_no": 101,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.5115,
-          "setpoint": 1.497
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:20:00",
-          "shift": "A",
-          "sample_no": 102,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.434,
-          "setpoint": 1.46025
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:30:00",
-          "shift": "A",
-          "sample_no": 103,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.434,
-          "setpoint": 1.441333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:40:00",
-          "shift": "A",
-          "sample_no": 104,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.429,
-          "setpoint": 1.408333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 13:50:00",
-          "shift": "A",
-          "sample_no": 105,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.434,
-          "setpoint": 1.4255
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:10:00",
-          "shift": "A",
-          "sample_no": 106,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.113,
-          "setpoint": 1.119
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:20:00",
-          "shift": "A",
-          "sample_no": 107,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1345,
-          "setpoint": 1.141833333333334
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:30:00",
-          "shift": "A",
-          "sample_no": 108,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.138666666666667,
-          "setpoint": 1.133
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 14:40:00",
-          "shift": "A",
-          "sample_no": 109,
-          "segment": 12,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1675,
-          "setpoint": 1.17125
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:00:00",
-          "shift": "B",
-          "sample_no": 110,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.111666666666667,
-          "setpoint": 1.126
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:10:00",
-          "shift": "B",
-          "sample_no": 111,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.043,
-          "setpoint": 1.035
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:20:00",
-          "shift": "B",
-          "sample_no": 112,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.066666666666667,
-          "setpoint": 1.0385
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 16:50:00",
-          "shift": "B",
-          "sample_no": 113,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.05,
-          "setpoint": 1.056
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:20:00",
-          "shift": "B",
-          "sample_no": 114,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.001,
-          "setpoint": 1.0125
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 17:50:00",
-          "shift": "B",
-          "sample_no": 115,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 2.331,
-          "setpoint": 2.3455
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:20:00",
-          "shift": "B",
-          "sample_no": 116,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.1134,
-          "setpoint": 1.123
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:30:00",
-          "shift": "B",
-          "sample_no": 117,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.11,
-          "setpoint": 1.113333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:40:00",
-          "shift": "B",
-          "sample_no": 118,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.117666666666667,
-          "setpoint": 1.1066
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 18:50:00",
-          "shift": "B",
-          "sample_no": 119,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.094,
-          "setpoint": 1.101166666666667
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 19:20:00",
-          "shift": "B",
-          "sample_no": 120,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.231,
-          "setpoint": 1.236833333333334
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 19:50:00",
-          "shift": "B",
-          "sample_no": 121,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.126,
-          "setpoint": 1.127333333333333
-        },
-        {
-          "date": "2026-10-26",
-          "event_time": "2026-10-26 20:00:00",
-          "shift": "B",
-          "sample_no": 122,
-          "segment": 13,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 1.205,
-          "setpoint": 1.196
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-31 01:00:00",
-          "shift": "C",
-          "sample_no": 123,
-          "segment": 14,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8238333333333334,
-          "setpoint": 0.82308
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-31 01:10:00",
-          "shift": "C",
-          "sample_no": 124,
-          "segment": 14,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.867970588235294,
-          "setpoint": 0.8678918918918918
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-31 01:20:00",
-          "shift": "C",
-          "sample_no": 125,
-          "segment": 14,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.857777777777778,
-          "setpoint": 0.8565
-        },
-        {
-          "date": "2026-10-30",
-          "event_time": "2026-10-31 01:30:00",
-          "shift": "C",
-          "sample_no": 126,
-          "segment": 14,
-          "source_tag": "Scanner_Water_Zone_Actual_Value",
-          "actual_value": 0.8692222222222221,
-          "setpoint": 0.8690857142857142
+          "actual_value": 1.057111111111111,
+          "setpoint": 1.057111111111111
         }
       ],
       "coverage": {
-        "from": "2026-10-24 13:10:00",
-        "to": "2026-10-31 01:30:00"
+        "from": "2026-10-29 19:00:00",
+        "to": "2026-11-05 12:08:44"
       }
     },
     {
@@ -7790,7 +4506,7 @@
       "recipe": "UNIHT1330",
       "parameter": "Scanner Water Zone",
       "section": "Calendering",
-      "snapshot_date": "2026-11-04",
+      "snapshot_date": "2026-11-05",
       "unit": null,
       "metrics": {
         "Cp": {
