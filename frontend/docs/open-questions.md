@@ -87,6 +87,15 @@ the remainder.
 | Q-OVG-03    | What is the target / RAG rule for Overage Material? | Entity lifecycle | BanmoreTechnical.jsx (Stock `ovg` card), specs/17-overage-material.md | No target defined — the card shows no status colour and no target line. | LOW | OPEN | 2026-10-28 |            |
 | Q-OVG-04    | Which requirement ID (FRS/US) does the Overage Material card trace to? | Non-goals | specs/17-overage-material.md | None found — flagged. Spec proceeds on the Gold read note supplied 2026-10-28. | LOW | OPEN | 2026-10-28 |            |
 
+## BTP compliance follow-up (2026-11-05)
+
+See [spec 18](../specs/18-btp-compliance-kpis.md).
+
+- **Q-BTP-COMP-01 — RESOLVED:** User confirmed that PM/Daily Check Sheet/Critical Parameter percentages use exact stored periods only. Unsupported arbitrary ranges show an explanation; never average/sum percentages or substitute the last day.
+- **Q-BTP-COMP-02 — RESOLVED:** User chose to retain the five other Maintenance cards as unavailable placeholders, with no mock values or targets.
+- **Q-BTP-COMP-03 — OPEN (data team):** The November 2026 PM `_m` row for Curing has a blank machine. The drill excludes anonymous machine rows and displays an empty state until Gold supplies the machine dimension. No non-PM count/name fallback.
+- **Q-BTP-COMP-04 — OPEN (business rules):** No target/RAG thresholds are specified for the three new KPIs. Cards remain neutral. Critical Parameter's guide defines a severe-violation percentage (lower is better); its raw Gold value is not inverted and the old mock 100% target is removed.
+
 ## Resolution log
 
 When a question is resolved, append a short note here with the date,

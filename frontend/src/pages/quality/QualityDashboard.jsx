@@ -46,6 +46,10 @@ import {
   pickChartType,
 } from "@/components/quality/shared/trendUtils.js";
 import { isUniformityTrendCard } from "@/lib/uniformityTrend.js";
+import { getCompliance } from "@/api/compliance.js";
+import { usePolledQuery } from "@/hooks/usePolledQuery.js";
+import ComplianceDrillPanel from "@/components/compliance/ComplianceDrillPanel.jsx";
+import { complianceCard, storedCompliancePeriod } from "@/lib/compliance.js";
 import jkLogo from "@/assets/jk-logo.png";
 import JKLoader from "@/components/JKLoader.jsx";
 import ProductionTimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
@@ -3474,8 +3478,18 @@ function ProcessDrillPanel({
   shift,
   granularity,
   processSummary,
+  compliancePeriod,
 }) {
   if (!kpi) return null;
+  if (kpi.drill === "cpc") {
+    return (
+      <ComplianceDrillPanel
+        key={`${compliancePeriod?.date}|${compliancePeriod?.granularity}`}
+        id="critical"
+        period={compliancePeriod}
+      />
+    );
+  }
   if (LIVE_PROCESS_DRILLS[kpi.drill]) {
     return (
       <LiveProcessDrillPanel
@@ -12525,6 +12539,27 @@ function QualityDashboard({ plant, onBack }) {
   const processGranularity =
     tf === "month" ? "MONTH" : tf === "year" ? "YEAR" : null;
   const processDate = tf === "month" || tf === "year" ? tfFrom : tfTo;
+  const criticalPeriod = storedCompliancePeriod({
+    date: processDate,
+    granularity: processGranularity,
+    shift,
+    ...(!["today", "day", "month", "year"].includes(tf)
+      ? { from: tfFrom, to: tfTo }
+      : {}),
+  });
+  const criticalCompliance = usePolledQuery(
+    () => getCompliance({ ids: ["critical"], ...criticalPeriod }),
+    {
+      enabled: tab === "process" && Boolean(criticalPeriod),
+      interval: 0,
+      deps: [criticalPeriod?.date, criticalPeriod?.granularity],
+    },
+  );
+  const criticalMatches =
+    criticalPeriod &&
+    criticalCompliance.data?.context?.date === criticalPeriod.date &&
+    criticalCompliance.data?.context?.granularity ===
+      criticalPeriod.granularity;
   // SPC is a single-day view only. Month and date-range controls are hidden
   // while this tab is active, and all SPC API calls receive only `date`.
   const spcFrom = null;
@@ -12692,6 +12727,24 @@ function QualityDashboard({ plant, onBack }) {
   // an API-backed value render as NA so the quality dashboard never shows dummy
   // KPI data as production data.
   const processCards = PROCESS_KPIS.map((k) => {
+    if (k.id === "cpc") {
+      return {
+        ...k,
+        ...complianceCard(
+          "critical",
+          criticalMatches ? criticalCompliance.data.kpis.critical : null,
+          {
+            period: criticalPeriod,
+            error: criticalCompliance.error,
+            isLoading:
+              criticalCompliance.isLoading ||
+              (criticalPeriod && !criticalMatches),
+          },
+        ),
+        id: "cpc",
+        drill: criticalPeriod ? "cpc" : null,
+      };
+    }
     if (!LIVE_PROCESS_KPI_IDS.has(k.id)) return toNaKpi(k);
     const live = liveProcess && liveProcess[k.id];
     if (!live) return toPendingLiveKpi(k);
@@ -13084,6 +13137,7 @@ function QualityDashboard({ plant, onBack }) {
                         shift={shift}
                         granularity={processGranularity}
                         processSummary={processSummary}
+                        compliancePeriod={criticalPeriod}
                         onOpenSPC={(mc) => {
                           setTab("spc");
                           setSpcSel(mc);

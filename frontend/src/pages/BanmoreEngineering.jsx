@@ -4,6 +4,7 @@ import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import EngineeringKpiGrid from "@/components/engineering/EngineeringKpiGrid.jsx";
 import EngineeringOverviewSection from "@/pages/engineering/EngineeringOverviewSection.jsx";
 import EngineeringReliabilitySection from "@/pages/engineering/EngineeringReliabilitySection.jsx";
+import EngineeringMaintenanceSection from "@/pages/engineering/EngineeringMaintenanceSection.jsx";
 import {
   currentMonthKeyInIST,
   todayInIST,
@@ -17,16 +18,16 @@ import { getPlant, getEngineeringKpis } from "@/api/plants.js";
 import { ENGINEERING_TABS } from "@/lib/mockData.js";
 import { useToast } from "@/components/common";
 
-// Real-backend tabs (spec 16/17). The other 4 tabs (maintenance/utilities/
-// projects/ops) stay on the mock EngineeringKpiGrid path untouched.
-const LIVE_TABS = new Set(["overall", "reliability"]);
+// Maintenance reads exact BTP compliance KPIs through Athena; other unopened
+// tabs keep their existing shell until their own sources are connected.
+const LIVE_TABS = new Set(["overall", "reliability", "maintenance"]);
 
 /**
  * Engineering Head dashboard shell for Banmore (spec 16/17). Ships page
- * chrome, the 6-tab strip, and per-tab content: Overview + Reliability are
- * wired to the real Engineering Reliability backend (Loss Tree, Breakdown/
- * MTBF/MTTR/Zero-Breakdown/Top-Machine-Breakdowns drills); the remaining 4
- * tabs keep the mock `EngineeringKpiGrid` shell from spec 16.
+ * chrome, the 6-tab strip, and per-tab content. Overview + Reliability use
+ * the Engineering Reliability backend. Maintenance uses exact BTP compliance
+ * snapshots; its unconnected cards are unavailable placeholders. The other
+ * three tabs keep their disabled shell from spec 16.
  */
 function BanmoreEngineering() {
   const theme = useTheme();
@@ -43,6 +44,7 @@ function BanmoreEngineering() {
   };
 
   const [activeTab, setActiveTab] = useState("overall");
+  const [maintenanceShift, setMaintenanceShift] = useState("all");
   // The current month is the default filter, and `preset: "month"` is what
   // says so in the UI — the header's "This Month" pill starts lit and its
   // dropdown starts on this month, so the period on screen matches the
@@ -130,6 +132,10 @@ function BanmoreEngineering() {
           plant={plant}
           timeRange={timeRange}
           onTimeRangeChange={onTimeRangeChange}
+          shift={activeTab === "maintenance" ? maintenanceShift : undefined}
+          onShiftChange={
+            activeTab === "maintenance" ? setMaintenanceShift : undefined
+          }
           onExport={onExportPdf}
           categoryTabs={ENGINEERING_TABS}
           activeCategory={activeTab}
@@ -159,6 +165,12 @@ function BanmoreEngineering() {
         )}
         {activeTab === "reliability" && (
           <EngineeringReliabilitySection period={period} />
+        )}
+        {activeTab === "maintenance" && (
+          <EngineeringMaintenanceSection
+            period={period}
+            shift={maintenanceShift}
+          />
         )}
         {!isLiveTab && (
           <EngineeringKpiGrid
