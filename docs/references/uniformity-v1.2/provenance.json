@@ -1,0 +1,17 @@
+{
+  "archive": "/home/yugal/Downloads/uniformity_silver_queries_v1_2.zip",
+  "sha256": "1c2ca2061135eb5b71f7b24d0bde4dafa375dc035f84b5812810eec69373d736",
+  "files": {
+    "silver_queries/trend_dbm_balancing.sql": "db340a6578463a4668a419ae19cb88d37456957228e2a60dc6b16f6232da8c9b",
+    "silver_queries/barcode_mtms_uniformity.sql": "cbbca4a7c15a6b27fdafdb63195576a450a2e1e8f243e3f27a4bfbbc6298d22b",
+    "silver_queries/barcode_zf_balancing.sql": "341a14097489fae8a3f6b2b1b2fbae42611b8fbe712ef13256b939470416b98b",
+    "silver_queries/barcode_tuo_status.sql": "06be38b05c5c60488da9545cce1808be2cbe86a8fd14e953d1038ac4e47dca0d",
+    "silver_queries/barcode_dbm_balancing.sql": "a9aa35c36837b65e48c388449b9b47007881d6ae9a04b03679b5f5ab21179bea",
+    "silver_queries/barcode_zf_uniformity.sql": "64e6daf13e87b7f5185d8ae183704874c133ee1f3ab6ea7e1c6ff8d6dc487184",
+    "silver_queries/trend_mtms_uniformity.sql": "01acb57641308f17f19e9f6c179969024d956da66ef875044a55655270497ec1"
+  },
+  "guide": {
+    "source": "/home/yugal/Downloads/Uniformity_Drilldown_Dev_Guide (1).md",
+    "sha256": "209e0d17c9a5a6bc057a4e6ebdfdcb30f182a6e6847019790a4f264c4a5ee097"
+  }
+}

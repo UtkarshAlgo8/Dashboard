@@ -1,0 +1,472 @@
+{
+  "verified_at": "2026-11-05T13:00:45.007Z",
+  "kind": "metadata-only; no production scans",
+  "sql": "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'silver' AND ((table_name = 'fct_productiondatatuo' AND column_name IN ('barcode', 'conicity', 'event_time', 'grade_conicity', 'grade_h1_rfv_ccw', 'grade_h1_rfv_cw', 'grade_lfv_ccw', 'grade_lfv_cw', 'grade_rfv_ccw', 'grade_rfv_cw', 'h1_rfv_ccw', 'h1_rfv_cw', 'item_code', 'lfv_ccw', 'lfv_cw', 'machine_name', 'rfv_ccw', 'rfv_cw', 'plant_code', 'source_machine', 'database_name', 'record_id')) OR (table_name = 'fct_productiondatatuonew' AND column_name IN ('barcode', 'couple_grade', 'event_time', 'grade_conicity', 'grade_h1_rfv_ccw', 'grade_h1_rfv_cw', 'grade_lfv_ccw', 'grade_lfv_cw', 'grade_lower_bulge', 'grade_lower_depression', 'grade_lower_lro', 'grade_rfv_ccw', 'grade_rfv_cw', 'grade_rro', 'grade_upper_bulge', 'grade_upper_depression', 'grade_upper_lro', 'lower_grade', 'machine_name', 'static_grade', 'tire_type', 'upper_grade', 'plant_code', 'source_machine', 'database_name', 'record_id')) OR (table_name = 'fct_productiondatapcrdbnew' AND column_name IN ('barcode', 'couple', 'couple_grade', 'event_time', 'item_code', 'lower', 'lower_grade', 'static', 'static_grade', 'upper', 'upper_grade', 'wc_id', 'plant_code', 'source_machine', 'database_name', 'record_id')) OR (table_name = 'fct_vtuodata_view' AND column_name IN ('barcode', 'event_time', 'first_name', 'recipe_description', 'status_name', 'wc_name', 'plant_code', 'source_machine', 'database_name', 'record_id')) OR (table_name = 'dim_recipemaster' AND column_name IN ('tyre_size', 'description', 'plant_code', 'source_machine', 'database_name', 'record_id'))) ORDER BY table_name, ordinal_position LIMIT 256",
+  "required": {
+    "fct_productiondatatuo": [
+      "barcode",
+      "conicity",
+      "event_time",
+      "grade_conicity",
+      "grade_h1_rfv_ccw",
+      "grade_h1_rfv_cw",
+      "grade_lfv_ccw",
+      "grade_lfv_cw",
+      "grade_rfv_ccw",
+      "grade_rfv_cw",
+      "h1_rfv_ccw",
+      "h1_rfv_cw",
+      "item_code",
+      "lfv_ccw",
+      "lfv_cw",
+      "machine_name",
+      "rfv_ccw",
+      "rfv_cw"
+    ],
+    "fct_productiondatatuonew": [
+      "barcode",
+      "couple_grade",
+      "event_time",
+      "grade_conicity",
+      "grade_h1_rfv_ccw",
+      "grade_h1_rfv_cw",
+      "grade_lfv_ccw",
+      "grade_lfv_cw",
+      "grade_lower_bulge",
+      "grade_lower_depression",
+      "grade_lower_lro",
+      "grade_rfv_ccw",
+      "grade_rfv_cw",
+      "grade_rro",
+      "grade_upper_bulge",
+      "grade_upper_depression",
+      "grade_upper_lro",
+      "lower_grade",
+      "machine_name",
+      "static_grade",
+      "tire_type",
+      "upper_grade"
+    ],
+    "fct_productiondatapcrdbnew": [
+      "barcode",
+      "couple",
+      "couple_grade",
+      "event_time",
+      "item_code",
+      "lower",
+      "lower_grade",
+      "static",
+      "static_grade",
+      "upper",
+      "upper_grade",
+      "wc_id"
+    ],
+    "fct_vtuodata_view": [
+      "barcode",
+      "event_time",
+      "first_name",
+      "recipe_description",
+      "status_name",
+      "wc_name"
+    ],
+    "dim_recipemaster": [
+      "tyre_size",
+      "description"
+    ]
+  },
+  "rows": [
+    {
+      "table_name": "dim_recipemaster",
+      "column_name": "record_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "dim_recipemaster",
+      "column_name": "tyre_size",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "dim_recipemaster",
+      "column_name": "description",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "dim_recipemaster",
+      "column_name": "source_machine",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "dim_recipemaster",
+      "column_name": "database_name",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "dim_recipemaster",
+      "column_name": "plant_code",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "record_id",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "wc_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "event_time",
+      "data_type": "timestamp(3) with time zone"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "item_code",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "static",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "static_grade",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "couple",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "couple_grade",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "upper",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "upper_grade",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "lower",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "lower_grade",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "barcode",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "source_machine",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "database_name",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatapcrdbnew",
+      "column_name": "plant_code",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "record_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "item_code",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "machine_name",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "conicity",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "barcode",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "event_time",
+      "data_type": "timestamp(3) with time zone"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "rfv_cw",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "h1_rfv_cw",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "lfv_cw",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "rfv_ccw",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "h1_rfv_ccw",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "lfv_ccw",
+      "data_type": "double"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "grade_rfv_cw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "grade_h1_rfv_cw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "grade_lfv_cw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "grade_rfv_ccw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "grade_h1_rfv_ccw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "grade_lfv_ccw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "grade_conicity",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "source_machine",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "database_name",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuo",
+      "column_name": "plant_code",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "record_id",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "machine_name",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "barcode",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "tire_type",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "event_time",
+      "data_type": "timestamp(3) with time zone"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "upper_grade",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "lower_grade",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_rfv_cw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_h1_rfv_cw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_lfv_cw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_rfv_ccw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_h1_rfv_ccw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_lfv_ccw",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_conicity",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_rro",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_upper_lro",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_lower_lro",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_upper_bulge",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_lower_bulge",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_upper_depression",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "grade_lower_depression",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "static_grade",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "couple_grade",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "source_machine",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "database_name",
+      "data_type": "varchar"
+    },
+    {
+      "table_name": "fct_productiondatatuonew",
+      "column_name": "plant_code",
+      "data_type": "varchar"
+    }
+  ],
+  "missing": {
+    "fct_productiondatatuo": [],
+    "fct_productiondatatuonew": [],
+    "fct_productiondatapcrdbnew": [],
+    "fct_vtuodata_view": [
+      "barcode",
+      "event_time",
+      "first_name",
+      "recipe_description",
+      "status_name",
+      "wc_name"
+    ],
+    "dim_recipemaster": []
+  },
+  "table_existence": {
+    "sql": "SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = 'silver' AND table_name IN ('fct_productiondatatuo', 'fct_productiondatatuonew', 'fct_productiondatapcrdbnew', 'fct_vtuodata_view', 'dim_recipemaster') ORDER BY table_name LIMIT 10",
+    "rows": [
+      {
+        "table_catalog": "awsdatacatalog",
+        "table_schema": "silver",
+        "table_name": "dim_recipemaster",
+        "table_type": "BASE TABLE"
+      },
+      {
+        "table_catalog": "awsdatacatalog",
+        "table_schema": "silver",
+        "table_name": "fct_productiondatapcrdbnew",
+        "table_type": "BASE TABLE"
+      },
+      {
+        "table_catalog": "awsdatacatalog",
+        "table_schema": "silver",
+        "table_name": "fct_productiondatatuo",
+        "table_type": "BASE TABLE"
+      },
+      {
+        "table_catalog": "awsdatacatalog",
+        "table_schema": "silver",
+        "table_name": "fct_productiondatatuonew",
+        "table_type": "BASE TABLE"
+      }
+    ]
+  }
+}
