@@ -536,14 +536,27 @@ function shareColumn(valueKey, label = "Share") {
  * @param {string} machinesKpi - `BreakdownMachines_*` for this level, where the
  *   spec publishes one (grade and grade×section only — deeper levels have no
  *   such file, and at machine level the count is 1 by definition).
+ * @param {string} totalKpi - `TotalMachines_*` for this level (grade and
+ *   grade×section only): every machine that ran in the period, including
+ *   those with no breakdown. It is joined onto each row by the level's own
+ *   key (status; status + section, the status being pinned by the parent
+ *   click), read as stored and never summed across days.
  */
-function breakdownLevel(groupBy, groupLabel, pctKpi, minKpi, machinesKpi) {
+function breakdownLevel(
+  groupBy,
+  groupLabel,
+  pctKpi,
+  minKpi,
+  machinesKpi,
+  totalKpi,
+) {
   const columns = [
     {
       key: pctKpi,
       label: "Breakdown %",
       align: "right",
-      render: (r) => fmtNum(r[pctKpi], 2) + "%",
+      // A row can exist only because Total Machines was published for it.
+      render: (r) => (r[pctKpi] == null ? "—" : fmtNum(r[pctKpi], 2) + "%"),
     },
     {
       key: minKpi,
@@ -564,11 +577,19 @@ function breakdownLevel(groupBy, groupLabel, pctKpi, minKpi, machinesKpi) {
       render: (r) => fmtNum(r[machinesKpi]),
     });
   }
+  if (totalKpi) {
+    columns.push({
+      key: totalKpi,
+      label: "Total Machines",
+      align: "right",
+      render: (r) => fmtNum(r[totalKpi]),
+    });
+  }
   columns.push(shareColumn(minKpi));
   return {
     groupBy,
     groupLabel,
-    kpiNames: machinesKpi ? [pctKpi, minKpi, machinesKpi] : [pctKpi, minKpi],
+    kpiNames: [pctKpi, minKpi, machinesKpi, totalKpi].filter(Boolean),
     columns,
   };
 }
@@ -601,6 +622,7 @@ export const BREAKDOWN_LEVELS = [
     "Breakdown_Pct_Grade",
     "BreakdownMin_Grade",
     "BreakdownMachines_Grade",
+    "TotalMachines_Grade",
   ),
   breakdownLevel(
     "section",
@@ -608,6 +630,7 @@ export const BREAKDOWN_LEVELS = [
     "Breakdown_Pct_Grade_Section",
     "BreakdownMin_Grade_Section",
     "BreakdownMachines_Grade_Section",
+    "TotalMachines_Grade_Section",
   ),
   breakdownLevel("machine", "Machine", "Breakdown_Pct_m", "BreakdownMin_m"),
   {
