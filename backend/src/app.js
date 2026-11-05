@@ -36,6 +36,7 @@ import {
   productRouter as ctpQualityProductRouter,
 } from "./quality/ctp/routes.js";
 import { router as engineeringReliabilityRouter } from "./engineering/routes/reliability.routes.js";
+import { router as complianceRouter } from "./compliance/routes.js";
 
 // Auth slice — see backend/src/middlewares/auth.middleware.js
 import authRouter from "./routes/auth.js";
@@ -138,6 +139,8 @@ app.use("/api/v1/quality", gate, qualityRouter);
 // Engineering Head dashboard (additive; separate data family — spec 16/17).
 //   /api/v1/engineering/reliability/{summary,kpi-children,kpi-history,latest-date,loss-tree}
 app.use("/api/v1/engineering/reliability", gate, engineeringReliabilityRouter);
+// BTP compliance is selected by exact KPI names, independent of department/category.
+app.use("/api/v1/compliance", gate, complianceRouter);
 
 app.use(notFound);
 app.use(errorHandler);

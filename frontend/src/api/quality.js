@@ -34,9 +34,10 @@ function cachedQualityGet(url, ttlMs = QUALITY_CACHE_TTL_MS) {
  * and the DB later — the frontend is identical across that switch.
  */
 
-// Frontend Process card id → gold `kpi_name` (overall level). Only these
-// three are backed by the gold layer; FTQ / Audit Deviation / Critical
-// Parameter / SPR are "not_available" in the FRD (§1.6) and render as NA.
+// Legacy Process-family cards using the Process Audit scope. Critical
+// Parameter Compliance uses api/compliance.js instead: its guide requires
+// exact BTP KPI-name selection without department/category predicates.
+// FTQ / Audit Deviation / SPR remain unavailable here.
 export const PROCESS_KPI_NAME = {
   pqr: "Plant_quality_rating_o",
   audit: "Plan_Compliance_o",

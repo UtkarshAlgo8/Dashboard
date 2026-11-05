@@ -87,6 +87,15 @@ the remainder.
 | Q-OVG-03    | What is the target / RAG rule for Overage Material? | Entity lifecycle | BanmoreTechnical.jsx (Stock `ovg` card), specs/17-overage-material.md | No target defined — the card shows no status colour and no target line. | LOW | OPEN | 2026-10-28 |            |
 | Q-OVG-04    | Which requirement ID (FRS/US) does the Overage Material card trace to? | Non-goals | specs/17-overage-material.md | None found — flagged. Spec proceeds on the Gold read note supplied 2026-10-28. | LOW | OPEN | 2026-10-28 |            |
 
+## BTP compliance follow-up (2026-11-05)
+
+See [spec 18](../specs/18-btp-compliance-kpis.md).
+
+- **Q-BTP-COMP-01 — RESOLVED:** User confirmed that PM/Daily Check Sheet/Critical Parameter percentages use exact stored periods only. Unsupported arbitrary ranges show an explanation; never average/sum percentages or substitute the last day.
+- **Q-BTP-COMP-02 — RESOLVED (UI follow-up supersedes original choice):** User now requests removing the five inactive Maintenance placeholders and the not-connected heading. Keep the two real connected cards visible even on empty/error periods. Remove only the standalone Daily counts summary strip; retain section → machine navigation and count columns in drill tables.
+- **Q-BTP-COMP-03 — OPEN (data team):** The November 2026 PM `_m` row for Curing has a blank machine. The drill excludes anonymous machine rows and displays an empty state until Gold supplies the machine dimension. No non-PM count/name fallback.
+- **Q-BTP-COMP-04 — OPEN (business rules):** No target/RAG thresholds are specified for the three new KPIs. User approved non-RAG brand-blue card presentation using existing theme tokens, explicitly not a pass/fail rule; no thresholds or targets are invented. Critical Parameter's guide defines a severe-violation percentage (lower is better); its raw Gold value is not inverted and the old mock 100% target is removed.
+
 ## Resolution log
 
 When a question is resolved, append a short note here with the date,
