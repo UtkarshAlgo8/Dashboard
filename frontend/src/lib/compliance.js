@@ -74,6 +74,7 @@ export function complianceCard(id, result, { period, error, isLoading } = {}) {
     u: "%",
     target: null,
     status: null,
+    presentationTone: "brand",
     sp: null,
     na: false,
     live: true,
@@ -87,6 +88,7 @@ export function complianceCard(id, result, { period, error, isLoading } = {}) {
     periodLabel: period ? `${period.granularity} · ${period.date}` : null,
     ragInfo: [
       definition.description,
+      "Blue is presentation only, not a pass/fail status. No RAG thresholds or target are defined.",
       "Published Gold value; no parent recomputation or invented target.",
     ],
     emptyReason: !period

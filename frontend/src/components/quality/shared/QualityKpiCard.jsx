@@ -3,7 +3,8 @@
  * the display value in `kpi.v`; any tyre-type adjustment happens upstream.
  * `kpi.ragInfo` (lines of text) adds an info icon that explains the card's
  * colour rule. `kpi.subLine` ({ text, alert? }) adds a second value line
- * under the main value, red when `alert` is set.
+ * under the main value, red when `alert` is set. BTP compliance can opt into
+ * `presentationTone: "brand"` for a non-RAG tint without defining thresholds.
  */
 import {
   Box,
@@ -37,7 +38,22 @@ import {
 export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
   const theme = useTheme();
   const tier = qualityCardTier(kpi);
-  const cardTheme = getKpiCardTheme(theme, tier);
+  const cardTheme = {
+    ...getKpiCardTheme(theme, tier),
+    // Opt-in presentation only. Existing status-coloured cards (including
+    // CTP) retain their established theme and status precedence unchanged.
+    ...(tier == null && kpi.presentationTone === "brand"
+      ? {
+          cardBg: theme.custom.pills.activeBg,
+          textColor: theme.palette.primary.main,
+          iconColor: theme.palette.primary.main,
+          sparkColor: theme.palette.primary.main,
+          barColor: theme.palette.primary.main,
+          barGradient: theme.palette.primary.main,
+          trackColor: theme.palette.primary.light,
+        }
+      : {}),
+  };
   const v = kpi.v;
   const numVal = numericKpiValue(v);
   const hasValue = numVal != null;

@@ -3478,18 +3478,8 @@ function ProcessDrillPanel({
   shift,
   granularity,
   processSummary,
-  compliancePeriod,
 }) {
   if (!kpi) return null;
-  if (kpi.drill === "cpc") {
-    return (
-      <ComplianceDrillPanel
-        key={`${compliancePeriod?.date}|${compliancePeriod?.granularity}`}
-        id="critical"
-        period={compliancePeriod}
-      />
-    );
-  }
   if (LIVE_PROCESS_DRILLS[kpi.drill]) {
     return (
       <LiveProcessDrillPanel
@@ -12860,15 +12850,20 @@ function QualityDashboard({ plant, onBack }) {
         : tab === "product"
           ? productCards
           : complaintCards;
-  const openObj = openKpi ? kpis.find((k) => k.id === openKpi) : null;
+  // One selected, currently drillable card owns the right-hand panel. An
+  // unsupported compliance period must not leave a stale drill open.
+  const openObj = openKpi
+    ? kpis.find((k) => k.id === openKpi && (tab !== "process" || k.drill))
+    : null;
   const tabAccent = tab === "process" ? C.bl : tab === "product" ? C.tl : C.rd;
   const bodyLoading =
     (tab === "process" && processLoading) ||
     (tab === "product" && productLoading);
 
   const toggle = (id) => {
-    setOpenKpi(openKpi === id ? null : id);
+    setOpenKpi((current) => (current === id ? null : id));
     setSub("");
+    if (tab === "process") setTrendKpi(null);
   };
   const onHeaderPresetChange = (payload) => {
     // ProductionTimeRangeSelect passes `{ preset, from, to }` (object);
@@ -12982,9 +12977,19 @@ function QualityDashboard({ plant, onBack }) {
     <QKpiCard
       key={kpi.id}
       kpi={{ ...kpi, v: tAdjust(kpi.v, kpi.n, tyreType, plant) }}
-      isOpen={openKpi === kpi.id}
+      isOpen={
+        tab === "process"
+          ? Boolean(openObj && openObj.id === kpi.id)
+          : openKpi === kpi.id
+      }
       onToggle={() => kpi.drill && toggle(kpi.id)}
-      onTrend={setTrendKpi}
+      onTrend={(kpi) => {
+        if (tab === "process") {
+          setOpenKpi(null);
+          setSub("");
+        }
+        setTrendKpi(kpi);
+      }}
     />
   );
 
@@ -13128,24 +13133,32 @@ function QualityDashboard({ plant, onBack }) {
                 }
                 panel={
                   <>
-                    {tab === "process" && (
-                      <ProcessDrillPanel
-                        kpi={openObj}
-                        sub={sub}
-                        setSub={setSub}
-                        date={processDate}
-                        shift={shift}
-                        granularity={processGranularity}
-                        processSummary={processSummary}
-                        compliancePeriod={criticalPeriod}
-                        onOpenSPC={(mc) => {
-                          setTab("spc");
-                          setSpcSel(mc);
-                          setOpenKpi(null);
-                          setSub("");
-                        }}
-                      />
-                    )}
+                    {tab === "process" &&
+                      (openObj?.id === "cpc" ? (
+                        <ComplianceDrillPanel
+                          key={`critical|${criticalPeriod?.date}|${criticalPeriod?.granularity}`}
+                          id="critical"
+                          period={criticalPeriod}
+                          onClose={() => setOpenKpi(null)}
+                        />
+                      ) : (
+                        <ProcessDrillPanel
+                          key={openObj?.id}
+                          kpi={openObj}
+                          sub={sub}
+                          setSub={setSub}
+                          date={processDate}
+                          shift={shift}
+                          granularity={processGranularity}
+                          processSummary={processSummary}
+                          onOpenSPC={(mc) => {
+                            setTab("spc");
+                            setSpcSel(mc);
+                            setOpenKpi(null);
+                            setSub("");
+                          }}
+                        />
+                      ))}
                     {tab === "product" &&
                       (openObj?.drill === "curingScrap" ? (
                         <LiveCuringScrapDrillPanel

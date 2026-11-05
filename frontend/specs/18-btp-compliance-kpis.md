@@ -4,9 +4,10 @@ Implemented against the user-supplied `checksheet_pm_compliance_kpis (3).md` (20
 
 ## UI scope
 
-- `/banmore/engineering` → **Maintenance** (now enabled): **PM Compliance** and **Daily Check Sheet Compliance**, with plant → section → machine drills. The other five Maintenance cards remain **Unavailable** placeholders, per user instruction; no mock values or targets are shown.
+- `/banmore/engineering` → **Maintenance**: show only the connected **PM Compliance** and **Daily Check Sheet Compliance** cards, with plant → section → machine drills. The follow-up UI request removes the five inactive placeholder cards and the not-connected heading. Connected cards remain visible for empty periods, loading and upstream errors.
 - `/banmore/quality` → **Process** → **Critical Parameter Compliance**, using the same section → machine drill component.
-- BTP only; no CTP changes. No infrastructure, deployment or new dependencies.
+- Both BTP pages use one selected drill in the right-hand `KpiSplitLayout` panel, with the other cards stacked at the left on desktop and the established stacked layout below `lg`. Switching Quality Process drills replaces the prior panel; opening a Process trend closes the drill and vice versa.
+- BTP only; no CTP behavior changes. No infrastructure, deployment or new dependencies.
 
 ## Authoritative mapping
 
@@ -16,7 +17,7 @@ Implemented against the user-supplied `checksheet_pm_compliance_kpis (3).md` (20
 | `pm` | `technicalchecksheet_Plan_Compliance_pm_o` | replace `_o` with `_s` / `_m` |
 | `critical` | `Critical_Parameter_Compliance_o` | replace `_o` with `_s` / `_m` |
 
-Daily Check Sheet also reads exact level-matched `mechanicalchecksheet_Total_Planned_*`, `mechanicalchecksheet_Complied_*`, `mechanicalchecksheet_Non_Complied_*`, `mechanicalchecksheet_Missed_*`, and `mechanicalchecksheet_In_Progress_*` counts. Plant counts are shown above its drills; section/machine counts appear alongside their published percentages. Missing counts stay missing, not zero-filled.
+Daily Check Sheet also reads exact level-matched `mechanicalchecksheet_Total_Planned_*`, `mechanicalchecksheet_Complied_*`, `mechanicalchecksheet_Non_Complied_*`, `mechanicalchecksheet_Missed_*`, and `mechanicalchecksheet_In_Progress_*` counts. The standalone “Daily Check Sheet counts (NOS) · BTP” plant-summary tile strip is removed by the follow-up UI request. Section/machine count columns remain in the actual drill tables alongside their published percentages; API counts are unchanged. Missing counts stay missing, not zero-filled.
 
 **No PM or Critical Parameter count KPIs are invented.** In particular, `technicalchecksheet_Planned_Nos_*` / `technicalchecksheet_Actual_Nos_*` must not be paired with PM Compliance.
 
@@ -28,7 +29,7 @@ All reads use `plant = 'BTP'`, exact case-sensitive KPI names, one date/granular
 - PM: completed PM check sheets ÷ PM check sheets planned up to today, excluding cancellations.
 - Critical Parameter: severe / Severe and Poka Yoke violations ÷ critical-parameter questions checked in submitted process audits up to today × 100. Despite its compliance name, the guide defines a **violation percentage: lower is better**. The UI explains this; it does not show `100 − value` or keep the old mock 100% target.
 - Gold percentages remain authoritative at **every** level. Never sum/average child percentages, derive an overall value from counts, or add shifts to make a day. Critical precision remains intact in the API; display formatting does not alter stored values.
-- No target/RAG thresholds were supplied. The three cards are neutral with an explanatory tooltip, not assigned invented green/amber/red bands.
+- No target/RAG thresholds were supplied. The user approved a **non-RAG brand-blue presentation** using the existing card/theme tokens: tinted background, brand value/icon/progress colours, and an explanatory tooltip. Blue does not imply pass/fail. Raw values, `status: null` and `target: null` remain unchanged. Existing status-coloured Quality/Production cards and default CTP card behavior are unaffected by the opt-in presentation.
 - `drill_down_attribute` is NULL for this family. The registry links `_o` → `_s` → `_m` explicitly; machines are leaves.
 
 ## Period contract
@@ -81,6 +82,12 @@ WHERE plant = 'BTP'
   AND granularity = 'MONTH'
   AND date = DATE '2026-11-01';
 ```
+
+## UI follow-up verification
+
+- 17 frontend checks passed (8 compliance presentation/state regressions and 9 existing Engineering period tests); 50 backend compliance/Quality/Engineering checks passed with one existing workbook-integration skip.
+- Frontend ESLint, full source formatting and production build passed. The full mechanical gate still fails on existing forbidden patterns; all 21 files responsible were verified unchanged from `HEAD`.
+- Headless Chrome with mocked API fixtures verified brand tint, retention of connected cards on empty/error responses, removal of only the standalone summary/inactive placeholders, Daily drill count columns, section → machine navigation, desktop right-hand positioning, mobile stacked panels, and mutually exclusive Quality CPC/PQR/close/trend transitions. No uncaught browser exceptions. These follow-up UI checks did not query live Athena or modify backend contracts.
 
 ## Context / verification
 
