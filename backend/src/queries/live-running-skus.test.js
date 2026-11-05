@@ -2,7 +2,32 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { liveRunningSkusQuery } from './live-running-skus.js';
+import { liveRunningSkusQuery, LIVE_RUNNING_SKU_TABLES } from './live-running-skus.js';
+
+test('snapshot SQL uses Athena functions and schema-qualified Silver sources only', () => {
+  const sql = liveRunningSkusQuery();
+  assert.equal(LIVE_RUNNING_SKU_TABLES.length, 7);
+  for (const table of LIVE_RUNNING_SKU_TABLES) {
+    assert.ok(table.startsWith('silver.'));
+    assert.ok(sql.includes(table), `Missing source ${table}`);
+  }
+  assert.match(sql, /current_timestamp AT TIME ZONE 'Asia\/Kolkata'/);
+  assert.match(sql, /CAST\(format_datetime\(current_timestamp/);
+  assert.match(sql, /CAST\(p\.event_time AS timestamp\)/);
+  assert.match(sql, /INTERVAL '168' HOUR/);
+  assert.match(sql, /to_unixtime\(/);
+  assert.match(sql, /regexp_like\(/);
+  assert.doesNotMatch(sql, /databricks|\bbronze\.|\b(?:timezone|epoch|strftime|regexp_matches)\(/i);
+  assert.doesNotMatch(sql, /\b(?:FROM|JOIN)\s+(?:fct_|dim_)/i);
+});
+
+test('Gold handoff exports the canonical read-only Athena query without environment configuration', () => {
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../../tools/live-running-sku-gold/export-query.js', import.meta.url)),
+  ], { encoding: 'utf8', env: { PATH: process.env.PATH } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${liveRunningSkusQuery()};\n`);
+});
 
 // Execute the complete production query. The Python helper only adapts SQL
 // dialect syntax; expected statuses and machine identities are literal fixtures.

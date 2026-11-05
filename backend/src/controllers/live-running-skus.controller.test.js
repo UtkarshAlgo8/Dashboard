@@ -7,7 +7,8 @@ process.env.CACHE_DRIVER = "memory";
 const { router } = await import("../routes/dashboard.js");
 const { errorHandler } = await import("../middlewares/errorHandler.js");
 const { config } = await import("../config.js");
-const { _clear } = await import("../utils/cache.js");
+const { _clear, cacheSet, buildCacheKey } = await import("../utils/cache.js");
+const { LIVE_RUNNING_SKU_TABLES } = await import("../queries/live-running-skus.js");
 const app = express();
 app.use("/api/v1/dashboard", router);
 app.use(errorHandler);
@@ -23,8 +24,18 @@ async function withServer(fn) {
   }
 }
 
-test("live SKU endpoint ignores temporal filters and hides stale SKUs", async (t) => {
+test("live SKU endpoint uses Athena, ignores legacy caches and temporal filters, and hides stale SKUs", async (t) => {
   await _clear();
+  await cacheSet(
+    buildCacheKey("/dashboard/live-running-skus:failure", { version: 1 }),
+    { message: "Legacy Databricks failure", type: "UPSTREAM_ERROR", status: 503 },
+    60_000,
+  );
+  await cacheSet(
+    buildCacheKey("/dashboard/live-running-skus", { version: 1 }),
+    { machines: [{ machine_id: "legacy" }] },
+    60_000,
+  );
   const nativeFetch = globalThis.fetch;
   const requests = [];
   t.mock.method(globalThis, "fetch", async (url, init) => {
@@ -76,13 +87,11 @@ test("live SKU endpoint ignores temporal filters and hides stale SKUs", async (t
     1,
     "time/shift filters must not partition the live cache",
   );
-  assert.equal(requests[0].engine, "databricks");
-  assert.equal(requests[0].tables.length, 7);
-  assert.ok(
-    requests[0].tables.every((path) =>
-      path.startsWith("databricks_table/silver/"),
-    ),
-  );
+  assert.equal(requests[0].engine, "athena");
+  assert.deepEqual(requests[0].tables, []);
+  for (const table of LIVE_RUNNING_SKU_TABLES) {
+    assert.ok(requests[0].sql.includes(table), `Missing Athena source ${table}`);
+  }
   assert.doesNotMatch(requests[0].sql, /2020-01|2030-12/);
 });
 
@@ -135,4 +144,29 @@ test("a failed live snapshot is replayed, not re-queried, while remembered", asy
     await nativeFetch(`${base}/api/v1/dashboard/live-running-skus`);
   });
   assert.equal(upstreamCalls, 2);
+});
+
+test("missing Athena sources remain unavailable instead of falling back or returning partial counts", async (t) => {
+  await _clear();
+  const nativeFetch = globalThis.fetch;
+  const requests = [];
+  const message = "Query FAILED: TABLE_NOT_FOUND: Table 'awsdatacatalog.silver.dim_tblitemmaster' does not exist";
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    if (String(url) !== config.upstream.url) return nativeFetch(url, init);
+    requests.push(JSON.parse(init.body));
+    return new Response(
+      JSON.stringify({ status: "ERROR", type: "Exception", message }),
+      { status: 502 },
+    );
+  });
+  await withServer(async (base) => {
+    const response = await nativeFetch(`${base}/api/v1/dashboard/live-running-skus`);
+    assert.equal(response.status, 502);
+    const body = await response.json();
+    assert.equal(body.error.message, message);
+    assert.equal(body.data, undefined);
+  });
+  assert.equal(requests.length, 1, "must not retry through Databricks or Bronze");
+  assert.equal(requests[0].engine, "athena");
+  assert.doesNotMatch(requests[0].sql, /\bbronze\./i);
 });
