@@ -16,3 +16,8 @@ export const SKU_PLAN_KPI_ID = "comp";
 // /dashboard/kpi-data instead, then delete the JSON and
 // api/skuFulfilmentSnapshot.js.
 export const TEMP_SKU_FULFILMENT_FROM_JSON = true;
+
+// The RCA button in the Engineering breakdown modals (Reliability Breakdown and
+// Top Machine Breakdowns) is hidden until RCA is activated. The RCA dialog,
+// state and backend stay in place. Set to false to show the button again.
+export const TEMP_DISABLE_RCA = true;

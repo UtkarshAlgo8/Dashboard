@@ -36,6 +36,7 @@
  * `Breakdown_Pct_m`, or `Breakdown_Pct_m_Failure` while a machine is pinned.
  * A failure across machines has no published % and reads "—".
  */
+import { TEMP_DISABLE_RCA } from "@/lib/tempFlags.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Stack, Typography, useTheme } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -1128,15 +1129,17 @@ function BreakdownChartModal({
           spacing={2}
         >
           {trend.control}
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<AssignmentOutlinedIcon fontSize="small" />}
-            onClick={() => setRcaOpen(true)}
-            sx={{ flexShrink: 0, textTransform: "none" }}
-          >
-            RCA
-          </Button>
+          {!TEMP_DISABLE_RCA && (
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<AssignmentOutlinedIcon fontSize="small" />}
+              onClick={() => setRcaOpen(true)}
+              sx={{ flexShrink: 0, textTransform: "none" }}
+            >
+              RCA
+            </Button>
+          )}
         </Stack>
       }
     >
