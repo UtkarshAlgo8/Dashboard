@@ -265,3 +265,39 @@ export function periodKeys(rows, lastShifts = null) {
   const keys = [...new Set(rows.map(periodKey))].sort();
   return lastShifts ? keys.slice(-lastShifts) : keys;
 }
+
+/**
+ * Seed the trend modal from Technical's own selection. `today` is the page's
+ * data as-of day (not a silent substitute period). A single non-today day or
+ * a multi-day range opens as a custom range; a month opens that month
+ * (null = the current month, as on Quality); a shift applies to Today only.
+ *
+ * @param {{ timeRange: {preset?: string, from?: string, to?: string,
+ *   month?: string|null}, dateWindow: {from?: string|null, to?: string|null,
+ *   granularity?: string|null}, shift: string, today: string }} p
+ * @returns {{preset: "today"|"month"|"custom", month?: string|null,
+ *   from?: string, to?: string, shift?: string} | null}
+ */
+export function technicalTrendFilter({ timeRange, dateWindow, shift, today }) {
+  const shiftKey = String(shift ?? "all").toLowerCase();
+  const todayFilter = { preset: "today", shift: shiftKey };
+  if (!timeRange || !today) return null;
+  if (timeRange.from && timeRange.to) {
+    const { from, to } = dateWindow;
+    if (!from || !to) return null;
+    return from === to && to === today
+      ? todayFilter
+      : { preset: "custom", from, to };
+  }
+  if (timeRange.preset === "today") return todayFilter;
+  if (timeRange.preset === "month") {
+    const key = timeRange.month ?? today.slice(0, 7);
+    return {
+      preset: "month",
+      month: key === today.slice(0, 7) ? null : key,
+    };
+  }
+  if (dateWindow?.from && dateWindow?.to)
+    return { preset: "custom", from: dateWindow.from, to: dateWindow.to };
+  return null;
+}

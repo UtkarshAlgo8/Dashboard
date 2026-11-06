@@ -412,3 +412,72 @@ test("integration wiring retains unrelated trends/cards; raw fetch only inside m
   assert.match(plot, /palette\.error\.main/);
   assert.match(plot, /DISPLAY_LIMIT = 20000/);
 });
+
+import { technicalTrendFilter } from "../src/lib/uniformityTrend.js";
+test("Technical trend filter mirrors the page selection and as-of day", () => {
+  const today = "2026-11-05";
+  const win = { from: "2026-11-01", to: "2026-11-05" };
+  assert.deepEqual(
+    technicalTrendFilter({
+      timeRange: { preset: "today", from: "", to: "" },
+      dateWindow: win,
+      shift: "B",
+      today,
+    }),
+    { preset: "today", shift: "b" },
+  );
+  assert.deepEqual(
+    technicalTrendFilter({
+      timeRange: { preset: "month", from: "", to: "", month: null },
+      dateWindow: win,
+      shift: "all",
+      today,
+    }),
+    { preset: "month", month: null },
+  );
+  assert.deepEqual(
+    technicalTrendFilter({
+      timeRange: { preset: "month", month: "2026-09" },
+      dateWindow: win,
+      shift: "all",
+      today,
+    }),
+    { preset: "month", month: "2026-09" },
+  );
+  assert.deepEqual(
+    technicalTrendFilter({
+      timeRange: { preset: "custom", from: "2026-11-05", to: "2026-11-05" },
+      dateWindow: { from: "2026-11-05", to: "2026-11-05" },
+      shift: "C",
+      today,
+    }),
+    { preset: "today", shift: "c" },
+  );
+  assert.deepEqual(
+    technicalTrendFilter({
+      timeRange: { preset: "custom", from: "2026-10-02", to: "2026-10-02" },
+      dateWindow: { from: "2026-10-02", to: "2026-10-02" },
+      shift: "all",
+      today,
+    }),
+    { preset: "custom", from: "2026-10-02", to: "2026-10-02" },
+  );
+  assert.deepEqual(
+    technicalTrendFilter({
+      timeRange: { preset: "custom", from: "2026-10-01", to: "2026-10-20" },
+      dateWindow: { from: "2026-10-01", to: "2026-10-20" },
+      shift: "all",
+      today,
+    }),
+    { preset: "custom", from: "2026-10-01", to: "2026-10-20" },
+  );
+  assert.equal(
+    technicalTrendFilter({
+      timeRange: { preset: "today" },
+      dateWindow: win,
+      shift: "all",
+      today: null,
+    }),
+    null,
+  );
+});

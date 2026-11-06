@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  CircularProgress,
   Paper,
   Stack,
   Table,
@@ -16,6 +15,8 @@ import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import KpiCard from "@/components/production/KpiCard.jsx";
 import JKLoader from "@/components/JKLoader.jsx";
 import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
+import UniformityTrendModal from "@/components/quality/UniformityTrendModal.jsx";
+import { isUniformityTrendCard } from "@/lib/uniformityTrend.js";
 import PaintWeightDrill from "@/components/technical/PaintWeightDrill.jsx";
 import UniformityDrillPanel from "@/components/quality/UniformityDrillPanel.jsx";
 import {
@@ -164,7 +165,13 @@ function SectionHeading({ children }) {
   );
 }
 
-function ProductGrid({ cards, openDrill, onOpenDrill, vertical = false }) {
+function ProductGrid({
+  cards,
+  openDrill,
+  onOpenDrill,
+  onOpenTrend,
+  vertical = false,
+}) {
   return (
     <Box
       sx={{
@@ -181,9 +188,14 @@ function ProductGrid({ cards, openDrill, onOpenDrill, vertical = false }) {
         ) : (
           <KpiCard
             key={card.id}
-            kpi={card}
+            kpi={
+              onOpenTrend && isUniformityTrendCard(card.sourceKpi)
+                ? card
+                : { ...card, hideTrend: true }
+            }
             isDrilling={openDrill?.id === card.id}
             onClick={card.drillable ? onOpenDrill : undefined}
+            onTrendOpen={onOpenTrend}
           />
         ),
       )}
@@ -354,7 +366,7 @@ function ProductChildrenDrill({
       />
       {rows == null ? (
         <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}>
-          <CircularProgress size={26} aria-label="Loading gold data" />
+          <JKLoader message="Loading drill data" />
         </Box>
       ) : error ? (
         <Typography sx={{ py: 2, fontSize: 13, color: "error.main" }}>
@@ -530,14 +542,28 @@ export default function TechnicalUniformityBalancingSection({
   granularity = "DAY",
   drillPeriod,
   onClearDrillShift,
+  trendFilter = null,
+  trendToday = null,
 }) {
   const [summary, setSummary] = useState(null);
   const [scrapRows, setScrapRows] = useState(null);
   const [loading, setLoading] = useState(Boolean(date));
   const [error, setError] = useState(null);
   const [openDrill, setOpenDrill] = useState(null);
+  const [trendCard, setTrendCard] = useState(null);
   const closeDrill = () => setOpenDrill(null);
-  const openCard = (card) => setOpenDrill(card);
+  // Drill and trend are mutually exclusive, as on Quality.
+  const openCard = (card) => {
+    setTrendCard(null);
+    setOpenDrill(card);
+  };
+  const openTrend =
+    trendFilter && trendToday
+      ? (card) => {
+          setOpenDrill(null);
+          setTrendCard(card);
+        }
+      : undefined;
 
   useEffect(() => {
     if (!date) return undefined;
@@ -678,6 +704,7 @@ export default function TechnicalUniformityBalancingSection({
                     cards={uniformityCards}
                     openDrill={openDrill}
                     onOpenDrill={openCard}
+                    onOpenTrend={openTrend}
                     vertical={vertical}
                   />
                 </Box>
@@ -687,6 +714,7 @@ export default function TechnicalUniformityBalancingSection({
                     cards={otherCards}
                     openDrill={openDrill}
                     onOpenDrill={openCard}
+                    onOpenTrend={openTrend}
                     vertical={vertical}
                   />
                 </Box>
@@ -754,6 +782,17 @@ export default function TechnicalUniformityBalancingSection({
           )}
         </Box>
       </Box>
+      {trendCard && openTrend && (
+        <UniformityTrendModal
+          key={trendCard.sourceKpi}
+          open
+          onClose={() => setTrendCard(null)}
+          cardKpi={trendCard.sourceKpi}
+          title={trendCard.name}
+          today={trendToday}
+          initialFilter={trendFilter}
+        />
+      )}
     </Box>
   );
 }

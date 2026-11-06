@@ -27,7 +27,9 @@ const requests = [],
   errors = [];
 let failDbm = true,
   delayedMtms = false,
-  emptyDbm = false;
+  emptyDbm = false,
+  paintDelay = 600,
+  paintFail = false;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const user = {
   id: 1,
@@ -66,6 +68,7 @@ values.Overall_Uniformity_Production.drill_down = {
   children: ["Mtms_Uniformity_Production"],
 };
 const legacyRequests = [];
+const trendRequests = [];
 const respond = (route, data, status = 200) =>
   route.fulfill({
     status,
@@ -221,6 +224,10 @@ await page.route("**/*", async (route) => {
     });
   if (url.pathname.endsWith("/as-of"))
     return respond(route, { data: { asOf: "2026-11-05" } });
+  if (url.pathname.endsWith("/product/uniformity-trend")) {
+    trendRequests.push(Object.fromEntries(q));
+    return respond(route, { data: { rows: [] } });
+  }
   if (url.pathname.endsWith("/product/summary"))
     return respond(route, { data: { values } });
   if (url.pathname.endsWith("/product/children")) {
@@ -261,8 +268,16 @@ await page.route("**/*", async (route) => {
           ],
         },
       });
-    if (names.startsWith("Paint_Wt_"))
+    if (names.startsWith("Paint_Wt_")) {
+      if (paintFail)
+        return respond(
+          route,
+          { error: { message: "Fixture paint outage" } },
+          502,
+        );
+      await delay(paintDelay);
       return respond(route, { data: { rows: [] } });
+    }
     throw new Error(`Unexpected legacy KPI request: ${names}`);
   }
   if (url.pathname.endsWith("/dashboard/kpi-data"))
@@ -275,6 +290,34 @@ await page.addInitScript((u) => {
   localStorage.setItem("jkdash.accessToken", "fixture-only");
   localStorage.setItem("jkdash.user", JSON.stringify(u));
 }, user);
+// Records every loader ever rendered: branded JKLoader text vs generic MUI spinner.
+await page.addInitScript(() => {
+  window.__loaders = { jk: new Set(), spinner: 0, where: [] };
+  const scan = () => {
+    document
+      .querySelectorAll(".jk-wait-text")
+      .forEach((n) => window.__loaders.jk.add(n.textContent.trim()));
+    document
+      .querySelectorAll('.MuiCircularProgress-root,[role="progressbar"]')
+      .forEach((n) => {
+        if (n.__seen) return;
+        n.__seen = true;
+        // Intentional exception outside drills: the unlabelled auth route guard.
+        const label = n.getAttribute("aria-label");
+        if (!label) return;
+        window.__loaders.spinner += 1;
+        window.__loaders.where.push(
+          n.getAttribute("aria-label") +
+            "|" +
+            n.parentElement?.outerHTML.slice(0, 160),
+        );
+      });
+  };
+  new MutationObserver(scan).observe(document, {
+    childList: true,
+    subtree: true,
+  });
+});
 async function text(value) {
   return page.getByText(value, { exact: true }).first();
 }
@@ -344,7 +387,7 @@ try {
   assert.deepEqual(await firstColumn(), ["AAA-01", "SAP-01"]);
   assert.equal(requests.length, count);
   await page.getByRole("button", { name: "SAP-01", exact: true }).click();
-  await page.getByRole("button", { name: "201", exact: true }).waitFor();
+  await page.getByRole("button", { name: "RFV CW", exact: true }).waitFor();
   count = requests.length;
   await sortHeader("Failed tyres");
   assert.deepEqual(await firstColumn(), ["RFV CW", "Conicity"]);
@@ -428,10 +471,23 @@ try {
   await page.locator(".highcharts-reset-zoom").waitFor();
   await page.screenshot({ path: "/tmp/b-uni-raw-plot-fixture.png" });
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "201", exact: true }).click();
+  assert.equal(
+    requests.filter((r) => r.path.endsWith("/barcodes")).length,
+    0,
+    "Plot icon never opens barcodes",
+  );
+  // The whole parameter row is the target: the Failed tyres count opens it too.
+  await page
+    .locator("tbody tr")
+    .filter({ hasText: "RFV CW" })
+    .locator("td")
+    .nth(1)
+    .click();
   await waitFor("FAILED-0");
   assert.equal(requests.filter((r) => r.path.endsWith("/barcodes")).length, 1);
   assert.equal(requests.at(-1).params.parameter, "RFV CW");
+  // expected is UI-only (parity warning): 201 Gold vs 201 Silver = no warning.
+  assert.equal(await page.getByText(/Gold reports/).count(), 0);
   assert.equal(requests.at(-1).params.machine, "MICROPOISE");
   assert.equal(requests.at(-1).params.sku, "SAP-01");
   await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -439,9 +495,9 @@ try {
   assert.equal(requests.filter((r) => r.path.endsWith("/barcodes")).length, 2);
   await drillCard("ZF Uniformity Yield");
   await toParameter();
-  await page.getByRole("button", { name: "201", exact: true }).waitFor();
+  await page.getByRole("button", { name: "RFV CW", exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: /^Plot / }).count(), 0);
-  await page.getByRole("button", { name: "201", exact: true }).click();
+  await page.locator("tbody tr").filter({ hasText: "RFV CW" }).click();
   await waitFor("FAILED-0");
   assert.equal(
     await page.locator("tbody tr").first().locator("td").nth(3).innerText(),
@@ -485,8 +541,10 @@ try {
   await waitFor("MTMS Uniformity Yield");
   delayedMtms = true;
   await clickText("MTMS Uniformity Yield");
-  await page.waitForFunction(
-    () => !!document.querySelector('[aria-label="Loading Uniformity table"]'),
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll(".jk-wait-text")].some((n) =>
+      n.textContent.includes("Loading Uniformity"),
+    ),
   );
   await drillCard("ZF Uniformity Yield");
   await delay(850);
@@ -627,12 +685,25 @@ try {
   await sortHeader("SKU");
   await sortHeader("SKU");
   await page.getByRole("button", { name: "SAP-01", exact: true }).click();
-  await page.getByRole("button", { name: "201", exact: true }).waitFor();
+  await page.getByRole("button", { name: "RFV CW", exact: true }).waitFor();
   assert.equal(requests.at(-1).params.machine, "30-0224");
   await sortHeader("Failed tyres");
   await sortHeader("Failed tyres");
-  await page.getByRole("button", { name: "201", exact: true }).click();
+  const barcodeCalls = requests.filter((r) => r.path.endsWith("/barcodes"));
+  assert.equal(
+    requests.filter((r) => r.path.endsWith("/barcodes")).length,
+    barcodeCalls.length,
+    "Sorting never opens barcodes",
+  );
+  // Keyboard: the parameter name is a real button; one activation, one request.
+  await page.getByRole("button", { name: "RFV CW", exact: true }).focus();
+  await page.keyboard.press("Enter");
   await waitFor("FAILED-0");
+  assert.equal(
+    requests.filter((r) => r.path.endsWith("/barcodes")).length,
+    barcodeCalls.length + 1,
+    "Keyboard activation sends exactly one barcodes request",
+  );
   await reclickOverall();
   await waitFor("FAILED-0");
   const cellValues = (index) =>
@@ -747,13 +818,29 @@ try {
     cardBox.y > siblingBox.y && panelBox.x > cardBox.x,
     "Legacy tested drill opens right on first click",
   );
+  // Error path first: the API layer caches successful responses.
+  paintFail = true;
+  await clickText("GT Weight Variation");
+  await page
+    .getByText("Unable to load paint weight data.", { exact: true })
+    .waitFor();
+  assert.equal(await page.locator(".jk-wait-text").count(), 0);
+  assert.equal(await page.locator(".MuiCircularProgress-root").count(), 0);
+  paintFail = false;
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await clickText("GT Weight Variation");
   await page
     .getByText("GT Weight Variation — Paint Weight", { exact: true })
     .waitFor();
+  // Delayed mock: branded loader must be visible, then clear on data.
+  await page
+    .locator(".jk-wait-text", { hasText: "Loading paint weight data" })
+    .waitFor();
+  assert.equal(await page.locator(".MuiCircularProgress-root").count(), 0);
   await page
     .getByText("No SKU data for this period.", { exact: true })
     .waitFor();
+  assert.equal(await page.locator(".jk-wait-text").count(), 0);
   panelBox = await page
     .getByText("GT Weight Variation — Paint Weight", { exact: true })
     .boundingBox();
@@ -792,6 +879,74 @@ try {
     "Narrow viewport stacks machine drill below cards",
   );
   await page.getByRole("button", { name: "Close Uniformity drill" }).click();
+  // --- Technical trend wiring (placed last: drills above assert request counts).
+  await page.setViewportSize({ width: 1520, height: 1100 });
+  await waitFor("MTMS Uniformity Yield");
+  // Technical trend wiring: Gold trend modal, lazy, supported cards only.
+  const trendButtons = page.getByRole("button", {
+    name: "View Trend Analytics",
+  });
+  const silverBefore = requests.length;
+  trendRequests.length = 0; // Quality page trend clicks are not Technical.
+  await delay(300);
+  assert.equal(trendRequests.length, 0, "No trend preload");
+  assert.equal(
+    await trendButtons.count(),
+    7,
+    "Only the seven Uniformity cards expose a trend action",
+  );
+  for (const [index, kpi, title] of [
+    [0, "Overall_Production_Yield", "Overall Production Yield"],
+    [2, "Mtms_Uniformity_Yield", "MTMS Uniformity Yield"],
+    [5, "Zf_Balancing_Yield_o", "ZF Balancing Yield"],
+    [6, "Dbm_Balancing_Yield", "DBM Balancing Yield"],
+  ]) {
+    const before = trendRequests.length;
+    await trendButtons.nth(index).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor();
+    await delay(300);
+    assert.ok(trendRequests.length > before, `${kpi} requests Gold trend`);
+    assert.equal(trendRequests[before].kpi_names, kpi);
+    assert.equal(trendRequests[before].rows, "plant");
+    assert.ok(
+      (await dialog.textContent()).includes(title),
+      `${title} modal title`,
+    );
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    await trendButtons.first().waitFor();
+  }
+  assert.equal(
+    requests.length,
+    silverBefore,
+    "Trend never calls Silver drill endpoints",
+  );
+  // Drill <-> trend precedence (card behind the modal is clicked by event).
+  await drillCard("MTMS Uniformity Yield");
+  await trendButtons.nth(2).click();
+  await page.getByRole("dialog").waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: "MICROPOISE", exact: true }).count(),
+    0,
+    "Opening trend closes the drill",
+  );
+  await (await text("ZF Uniformity Yield")).dispatchEvent("click");
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "MICROPOISE", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Close Uniformity drill" }).click();
+  // Branded loader only: no generic spinner in any drill; loader clears after data/error.
+  const loaders = await page.evaluate(() => ({
+    jk: [...window.__loaders.jk],
+    spinner: window.__loaders.spinner,
+    where: window.__loaders.where,
+  }));
+  assert.equal(loaders.spinner, 0, JSON.stringify(loaders.where));
+  assert.ok(
+    loaders.jk.some((m) => m.startsWith("Loading Uniformity")),
+    JSON.stringify(loaders.jk),
+  );
+  assert.equal(await page.locator(".jk-wait-text").count(), 0);
   assert.equal(errors.length, 0, JSON.stringify(errors));
   await delay(50);
   console.info(

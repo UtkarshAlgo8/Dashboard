@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  CircularProgress,
   IconButton,
   Stack,
   Tooltip,
@@ -14,6 +13,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { Card } from "@/components/quality/shared/Card.jsx";
 import { Breadcrumb } from "@/components/quality/shared/Breadcrumb.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
+import JKLoader from "@/components/JKLoader.jsx";
 import UniformityRawPlot from "@/components/quality/UniformityRawPlot.jsx";
 import useUniformityPage from "@/hooks/useUniformityPage.js";
 import {
@@ -89,7 +89,10 @@ export default function UniformityDrillPanel({
                 <IconButton
                   size="small"
                   aria-label={`Plot ${row.parameter}`}
-                  onClick={() => action("plot", row.parameter)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    action("plot", row.parameter);
+                  }}
                 >
                   <ShowChartIcon fontSize="small" />
                 </IconButton>
@@ -115,8 +118,22 @@ export default function UniformityDrillPanel({
     if (level === "machine" && index === 0) return link(cell, "machine", cell);
     if (level === "sku" && index === 0 && card.id !== "tuo")
       return link(cell, "sku", cell);
-    if (level === "parameter" && index === 1)
-      return cell == null ? "—" : link(display(cell), "barcodes", row[0], cell);
+    // Level 4 (barcodes) opens from the parameter row; the parameter name is
+    // the keyboard-accessible control, the whole row is the pointer target.
+    if (level === "parameter" && index === 0 && row[1] != null)
+      return (
+        <Button
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation();
+            action("barcodes", row[0], row[1]);
+          }}
+          sx={{ textTransform: "none" }}
+        >
+          {cell}
+        </Button>
+      );
+    if (level === "parameter" && index === 1) return display(cell);
     return cell;
   };
   const columns =
@@ -184,8 +201,8 @@ export default function UniformityDrillPanel({
         </Alert>
       )}
       {loading ? (
-        <Box sx={{ py: 4, textAlign: "center" }}>
-          <CircularProgress size={24} aria-label="Loading Uniformity table" />
+        <Box sx={{ py: 1, display: "grid", placeItems: "center" }}>
+          <JKLoader message="Loading Uniformity" />
         </Box>
       ) : error ? (
         <Alert severity="error" action={<Button onClick={retry}>Retry</Button>}>
@@ -208,6 +225,12 @@ export default function UniformityDrillPanel({
               cols={columns}
               rows={rows}
               renderCell={renderCell}
+              onRowClick={
+                level === "parameter"
+                  ? (row) => action("barcodes", row[0], row[1])
+                  : undefined
+              }
+              isRowClickable={(row) => row[1] != null}
               rowKey={(row) => row[0]}
               compareCells={(a, b, index) =>
                 compareUniformityCells(level, a, b, index)

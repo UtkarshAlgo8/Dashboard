@@ -2,7 +2,6 @@ import { useEffect, useReducer } from "react";
 import {
   Alert,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -13,6 +12,7 @@ import {
 } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
+import JKLoader from "@/components/JKLoader.jsx";
 import { getUniformityPage } from "@/api/uniformity.js";
 import {
   appendUniformityPoints,
@@ -164,8 +164,8 @@ export default function UniformityRawPlot({ scope, title, onClose }) {
           <Typography>No measured values for this selection.</Typography>
         ) : null}
         {state.loading && (
-          <Stack alignItems="center" sx={{ py: 2 }}>
-            <CircularProgress size={24} aria-label="Loading raw values" />
+          <Stack alignItems="center" sx={{ py: 1 }}>
+            <JKLoader message="Loading raw values" />
           </Stack>
         )}
         {state.has_more && state.rows.length >= DISPLAY_LIMIT && (
