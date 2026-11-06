@@ -129,6 +129,22 @@ export function recordedClockMillis(value) {
     Number((m[7] ?? "").padEnd(3, "0")),
   );
 }
+/** Override only Uniformity identity/time columns; keep other table sorting unchanged. */
+export function compareUniformityCells(level, a, b, index) {
+  if (index === 0 && ["machine", "sku"].includes(level))
+    return String(a).toLowerCase().localeCompare(String(b).toLowerCase());
+  if (level !== "barcodes" || (index !== 0 && index !== 1)) return undefined;
+  const value = (cell) => {
+    if (cell == null || String(cell).trim() === "" || cell === "—") return null;
+    return index === 1 ? recordedClockMillis(cell) : String(cell);
+  };
+  const left = value(a),
+    right = value(b);
+  if (left == null || right == null)
+    return left == null ? (right == null ? 0 : -1) : 1;
+  if (index === 1) return left - right;
+  return left.localeCompare(right);
+}
 /** Reject changing/overlapping pages; never silently sample or lose tyres. */
 export function appendUniformityPoints(previous, page) {
   if (page.truncated)

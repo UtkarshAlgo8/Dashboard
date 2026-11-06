@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import {
   appendUniformityPoints,
+  compareUniformityCells,
   INITIAL_UNIFORMITY_NAV,
   overallUniformityFamily,
   recordedClockMillis,
@@ -178,6 +179,27 @@ test("navigation is machine -> SKU -> parameter -> clicked failures, with correc
   ])
     assert.equal(uniformityCard(kpi), null);
 });
+test("barcode sorting compares recorded wall clocks and full identifiers, with explicit missing values", () => {
+  const compareTime = (a, b) => compareUniformityCells("barcodes", a, b, 1);
+  const compareBarcode = (a, b) => compareUniformityCells("barcodes", a, b, 0);
+  assert.ok(
+    compareTime("2026-11-05 23:30:00-04:00", "2026-11-05 10:00:00+05:30") > 0,
+  );
+  assert.ok(compareTime("2026-11-01 08:00:00", "2026-11-05 10:00:00") < 0);
+  assert.equal(
+    compareTime("2026-11-05 10:00:00+05:30", "2026-11-05 10:00:00-04:00"),
+    0,
+  );
+  assert.ok(compareBarcode("A-2", "B-10") < 0);
+  assert.ok(compareBarcode("Z-1", "A-2") > 0);
+  assert.ok(compareTime(null, "2026-11-01 08:00:00") < 0);
+  assert.ok(compareBarcode("A-2", null) > 0);
+  assert.equal(compareBarcode(null, ""), 0);
+  assert.equal(compareUniformityCells("barcodes", "10", "2", 3), undefined);
+  assert.equal(compareUniformityCells("barcodes", "10", "2", 4), undefined);
+  assert.ok(compareUniformityCells("machine", "alpha", "beta", 0) < 0);
+});
+
 test("raw plot preserves recorded clocks, null-vs-zero correctness, complete pages and source changes", () => {
   assert.equal(
     recordedClockMillis("2026-01-31 07:00:00+05:30"),

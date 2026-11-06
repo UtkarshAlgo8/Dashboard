@@ -61,6 +61,10 @@ values.Overall_Production_Yield.drill_down = {
   is_leaf: false,
   children: ["Mtms_Uniformity_Yield", "Zf_Uniformity_Yield"],
 };
+values.Overall_Uniformity_Production.drill_down = {
+  is_leaf: false,
+  children: ["Mtms_Uniformity_Production"],
+};
 const legacyRequests = [];
 const respond = (route, data, status = 200) =>
   route.fulfill({
@@ -176,11 +180,25 @@ await page.route("**/*", async (route) => {
         }));
       } else
         all = Array.from({ length: 201 }, (_, n) => ({
-          barcode: `FAILED-${n}`,
-          test_time: "2026-11-01 08:00:00",
+          barcode:
+            n === 1
+              ? "Z-1"
+              : n === 2
+                ? "A-2"
+                : n === 3
+                  ? "B-10"
+                  : `FAILED-${n}`,
+          test_time:
+            n === 1
+              ? "2026-11-05 10:00:00.000"
+              : n === 2
+                ? "2026-11-01 08:00:00.000"
+                : n === 3
+                  ? "2026-11-05 23:30:00.000"
+                  : "2026-11-03 08:00:00.000",
           shift: "A",
           actual_value: card.startsWith("zf") ? null : n,
-          grade: "C",
+          grade: n === 1 ? "2" : n === 2 ? "10" : "3",
         }));
     }
     return respond(route, {
@@ -229,6 +247,22 @@ await page.route("**/*", async (route) => {
           ],
         },
       });
+    if (names === "Mtms_Uniformity_Production")
+      return respond(route, {
+        data: {
+          rows: [
+            {
+              kpi_name: names,
+              machine: "MT-01",
+              actual_value: 20,
+              unit: "NOS",
+              drill_down: { is_leaf: true, children: [] },
+            },
+          ],
+        },
+      });
+    if (names.startsWith("Paint_Wt_"))
+      return respond(route, { data: { rows: [] } });
     throw new Error(`Unexpected legacy KPI request: ${names}`);
   }
   if (url.pathname.endsWith("/dashboard/kpi-data"))
@@ -501,6 +535,29 @@ try {
   await clickText("Overall Production Yield");
   const familyButton = page.getByRole("button", { name: "MTMS Uniformity ›" });
   await familyButton.waitFor();
+  const overallFirst = await page
+    .getByText("Overall Production Yield", { exact: true })
+    .first()
+    .boundingBox();
+  const testedFirst = await page
+    .getByText("Uniformity Tyres Tested", { exact: true })
+    .first()
+    .boundingBox();
+  const familyTable = await page
+    .locator("table[aria-label='Overall Production Yield drill-down']")
+    .boundingBox();
+  assert.ok(
+    testedFirst.y > overallFirst.y && familyTable.x > overallFirst.x,
+    "First Overall family drill uses vertical cards and right panel",
+  );
+  const legacyBeforeReclick = legacyRequests.length;
+  await clickText("Overall Production Yield");
+  await familyButton.waitFor();
+  assert.equal(
+    legacyRequests.length,
+    legacyBeforeReclick,
+    "Reclick preserves family table without fetching",
+  );
   const featureBeforeFamily = requests.length;
   await familyButton.focus();
   await page.keyboard.press("Enter");
@@ -521,10 +578,39 @@ try {
   assert.equal(machineRequest.from, rangeRequest.from);
   assert.equal(machineRequest.to, rangeRequest.to);
   assert.equal(machineRequest.machine, undefined);
+  const assertBridgedLayout = async () => {
+    const card = await page
+      .getByText("Overall Production Yield", { exact: true })
+      .first()
+      .boundingBox();
+    const nextCard = await page
+      .getByText("Uniformity Tyres Tested", { exact: true })
+      .first()
+      .boundingBox();
+    const table = await page.locator("tbody tr").first().boundingBox();
+    assert.ok(
+      nextCard.y > card.y && table.x > card.x,
+      "Overall bridged drill retains vertical cards/right-hand table",
+    );
+  };
+  const reclickOverall = async () => {
+    const before = requests.length;
+    await clickText("Overall Production Yield");
+    await assertBridgedLayout();
+    assert.equal(
+      requests.length,
+      before,
+      "Reclicking the same card does not refetch",
+    );
+  };
+  await reclickOverall();
+  await machineButton.waitFor();
   await sortHeader("Machine");
   await sortHeader("Machine");
   await machineButton.focus();
   await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "SAP-01", exact: true }).waitFor();
+  await reclickOverall();
   await page.getByRole("button", { name: "SAP-01", exact: true }).waitFor();
   const skuRequest = requests.at(-1).params;
   assert.equal(skuRequest.level, "sku");
@@ -547,6 +633,37 @@ try {
   await sortHeader("Failed tyres");
   await page.getByRole("button", { name: "201", exact: true }).click();
   await waitFor("FAILED-0");
+  await reclickOverall();
+  await waitFor("FAILED-0");
+  const cellValues = (index) =>
+    page.locator(`tbody tr td:nth-child(${index})`).allTextContents();
+  let beforeSort = requests.length;
+  await sortHeader("Test time");
+  assert.equal((await cellValues(1))[0], "B-10");
+  await sortHeader("Test time");
+  assert.equal((await cellValues(1))[0], "A-2");
+  await sortHeader("Barcode");
+  assert.equal((await cellValues(1))[0], "Z-1");
+  await sortHeader("Barcode");
+  assert.deepEqual((await cellValues(1)).slice(0, 2), ["A-2", "B-10"]);
+  await sortHeader("Value");
+  assert.equal((await cellValues(4))[0], "99");
+  await sortHeader("Value");
+  assert.equal((await cellValues(4))[0], "0");
+  await sortHeader("Grade");
+  assert.equal((await cellValues(5))[0], "10");
+  await sortHeader("Grade");
+  assert.equal((await cellValues(5))[0], "2");
+  assert.equal(
+    requests.length,
+    beforeSort,
+    "Page-local sorting makes no requests",
+  );
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await waitFor("FAILED-100");
+  assert.equal(requests.at(-1).params.offset, "100");
+  await page.getByRole("button", { name: "Previous", exact: true }).click();
+  await waitFor("FAILED-0");
   assert.equal(requests.at(-1).params.machine, "30-0224");
   assert.equal(requests.at(-1).params.parameter, "RFV CW");
   await page.getByText("SAP-01", { exact: true }).click();
@@ -568,6 +685,19 @@ try {
     .getByText("Overall Production Yield", { exact: true })
     .last()
     .click();
+  await page.getByRole("button", { name: "ZF Uniformity ›" }).waitFor();
+  const overallAfterBack = await page
+    .getByText("Overall Production Yield", { exact: true })
+    .first()
+    .boundingBox();
+  const testedAfterBack = await page
+    .getByText("Uniformity Tyres Tested", { exact: true })
+    .first()
+    .boundingBox();
+  assert.ok(
+    testedAfterBack.y > overallAfterBack.y,
+    "Family panel remains open in the right-hand drill layout",
+  );
   await page.getByRole("button", { name: "ZF Uniformity ›" }).click();
   await page.getByRole("button", { name: "ZF-01", exact: true }).waitFor();
   assert.ok(
@@ -583,6 +713,85 @@ try {
   assert.equal(requests.at(-1).params.card, "zf-uniformity");
   assert.equal(requests.at(-1).params.machine, "ZF-01");
   assert.equal(requests.at(-1).params.level, "sku");
+  await clickText("TUO Uniformity Yield");
+  await page.getByRole("button", { name: "MICROPOISE", exact: true }).waitFor();
+  assert.equal(requests.at(-1).params.card, "tuo");
+  await page.getByRole("button", { name: "Close Uniformity drill" }).click();
+  assert.equal(await page.locator("tbody tr").count(), 0);
+  const overallAfterClose = await page
+    .getByText("Overall Production Yield", { exact: true })
+    .first()
+    .boundingBox();
+  const testedAfterClose = await page
+    .getByText("Uniformity Tyres Tested", { exact: true })
+    .first()
+    .boundingBox();
+  assert.ok(
+    Math.abs(overallAfterClose.y - testedAfterClose.y) < 5,
+    "Closing restores the normal card grid",
+  );
+  await clickText("Uniformity Tyres Tested");
+  await page.getByText("MT-01", { exact: true }).waitFor();
+  let cardBox = await page
+    .getByText("Uniformity Tyres Tested", { exact: true })
+    .first()
+    .boundingBox();
+  let siblingBox = await page
+    .getByText("Overall Production Yield", { exact: true })
+    .first()
+    .boundingBox();
+  let panelBox = await page
+    .locator("table[aria-label='Uniformity Tyres Tested drill-down']")
+    .boundingBox();
+  assert.ok(
+    cardBox.y > siblingBox.y && panelBox.x > cardBox.x,
+    "Legacy tested drill opens right on first click",
+  );
+  await clickText("GT Weight Variation");
+  await page
+    .getByText("GT Weight Variation — Paint Weight", { exact: true })
+    .waitFor();
+  await page
+    .getByText("No SKU data for this period.", { exact: true })
+    .waitFor();
+  panelBox = await page
+    .getByText("GT Weight Variation — Paint Weight", { exact: true })
+    .boundingBox();
+  cardBox = await page
+    .getByText("GT Weight Variation", { exact: true })
+    .first()
+    .boundingBox();
+  assert.ok(
+    panelBox.x > cardBox.x,
+    "Other Product drill opens right on first click",
+  );
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.setViewportSize({ width: 700, height: 1100 });
+  await clickText("Overall Production Yield");
+  await page.getByRole("button", { name: "MTMS Uniformity ›" }).waitFor();
+  let lastCard = await page
+    .getByText("CTA Compliance", { exact: true })
+    .first()
+    .boundingBox();
+  panelBox = await page
+    .locator("table[aria-label='Overall Production Yield drill-down']")
+    .boundingBox();
+  assert.ok(
+    panelBox.y > lastCard.y,
+    "Narrow viewport stacks family drill below cards",
+  );
+  await page.getByRole("button", { name: "MTMS Uniformity ›" }).click();
+  await page.getByRole("button", { name: "30-0224", exact: true }).waitFor();
+  lastCard = await page
+    .getByText("CTA Compliance", { exact: true })
+    .first()
+    .boundingBox();
+  panelBox = await page.locator("tbody tr").first().boundingBox();
+  assert.ok(
+    panelBox.y > lastCard.y,
+    "Narrow viewport stacks machine drill below cards",
+  );
+  await page.getByRole("button", { name: "Close Uniformity drill" }).click();
   assert.equal(errors.length, 0, JSON.stringify(errors));
   await delay(50);
   console.info(

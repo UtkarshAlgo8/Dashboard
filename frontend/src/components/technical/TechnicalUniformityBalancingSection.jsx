@@ -226,7 +226,6 @@ function ProductChildrenDrill({
   onClose,
   drillPeriod,
   onClearDrillShift,
-  onBridgeChange,
 }) {
   const initialLevel = useMemo(
     () => ({ title: kpi.name, kpiNames: kpi.drillChildren ?? [] }),
@@ -292,7 +291,6 @@ function ProductChildrenDrill({
           <Button
             onClick={() => {
               setBridge(null);
-              onBridgeChange(false);
             }}
           >
             Back to families
@@ -317,7 +315,6 @@ function ProductChildrenDrill({
           onParentNav={(index) => {
             if (index === 0) return onClose();
             setBridge(null);
-            onBridgeChange(false);
           }}
         />
       </>
@@ -398,7 +395,6 @@ function ProductChildrenDrill({
                   const activate = () => {
                     if (!familyKpi) return openChild(row);
                     setBridge({ familyKpi, title: label });
-                    onBridgeChange(true);
                   };
                   return (
                     <TableRow
@@ -540,15 +536,8 @@ export default function TechnicalUniformityBalancingSection({
   const [loading, setLoading] = useState(Boolean(date));
   const [error, setError] = useState(null);
   const [openDrill, setOpenDrill] = useState(null);
-  const [bridged, setBridged] = useState(false);
-  const closeDrill = () => {
-    setBridged(false);
-    setOpenDrill(null);
-  };
-  const openCard = (card) => {
-    setBridged(false);
-    setOpenDrill(card);
-  };
+  const closeDrill = () => setOpenDrill(null);
+  const openCard = (card) => setOpenDrill(card);
 
   useEffect(() => {
     if (!date) return undefined;
@@ -641,7 +630,7 @@ export default function TechnicalUniformityBalancingSection({
   );
   const uniformityCards = cards.filter((card) => card.sourceKpi);
   const otherCards = cards.filter((card) => !card.sourceKpi);
-  const vertical = openDrill?.drillType === "uniformity" || bridged;
+  const vertical = Boolean(openDrill);
 
   return (
     <Box component="section" aria-labelledby="technical-uniformity-heading">
@@ -741,7 +730,6 @@ export default function TechnicalUniformityBalancingSection({
               granularity={granularity}
               drillPeriod={drillPeriod}
               onClearDrillShift={onClearDrillShift}
-              onBridgeChange={setBridged}
               onClose={closeDrill}
             />
           )}

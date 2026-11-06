@@ -18,6 +18,7 @@ import UniformityRawPlot from "@/components/quality/UniformityRawPlot.jsx";
 import useUniformityPage from "@/hooks/useUniformityPage.js";
 import {
   INITIAL_UNIFORMITY_NAV,
+  compareUniformityCells,
   uniformityLevel,
   uniformityNavigation,
 } from "@/lib/uniformityDrill.js";
@@ -209,11 +210,7 @@ export default function UniformityDrillPanel({
               renderCell={renderCell}
               rowKey={(row) => row[0]}
               compareCells={(a, b, index) =>
-                index === 0 && ["machine", "sku"].includes(level)
-                  ? String(a)
-                      .toLowerCase()
-                      .localeCompare(String(b).toLowerCase())
-                  : undefined
+                compareUniformityCells(level, a, b, index)
               }
             />
           ) : (
