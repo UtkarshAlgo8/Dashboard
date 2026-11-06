@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { complianceCard, storedCompliancePeriod } from "./compliance.js";
+import {
+  complianceCard,
+  formatCompliancePeriod,
+  storedCompliancePeriod,
+} from "./compliance.js";
 
 const period = { date: "2026-11-01", granularity: "MONTH" };
 
@@ -32,6 +36,39 @@ for (const id of ["pm", "daily", "critical"]) {
     }
   });
 }
+
+test("captions describe valid stored periods, not freshness or invalid anchors", () => {
+  assert.equal(formatCompliancePeriod(period), "Nov 2026");
+  assert.equal(
+    formatCompliancePeriod({ date: "2026-01-01", granularity: "YEAR" }),
+    "2026",
+  );
+  assert.equal(
+    formatCompliancePeriod({ date: "2026-11-03", granularity: "DAY" }),
+    "03 Nov 2026",
+  );
+  assert.equal(
+    formatCompliancePeriod({ date: "2026-11-03", granularity: "SHIFT B" }),
+    "03 Nov 2026 · Shift B",
+  );
+  for (const bad of [
+    null,
+    { date: "2026-02-30", granularity: "DAY" },
+    { date: "2026-11-03", granularity: "MONTH" },
+    { date: "2026-02-01", granularity: "YEAR" },
+    { date: "2026-11-03", granularity: "OTHER" },
+  ])
+    assert.equal(formatCompliancePeriod(bad), null);
+  for (const state of [{}, { isLoading: true }, { error: new Error("down") }]) {
+    const card = complianceCard("pm", null, { period, ...state });
+    assert.equal(card.periodLabel, "Nov 2026");
+    assert.doesNotMatch(card.periodLabel, /as of/i);
+  }
+  assert.equal(
+    complianceCard("critical", null, { period: null }).periodLabel,
+    null,
+  );
+});
 
 test("Critical Parameter remains a lower-is-better raw violation percentage", () => {
   const card = complianceCard(

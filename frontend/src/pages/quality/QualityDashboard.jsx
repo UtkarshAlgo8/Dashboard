@@ -12897,6 +12897,8 @@ function QualityDashboard({ plant, onBack }) {
       setTfTo(r.to);
       setShift("All");
     } else {
+      // A newly selected custom range must not retain a previous shift.
+      if (nextFrom || nextTo) setShift("All");
       // Custom range (or null when the user opens the Date Range dialog).
       if (nextFrom) setTfFrom(nextFrom);
       if (nextTo) setTfTo(nextTo);
@@ -12937,6 +12939,10 @@ function QualityDashboard({ plant, onBack }) {
     to: tfTo,
     month: tfMonth,
   };
+  // The shared date dialog emits From and To synchronously. Keep the latest
+  // update within this render's callback so the second updater does not spread
+  // the stale pre-dialog range before React applies the batched state changes.
+  let pendingHeaderRange = timeRangeForHeader;
   const headerShift = typeof shift === "string" ? shift.toLowerCase() : "all";
   const onHeaderExport = () => {
     // Quality uses the print-page path for export (matches the inline
@@ -13038,8 +13044,10 @@ function QualityDashboard({ plant, onBack }) {
         onTimeRangeChange={(updater) => {
           const next =
             typeof updater === "function"
-              ? updater(timeRangeForHeader)
+              ? updater(pendingHeaderRange)
               : updater;
+          if (!next) return;
+          pendingHeaderRange = next;
           // Map the production-shape update back into Quality's flat state.
           // ProductionHeader's month-dropdown click sends
           // { preset: "month", month: "2026-07" } — that hits this branch
