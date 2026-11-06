@@ -22,6 +22,7 @@ import SouthEastIcon from "@mui/icons-material/SouthEast";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import Sparkline from "@/components/production/Sparkline.jsx";
+import JKLoader from "@/components/JKLoader.jsx";
 import { getKpiCardTheme } from "@/lib/thresholds.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import {
@@ -54,6 +55,7 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         }
       : {}),
   };
+  const neutral = kpi.presentationTone === "neutral";
   const v = kpi.v;
   const numVal = numericKpiValue(v);
   const hasValue = numVal != null;
@@ -72,9 +74,10 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
   const canDrill = Boolean(kpi.drill);
   const Icon =
     QUALITY_KPI_ICON[kpi.id] ?? (isPct ? TaskAltOutlinedIcon : GridViewIcon);
-  const caption = hasValue
-    ? [kpi.metricLabel, kpi.periodLabel].filter(Boolean).join(" · ")
-    : "";
+  const caption =
+    hasValue || kpi.showPeriodWhenEmpty
+      ? [kpi.metricLabel, kpi.periodLabel].filter(Boolean).join(" · ")
+      : "";
   const footnote = !hasValue
     ? (kpi.emptyReason ?? (kpi.na ? "Not available yet" : null))
     : kpi.target
@@ -117,7 +120,11 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         containerType: "inline-size",
         backgroundColor: cardTheme.cardBg,
         border: isOpen ? 2 : 1,
-        borderColor: isOpen ? "primary.main" : `${cardTheme.sparkColor}30`,
+        borderColor: isOpen
+          ? "primary.main"
+          : neutral
+            ? "divider"
+            : `${cardTheme.sparkColor}30`,
         borderRadius: 2.5,
         p: 1.75,
         minWidth: 0,
@@ -194,6 +201,7 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
             sx={{ minWidth: 0 }}
           >
             <Typography
+              component={kpi.isLoading ? "div" : "p"}
               sx={{
                 fontSize: { xs: 24, md: 26, lg: 28 },
                 fontWeight: 800,
@@ -202,7 +210,24 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
                 whiteSpace: "nowrap",
               }}
             >
-              {value}
+              {kpi.isLoading ? (
+                <Box
+                  sx={{
+                    "& .jk-enhanced-loader": { p: 0, alignItems: "flex-start" },
+                    "& .jk-wrapper": { width: 36, height: 36 },
+                    "& .jk-wait-text": {
+                      fontSize: 11,
+                      letterSpacing: 0,
+                      pl: 0,
+                      mt: 0.5,
+                    },
+                  }}
+                >
+                  <JKLoader message={`Loading ${kpi.n}`} />
+                </Box>
+              ) : (
+                value
+              )}
             </Typography>
             {hasValue && kpi.u && !isPct && (
               <Typography
@@ -279,7 +304,7 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
       </Stack>
 
       {/* Progress bar */}
-      {!isOpen && (
+      {!isOpen && kpi.showProgress !== false && (
         <Box
           sx={{
             width: "100%",

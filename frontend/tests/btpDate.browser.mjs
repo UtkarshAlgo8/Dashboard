@@ -51,6 +51,20 @@ await page.route("**/*", async (route) => {
         Total_Violations_o: 2,
       },
     };
+  if (u.pathname.endsWith("/engineering/safety")) {
+    data = {
+      context: {
+        ...Object.fromEntries(u.searchParams),
+        plant: "Banmore",
+        level: u.searchParams.get("level") ?? "overall",
+        offset: Number(u.searchParams.get("offset") ?? 0),
+        limit: Number(u.searchParams.get("limit") ?? 25),
+      },
+      value: null,
+      rows: [],
+      page: { offset: 0, limit: 25, total: 0, hasMore: false },
+    };
+  }
   if (u.pathname.endsWith("/compliance")) {
     const date = u.searchParams.get("date"),
       granularity = u.searchParams.get("granularity"),
@@ -264,7 +278,7 @@ try {
       .count(),
     0,
   );
-  await page.locator("#root").getByText("Oct 2026", { exact: true }).click();
+  await page.getByRole("banner").getByText("Oct 2026", { exact: true }).click();
   await page.getByRole("menuitem", { name: "Sep 2026" }).click();
   await page
     .getByText(/Compliance unavailable: Fixture compliance outage/)
@@ -275,7 +289,7 @@ try {
       .count(),
     0,
   );
-  await page.locator("#root").getByText("Sep 2026", { exact: true }).click();
+  await page.getByRole("banner").getByText("Sep 2026", { exact: true }).click();
   await page.getByRole("menuitem", { name: "Aug 2026" }).click();
   await page
     .getByText("Published Gold compliance · Aug 2026", { exact: true })
