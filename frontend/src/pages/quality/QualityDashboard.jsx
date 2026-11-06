@@ -24,8 +24,6 @@ import {
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import UniformityTrendModal from "@/components/quality/UniformityTrendModal.jsx";
-import UniformityDrillPanel from "@/components/quality/UniformityDrillPanel.jsx";
-import { uniformityCard, uniformityPeriod } from "@/lib/uniformityDrill.js";
 import { C } from "@/components/quality/shared/theme.js";
 import { monthRangeFromKey } from "@/components/quality/shared/dates.js";
 import { Breadcrumb } from "@/components/quality/shared/Breadcrumb.jsx";
@@ -12833,11 +12831,9 @@ function QualityDashboard({ plant, onBack }) {
       drill:
         kpi.id === "gtw"
           ? "paintWeight"
-          : uniformityCard(kpi.sourceKpi)
-            ? "uniformityDrill"
-            : live.drill_down?.is_leaf
-              ? null
-              : "product",
+          : live.drill_down?.is_leaf
+            ? null
+            : "product",
       drillChildren: live.drill_down?.children || [],
       accentColor: productValueColor(
         Number(live.actual_value),
@@ -13176,26 +13172,6 @@ function QualityDashboard({ plant, onBack }) {
                           date={processDate}
                           shift={shift}
                           granularity={processGranularity}
-                        />
-                      ) : openObj?.drill === "uniformityDrill" ? (
-                        <UniformityDrillPanel
-                          key={JSON.stringify([
-                            openObj.sourceKpi,
-                            tf,
-                            tfFrom,
-                            tfTo,
-                            shift,
-                          ])}
-                          card={uniformityCard(openObj.sourceKpi)}
-                          title={openObj.n}
-                          period={uniformityPeriod({
-                            preset: tf,
-                            from: tfFrom,
-                            to: tfTo,
-                            shift,
-                            today: todayInIST(),
-                          })}
-                          onClose={() => setOpenKpi(null)}
                         />
                       ) : (
                         <LiveProductDrillPanel

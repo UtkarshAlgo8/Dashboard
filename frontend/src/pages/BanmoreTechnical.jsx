@@ -53,6 +53,7 @@ import {
   toGtWeightCard,
 } from "@/lib/paintWeight.js";
 import TechnicalUniformityBalancingSection from "@/components/technical/TechnicalUniformityBalancingSection.jsx";
+import { technicalUniformityPeriod } from "@/lib/uniformityDrill.js";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
 import { getOverage } from "@/api/inventory.js";
 import OverageDrill from "@/components/technical/OverageDrill.jsx";
@@ -830,10 +831,17 @@ function BanmoreTechnical() {
           <TechnicalAnalysis />
         ) : tab === "uniformity" ? (
           <TechnicalUniformityBalancingSection
-            key={`${uniformityDate ?? "no-date"}|${uniformityShift}|${uniformityGranularity}`}
+            key={JSON.stringify([
+              uniformityDate,
+              uniformityShift,
+              uniformityGranularity,
+              dateWindow,
+            ])}
             date={uniformityDate}
             shift={uniformityShift}
             granularity={uniformityGranularity}
+            drillPeriod={technicalUniformityPeriod(dateWindow, shift)}
+            onClearDrillShift={() => setShift("all")}
           />
         ) : (
           <>

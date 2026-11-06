@@ -48,7 +48,7 @@ export default function UniformityDrillPanel({ card, title, period, onClose }) {
     scope,
   );
   const path = [
-    "Product",
+    "Uniformity & Balancing",
     title,
     ...[nav.machine, nav.sku, nav.parameter].filter(Boolean),
   ];
@@ -64,28 +64,13 @@ export default function UniformityDrillPanel({ card, title, period, onClose }) {
   );
   const rows = (data?.rows ?? []).map((row) => {
     if (level === "machine")
-      return [
-        link(row.machine, "machine", row.machine),
-        display(row.yield_pct),
-        display(row.tyres_tested),
-      ];
+      return [row.machine, display(row.yield_pct), display(row.tyres_tested)];
     if (level === "sku")
-      return [
-        card.id === "tuo" ? row.sku : link(row.sku, "sku", row.sku),
-        display(row.yield_pct),
-        display(row.tyres_tested),
-      ];
+      return [row.sku, display(row.yield_pct), display(row.tyres_tested)];
     if (level === "parameter")
       return [
         row.parameter,
-        row.failed_tyres == null
-          ? "—"
-          : link(
-              display(row.failed_tyres),
-              "barcodes",
-              row.parameter,
-              row.failed_tyres,
-            ),
+        row.failed_tyres,
         display(row.failed_pct),
         ...(card.plot
           ? [
@@ -118,6 +103,14 @@ export default function UniformityDrillPanel({ card, title, period, onClose }) {
       "—",
     ];
   });
+  const renderCell = (cell, index, row) => {
+    if (level === "machine" && index === 0) return link(cell, "machine", cell);
+    if (level === "sku" && index === 0 && card.id !== "tuo")
+      return link(cell, "sku", cell);
+    if (level === "parameter" && index === 1)
+      return cell == null ? "—" : link(display(cell), "barcodes", row[0], cell);
+    return cell;
+  };
   const columns =
     level === "barcodes"
       ? ["Barcode", "Test time", "Shift", "Value", "Grade", "LSL", "USL"]
@@ -200,7 +193,19 @@ export default function UniformityDrillPanel({ card, title, period, onClose }) {
               </Alert>
             )}
           {rows.length ? (
-            <DTable cols={columns} rows={rows} />
+            <DTable
+              cols={columns}
+              rows={rows}
+              renderCell={renderCell}
+              rowKey={(row) => row[0]}
+              compareCells={(a, b, index) =>
+                index === 0 && ["machine", "sku"].includes(level)
+                  ? String(a)
+                      .toLowerCase()
+                      .localeCompare(String(b).toLowerCase())
+                  : undefined
+              }
+            />
           ) : (
             <Typography sx={{ py: 2 }} color="text.secondary">
               No {level === "barcodes" ? "failed barcodes" : "Gold rows"} for
@@ -226,12 +231,10 @@ export default function UniformityDrillPanel({ card, title, period, onClose }) {
               Next
             </Button>
           </Stack>
-          {data?.has_more && (
-            <Typography variant="caption" color="text.secondary">
-              More rows available on the next page. Sorting applies to this page
-              only.
-            </Typography>
-          )}
+          <Typography variant="caption" color="text.secondary">
+            Sorting applies to the current page only.
+            {data?.has_more ? " More rows available on the next page." : ""}
+          </Typography>
         </>
       )}
       {nav.plot && (

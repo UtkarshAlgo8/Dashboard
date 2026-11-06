@@ -34,6 +34,28 @@ export function uniformityPeriod({ preset, from, to, shift, today }) {
     shift: "ALL",
   };
 }
+/** Resolve Technical's selected window, not the trailing sparkline history. */
+export function technicalUniformityPeriod(dateWindow, shift) {
+  const { from, to, granularity, mode } = dateWindow;
+  if (!from || !to) return null;
+  const token = String(shift).toUpperCase();
+  if (
+    ["A", "B", "C"].includes(token) &&
+    (mode === "aggregate" || granularity === "MONTH" || granularity === "YEAR")
+  )
+    return null;
+  if (mode === "aggregate") return { period: "range", from, to, shift: "ALL" };
+  if (granularity === "MONTH")
+    return { period: "month", from, to, shift: "ALL" };
+  if (granularity === "YEAR") return { period: "year", from, to, shift: "ALL" };
+  const selected = to;
+  return {
+    period: "day",
+    from: selected,
+    to: selected,
+    shift: ["A", "B", "C"].includes(token) ? token : "ALL",
+  };
+}
 export const INITIAL_UNIFORMITY_NAV = {
   machine: null,
   sku: null,

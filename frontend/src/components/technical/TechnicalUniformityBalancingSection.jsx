@@ -17,6 +17,8 @@ import KpiCard from "@/components/production/KpiCard.jsx";
 import JKLoader from "@/components/JKLoader.jsx";
 import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
 import PaintWeightDrill from "@/components/technical/PaintWeightDrill.jsx";
+import UniformityDrillPanel from "@/components/quality/UniformityDrillPanel.jsx";
+import { uniformityCard } from "@/lib/uniformityDrill.js";
 import {
   getCuringScrapRows,
   getProductChildren,
@@ -159,12 +161,14 @@ function SectionHeading({ children }) {
   );
 }
 
-function ProductGrid({ cards, openDrill, onOpenDrill }) {
+function ProductGrid({ cards, openDrill, onOpenDrill, vertical = false }) {
   return (
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+        gridTemplateColumns: vertical
+          ? "1fr"
+          : "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
         gap: 1,
       }}
     >
@@ -434,11 +438,13 @@ function CuringScrapDrill({ date, shift, granularity, onClose }) {
   );
 }
 
-/** The Technical Uniformity tab intentionally mirrors Quality › Product. */
+/** Technical cards use the established Quality Product Gold source. */
 export default function TechnicalUniformityBalancingSection({
   date,
   shift = "All",
   granularity = "DAY",
+  drillPeriod,
+  onClearDrillShift,
 }) {
   const [summary, setSummary] = useState(null);
   const [scrapRows, setScrapRows] = useState(null);
@@ -524,9 +530,12 @@ export default function TechnicalUniformityBalancingSection({
           value: Number(live.actual_value),
           unit: live.unit || "",
           drillable: Boolean(
-            !live.drill_down?.is_leaf && live.drill_down?.children?.length,
+            uniformityCard(definition.sourceKpi) ||
+            (!live.drill_down?.is_leaf && live.drill_down?.children?.length),
           ),
-          drillType: "product",
+          drillType: uniformityCard(definition.sourceKpi)
+            ? "uniformity"
+            : "product",
           drillChildren: live.drill_down?.children ?? [],
         };
       }),
@@ -544,65 +553,120 @@ export default function TechnicalUniformityBalancingSection({
       >
         Uniformity &amp; Balancing
       </Typography>
-      {loading ? (
-        <JKLoader message="Loading KPIs" />
-      ) : (
-        <>
-          {error && (
-            <Typography sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}>
-              Some live values could not be loaded. Unavailable cards remain
-              marked as no data.
-            </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: {
+            xs: "column",
+            lg: openDrill?.drillType === "uniformity" ? "row" : "column",
+          },
+          gap: 2,
+          alignItems: "flex-start",
+        }}
+      >
+        <Box
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            flex:
+              openDrill?.drillType === "uniformity"
+                ? { lg: "0 0 250px" }
+                : undefined,
+          }}
+        >
+          {loading ? (
+            <JKLoader message="Loading KPIs" />
+          ) : (
+            <>
+              {error && (
+                <Typography
+                  sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}
+                >
+                  Some live values could not be loaded. Unavailable cards remain
+                  marked as no data.
+                </Typography>
+              )}
+              <Stack spacing={2.5}>
+                <Box>
+                  <SectionHeading>Uniformity &amp; Balancing</SectionHeading>
+                  <ProductGrid
+                    cards={uniformityCards}
+                    openDrill={openDrill}
+                    onOpenDrill={setOpenDrill}
+                    vertical={openDrill?.drillType === "uniformity"}
+                  />
+                </Box>
+                <Box>
+                  <SectionHeading>Other Product KPIs</SectionHeading>
+                  <ProductGrid
+                    cards={otherCards}
+                    openDrill={openDrill}
+                    onOpenDrill={setOpenDrill}
+                    vertical={openDrill?.drillType === "uniformity"}
+                  />
+                </Box>
+              </Stack>
+            </>
           )}
-          <Stack spacing={2.5}>
-            <Box>
-              <SectionHeading>Uniformity &amp; Balancing</SectionHeading>
-              <ProductGrid
-                cards={uniformityCards}
-                openDrill={openDrill}
-                onOpenDrill={setOpenDrill}
+        </Box>
+        <Box sx={{ width: "100%", minWidth: 0, flex: 1 }}>
+          {openDrill?.drillType === "uniformity" && !drillPeriod && (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography>
+                Choose All Shifts for a month or date range, or select a single
+                day to use a shift.
+              </Typography>
+              <Button onClick={onClearDrillShift}>Use All Shifts</Button>
+            </Paper>
+          )}
+          {openDrill?.drillType === "uniformity" && drillPeriod && (
+            <>
+              {drillPeriod.period === "range" && (
+                <Typography variant="caption" color="text.secondary">
+                  Cards show the latest snapshot; this drill covers the selected
+                  date range.
+                </Typography>
+              )}
+              <UniformityDrillPanel
+                key={JSON.stringify([openDrill.id, drillPeriod])}
+                card={uniformityCard(openDrill.sourceKpi)}
+                title={openDrill.name}
+                period={drillPeriod}
+                onClose={() => setOpenDrill(null)}
               />
-            </Box>
-            <Box>
-              <SectionHeading>Other Product KPIs</SectionHeading>
-              <ProductGrid
-                cards={otherCards}
-                openDrill={openDrill}
-                onOpenDrill={setOpenDrill}
-              />
-            </Box>
-          </Stack>
-        </>
-      )}
-      {openDrill?.drillType === "product" && (
-        <ProductChildrenDrill
-          key={`${openDrill.id}-${date}-${shift}-${granularity}`}
-          kpi={openDrill}
-          date={date}
-          shift={shift}
-          granularity={granularity}
-          onClose={() => setOpenDrill(null)}
-        />
-      )}
-      {openDrill?.drillType === "paintWeight" && (
-        <PaintWeightDrill
-          key={`${date}-${shift}-${granularity}`}
-          date={date}
-          shift={shift}
-          granularity={granularity}
-          breadcrumb={["Uniformity & Balancing", openDrill.name]}
-          onClose={() => setOpenDrill(null)}
-        />
-      )}
-      {openDrill?.drillType === "curingScrap" && (
-        <CuringScrapDrill
-          key={`${date}-${shift}-${granularity}`}
-          date={date}
-          shift={shift}
-          granularity={granularity}
-          onClose={() => setOpenDrill(null)}
-        />
-      )}
+            </>
+          )}
+          {openDrill?.drillType === "product" && (
+            <ProductChildrenDrill
+              key={`${openDrill.id}-${date}-${shift}-${granularity}`}
+              kpi={openDrill}
+              date={date}
+              shift={shift}
+              granularity={granularity}
+              onClose={() => setOpenDrill(null)}
+            />
+          )}
+          {openDrill?.drillType === "paintWeight" && (
+            <PaintWeightDrill
+              key={`${date}-${shift}-${granularity}`}
+              date={date}
+              shift={shift}
+              granularity={granularity}
+              breadcrumb={["Uniformity & Balancing", openDrill.name]}
+              onClose={() => setOpenDrill(null)}
+            />
+          )}
+          {openDrill?.drillType === "curingScrap" && (
+            <CuringScrapDrill
+              key={`${date}-${shift}-${granularity}`}
+              date={date}
+              shift={shift}
+              granularity={granularity}
+              onClose={() => setOpenDrill(null)}
+            />
+          )}
+        </Box>
+      </Box>
     </Box>
   );
 }

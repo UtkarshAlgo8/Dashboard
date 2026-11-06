@@ -6,6 +6,7 @@ import {
   appendUniformityPoints,
   INITIAL_UNIFORMITY_NAV,
   recordedClockMillis,
+  technicalUniformityPeriod,
   uniformityCard,
   uniformityLevel,
   uniformityNavigation,
@@ -40,6 +41,61 @@ test("drill period differs from existing trend windows: stored months and weight
   assert.equal(uniformityPeriod({ ...f, preset: "year" }).period, "year");
   assert.equal(uniformityPeriod({ ...f, preset: "day" }).from, f.to);
 });
+test("Technical drill uses selected range, month, snapshot day and shift without collapsing ranges", () => {
+  assert.deepEqual(
+    technicalUniformityPeriod(
+      {
+        from: "2026-01-02",
+        to: "2026-01-20",
+        mode: "aggregate",
+        granularity: "DAY",
+      },
+      "all",
+    ),
+    { period: "range", from: "2026-01-02", to: "2026-01-20", shift: "ALL" },
+  );
+  assert.deepEqual(
+    technicalUniformityPeriod(
+      {
+        from: "2026-01-01",
+        to: "2026-01-20",
+        mode: "snapshot",
+        granularity: "MONTH",
+      },
+      "all",
+    ),
+    { period: "month", from: "2026-01-01", to: "2026-01-20", shift: "ALL" },
+  );
+  assert.deepEqual(
+    technicalUniformityPeriod(
+      {
+        from: "2026-01-13",
+        to: "2026-01-20",
+        mode: "snapshot",
+        granularity: "DAY",
+      },
+      "b",
+    ),
+    { period: "day", from: "2026-01-20", to: "2026-01-20", shift: "B" },
+  );
+  assert.equal(
+    technicalUniformityPeriod(
+      {
+        from: "2026-01-02",
+        to: "2026-01-20",
+        mode: "aggregate",
+        granularity: "DAY",
+      },
+      "a",
+    ),
+    null,
+  );
+  assert.equal(
+    technicalUniformityPeriod({ from: null, to: null }, "all"),
+    null,
+  );
+});
+
 test("navigation is machine -> SKU -> parameter -> clicked failures, with correct back/page reset", () => {
   let state = INITIAL_UNIFORMITY_NAV;
   assert.equal(uniformityLevel(state), "machine");
@@ -249,7 +305,23 @@ test("integration wiring retains unrelated trends/cards; raw fetch only inside m
     "<LiveCuringScrapDrillPanel",
   ])
     assert.ok(page.includes(retained));
-  assert.ok(page.includes("<UniformityDrillPanel"));
+  assert.ok(!page.includes("<UniformityDrillPanel"));
+  const technical = readFileSync(
+    new URL(
+      "../src/components/technical/TechnicalUniformityBalancingSection.jsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.ok(technical.includes("<UniformityDrillPanel"));
+  assert.ok(technical.includes("uniformityCard(definition.sourceKpi)"));
+  const technicalPage = readFileSync(
+    new URL("../src/pages/BanmoreTechnical.jsx", import.meta.url),
+    "utf8",
+  );
+  assert.ok(
+    technicalPage.includes("technicalUniformityPeriod(dateWindow, shift)"),
+  );
   const panel = readFileSync(
     new URL(
       "../src/components/quality/UniformityDrillPanel.jsx",

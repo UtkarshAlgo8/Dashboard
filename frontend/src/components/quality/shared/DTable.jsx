@@ -16,6 +16,9 @@ export function DTable({
   isRowClickable,
   searchable = false,
   searchPlaceholder = "Search…",
+  renderCell,
+  rowKey,
+  compareCells,
 }) {
   const [sc, setSc] = useState(null),
     [sd, setSd] = useState("desc"),
@@ -59,7 +62,8 @@ export function DTable({
           tb = txt(b[sc]);
         c2 = ta < tb ? -1 : ta > tb ? 1 : 0;
       }
-      return sd === "asc" ? c2 : -c2;
+      const comparison = compareCells?.(a[sc], b[sc], sc) ?? c2;
+      return sd === "asc" ? comparison : -comparison;
     });
   }
   const onH = (i) => {
@@ -186,7 +190,7 @@ export function DTable({
                 (typeof isRowClickable !== "function" || isRowClickable(row));
               return (
                 <tr
-                  key={ri}
+                  key={rowKey ? rowKey(row) : ri}
                   onClick={clickable ? () => onRowClick(row) : undefined}
                   style={{
                     background: ri % 2 === 0 ? C.cd : C.rowAlt,
@@ -255,7 +259,9 @@ export function DTable({
                           fontWeight: ci === 0 || stC ? 600 : 400,
                         }}
                       >
-                        {isS ? (
+                        {renderCell ? (
+                          renderCell(cell, ci, row)
+                        ) : isS ? (
                           <span
                             style={{
                               padding: "2px 6px",

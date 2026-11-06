@@ -110,10 +110,18 @@ await page.route("**/*", async (route) => {
                   yield_pct: 91.25,
                   tyres_tested: 1002,
                 },
+                ...(card === "mtms" && !delayedMtms
+                  ? [{ machine: "ALPHA", yield_pct: 98, tyres_tested: 20 }]
+                  : []),
               ];
       } else if (level === "sku") {
         assert.equal(q.get("machine"), "MICROPOISE");
-        all = [{ sku: "SAP-01", yield_pct: 92.5, tyres_tested: 1002 }];
+        all = [
+          { sku: "SAP-01", yield_pct: 92.5, tyres_tested: 1002 },
+          ...(card === "mtms"
+            ? [{ sku: "AAA-01", yield_pct: 90, tyres_tested: 10 }]
+            : []),
+        ];
       } else {
         assert.equal(q.get("sku"), "SAP-01");
         assert.notEqual(card, "tuo");
@@ -126,6 +134,9 @@ await page.route("**/*", async (route) => {
             failed_tyres: 201,
             failed_pct: 20.06,
           },
+          ...(card === "mtms"
+            ? [{ parameter: "Conicity", failed_tyres: 12, failed_pct: 1.2 }]
+            : []),
         ];
       }
     } else {
@@ -204,13 +215,73 @@ try {
   await clickText("Product");
   await waitFor("MTMS Uniformity Yield");
   assert.equal(requests.length, 0, "No Uniformity drill preload");
+  await page
+    .getByRole("button", { name: "View Overall Production Yield trend" })
+    .click();
+  await page.getByRole("dialog").waitFor();
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await clickText("MTMS Uniformity Yield");
+  await delay(100);
+  assert.equal(requests.length, 0, "Quality does not invoke the new drill API");
+  await page.goto(`${origin}/banmore/technical`);
+  await page.getByRole("tab", { name: "Uniformity & Balancing" }).click();
   await drillCard("MTMS Uniformity Yield");
-  await toParameter();
+  const mtmsCard = await page
+    .getByText("MTMS Uniformity Yield", { exact: true })
+    .first()
+    .boundingBox();
+  const tuoCard = await page
+    .getByText("TUO Uniformity Yield", { exact: true })
+    .first()
+    .boundingBox();
+  const drillTable = await page.locator("tbody tr").first().boundingBox();
+  assert.ok(
+    tuoCard.y > mtmsCard.y && drillTable.x > mtmsCard.x,
+    "Vertical cards and right-hand drill layout",
+  );
+  const firstColumn = () =>
+    page.locator("tbody tr td:first-child").allTextContents();
+  const sortHeader = async (label) =>
+    page.getByRole("columnheader", { name: new RegExp(`^${label}`) }).click();
+  let count = requests.length;
+  await sortHeader("Machine");
+  assert.deepEqual(await firstColumn(), ["MICROPOISE", "ALPHA"]);
+  await sortHeader("Machine");
+  assert.deepEqual(await firstColumn(), ["ALPHA", "MICROPOISE"]);
+  assert.equal(requests.length, count, "Sorting does not request other pages");
+  await page.getByRole("button", { name: "MICROPOISE", exact: true }).click();
+  await page.getByRole("button", { name: "SAP-01", exact: true }).waitFor();
+  count = requests.length;
+  await sortHeader("SKU");
+  assert.deepEqual(await firstColumn(), ["SAP-01", "AAA-01"]);
+  await sortHeader("SKU");
+  assert.deepEqual(await firstColumn(), ["AAA-01", "SAP-01"]);
+  assert.equal(requests.length, count);
+  await page.getByRole("button", { name: "SAP-01", exact: true }).click();
+  await page.getByRole("button", { name: "201", exact: true }).waitFor();
+  count = requests.length;
+  await sortHeader("Failed tyres");
+  assert.deepEqual(await firstColumn(), ["RFV CW", "Conicity"]);
+  await sortHeader("Failed tyres");
+  assert.deepEqual(await firstColumn(), ["Conicity", "RFV CW"]);
+  assert.equal(requests.length, count);
+  assert.equal(requests.at(-1).params.sku, "SAP-01");
   await page
     .getByRole("button", { name: "Plot RFV CW", exact: true })
     .waitFor();
   assert.equal(requests.length, 3);
   assert.ok(requests.every((r) => r.path.endsWith("/gold")));
+  await page.getByText("MICROPOISE", { exact: true }).click();
+  await page.getByRole("button", { name: "SAP-01", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Plot RFV CW", exact: true })
+    .waitFor();
+  assert.equal(
+    requests.length,
+    3,
+    "Breadcrumb revisits cached selected levels",
+  );
   await page.getByRole("button", { name: "Plot RFV CW", exact: true }).click();
   await page.getByText(/1000 of 1002 measured tyres loaded/).waitFor();
   assert.equal(requests.filter((r) => r.path.endsWith("/points")).length, 1);
@@ -275,6 +346,9 @@ try {
   await page.getByRole("button", { name: "201", exact: true }).click();
   await waitFor("FAILED-0");
   assert.equal(requests.filter((r) => r.path.endsWith("/barcodes")).length, 1);
+  assert.equal(requests.at(-1).params.parameter, "RFV CW");
+  assert.equal(requests.at(-1).params.machine, "MICROPOISE");
+  assert.equal(requests.at(-1).params.sku, "SAP-01");
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await waitFor("FAILED-100");
   assert.equal(requests.filter((r) => r.path.endsWith("/barcodes")).length, 2);
@@ -340,10 +414,36 @@ try {
   await clickText("DBM Balancing Yield");
   await page.getByRole("combobox").filter({ hasText: "All Shifts" }).click();
   await page.getByRole("option", { name: "Shift A", exact: true }).click();
+  await clickText("DBM Balancing Yield");
   await page
     .getByText("No Gold rows for this selection.", { exact: true })
     .waitFor();
   assert.equal(await page.getByRole("button", { name: /^Plot / }).count(), 0);
+  await page.getByText("Date Range", { exact: true }).click();
+  await page.getByText("Custom Date Range…", { exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Previous month" }).click();
+  await dialog.getByText("10", { exact: true }).click();
+  await dialog.getByText("12", { exact: true }).click();
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  const beforeInvalidScope = requests.length;
+  await clickText("MTMS Uniformity Yield");
+  await page.getByText(/Choose All Shifts for a month or date range/).waitFor();
+  assert.equal(requests.length, beforeInvalidScope);
+  await page.getByRole("button", { name: "Use All Shifts" }).click();
+  delayedMtms = false;
+  await drillCard("MTMS Uniformity Yield");
+  await page
+    .getByText(
+      /Cards show the latest snapshot; this drill covers the selected date range/,
+    )
+    .waitFor();
+  const rangeRequest = requests.at(-1).params;
+  assert.equal(rangeRequest.period, "range");
+  assert.ok(rangeRequest.from.endsWith("-10"));
+  assert.ok(rangeRequest.to.endsWith("-12"));
+  assert.notEqual(rangeRequest.from, rangeRequest.to);
+  assert.equal(rangeRequest.shift, "ALL");
   assert.equal(errors.length, 0, JSON.stringify(errors));
   await delay(50);
   console.info(
