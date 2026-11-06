@@ -57,6 +57,11 @@ const values = Object.fromEntries(
     },
   ]),
 );
+values.Overall_Production_Yield.drill_down = {
+  is_leaf: false,
+  children: ["Mtms_Uniformity_Yield", "Zf_Uniformity_Yield"],
+};
+const legacyRequests = [];
 const respond = (route, data, status = 200) =>
   route.fulfill({
     status,
@@ -113,9 +118,26 @@ await page.route("**/*", async (route) => {
                 ...(card === "mtms" && !delayedMtms
                   ? [{ machine: "ALPHA", yield_pct: 98, tyres_tested: 20 }]
                   : []),
+                ...(card === "mtms" && q.get("period") === "range"
+                  ? [
+                      { machine: "30-0224", yield_pct: 99, tyres_tested: 10 },
+                      {
+                        machine: "NEW-FACTUAL-729",
+                        yield_pct: 97,
+                        tyres_tested: 11,
+                      },
+                    ]
+                  : []),
+                ...(card === "zf-uniformity" && q.get("period") === "range"
+                  ? [{ machine: "ZF-01", yield_pct: 92, tyres_tested: 10 }]
+                  : []),
               ];
       } else if (level === "sku") {
-        assert.equal(q.get("machine"), "MICROPOISE");
+        assert.ok(
+          ["MICROPOISE", "30-0224", "NEW-FACTUAL-729", "ZF-01"].includes(
+            q.get("machine"),
+          ),
+        );
         all = [
           { sku: "SAP-01", yield_pct: 92.5, tyres_tested: 1002 },
           ...(card === "mtms"
@@ -183,6 +205,32 @@ await page.route("**/*", async (route) => {
     return respond(route, { data: { asOf: "2026-11-05" } });
   if (url.pathname.endsWith("/product/summary"))
     return respond(route, { data: { values } });
+  if (url.pathname.endsWith("/product/children")) {
+    legacyRequests.push(Object.fromEntries(q));
+    const names = q.get("kpi_names");
+    if (names === "Mtms_Uniformity_Yield,Zf_Uniformity_Yield")
+      return respond(route, {
+        data: {
+          rows: [
+            {
+              kpi_name: "Mtms_Uniformity_Yield",
+              machine: null,
+              actual_value: 95,
+              unit: "%",
+              drill_down: { is_leaf: true, children: [] },
+            },
+            {
+              kpi_name: "Zf_Uniformity_Yield",
+              machine: null,
+              actual_value: 92,
+              unit: "%",
+              drill_down: null,
+            },
+          ],
+        },
+      });
+    throw new Error(`Unexpected legacy KPI request: ${names}`);
+  }
   if (url.pathname.endsWith("/dashboard/kpi-data"))
     return respond(route, { data: [] });
   return respond(route, {
@@ -216,7 +264,10 @@ try {
   await waitFor("MTMS Uniformity Yield");
   assert.equal(requests.length, 0, "No Uniformity drill preload");
   await page
-    .getByRole("button", { name: "View Overall Production Yield trend" })
+    .getByRole("button", {
+      name: "View Overall Production Yield trend",
+      exact: true,
+    })
     .click();
   await page.getByRole("dialog").waitFor();
   await page.keyboard.press("Escape");
@@ -432,7 +483,8 @@ try {
   assert.equal(requests.length, beforeInvalidScope);
   await page.getByRole("button", { name: "Use All Shifts" }).click();
   delayedMtms = false;
-  await drillCard("MTMS Uniformity Yield");
+  emptyDbm = false;
+  await drillCard("DBM Balancing Yield");
   await page
     .getByText(
       /Cards show the latest snapshot; this drill covers the selected date range/,
@@ -444,6 +496,93 @@ try {
   assert.ok(rangeRequest.to.endsWith("-12"));
   assert.notEqual(rangeRequest.from, rangeRequest.to);
   assert.equal(rangeRequest.shift, "ALL");
+
+  // Screenshot path: leaf family -> factual Gold machine rows -> SKU.
+  await clickText("Overall Production Yield");
+  const familyButton = page.getByRole("button", { name: "MTMS Uniformity ›" });
+  await familyButton.waitFor();
+  const featureBeforeFamily = requests.length;
+  await familyButton.focus();
+  await page.keyboard.press("Enter");
+  const machineButton = page.getByRole("button", {
+    name: "30-0224",
+    exact: true,
+  });
+  await machineButton.waitFor();
+  assert.equal(
+    requests.length,
+    featureBeforeFamily + 1,
+    "Only selected machine level loaded",
+  );
+  const machineRequest = requests.at(-1).params;
+  assert.equal(machineRequest.level, "machine");
+  assert.equal(machineRequest.card, "mtms");
+  assert.equal(machineRequest.period, "range");
+  assert.equal(machineRequest.from, rangeRequest.from);
+  assert.equal(machineRequest.to, rangeRequest.to);
+  assert.equal(machineRequest.machine, undefined);
+  await sortHeader("Machine");
+  await sortHeader("Machine");
+  await machineButton.focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "SAP-01", exact: true }).waitFor();
+  const skuRequest = requests.at(-1).params;
+  assert.equal(skuRequest.level, "sku");
+  assert.equal(skuRequest.card, "mtms");
+  assert.equal(skuRequest.machine, "30-0224");
+  assert.equal(skuRequest.period, "range");
+  assert.equal(skuRequest.from, rangeRequest.from);
+  assert.equal(skuRequest.to, rangeRequest.to);
+  assert.equal(
+    requests.length,
+    featureBeforeFamily + 2,
+    "One machine level and selected SKU level; no child preload",
+  );
+  await sortHeader("SKU");
+  await sortHeader("SKU");
+  await page.getByRole("button", { name: "SAP-01", exact: true }).click();
+  await page.getByRole("button", { name: "201", exact: true }).waitFor();
+  assert.equal(requests.at(-1).params.machine, "30-0224");
+  await sortHeader("Failed tyres");
+  await sortHeader("Failed tyres");
+  await page.getByRole("button", { name: "201", exact: true }).click();
+  await waitFor("FAILED-0");
+  assert.equal(requests.at(-1).params.machine, "30-0224");
+  assert.equal(requests.at(-1).params.parameter, "RFV CW");
+  await page.getByText("SAP-01", { exact: true }).click();
+  await page.getByRole("button", { name: "Plot RFV CW" }).click();
+  await page.getByText(/1000 of 1002 measured tyres loaded/).waitFor();
+  assert.equal(requests.at(-1).params.machine, "30-0224");
+  assert.equal(requests.at(-1).params.card, "mtms");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByText("MTMS Uniformity", { exact: true }).click();
+  await machineButton.waitFor();
+  await page
+    .getByRole("button", { name: "NEW-FACTUAL-729", exact: true })
+    .click();
+  await page.getByRole("button", { name: "SAP-01", exact: true }).waitFor();
+  assert.equal(requests.at(-1).params.machine, "NEW-FACTUAL-729");
+  await page.getByText("MTMS Uniformity", { exact: true }).click();
+  await machineButton.waitFor();
+  await page
+    .getByText("Overall Production Yield", { exact: true })
+    .last()
+    .click();
+  await page.getByRole("button", { name: "ZF Uniformity ›" }).click();
+  await page.getByRole("button", { name: "ZF-01", exact: true }).waitFor();
+  assert.ok(
+    legacyRequests.every(
+      (request) =>
+        request.kpi_names === "Mtms_Uniformity_Yield,Zf_Uniformity_Yield",
+    ),
+  );
+  assert.equal(requests.at(-1).params.level, "machine");
+  assert.equal(requests.at(-1).params.card, "zf-uniformity");
+  await page.getByRole("button", { name: "ZF-01", exact: true }).click();
+  await page.getByRole("button", { name: "SAP-01", exact: true }).waitFor();
+  assert.equal(requests.at(-1).params.card, "zf-uniformity");
+  assert.equal(requests.at(-1).params.machine, "ZF-01");
+  assert.equal(requests.at(-1).params.level, "sku");
   assert.equal(errors.length, 0, JSON.stringify(errors));
   await delay(50);
   console.info(
@@ -469,11 +608,13 @@ try {
     JSON.stringify({
       browserErrors: errors,
       diagnostics: await page.evaluate(() => ({
-        highcharts: window._Highcharts.charts.filter(Boolean).map((c) => ({
-          enabled: c.options.tooltip.enabled,
-          mouseTracking: c.series[0].options.enableMouseTracking,
-          tooltipCreated: !!c.tooltip,
-        })),
+        highcharts: (window._Highcharts?.charts ?? [])
+          .filter(Boolean)
+          .map((c) => ({
+            enabled: c.options.tooltip.enabled,
+            mouseTracking: c.series[0].options.enableMouseTracking,
+            tooltipCreated: !!c.tooltip,
+          })),
         tooltip: [...document.querySelectorAll(".highcharts-tooltip")].map(
           (e) => e.outerHTML,
         ),

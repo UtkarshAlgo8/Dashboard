@@ -2,7 +2,7 @@
 
 ## Scope
 
-BTP Technical > Uniformity & Balancing: MTMS, TUO, ZF Uniformity, ZF Balancing, DBM. The underlying Gold department/category remain Quality / Uniformity Testing; Quality dashboard retains its existing drill behavior. Gold machine/SKU tables for all five; parameter/failure tables for MTMS/ZF/DBM; raw plots only MTMS/DBM. TUO Silver status/barcodes are intentionally deferred, not substituted. Its SKU table remains available and shows an explicit disabled status action.
+BTP Technical > Uniformity & Balancing: MTMS, TUO, ZF Uniformity, ZF Balancing, DBM. Overall Production Yield's recognized family rows enter the same guide drill at its selected-period Gold machine table, regardless of legacy family leaf metadata; unknown families are not inferred. Overall and family breadcrumbs return to their respective tables. The initial Overall family summary remains an explicitly labelled snapshot for arbitrary ranges. The underlying Gold department/category remain Quality / Uniformity Testing; Quality dashboard retains its existing drill behavior. Gold machine/SKU tables for all five; parameter/failure tables for MTMS/ZF/DBM; raw plots only MTMS/DBM. TUO Silver status/barcodes are intentionally deferred, not substituted. Its SKU table remains available and shows an explicit disabled status action.
 
 Original guide and all seven SQL files are preserved **unchanged** in `references/uniformity-v1.2/`; `provenance.json` records source paths/archive SHA-256 and individual hashes. `athena-schema-metadata.json` records the two authorized, bounded metadata-only queries and results. No production fact scans, raw samples or live parity queries were authorized/performed.
 

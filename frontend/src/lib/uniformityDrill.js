@@ -11,6 +11,13 @@ export function uniformityCard(kpi) {
     ? UNIFORMITY_DRILL_CARDS[kpi]
     : null;
 }
+// Only factual family rows in the Overall yield root can enter the guide drill.
+export function overallUniformityFamily(rootKpi, levelNames, row) {
+  if (rootKpi !== "Overall_Production_Yield" || !Array.isArray(levelNames))
+    return null;
+  if (!levelNames.includes(row.kpi_name) || row.machine != null) return null;
+  return uniformityCard(row.kpi_name) ? row.kpi_name : null;
+}
 /** Gold stored periods; Silver receives the matching production-date span. */
 export function uniformityPeriod({ preset, from, to, shift, today }) {
   if (preset === "today" || preset === "day") {

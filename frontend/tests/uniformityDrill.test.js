@@ -5,6 +5,7 @@ import vm from "node:vm";
 import {
   appendUniformityPoints,
   INITIAL_UNIFORMITY_NAV,
+  overallUniformityFamily,
   recordedClockMillis,
   technicalUniformityPeriod,
   uniformityCard,
@@ -92,6 +93,49 @@ test("Technical drill uses selected range, month, snapshot day and shift without
   );
   assert.equal(
     technicalUniformityPeriod({ from: null, to: null }, "all"),
+    null,
+  );
+});
+
+test("Overall yield bridge accepts only the five explicit family rows regardless of leaf metadata", () => {
+  const families = [
+    "Mtms_Uniformity_Yield",
+    "Tuo_Uniformity_Yield",
+    "Zf_Uniformity_Yield",
+    "Zf_Balancing_Yield_o",
+    "Dbm_Balancing_Yield",
+  ];
+  const expectedCards = ["mtms", "tuo", "zf-uniformity", "zf-balancing", "dbm"];
+  for (const [i, family] of families.entries()) {
+    assert.equal(uniformityCard(family).id, expectedCards[i]);
+    for (const drill_down of [null, { is_leaf: true, children: [] }]) {
+      const row = { kpi_name: family, machine: null, drill_down };
+      assert.equal(
+        overallUniformityFamily("Overall_Production_Yield", families, row),
+        family,
+      );
+      assert.equal(
+        overallUniformityFamily("Overall_Uniformity_Production", families, row),
+        null,
+      );
+      assert.equal(
+        overallUniformityFamily("Overall_Production_Yield", ["other"], row),
+        null,
+      );
+      assert.equal(
+        overallUniformityFamily("Overall_Production_Yield", families, {
+          ...row,
+          machine: "M",
+        }),
+        null,
+      );
+    }
+  }
+  assert.equal(
+    overallUniformityFamily("Overall_Production_Yield", ["__proto__"], {
+      kpi_name: "__proto__",
+      machine: null,
+    }),
     null,
   );
 });

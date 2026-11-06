@@ -28,7 +28,14 @@ const display = (value) =>
     : Number(value).toLocaleString("en-IN", { maximumSignificantDigits: 15 });
 
 /** Selected BTP Gold level, or an explicitly clicked Silver failure page. */
-export default function UniformityDrillPanel({ card, title, period, onClose }) {
+export default function UniformityDrillPanel({
+  card,
+  title,
+  period,
+  onClose,
+  parentBreadcrumb = null,
+  onParentNav,
+}) {
   const [nav, dispatch] = useReducer(
     uniformityNavigation,
     INITIAL_UNIFORMITY_NAV,
@@ -47,9 +54,9 @@ export default function UniformityDrillPanel({ card, title, period, onClose }) {
     level === "barcodes" ? "barcodes" : "gold",
     scope,
   );
+  const prefix = parentBreadcrumb ?? ["Uniformity & Balancing", title];
   const path = [
-    "Uniformity & Balancing",
-    title,
+    ...prefix,
     ...[nav.machine, nav.sku, nav.parameter].filter(Boolean),
   ];
   const action = (type, value, expected) => dispatch({ type, value, expected });
@@ -132,9 +139,12 @@ export default function UniformityDrillPanel({ card, title, period, onClose }) {
       >
         <Breadcrumb
           path={path}
-          onNav={(index) =>
-            index === 0 ? onClose() : dispatch({ type: "back", index })
-          }
+          onNav={(index) => {
+            if (parentBreadcrumb && index < prefix.length - 1)
+              return onParentNav(index);
+            if (index === 0) return onClose();
+            dispatch({ type: "back", index: index - (prefix.length - 2) });
+          }}
         />
         <IconButton
           size="small"
