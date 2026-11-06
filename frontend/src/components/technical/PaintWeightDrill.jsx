@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   Box,
   Button,
-  CircularProgress,
   Paper,
   Stack,
   Table,
@@ -12,6 +11,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import JKLoader from "@/components/JKLoader.jsx";
 import { getProductChildren } from "@/api/quality.js";
 import {
   PAINT_WEIGHT_COLUMNS,
@@ -87,7 +87,7 @@ export default function PaintWeightDrill({
       </Typography>
       {rows == null ? (
         <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}>
-          <CircularProgress size={26} aria-label="Loading paint weight data" />
+          <JKLoader message="Loading paint weight data" />
         </Box>
       ) : error ? (
         <Typography

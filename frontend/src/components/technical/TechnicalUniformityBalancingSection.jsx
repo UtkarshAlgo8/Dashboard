@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  CircularProgress,
   Paper,
   Stack,
   Table,
@@ -16,7 +15,14 @@ import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import KpiCard from "@/components/production/KpiCard.jsx";
 import JKLoader from "@/components/JKLoader.jsx";
 import ScrapReworkDrillPanel from "@/components/drills/quality/ScrapReworkDrillPanel.jsx";
+import UniformityTrendModal from "@/components/quality/UniformityTrendModal.jsx";
+import { isUniformityTrendCard } from "@/lib/uniformityTrend.js";
 import PaintWeightDrill from "@/components/technical/PaintWeightDrill.jsx";
+import UniformityDrillPanel from "@/components/quality/UniformityDrillPanel.jsx";
+import {
+  overallUniformityFamily,
+  uniformityCard,
+} from "@/lib/uniformityDrill.js";
 import {
   getCuringScrapRows,
   getProductChildren,
@@ -159,12 +165,20 @@ function SectionHeading({ children }) {
   );
 }
 
-function ProductGrid({ cards, openDrill, onOpenDrill }) {
+function ProductGrid({
+  cards,
+  openDrill,
+  onOpenDrill,
+  onOpenTrend,
+  vertical = false,
+}) {
   return (
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+        gridTemplateColumns: vertical
+          ? "1fr"
+          : "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
         gap: 1,
       }}
     >
@@ -174,9 +188,14 @@ function ProductGrid({ cards, openDrill, onOpenDrill }) {
         ) : (
           <KpiCard
             key={card.id}
-            kpi={card}
+            kpi={
+              onOpenTrend && isUniformityTrendCard(card.sourceKpi)
+                ? card
+                : { ...card, hideTrend: true }
+            }
             isDrilling={openDrill?.id === card.id}
             onClick={card.drillable ? onOpenDrill : undefined}
+            onTrendOpen={onOpenTrend}
           />
         ),
       )}
@@ -211,7 +230,15 @@ function ProductBreadcrumb({ path, onNavigate }) {
   );
 }
 
-function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
+function ProductChildrenDrill({
+  kpi,
+  date,
+  shift,
+  granularity,
+  onClose,
+  drillPeriod,
+  onClearDrillShift,
+}) {
   const initialLevel = useMemo(
     () => ({ title: kpi.name, kpiNames: kpi.drillChildren ?? [] }),
     [kpi.name, kpi.drillChildren],
@@ -219,6 +246,7 @@ function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
   const [levels, setLevels] = useState([initialLevel]);
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
+  const [bridge, setBridge] = useState(null);
   const level = levels[levels.length - 1];
   const namesKey = level.kpiNames.join(",");
 
@@ -263,6 +291,47 @@ function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
     ...levels.slice(1).map((item) => item.title),
   ];
 
+  if (bridge) {
+    if (!drillPeriod)
+      return (
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Typography>
+            Choose All Shifts for a month or date range, or select a single day
+            to use a shift.
+          </Typography>
+          <Button onClick={onClearDrillShift}>Use All Shifts</Button>
+          <Button
+            onClick={() => {
+              setBridge(null);
+            }}
+          >
+            Back to families
+          </Button>
+        </Paper>
+      );
+    return (
+      <>
+        {drillPeriod.period === "range" && (
+          <Typography variant="caption" color="text.secondary">
+            Cards show the latest snapshot; this drill covers the selected date
+            range.
+          </Typography>
+        )}
+        <UniformityDrillPanel
+          key={JSON.stringify([bridge.familyKpi, drillPeriod])}
+          card={uniformityCard(bridge.familyKpi)}
+          title={bridge.title}
+          period={drillPeriod}
+          parentBreadcrumb={["Uniformity & Balancing", kpi.name, bridge.title]}
+          onClose={onClose}
+          onParentNav={(index) => {
+            if (index === 0) return onClose();
+            setBridge(null);
+          }}
+        />
+      </>
+    );
+  }
   return (
     <Paper component="section" variant="outlined" sx={{ mt: 2, p: 2 }}>
       <Stack
@@ -278,6 +347,13 @@ function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
           Close
         </Button>
       </Stack>
+      {kpi.sourceKpi === "Overall_Production_Yield" &&
+        drillPeriod?.period === "range" && (
+          <Typography variant="caption" color="text.secondary">
+            Family rows use the latest-day snapshot; the selected family drill
+            covers the full date range.
+          </Typography>
+        )}
       <ProductBreadcrumb
         path={path}
         onNavigate={(index) => {
@@ -290,7 +366,7 @@ function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
       />
       {rows == null ? (
         <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}>
-          <CircularProgress size={26} aria-label="Loading gold data" />
+          <JKLoader message="Loading drill data" />
         </Box>
       ) : error ? (
         <Typography sx={{ py: 2, fontSize: 13, color: "error.main" }}>
@@ -310,22 +386,35 @@ function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
               </TableHead>
               <TableBody>
                 {rows.map((row, index) => {
+                  const familyKpi =
+                    levels.length === 1
+                      ? overallUniformityFamily(
+                          kpi.sourceKpi,
+                          level.kpiNames,
+                          row,
+                        )
+                      : null;
                   const canDrill = Boolean(
-                    !row.drill_down?.is_leaf &&
-                    row.drill_down?.children?.length,
+                    familyKpi ||
+                    (!row.drill_down?.is_leaf &&
+                      row.drill_down?.children?.length),
                   );
+                  const guideControl = Boolean(familyKpi);
                   const label =
                     row.machine ||
                     PRODUCT_KPI_LABELS[row.kpi_name] ||
                     row.kpi_name;
-                  const activate = () => openChild(row);
+                  const activate = () => {
+                    if (!familyKpi) return openChild(row);
+                    setBridge({ familyKpi, title: label });
+                  };
                   return (
                     <TableRow
                       key={`${row.kpi_name}-${row.machine || "summary"}-${index}`}
                       hover={canDrill}
-                      onClick={canDrill ? activate : undefined}
+                      onClick={canDrill && !guideControl ? activate : undefined}
                       onKeyDown={
-                        canDrill
+                        canDrill && !guideControl
                           ? (event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
@@ -334,8 +423,8 @@ function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
                             }
                           : undefined
                       }
-                      tabIndex={canDrill ? 0 : undefined}
-                      role={canDrill ? "button" : undefined}
+                      tabIndex={canDrill && !guideControl ? 0 : undefined}
+                      role={canDrill && !guideControl ? "button" : undefined}
                       sx={
                         canDrill
                           ? {
@@ -356,8 +445,20 @@ function ProductChildrenDrill({ kpi, date, shift, granularity, onClose }) {
                             : undefined
                         }
                       >
-                        {label}
-                        {canDrill ? " ›" : ""}
+                        {canDrill && guideControl ? (
+                          <Button
+                            size="small"
+                            onClick={activate}
+                            sx={{ textTransform: "none" }}
+                          >
+                            {label} ›
+                          </Button>
+                        ) : (
+                          <>
+                            {label}
+                            {canDrill ? " ›" : ""}
+                          </>
+                        )}
                       </TableCell>
                       <TableCell>
                         {row.machine && row.machine !== label
@@ -434,17 +535,35 @@ function CuringScrapDrill({ date, shift, granularity, onClose }) {
   );
 }
 
-/** The Technical Uniformity tab intentionally mirrors Quality › Product. */
+/** Technical cards use the established Quality Product Gold source. */
 export default function TechnicalUniformityBalancingSection({
   date,
   shift = "All",
   granularity = "DAY",
+  drillPeriod,
+  onClearDrillShift,
+  trendFilter = null,
+  trendToday = null,
 }) {
   const [summary, setSummary] = useState(null);
   const [scrapRows, setScrapRows] = useState(null);
   const [loading, setLoading] = useState(Boolean(date));
   const [error, setError] = useState(null);
   const [openDrill, setOpenDrill] = useState(null);
+  const [trendCard, setTrendCard] = useState(null);
+  const closeDrill = () => setOpenDrill(null);
+  // Drill and trend are mutually exclusive, as on Quality.
+  const openCard = (card) => {
+    setTrendCard(null);
+    setOpenDrill(card);
+  };
+  const openTrend =
+    trendFilter && trendToday
+      ? (card) => {
+          setOpenDrill(null);
+          setTrendCard(card);
+        }
+      : undefined;
 
   useEffect(() => {
     if (!date) return undefined;
@@ -524,9 +643,12 @@ export default function TechnicalUniformityBalancingSection({
           value: Number(live.actual_value),
           unit: live.unit || "",
           drillable: Boolean(
-            !live.drill_down?.is_leaf && live.drill_down?.children?.length,
+            uniformityCard(definition.sourceKpi) ||
+            (!live.drill_down?.is_leaf && live.drill_down?.children?.length),
           ),
-          drillType: "product",
+          drillType: uniformityCard(definition.sourceKpi)
+            ? "uniformity"
+            : "product",
           drillChildren: live.drill_down?.children ?? [],
         };
       }),
@@ -534,6 +656,7 @@ export default function TechnicalUniformityBalancingSection({
   );
   const uniformityCards = cards.filter((card) => card.sourceKpi);
   const otherCards = cards.filter((card) => !card.sourceKpi);
+  const vertical = Boolean(openDrill);
 
   return (
     <Box component="section" aria-labelledby="technical-uniformity-heading">
@@ -544,63 +667,130 @@ export default function TechnicalUniformityBalancingSection({
       >
         Uniformity &amp; Balancing
       </Typography>
-      {loading ? (
-        <JKLoader message="Loading KPIs" />
-      ) : (
-        <>
-          {error && (
-            <Typography sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}>
-              Some live values could not be loaded. Unavailable cards remain
-              marked as no data.
-            </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: {
+            xs: "column",
+            lg: vertical ? "row" : "column",
+          },
+          gap: 2,
+          alignItems: "flex-start",
+        }}
+      >
+        <Box
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            flex: vertical ? { lg: "0 0 250px" } : undefined,
+          }}
+        >
+          {loading ? (
+            <JKLoader message="Loading KPIs" />
+          ) : (
+            <>
+              {error && (
+                <Typography
+                  sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}
+                >
+                  Some live values could not be loaded. Unavailable cards remain
+                  marked as no data.
+                </Typography>
+              )}
+              <Stack spacing={2.5}>
+                <Box>
+                  <SectionHeading>Uniformity &amp; Balancing</SectionHeading>
+                  <ProductGrid
+                    cards={uniformityCards}
+                    openDrill={openDrill}
+                    onOpenDrill={openCard}
+                    onOpenTrend={openTrend}
+                    vertical={vertical}
+                  />
+                </Box>
+                <Box>
+                  <SectionHeading>Other Product KPIs</SectionHeading>
+                  <ProductGrid
+                    cards={otherCards}
+                    openDrill={openDrill}
+                    onOpenDrill={openCard}
+                    onOpenTrend={openTrend}
+                    vertical={vertical}
+                  />
+                </Box>
+              </Stack>
+            </>
           )}
-          <Stack spacing={2.5}>
-            <Box>
-              <SectionHeading>Uniformity &amp; Balancing</SectionHeading>
-              <ProductGrid
-                cards={uniformityCards}
-                openDrill={openDrill}
-                onOpenDrill={setOpenDrill}
+        </Box>
+        <Box sx={{ width: "100%", minWidth: 0, flex: 1 }}>
+          {openDrill?.drillType === "uniformity" && !drillPeriod && (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography>
+                Choose All Shifts for a month or date range, or select a single
+                day to use a shift.
+              </Typography>
+              <Button onClick={onClearDrillShift}>Use All Shifts</Button>
+            </Paper>
+          )}
+          {openDrill?.drillType === "uniformity" && drillPeriod && (
+            <>
+              {drillPeriod.period === "range" && (
+                <Typography variant="caption" color="text.secondary">
+                  Cards show the latest snapshot; this drill covers the selected
+                  date range.
+                </Typography>
+              )}
+              <UniformityDrillPanel
+                key={JSON.stringify([openDrill.id, drillPeriod])}
+                card={uniformityCard(openDrill.sourceKpi)}
+                title={openDrill.name}
+                period={drillPeriod}
+                onClose={() => setOpenDrill(null)}
               />
-            </Box>
-            <Box>
-              <SectionHeading>Other Product KPIs</SectionHeading>
-              <ProductGrid
-                cards={otherCards}
-                openDrill={openDrill}
-                onOpenDrill={setOpenDrill}
-              />
-            </Box>
-          </Stack>
-        </>
-      )}
-      {openDrill?.drillType === "product" && (
-        <ProductChildrenDrill
-          key={`${openDrill.id}-${date}-${shift}-${granularity}`}
-          kpi={openDrill}
-          date={date}
-          shift={shift}
-          granularity={granularity}
-          onClose={() => setOpenDrill(null)}
-        />
-      )}
-      {openDrill?.drillType === "paintWeight" && (
-        <PaintWeightDrill
-          key={`${date}-${shift}-${granularity}`}
-          date={date}
-          shift={shift}
-          granularity={granularity}
-          breadcrumb={["Uniformity & Balancing", openDrill.name]}
-          onClose={() => setOpenDrill(null)}
-        />
-      )}
-      {openDrill?.drillType === "curingScrap" && (
-        <CuringScrapDrill
-          key={`${date}-${shift}-${granularity}`}
-          date={date}
-          shift={shift}
-          granularity={granularity}
-          onClose={() => setOpenDrill(null)}
+            </>
+          )}
+          {openDrill?.drillType === "product" && (
+            <ProductChildrenDrill
+              key={`${openDrill.id}-${date}-${shift}-${granularity}`}
+              kpi={openDrill}
+              date={date}
+              shift={shift}
+              granularity={granularity}
+              drillPeriod={drillPeriod}
+              onClearDrillShift={onClearDrillShift}
+              onClose={closeDrill}
+            />
+          )}
+          {openDrill?.drillType === "paintWeight" && (
+            <PaintWeightDrill
+              key={`${date}-${shift}-${granularity}`}
+              date={date}
+              shift={shift}
+              granularity={granularity}
+              breadcrumb={["Uniformity & Balancing", openDrill.name]}
+              onClose={() => setOpenDrill(null)}
+            />
+          )}
+          {openDrill?.drillType === "curingScrap" && (
+            <CuringScrapDrill
+              key={`${date}-${shift}-${granularity}`}
+              date={date}
+              shift={shift}
+              granularity={granularity}
+              onClose={() => setOpenDrill(null)}
+            />
+          )}
+        </Box>
+      </Box>
+      {trendCard && openTrend && (
+        <UniformityTrendModal
+          key={trendCard.sourceKpi}
+          open
+          onClose={() => setTrendCard(null)}
+          cardKpi={trendCard.sourceKpi}
+          title={trendCard.name}
+          today={trendToday}
+          initialFilter={trendFilter}
         />
       )}
     </Box>

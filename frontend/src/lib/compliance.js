@@ -63,6 +63,34 @@ export function storedCompliancePeriod({ date, granularity, shift, from, to }) {
   };
 }
 
+/** Display the selected stored period, never a source-freshness claim. */
+export function formatCompliancePeriod(period) {
+  const date = period?.date;
+  const grain = period?.granularity;
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return null;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (
+    !Number.isFinite(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== date
+  )
+    return null;
+  if (grain === "YEAR")
+    return date.endsWith("-01-01") ? date.slice(0, 4) : null;
+  if (grain === "MONTH" && !date.endsWith("-01")) return null;
+  if (!["DAY", "MONTH", "SHIFT A", "SHIFT B", "SHIFT C"].includes(grain))
+    return null;
+  const month = parsed.toLocaleString("en-GB", {
+    month: "short",
+    timeZone: "UTC",
+  });
+  if (grain === "MONTH") return `${month} ${date.slice(0, 4)}`;
+  const label = `${date.slice(8, 10)} ${month} ${date.slice(0, 4)}`;
+  return grain.startsWith("SHIFT ")
+    ? `${label} · Shift ${grain.slice(-1)}`
+    : label;
+}
+
 /** Quality/Engineering share the existing KPI tile; values remain Gold's %. */
 export function complianceCard(id, result, { period, error, isLoading } = {}) {
   const definition = COMPLIANCE_DEFINITIONS[id];
@@ -85,7 +113,7 @@ export function complianceCard(id, result, { period, error, isLoading } = {}) {
       id === "critical"
         ? "Severe violation rate · lower is better"
         : "Published Gold compliance",
-    periodLabel: period ? `${period.granularity} · ${period.date}` : null,
+    periodLabel: formatCompliancePeriod(period),
     ragInfo: [
       definition.description,
       "Blue is presentation only, not a pass/fail status. No RAG thresholds or target are defined.",

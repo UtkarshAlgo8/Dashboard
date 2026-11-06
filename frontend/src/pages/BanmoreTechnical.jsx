@@ -32,7 +32,13 @@ import LiveRunningSkusDrill from "@/components/technical/LiveRunningSkusDrill.js
 import { useDashboardFetch } from "@/hooks/useDashboardFetch.js";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import client from "@/api/client.js";
-import { buildDatePayload, presetToDateRange } from "@/lib/timeRange.js";
+import {
+  buildDatePayload,
+  normalizeDateInput,
+  presetToDateRange,
+  todayIso,
+} from "@/lib/timeRange.js";
+import { technicalTrendFilter } from "@/lib/uniformityTrend.js";
 import { withNumericValues } from "@/lib/technicalDrills.js";
 import { TEMP_DISABLE_SKU_PLAN } from "@/lib/tempFlags.js";
 import {
@@ -53,6 +59,7 @@ import {
   toGtWeightCard,
 } from "@/lib/paintWeight.js";
 import TechnicalUniformityBalancingSection from "@/components/technical/TechnicalUniformityBalancingSection.jsx";
+import { technicalUniformityPeriod } from "@/lib/uniformityDrill.js";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
 import { getOverage } from "@/api/inventory.js";
 import OverageDrill from "@/components/technical/OverageDrill.jsx";
@@ -344,6 +351,18 @@ function BanmoreTechnical() {
       ? dateWindow.from
       : (dateWindow.to ?? dateWindow.from);
   const uniformityShift = shift === "all" ? "All" : String(shift).toUpperCase();
+  // Trend modal context: the page's as-of day, not the raw system date.
+  const trendToday = normalizeDateInput(asOfData?.asOf ?? "") ?? todayIso();
+  const uniformityTrendFilter = useMemo(
+    () =>
+      technicalTrendFilter({
+        timeRange,
+        dateWindow,
+        shift,
+        today: trendToday,
+      }),
+    [timeRange, dateWindow, shift, trendToday],
+  );
 
   // Building's GT Weight Variation card reads the same Quality › Product
   // summary (and snapshot date) as the Uniformity tab.
@@ -830,10 +849,19 @@ function BanmoreTechnical() {
           <TechnicalAnalysis />
         ) : tab === "uniformity" ? (
           <TechnicalUniformityBalancingSection
-            key={`${uniformityDate ?? "no-date"}|${uniformityShift}|${uniformityGranularity}`}
+            key={JSON.stringify([
+              uniformityDate,
+              uniformityShift,
+              uniformityGranularity,
+              dateWindow,
+            ])}
             date={uniformityDate}
             shift={uniformityShift}
             granularity={uniformityGranularity}
+            drillPeriod={technicalUniformityPeriod(dateWindow, shift)}
+            onClearDrillShift={() => setShift("all")}
+            trendFilter={uniformityTrendFilter}
+            trendToday={trendToday}
           />
         ) : (
           <>

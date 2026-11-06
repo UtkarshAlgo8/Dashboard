@@ -16,6 +16,7 @@ import {
   COMPLIANCE_COUNT_COLUMNS,
   COMPLIANCE_DEFINITIONS,
   COMPLIANCE_PERIOD_HELP,
+  formatCompliancePeriod,
 } from "@/lib/compliance.js";
 
 const display = (value) =>
@@ -84,8 +85,8 @@ export default function ComplianceDrillPanel({ id, period, onClose }) {
       ) : (
         <>
           <Typography sx={{ mb: 1, fontSize: 12, color: "text.secondary" }}>
-            {period.granularity} · {period.date} · Published values at this
-            level; not calculated from children.
+            {formatCompliancePeriod(period) ?? "Selected period"} · Published
+            values at this level; not calculated from children.
           </Typography>
           {query.error ? (
             <Alert severity="error">
