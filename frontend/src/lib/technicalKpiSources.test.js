@@ -6,6 +6,7 @@ import {
   toBuildingAttributedKpis,
   toDowntimeReasonKpis,
   toMachineProductionKpi,
+  toTrendKpi,
 } from "./technicalKpiSources.js";
 import { toKpiGrid } from "./kpi-transformer.js";
 
@@ -115,13 +116,13 @@ const monthOpts = {
   plantId: "banmore",
 };
 
-test("builds Breakdown and Setup & Change averaged over the downtime fleet", () => {
+test("builds Breakdown and Setup & Change as reason totals, not per-machine averages", () => {
   const cards = toDowntimeReasonKpis(downtimeRows, monthOpts);
   assert.deepEqual(
     cards.map((k) => [k.id, k.value, k.unit]),
     [
-      ["bdown", 30, "min"],
-      ["bcs", 15, "min"],
+      ["bdown", 60, "min"],
+      ["bcs", 30, "min"],
     ],
   );
   const total = toKpiGrid([], {
@@ -247,4 +248,31 @@ test("buildingAttributedRows matches the discipline case-insensitively", () => {
     rows.map((row) => row.actual_value),
     [5],
   );
+});
+
+test("reason card total sums every machine's minutes on that reason", () => {
+  const rows = [
+    reasonRow("Setup & Change", "0201", 40, "Mixing"),
+    reasonRow("Setup & Change", "0202", 35, "Mixing"),
+    reasonRow("Breakdown", "0203", 10, "Mixing"),
+  ];
+  const bcs = toDowntimeReasonKpis(rows, {
+    ...monthOpts,
+    section: "Mixing",
+  }).find((k) => k.id === "bcs");
+  assert.equal(bcs.value, 75);
+  assert.equal(bcs.topMachine?.machine, "0201");
+});
+
+test("toTrendKpi maps Technical cards to the Production trend ids", () => {
+  assert.equal(toTrendKpi({ id: "prod", value: 1 }).id, "prod");
+  assert.equal(toTrendKpi({ id: "ncr" }).id, "ncm");
+  assert.equal(toTrendKpi({ id: "bdown" }).id, "downtime");
+  assert.equal(toTrendKpi({ id: "bcs" }).id, "downtime");
+  assert.equal(toTrendKpi({ id: "prod", value: 7 }).value, 7);
+});
+
+test("toTrendKpi returns null for a card with no Production source", () => {
+  assert.equal(toTrendKpi({ id: "ovg" }), null);
+  assert.equal(toTrendKpi(null), null);
 });

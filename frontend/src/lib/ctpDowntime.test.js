@@ -202,7 +202,7 @@ test("missing CTP stored totals show a dash rather than falling back to reasons"
   assert.equal(total([row(0)]).value, 0);
 });
 
-test("Banmore and CTP Technical single-reason cards retain their per-machine averages", () => {
+test("Technical single-reason cards show reason totals; the Production tile keeps its average", () => {
   const reasons = [
     row(60, { kpi_name: "Breakdown", machine: "A" }),
     row(30, { kpi_name: "Setup & Change", machine: "B" }),
@@ -212,6 +212,6 @@ test("Banmore and CTP Technical single-reason cards retain their per-machine ave
     45,
   );
   const cards = toDowntimeReasonKpis(reasons, opts);
-  assert.equal(cards.find((k) => k.id === "bdown").value, 30);
-  assert.equal(cards.find((k) => k.id === "bcs").value, 15);
+  assert.equal(cards.find((k) => k.id === "bdown").value, 60);
+  assert.equal(cards.find((k) => k.id === "bcs").value, 30);
 });

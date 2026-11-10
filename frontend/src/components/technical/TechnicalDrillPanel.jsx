@@ -294,6 +294,7 @@ function NcrDrill({
   breadcrumb,
   sectionName,
   rawRows,
+  card,
   isLoading,
   onClose,
 }) {
@@ -306,8 +307,12 @@ function NcrDrill({
       held.map((r) => canonicalUnit(r.unit_of_measurement)).filter(Boolean),
     ),
   ];
+  // Open on the card's unit so the drill total matches the card.
+  const cardUnit = unitOptions.find((u) => displayUnit(u) === card?.unit);
   const [unitPick, setUnit] = useState(null);
-  const unit = unitOptions.includes(unitPick) ? unitPick : unitOptions[0];
+  const unit = unitOptions.includes(unitPick)
+    ? unitPick
+    : (cardUnit ?? unitOptions[0]);
   const rows = unit
     ? held.filter((r) => canonicalUnit(r.unit_of_measurement) === unit)
     : held;
@@ -370,7 +375,7 @@ function NcrDrill({
               fmt(toDisplayQuantity(r.actual_value, unit).value),
             ])
       }
-      footnote={`Held material cannot be issued until it is dispositioned. Total of the item rows: ${quantity(total, unit)}. The card reads the section NCM Hold total, which the gold data does not keep equal to its item rows (same on the Production dashboard).${cappedNote(groupKey ? groups.length : records.length)}`}
+      footnote={`Held material cannot be issued until it is dispositioned. Total of the item rows: ${quantity(total, unit)}.${cappedNote(groupKey ? groups.length : records.length)}`}
       downloadFilename={`technical-ncr-${sectionName}`.toLowerCase()}
       isLoading={isLoading && held.length === 0}
       onClose={onClose}
@@ -463,7 +468,7 @@ function BreakdownDrill({
               fmt(e.minutes),
             ])
       }
-      footnote={`Totals are machine-minutes across every ${sectionName} machine; the card shows the average per machine. Same reason rows as the Production dashboard's Total Downtime.${cappedNote(groupKey ? groups.length : events.length)}`}
+      footnote={`Totals are machine-minutes across every ${sectionName} machine, as on the card. Same reason rows as the Production dashboard's Total Downtime.${cappedNote(groupKey ? groups.length : events.length)}`}
       downloadFilename={`technical-breakdown-${sectionName}`.toLowerCase()}
       onClose={onClose}
     />
@@ -535,7 +540,7 @@ function SetupDrill({
               fmt(e.minutes),
             ])
       }
-      footnote={`Setup loss is machine time lost to changeovers, summed across every machine; the card shows the average per machine.${cappedNote(groupKey ? groups.length : events.length)}`}
+      footnote={`Setup loss is machine time lost to changeovers, summed across every machine, as on the card.${cappedNote(groupKey ? groups.length : events.length)}`}
       downloadFilename={`technical-setup-${sectionName}`.toLowerCase()}
       onClose={onClose}
     />

@@ -309,3 +309,112 @@ test("CTP OEE card stays empty when the window has no OEE rows", () => {
   });
   assert.equal(card.value, "—");
 });
+
+// Banmore Technical › Stock reads Production / NCM_Hold with no product
+// pinned. Gold keeps one MONTH row per product (Sep 2026 Mixing: Master
+// Compound 43,920 + Final Compound 35,505 Batch); the card must show the sum.
+const stockRow = (section, kpi_name, product_type, unit, actual_value) => ({
+  date: "2026-09-01",
+  section,
+  sub_section: section === "Mixing" ? "" : "Extruder",
+  machine: "",
+  itemcode: "",
+  product_type,
+  granularity: "MONTH",
+  category: kpi_name === "NCM_Hold" ? "Quality" : "Productivity",
+  kpi_name,
+  unit_of_measurement: unit,
+  actual_value,
+});
+const banmoreMonth = (section, category, extra = {}) => ({
+  section,
+  category,
+  granularity: "MONTH",
+  mode: "snapshot",
+  plantId: "banmore",
+  tyreType: "PCR",
+  ...extra,
+});
+const cardOf = (rows, opts, id) =>
+  toKpiGrid(rows, opts).find((k) => k.id === id);
+
+test("Banmore Mixing month Production sums every product when none is pinned", () => {
+  const rows = [
+    stockRow("Mixing", "Production", "Master Compound", "Batch", 43920),
+    stockRow("Mixing", "Production", "Final Compound", "Batch", 35505),
+    stockRow("Mixing", "Production", "Master Compound", "KG", 11386264),
+  ];
+  const card = cardOf(rows, banmoreMonth("Mixing", "P"), "prod");
+  assert.equal(card.value, 79425);
+  assert.equal(card.unit, "Batch");
+});
+
+test("Banmore Stock all-product total keeps one unit (NOS before metres)", () => {
+  const rows = [
+    stockRow("Stock", "Production", "Tread", "Meter", 590476),
+    stockRow("Stock", "Production", "Sidewall", "Meters", 1143101),
+    stockRow("Stock", "Production", "Tread", "NOS", 481810),
+  ];
+  const card = cardOf(rows, banmoreMonth("Stock", "P"), "prod");
+  assert.equal(card.value, 481810);
+  assert.equal(card.unit, "NOS");
+});
+
+test("Banmore Stock metre products in two spellings fold into one total", () => {
+  const rows = [
+    stockRow("Stock", "Production", "Ply Mother Roll", "Meter", 845373),
+    stockRow("Stock", "Production", "Belt Mother Roll", "Meters", 367500),
+  ];
+  const card = cardOf(rows, banmoreMonth("Stock", "P"), "prod");
+  assert.equal(card.value, 1212873);
+});
+
+test("Banmore Mixing month NCM Hold sums every product and status row", () => {
+  const rows = [
+    stockRow("Mixing", "NCM_Hold", "Compound", "KG", 1086184),
+    stockRow("Mixing", "NCM_Hold", "Final Compound", "KG", 960188.71),
+    stockRow("Mixing", "NCM_Hold", "Master Compound", "KG", 160),
+  ];
+  const card = cardOf(rows, banmoreMonth("Mixing", "Q"), "ncm");
+  assert.equal(card.value, 2046.53);
+  assert.equal(card.unit, "MT");
+});
+
+test("a pinned Banmore product still reads that product alone", () => {
+  const rows = [
+    stockRow("Mixing", "Production", "Master Compound", "Batch", 43920),
+    stockRow("Mixing", "Production", "Final Compound", "Batch", 35505),
+  ];
+  const card = cardOf(
+    rows,
+    banmoreMonth("Mixing", "P", { productType: "Final Compound" }),
+    "prod",
+  );
+  assert.equal(card.value, 35505);
+});
+
+test("Banmore unpinned Production with no rows renders the placeholder", () => {
+  const card = cardOf([], banmoreMonth("Mixing", "P"), "prod");
+  assert.ok(card == null || card.value == null || card.value === "—");
+});
+
+test("Banmore Curing month NCM Hold sums every status row", () => {
+  const rows = [
+    stockRow("Curing", "NCM_Hold", "Cured Tyre", "NOS", 500),
+    stockRow("Curing", "NCM_Hold", "Cured Tyre", "NOS", 329),
+  ];
+  const card = cardOf(rows, banmoreMonth("Curing", "Q"), "ncm");
+  assert.equal(card.value, 829);
+});
+
+test("Banmore TBM Production stays on Green Tyre, never adding Carcass", () => {
+  const rows = [
+    stockRow("TBM", "Production", "Green Tyre", "NOS", 744756),
+    stockRow("TBM", "Production", "Carcass", "NOS", 167834),
+    stockRow("TBM", "Production_product", "Green Tyre", "NOS", 744756),
+    stockRow("TBM", "Production_product", "LCV", "NOS", 114253),
+    stockRow("TBM", "Production_product", "Passenger Radial", "NOS", 504995),
+  ];
+  const card = cardOf(rows, banmoreMonth("TBM", "P"), "prod");
+  assert.equal(card.value, 744756);
+});

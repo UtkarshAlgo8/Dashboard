@@ -1250,6 +1250,48 @@ const UNIT_PINNED_SERIES = new Set([
  */
 const STRICT_FILTER_PLANTS = new Set(["chennai", "ctp"]);
 
+/**
+ * KPI → sections whose unpinned card sums every product / status row.
+ * TBM / Curing Production is excluded: its Green Tyre / Cured Tyre row
+ * already totals the other products (and Carcass is the same tyres at an
+ * earlier stage), so summing would double-count.
+ */
+const ALL_PRODUCT_SUM_SECTIONS = new Map([
+  ["Production", new Set(["Mixing", "Stock"])],
+  ["NCM_Hold", new Set(["Mixing", "Stock", "TBM", "Curing"])],
+]);
+
+/**
+ * Units an all-product total is read in, best first: counts before mass
+ * before length. Rows with no unit only count when nothing else exists.
+ */
+const PREFERRED_UNITS = ["BATCH", "NOS", "KG", "MT", "M"];
+
+/**
+ * The rows in the one unit an all-product total is shown in — values in
+ * different units never add up (Extruder records Tread in NOS and M). The
+ * kept rows share one spelling of that unit ("Meter" / "Meters" → the
+ * first seen), so sumRowsPerPeriod folds each period into a single row.
+ *
+ * @param {object[]} rows
+ * @returns {object[]}
+ */
+function inPreferredUnit(rows) {
+  const rank = (u) => {
+    if (u == null) return Number.MAX_SAFE_INTEGER;
+    const i = PREFERRED_UNITS.indexOf(u);
+    return i === -1 ? PREFERRED_UNITS.length : i;
+  };
+  const [unit] = [
+    ...new Set(rows.map((r) => canonicalUnit(r.unit_of_measurement))),
+  ].sort((a, b) => rank(a) - rank(b) || String(a).localeCompare(String(b)));
+  const kept = rows.filter(
+    (r) => canonicalUnit(r.unit_of_measurement) === unit,
+  );
+  const spelling = kept[0]?.unit_of_measurement;
+  return kept.map((r) => ({ ...r, unit_of_measurement: spelling }));
+}
+
 /** CTP quality counts summed per day across their level-1 rows. */
 const SUMMED_QUALITY_KPIS = new Set(["Scrap", "Rework", "NCM_Hold"]);
 
@@ -1357,10 +1399,12 @@ function selectSeries(
     // drill-down reads the full 6-reason set directly from `downtimeRows`,
     // independently of this synthesis (see DowntimeDrillPanel.jsx).
     // A kpiDef may narrow the SUM to its own `reasons` (the Technical
-    // dashboard's single-reason Breakdown / Setup & Change cards). The
-    // machine fleet still spans all card reasons, so a reason card is
-    // averaged over the same machines as Total Downtime and the reasons
-    // add up to the total. The Production tile carries no `reasons`.
+    // dashboard's single-reason Breakdown / Setup & Change cards). Those
+    // cards show the reason's total machine-minutes — the figure gold and
+    // their drill report — so they record no fleet and are never divided
+    // per machine (Sep 2026 Mixing Setup & Change: 7,387 min, not the
+    // 7,387 / 5 = 1,477.4 average). The Production tile carries no
+    // `reasons` and keeps its per-machine average.
     for (const reason of CARD_DOWNTIME_REASONS) {
       const g = downtimeByReason.get(reason);
       if (!g) continue;
@@ -1390,7 +1434,7 @@ function selectSeries(
           });
         const bucket = prev ?? perDate.get(d);
         if (!isEmptyToken(r.machine)) {
-          bucket.machines.add(r.machine);
+          if (!kpiDef.reasons) bucket.machines.add(r.machine);
           if (counted) {
             bucket.machineTotals.set(
               r.machine,
@@ -1731,6 +1775,20 @@ function selectSeries(
         groupDesc = groupDesc.filter((r) => r.unit_of_measurement === wantUnit);
       }
     }
+  }
+
+  // Banmore with no product pinned (the Technical dashboard):
+  // gold keeps one Production / NCM_Hold row per product (and NCM status)
+  // per period, and the card read only the first — Sep 2026 Mixing showed
+  // Master Compound 43,920 Batch instead of Master + Final 79,425, and NCR
+  // 0.16 MT instead of 2,687.87 MT. Sum every product in one unit so the
+  // month card, a custom range over that month, and the drill agree.
+  if (
+    !strictFilters &&
+    !productType &&
+    ALL_PRODUCT_SUM_SECTIONS.get(name)?.has(section)
+  ) {
+    groupDesc = sumRowsPerPeriod(inPreferredUnit(groupDesc));
   }
 
   // CTP stores the quality counts as several level-1 rows per day — one per

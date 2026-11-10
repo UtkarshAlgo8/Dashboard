@@ -50,8 +50,10 @@ import {
   resolveTechnicalKpi,
   toBuildingAttributedKpis,
   toDowntimeReasonKpis,
+  toTrendKpi,
 } from "@/lib/technicalKpiSources.js";
 import TechnicalDrillPanel from "@/components/technical/TechnicalDrillPanel.jsx";
+import TrendModal from "@/components/trend/TrendModal.jsx";
 import PaintWeightDrill from "@/components/technical/PaintWeightDrill.jsx";
 import { getProductSummary } from "@/api/quality.js";
 import {
@@ -603,6 +605,18 @@ function BanmoreTechnical() {
     [buildingDrillQuery.data],
   );
 
+  // "View Trend Analytics" opens the Production trend behind the card, in
+  // the scope it was opened from; an area / tab switch closes it.
+  const [openTrend, setOpenTrend] = useState(null);
+  const trendKpi =
+    openTrend?.scope === drillScope ? toTrendKpi(openTrend.kpi) : null;
+  const trendSource = trendKpi ? TECHNICAL_KPI_SOURCES[openTrend.kpi.id] : null;
+  const handleTrendOpen = (kpi) => {
+    if (toTrendKpi(kpi) && !isBuildingAttributed(kpi.id)) {
+      setOpenTrend({ kpi, scope: drillScope });
+    }
+  };
+
   const handleCloseDrill = () => {
     setOpenDrill(null);
     resetProductivityDrill();
@@ -873,9 +887,21 @@ function BanmoreTechnical() {
               error={isLiveTab ? error : null}
               openDrillKpiId={openDrillKpiId}
               onDrillKpi={handleDrillKpi}
+              onTrendOpen={handleTrendOpen}
               onCloseDrill={handleCloseDrill}
             />
             {drillPanel}
+            <TrendModal
+              open={Boolean(trendKpi)}
+              onClose={() => setOpenTrend(null)}
+              plantId="banmore"
+              kpi={trendKpi}
+              section={section}
+              category={trendSource?.category === "q" ? "q" : "p"}
+              subSection={subSection}
+              tyreType="PCR"
+              asOf={asOfData?.asOf ?? null}
+            />
           </>
         )}
       </Box>
@@ -960,6 +986,7 @@ function TechnicalKpiSection({
   error,
   openDrillKpiId,
   onDrillKpi,
+  onTrendOpen,
   onCloseDrill,
 }) {
   return (
@@ -984,6 +1011,7 @@ function TechnicalKpiSection({
         isLiveLoading={isLiveLoading}
         openDrillKpiId={openDrillKpiId}
         onDrillKpi={onDrillKpi}
+        onTrendOpen={onTrendOpen}
         onCloseDrill={onCloseDrill}
       />
     </Box>
@@ -997,6 +1025,7 @@ function KpiGrid({
   isLiveLoading = false,
   openDrillKpiId = null,
   onDrillKpi,
+  onTrendOpen,
   onCloseDrill,
 }) {
   return (
@@ -1020,6 +1049,7 @@ function KpiGrid({
             kpi={onDrillKpi ? live : { ...live, drillable: false }}
             isDrilling={openDrillKpiId === definition.id}
             onClick={onDrillKpi}
+            onTrendOpen={onTrendOpen}
             onCloseDrill={onCloseDrill}
           />
         ) : (

@@ -186,6 +186,27 @@ export function resolveTechnicalKpi(definition, kpisByCategory) {
   return { ...live, id: definition.id, name: definition.name };
 }
 
+// The Production trend view the single-reason downtime cards open.
+const DOWNTIME_TREND_ID = "downtime";
+
+/**
+ * A Technical card relabelled with the Production card id the shared
+ * TrendModal routes on ("prod" → Production trend, "downtime" → reason
+ * trend, others → the rawName series), or null when the card has no
+ * Production source to trend.
+ *
+ * @param {{ id: string }} card
+ * @returns {object | null}
+ */
+export function toTrendKpi(card) {
+  const source = TECHNICAL_KPI_SOURCES[card?.id];
+  if (!source) return null;
+  return {
+    ...card,
+    id: source.reason ? DOWNTIME_TREND_ID : source.productionId,
+  };
+}
+
 // Building's aggregate product: its rows already total every other TBM
 // product, so a machine's card reads it alone (as the section card does).
 const BUILDING_AGGREGATE_PRODUCT = "Green Tyre";
