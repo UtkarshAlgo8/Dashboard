@@ -87,6 +87,21 @@ the remainder.
 | Q-OVG-03    | What is the target / RAG rule for Overage Material? | Entity lifecycle | BanmoreTechnical.jsx (Stock `ovg` card), specs/17-overage-material.md | No target defined — the card shows no status colour and no target line. | LOW | OPEN | 2026-10-28 |            |
 | Q-OVG-04    | Which requirement ID (FRS/US) does the Overage Material card trace to? | Non-goals | specs/17-overage-material.md | None found — flagged. Spec proceeds on the Gold read note supplied 2026-10-28. | LOW | OPEN | 2026-10-28 |            |
 
+## BTP Safety follow-up (2026-11-10)
+
+- **Q-BTP-SAFETY-01 — OPEN (data team):** Live Gold has no November Safety rows; latest DAY/SHIFT data for all three names is 10-Jun-2026, with MONTH anchor 01-Jun-2026. Confirm source coverage and backfill if observations exist. See [data-team handoff](../../docs/btp-safety-data-team-handoff-2026-11-10.md).
+- **Q-BTP-SAFETY-02 — RESOLVED (dashboard):** User approved Safety-specific handling of upstream SQL NULL encoded as exactly `""`, preserving missing data as null and explicit zero as zero. Strict numeric, pagination and reconciliation validation remains in place. User requested removing the page-level red Safety error banner; unavailable/no-published-data card states remain. Upstream JSON-null preservation is a separate data-team follow-up.
+
+## BTP Stock Cost follow-up (2026-11-10)
+
+See [spec 19](../specs/19-btp-stock-cost.md).
+
+- **Q-BTP-STOCK-01 — RESOLVED:** User chose latest published DAY within the selected month/range for the card, explicitly labelled, with no sum across dates. DAY-only Stock Cost ignores the shift selection and says All shifts. Trends open in a modal; the category drill uses the existing right-hand panel.
+- **Q-BTP-STOCK-02 — DEFERRED:** Daily movement vs closing stock balance remains unconfirmed. Do not implement MTD or other sums across dates until clarified.
+- **Q-BTP-STOCK-03 — DEFERRED:** No budget/threshold is defined. Card and change percentage stay neutral; no RAG or inferred better/worse direction.
+- **Q-BTP-STOCK-04 — DEFERRED:** No item-level Gold block is published. Stop at category; revisit only when level-3 itemcode data is confirmed.
+- **Q-BTP-STOCK-05 — RESOLVED:** Live Gold includes BT and L beyond the guide's example units. User confirmed displaying every published nonempty UoM separately, preserving its raw label, never combining or converting units.
+
 ## BTP compliance follow-up (2026-11-05)
 
 See [spec 18](../specs/18-btp-compliance-kpis.md).

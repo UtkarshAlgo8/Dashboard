@@ -123,7 +123,9 @@ function BanmoreEngineering() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
         backgroundColor: "background.default",
       }}
     >
@@ -144,7 +146,16 @@ function BanmoreEngineering() {
         />
       </Box>
 
-      <Box ref={bodyRef} sx={{ px: { xs: 2, md: 3 }, py: 2 }}>
+      <Box
+        ref={bodyRef}
+        sx={{
+          px: { xs: 2, md: 3 },
+          py: 2,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {/* The gold feed runs behind the calendar, so the page is often NOT
             showing today. Say which period is on screen — without it a quiet
             day is indistinguishable from a broken dashboard. */}

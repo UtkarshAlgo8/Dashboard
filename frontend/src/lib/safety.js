@@ -74,6 +74,7 @@ export function safetyCard(result, { period, error, isLoading } = {}) {
     status: null,
     target: null,
     presentationTone: "neutral",
+    loadingPresentation: "skeleton",
     showProgress: false,
     showPeriodWhenEmpty: true,
     isLoading,

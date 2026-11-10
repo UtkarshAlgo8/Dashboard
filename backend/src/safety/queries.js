@@ -79,7 +79,9 @@ function number(row, key, nullable = true) {
     fail("Safety response row shape is invalid.");
   if (!Object.hasOwn(row, key)) fail(`Safety response is missing ${key}.`);
   const value = row[key];
-  if (value === null && nullable) return null;
+  // Athena's upstream transport encodes SQL NULL as exactly "". Preserve
+  // missing aggregates as null, never Number("") === 0. Whitespace stays invalid.
+  if ((value === null || value === "") && nullable) return null;
   if (
     (typeof value === "string" && value.trim() === "") ||
     value === null ||
@@ -170,7 +172,7 @@ export function safetyResult(rows, input) {
     }
     if (!Object.hasOwn(row, "position"))
       fail("Safety page position is missing.");
-    if (row.position === null) {
+    if (row.position === null || row.position === "") {
       if (rows.length !== 1 || expected !== 0)
         fail("Safety page is missing or truncated.");
       continue;
