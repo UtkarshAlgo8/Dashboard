@@ -285,6 +285,20 @@ function ParetoChart({
       tooltip: {
         shared: true,
         useHTML: true,
+        // HTML axis labels otherwise paint over the in-chart SVG tooltip.
+        // Render above the dialog with an opaque theme surface instead.
+        outside: true,
+        backgroundColor: theme.palette.background.paper,
+        borderColor: theme.palette.divider,
+        borderWidth: 1,
+        borderRadius: 6,
+        padding: 10,
+        style: {
+          color: strong,
+          fontSize: "12px",
+          lineHeight: "1.5",
+          zIndex: theme.zIndex.modal + 1,
+        },
         formatter: function () {
           const idx = this.points?.[0]?.point?.index ?? 0;
           const row = rows[idx];
