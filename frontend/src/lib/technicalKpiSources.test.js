@@ -6,6 +6,7 @@ import {
   toBuildingAttributedKpis,
   toDowntimeReasonKpis,
   toMachineProductionKpi,
+  toBuildingTrendKpi,
   toTrendKpi,
 } from "./technicalKpiSources.js";
 import { toKpiGrid } from "./kpi-transformer.js";
@@ -275,4 +276,15 @@ test("toTrendKpi maps Technical cards to the Production trend ids", () => {
 test("toTrendKpi returns null for a card with no Production source", () => {
   assert.equal(toTrendKpi({ id: "ovg" }), null);
   assert.equal(toTrendKpi(null), null);
+});
+
+test("toBuildingTrendKpi trends the Building card's Curing discipline series", () => {
+  assert.equal(toBuildingTrendKpi({ id: "bctscrap" }).rawName, "Scrap_s");
+  assert.equal(toBuildingTrendKpi({ id: "rwk" }).rawName, "Rework_s");
+  assert.equal(toBuildingTrendKpi({ id: "rwk", value: 9 }).value, 9);
+});
+
+test("toBuildingTrendKpi returns null for a card that is not Building-attributed", () => {
+  assert.equal(toBuildingTrendKpi({ id: "prod" }), null);
+  assert.equal(toBuildingTrendKpi(null), null);
 });

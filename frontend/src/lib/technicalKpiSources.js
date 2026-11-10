@@ -207,6 +207,30 @@ export function toTrendKpi(card) {
   };
 }
 
+/**
+ * Where a Building-attributed card's trend reads from: the Curing quality
+ * rows of the BUILDING discipline, the same rows the card is built from.
+ */
+export const BUILDING_TREND_SCOPE = {
+  section: "cur",
+  subSection: BUILDING_DISCIPLINE,
+  category: "q",
+};
+
+/**
+ * A Building Cured Tyre Scrap / Rework card prepared for the shared
+ * TrendModal: it trends the card's discipline series (Scrap_s / Rework_s),
+ * or null when the card is not Building-attributed.
+ *
+ * @param {{ id: string }} card
+ * @returns {object | null}
+ */
+export function toBuildingTrendKpi(card) {
+  const kind = BUILDING_ATTRIBUTED_KPIS[card?.id];
+  if (!kind) return null;
+  return { ...card, rawName: `${kind}_s` };
+}
+
 // Building's aggregate product: its rows already total every other TBM
 // product, so a machine's card reads it alone (as the section card does).
 const BUILDING_AGGREGATE_PRODUCT = "Green Tyre";

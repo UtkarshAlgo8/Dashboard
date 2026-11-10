@@ -45,11 +45,13 @@ import {
   BUILDING_ATTRIBUTED_CARD_KPIS,
   BUILDING_ATTRIBUTED_DRILL_KPIS,
   BUILDING_ATTRIBUTED_KPIS,
+  BUILDING_TREND_SCOPE,
   TECHNICAL_KPI_SOURCES,
   buildingAttributedRows,
   resolveTechnicalKpi,
   toBuildingAttributedKpis,
   toDowntimeReasonKpis,
+  toBuildingTrendKpi,
   toTrendKpi,
 } from "@/lib/technicalKpiSources.js";
 import TechnicalDrillPanel from "@/components/technical/TechnicalDrillPanel.jsx";
@@ -607,14 +609,27 @@ function BanmoreTechnical() {
 
   // "View Trend Analytics" opens the Production trend behind the card, in
   // the scope it was opened from; an area / tab switch closes it.
+  // Building's Cured Tyre Scrap / Rework trend their Curing BUILDING rows.
   const [openTrend, setOpenTrend] = useState(null);
-  const trendKpi =
-    openTrend?.scope === drillScope ? toTrendKpi(openTrend.kpi) : null;
-  const trendSource = trendKpi ? TECHNICAL_KPI_SOURCES[openTrend.kpi.id] : null;
+  const trendCard = openTrend?.scope === drillScope ? openTrend.kpi : null;
+  const isBuildingTrend =
+    Boolean(trendCard) && isBuildingAttributed(trendCard.id);
+  const trendKpi = isBuildingTrend
+    ? toBuildingTrendKpi(trendCard)
+    : toTrendKpi(trendCard);
+  const trendScope = isBuildingTrend
+    ? BUILDING_TREND_SCOPE
+    : {
+        section,
+        subSection,
+        category:
+          TECHNICAL_KPI_SOURCES[trendCard?.id]?.category === "q" ? "q" : "p",
+      };
   const handleTrendOpen = (kpi) => {
-    if (toTrendKpi(kpi) && !isBuildingAttributed(kpi.id)) {
-      setOpenTrend({ kpi, scope: drillScope });
-    }
+    const trendable = isBuildingAttributed(kpi.id)
+      ? toBuildingTrendKpi(kpi)
+      : toTrendKpi(kpi);
+    if (trendable) setOpenTrend({ kpi, scope: drillScope });
   };
 
   const handleCloseDrill = () => {
@@ -896,9 +911,9 @@ function BanmoreTechnical() {
               onClose={() => setOpenTrend(null)}
               plantId="banmore"
               kpi={trendKpi}
-              section={section}
-              category={trendSource?.category === "q" ? "q" : "p"}
-              subSection={subSection}
+              section={trendScope.section}
+              category={trendScope.category}
+              subSection={trendScope.subSection}
               tyreType="PCR"
               asOf={asOfData?.asOf ?? null}
             />
