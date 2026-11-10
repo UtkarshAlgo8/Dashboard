@@ -349,15 +349,55 @@ test("Banmore Mixing month Production sums every product when none is pinned", (
   assert.equal(card.unit, "Batch");
 });
 
-test("Banmore Stock all-product total keeps one unit (NOS before metres)", () => {
+test("Banmore Stock all-product total reads the unit covering most products", () => {
   const rows = [
     stockRow("Stock", "Production", "Tread", "Meter", 590476),
     stockRow("Stock", "Production", "Sidewall", "Meters", 1143101),
     stockRow("Stock", "Production", "Tread", "NOS", 481810),
   ];
   const card = cardOf(rows, banmoreMonth("Stock", "P"), "prod");
-  assert.equal(card.value, 481810);
-  assert.equal(card.unit, "NOS");
+  assert.equal(card.value, 1733577);
+  assert.equal(card.unit, "M");
+});
+
+// Oct 2026 Extruder: gold's section Production has Sidewall only; Tread
+// exists only at machine level (Production_m), which the drill sums.
+const machineRow = (product_type, machine, unit, actual_value) => ({
+  ...stockRow("Stock", "Production_m", product_type, unit, actual_value),
+  machine,
+});
+
+test("Stock card fills a product missing from section Production with its machine rows", () => {
+  const rows = [
+    stockRow("Stock", "Production", "Sidewall", "Meter", 1132010.55),
+    machineRow("Sidewall", "5601", "Meter", 700000),
+    machineRow("Sidewall", "5602", "Meter", 432010.55),
+    machineRow("Tread", "5601", "Meter", 623901.15),
+    machineRow("Tread", "5601", "NOS", 494697),
+  ];
+  const card = cardOf(rows, banmoreMonth("Stock", "P"), "prod");
+  assert.equal(card.value, 1755911.7);
+  assert.equal(card.unit, "M");
+});
+
+test("Stock card counts a machine row fetched twice (card + open drill) once", () => {
+  const tread = machineRow("Tread", "5601", "Meter", 623901.15);
+  const rows = [
+    stockRow("Stock", "Production", "Sidewall", "Meter", 1132010.55),
+    tread,
+    { ...tread },
+  ];
+  const card = cardOf(rows, banmoreMonth("Stock", "P"), "prod");
+  assert.equal(card.value, 1755911.7);
+});
+
+test("Stock card ignores machine rows for a product section Production has", () => {
+  const rows = [
+    stockRow("Stock", "Production", "Ply", "Meter", 1463499),
+    machineRow("Ply", "4501", "Meter", 41174208),
+  ];
+  const card = cardOf(rows, banmoreMonth("Stock", "P"), "prod");
+  assert.equal(card.value, 1463499);
 });
 
 test("Banmore Stock metre products in two spellings fold into one total", () => {

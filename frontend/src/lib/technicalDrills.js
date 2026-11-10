@@ -38,8 +38,29 @@ export function withNumericValues(rows) {
   });
 }
 
+// Columns that identify one gold row (the backend's de-duplication key plus
+// the value), so a copy of the same row is recognised.
+const ROW_IDENTITY = [
+  "date",
+  "granularity",
+  "kpi_name",
+  "section",
+  "sub_section",
+  "tyre_type",
+  "machine",
+  "product_type",
+  "itemcode",
+  "unit_of_measurement",
+  "status",
+  "remarks",
+  "actual_value",
+];
+
 /**
- * Rows of one kpi_name in one section that carry a numeric value.
+ * Rows of one kpi_name in one section that carry a numeric value, each row
+ * once. The backend already drops duplicate gold rows, so an exact copy here
+ * only means the same row arrived from two fetches (the card's and its
+ * drill's — Stock Production_m is in both) and must not be summed twice.
  *
  * @param {object[] | null} rows
  * @param {string} kpiName
@@ -48,12 +69,20 @@ export function withNumericValues(rows) {
  */
 export function rowsOf(rows, kpiName, sectionName) {
   if (!Array.isArray(rows)) return [];
-  return rows.filter(
-    (r) =>
-      r?.kpi_name === kpiName &&
-      r.section === sectionName &&
-      numericValue(r) != null,
-  );
+  const seen = new Set();
+  return rows.filter((r) => {
+    if (
+      r?.kpi_name !== kpiName ||
+      r.section !== sectionName ||
+      numericValue(r) == null
+    ) {
+      return false;
+    }
+    const key = ROW_IDENTITY.map((col) => String(r[col] ?? "")).join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** @returns {number} */

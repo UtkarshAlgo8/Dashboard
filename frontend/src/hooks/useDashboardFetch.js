@@ -24,6 +24,7 @@ import {
   landingKpiNames,
   readsCuringPcrSkuTotal,
   CURING_PCR_TOTAL_KPI,
+  STOCK_PRODUCTION_FALLBACK_KPI,
 } from "@/lib/kpi-transformer.js";
 import { buildDatePayload } from "@/lib/timeRange.js";
 import { DOWNTIME_REASONS } from "@/lib/downtime.js";
@@ -405,7 +406,13 @@ export function useDashboardFetch({ plantId = "banmore" } = {}) {
               ? [CURING_PCR_TOTAL_KPI]
               : []),
           ]
-        : null,
+        : // Stock with no product pinned (the Technical page) sums every
+          // product; gold's section Production misses some products in
+          // some months (Extruder Tread, Oct 2026), so the machine rows
+          // fill them in — see selectSeries.
+          state.section === "stk" && !state.productType
+          ? [STOCK_PRODUCTION_FALLBACK_KPI]
+          : null,
     // Fetch ONLY the KPIs this grid draws. The landing band otherwise returns
     // every top-level kpi_name in the (section, category) — 6 names in Mixing
     // Productivity against the 3 on screen — and toKpiGrid discards the

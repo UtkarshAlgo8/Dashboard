@@ -147,3 +147,23 @@ test("withNumericValues turns Athena strings into numbers, blanks into null", ()
   );
   assert.deepEqual(withNumericValues(null), []);
 });
+
+test("rowsOf counts a row that arrived from two fetches once", () => {
+  const row = {
+    kpi_name: "Production_m",
+    section: "Stock",
+    date: "2026-10-01",
+    granularity: "MONTH",
+    machine: "5601",
+    product_type: "Tread",
+    unit_of_measurement: "Meter",
+    actual_value: 623901.15,
+  };
+  const other = { ...row, machine: "5602", actual_value: 10 };
+  assert.deepEqual(
+    rowsOf([row, { ...row }, other], "Production_m", "Stock").map(
+      (r) => r.machine,
+    ),
+    ["5601", "5602"],
+  );
+});

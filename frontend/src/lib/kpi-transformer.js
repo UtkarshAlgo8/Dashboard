@@ -195,6 +195,15 @@ export function resolveProductionKpi(section, selectedProduct) {
  */
 export const CURING_PCR_TOTAL_KPI = "Production_sku";
 
+/**
+ * Machine-level Production, read by the unpinned Stock card (the Technical
+ * page) for a product that has no section `Production` row in a period.
+ * Gold's section rows miss products in some months — Extruder Tread has
+ * none for Oct 2026 while its Production_m rows total 623,901 M — which the
+ * card's drill (also Production_m) shows.
+ */
+export const STOCK_PRODUCTION_FALLBACK_KPI = "Production_m";
+
 /** True only for the Curing section on the PCR tyre line. */
 export function readsCuringPcrSkuTotal(section, tyreType, granularity = null) {
   return (
@@ -1262,16 +1271,19 @@ const ALL_PRODUCT_SUM_SECTIONS = new Map([
 ]);
 
 /**
- * Units an all-product total is read in, best first: counts before mass
- * before length. Rows with no unit only count when nothing else exists.
+ * Tie-break for the unit an all-product total is read in, once units are
+ * ranked by how many products they cover: counts before mass before
+ * length. Rows with no unit only count when nothing else exists.
  */
 const PREFERRED_UNITS = ["BATCH", "NOS", "KG", "MT", "M"];
 
 /**
  * The rows in the one unit an all-product total is shown in — values in
- * different units never add up (Extruder records Tread in NOS and M). The
- * kept rows share one spelling of that unit ("Meter" / "Meters" → the
- * first seen), so sumRowsPerPeriod folds each period into a single row.
+ * different units never add up. The unit covering the most products wins
+ * (Extruder: Sidewall + Tread in M, not Tread alone in NOS), then
+ * PREFERRED_UNITS. The kept rows share one spelling of that unit
+ * ("Meter" / "Meters" → the first seen), so sumRowsPerPeriod folds each
+ * period into a single row.
  *
  * @param {object[]} rows
  * @returns {object[]}
@@ -1282,14 +1294,55 @@ function inPreferredUnit(rows) {
     const i = PREFERRED_UNITS.indexOf(u);
     return i === -1 ? PREFERRED_UNITS.length : i;
   };
-  const [unit] = [
-    ...new Set(rows.map((r) => canonicalUnit(r.unit_of_measurement))),
-  ].sort((a, b) => rank(a) - rank(b) || String(a).localeCompare(String(b)));
+  const productsByUnit = new Map();
+  for (const r of rows) {
+    const u = canonicalUnit(r.unit_of_measurement);
+    if (!productsByUnit.has(u)) productsByUnit.set(u, new Set());
+    productsByUnit.get(u).add(canonicalizeProductType(r.product_type));
+  }
+  const coverage = (u) => (u == null ? 0 : productsByUnit.get(u).size);
+  const [unit] = [...productsByUnit.keys()].sort(
+    (a, b) =>
+      coverage(b) - coverage(a) ||
+      rank(a) - rank(b) ||
+      String(a).localeCompare(String(b)),
+  );
   const kept = rows.filter(
     (r) => canonicalUnit(r.unit_of_measurement) === unit,
   );
   const spelling = kept[0]?.unit_of_measurement;
   return kept.map((r) => ({ ...r, unit_of_measurement: spelling }));
+}
+
+/**
+ * Section Production rows plus, for each (period, product) with none, that
+ * product's machine rows relabelled as Production. Machine rows repeated by
+ * an open drill (the same rows fetched twice) are counted once.
+ *
+ * @param {object[]} productionRows section `Production` rows
+ * @param {object[]} machineRows `Production_m` rows
+ * @returns {object[]}
+ */
+function withMachineFallback(productionRows, machineRows) {
+  const periodProduct = (r) =>
+    `${isoDate(r.date)}|${normGran(r.granularity)}|${canonicalizeProductType(r.product_type)}`;
+  const covered = new Set(productionRows.map(periodProduct));
+  const seen = new Set();
+  const fallback = [];
+  for (const r of machineRows) {
+    if (covered.has(periodProduct(r))) continue;
+    const key = [
+      periodProduct(r),
+      r.machine ?? "",
+      r.itemcode ?? "",
+      r.unit_of_measurement ?? "",
+      r.actual_value,
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fallback.push({ ...r, kpi_name: "Production" });
+  }
+  return [...productionRows, ...fallback];
 }
 
 /** CTP quality counts summed per day across their level-1 rows. */
@@ -1788,7 +1841,14 @@ function selectSeries(
     !productType &&
     ALL_PRODUCT_SUM_SECTIONS.get(name)?.has(section)
   ) {
-    groupDesc = sumRowsPerPeriod(inPreferredUnit(groupDesc));
+    const rows =
+      name === "Production" && section === "Stock"
+        ? withMachineFallback(
+            groupDesc,
+            groups.get(STOCK_PRODUCTION_FALLBACK_KPI) ?? [],
+          )
+        : groupDesc;
+    groupDesc = sumRowsPerPeriod(inPreferredUnit(rows));
   }
 
   // CTP stores the quality counts as several level-1 rows per day — one per
@@ -1999,6 +2059,9 @@ export function toKpiGrid(
   // Production_product, so those rows must survive the allow-list filter.
   if (section === "TBM" || section === "Curing") {
     allowedNames.add("Production_product");
+  }
+  if (section === "Stock" && !productType) {
+    allowedNames.add(STOCK_PRODUCTION_FALLBACK_KPI);
   }
   if (
     readsCuringPcrSkuTotal(section, tyreType, granularity) ||
