@@ -19,6 +19,10 @@ export function DTable({
   renderCell,
   rowKey,
   compareCells,
+  sortable = true,
+  statusColors = true,
+  preserveText = false,
+  keyboardRows = false,
 }) {
   const [sc, setSc] = useState(null),
     [sd, setSd] = useState("desc"),
@@ -149,8 +153,8 @@ export function DTable({
                 return (
                   <th
                     key={i}
-                    onClick={() => onH(i)}
-                    title="Click to sort"
+                    onClick={sortable ? () => onH(i) : undefined}
+                    title={sortable ? "Click to sort" : undefined}
                     style={{
                       textAlign: "center",
                       padding: "8px 10px",
@@ -163,21 +167,23 @@ export function DTable({
                       borderRight:
                         i === cols.length - 1 ? "none" : "1px solid " + C.bd,
                       fontSize: 11,
-                      cursor: "pointer",
+                      cursor: sortable ? "pointer" : "default",
                       userSelect: "none",
                       whiteSpace: "nowrap",
                     }}
                   >
                     {c}
-                    <span
-                      style={{
-                        marginLeft: 4,
-                        fontSize: 9,
-                        opacity: a ? 1 : 0.3,
-                      }}
-                    >
-                      {a ? (sd === "asc" ? "▲" : "▼") : "⇅"}
-                    </span>
+                    {sortable && (
+                      <span
+                        style={{
+                          marginLeft: 4,
+                          fontSize: 9,
+                          opacity: a ? 1 : 0.3,
+                        }}
+                      >
+                        {a ? (sd === "asc" ? "▲" : "▼") : "⇅"}
+                      </span>
+                    )}
                   </th>
                 );
               })}
@@ -192,6 +198,18 @@ export function DTable({
                 <tr
                   key={rowKey ? rowKey(row) : ri}
                   onClick={clickable ? () => onRowClick(row) : undefined}
+                  tabIndex={clickable && keyboardRows ? 0 : undefined}
+                  onKeyDown={
+                    clickable && keyboardRows
+                      ? (event) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onRowClick(row);
+                          }
+                        }
+                      : undefined
+                  }
                   style={{
                     background: ri % 2 === 0 ? C.cd : C.rowAlt,
                     transition: "background .15s ease",
@@ -208,6 +226,7 @@ export function DTable({
                 >
                   {row.map((cell, ci) => {
                     const isS =
+                      statusColors &&
                       typeof cell === "string" &&
                       [
                         "OK",
@@ -255,6 +274,8 @@ export function DTable({
                               ? "none"
                               : "1px solid " + C.bd,
                           textAlign: "center",
+                          whiteSpace: preserveText ? "pre-wrap" : undefined,
+                          overflowWrap: preserveText ? "anywhere" : undefined,
                           color: stC || C.tx,
                           fontWeight: ci === 0 || stC ? 600 : 400,
                         }}

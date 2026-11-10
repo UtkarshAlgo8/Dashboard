@@ -5,7 +5,7 @@
  */
 import { Box } from "@mui/material";
 
-export function KpiSplitLayout({ open, cards, panel }) {
+export function KpiSplitLayout({ open, cards, panel, stackCards = false }) {
   return (
     <Box
       sx={{
@@ -24,15 +24,20 @@ export function KpiSplitLayout({ open, cards, panel }) {
         sx={{
           display: "grid",
           gap: 2,
-          width: open ? { xs: "100%", lg: "340px" } : "100%",
-          flex: open ? "0 0 340px" : "1 1 auto",
-          gridTemplateColumns: open
-            ? "1fr"
-            : {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                md: "repeat(4, minmax(0, 1fr))",
-              },
+          width: open || stackCards ? { xs: "100%", lg: "340px" } : "100%",
+          flex: open
+            ? stackCards
+              ? { xs: "1 1 auto", lg: "0 0 340px" }
+              : "0 0 340px"
+            : "1 1 auto",
+          gridTemplateColumns:
+            open || stackCards
+              ? "1fr"
+              : {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  md: "repeat(4, minmax(0, 1fr))",
+                },
           transition: "all .3s ease",
         }}
       >
