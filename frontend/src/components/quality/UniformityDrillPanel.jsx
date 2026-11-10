@@ -110,8 +110,6 @@ export default function UniformityDrillPanel({
           ? "—"
           : String(row.actual_value),
       row.grade ?? "—",
-      "—",
-      "—",
     ];
   });
   const renderCell = (cell, index, row) => {
@@ -138,7 +136,7 @@ export default function UniformityDrillPanel({
   };
   const columns =
     level === "barcodes"
-      ? ["Barcode", "Test time", "Shift", "Value", "Grade", "LSL", "USL"]
+      ? ["Barcode", "Test time", "Shift", "Value", "Grade"]
       : level === "parameter"
         ? [
             "Parameter",
