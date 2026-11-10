@@ -484,6 +484,25 @@ try {
     .nth(1)
     .click();
   await waitFor("FAILED-0");
+  assert.deepEqual(
+    await page
+      .locator("thead th")
+      .allTextContents()
+      .then((headers) => headers.map((h) => h.replace(/[⇅▲▼]/g, "").trim())),
+    ["Barcode", "Test time", "Shift", "Value", "Grade"],
+  );
+  assert.equal(await page.locator("tbody tr").first().locator("td").count(), 5);
+  await page.screenshot({ path: "/tmp/btp-uniformity-barcode-columns.png" });
+  const download = page.waitForEvent("download");
+  await page.getByTitle("Download", { exact: true }).last().click();
+  const csvOption = page.getByRole("button", { name: /CSV \(Table\)/ });
+  if (await csvOption.isVisible()) await csvOption.click();
+  const csvStream = await (await download).createReadStream();
+  let csv = "";
+  for await (const chunk of csvStream) csv += chunk.toString();
+  assert.equal(csv.split("\n")[0].split(",").length, 5);
+  assert.doesNotMatch(csv.split("\n")[0], /LSL|USL/);
+  assert.ok(csv.includes("FAILED-0"));
   assert.equal(requests.filter((r) => r.path.endsWith("/barcodes")).length, 1);
   assert.equal(requests.at(-1).params.parameter, "RFV CW");
   // expected is UI-only (parity warning): 201 Gold vs 201 Silver = no warning.
@@ -503,9 +522,14 @@ try {
     await page.locator("tbody tr").first().locator("td").nth(3).innerText(),
     "",
   );
+  assert.equal(await page.locator("tbody tr").first().locator("td").count(), 5);
   assert.equal(
-    await page.locator("tbody tr").first().locator("td").nth(5).innerText(),
-    "—",
+    await page.getByRole("columnheader", { name: /^LSL/ }).count(),
+    0,
+  );
+  assert.equal(
+    await page.getByRole("columnheader", { name: /^USL/ }).count(),
+    0,
   );
   await drillCard("ZF Balancing Yield");
   await toParameter();

@@ -1,10 +1,11 @@
 /**
  * SQL builders for the Quality Product tab's live cards.
  *
- * Uniformity uses BANMORE / Quality / Uniformity Testing; Paint Weight uses
- * BANMORE / Production / Final Finish / Process Audit. Queries use the shared
- * source resolver so recent DAY/SHIFT requests use gold_daily while historic
- * reads retain gold.gold.
+ * Uniformity uses BANMORE / Quality / Uniformity Testing except the published
+ * Overall_Production_Yield, which uses BTP in the same Quality category.
+ * Paint Weight uses BANMORE / Production / Final Finish / Process Audit.
+ * Queries use the shared source resolver: recent DAY/SHIFT reads use gold_daily
+ * while historic reads retain gold.gold.
  */
 import {
   escapeLiteral,
@@ -62,7 +63,7 @@ const SELECT_COLS =
   "date, machine, kpi_name, actual_value, unit_of_measurement, " +
   "threshold_value, status, drill_down_attribute";
 
-/** The Product gold rows consistently use the BANMORE plant label. */
+/** The standard Product Uniformity scope; the Overall yield exception is scoped separately. */
 export function productScopePredicate() {
   return (
     `${departmentPredicate()} ` +
@@ -78,9 +79,18 @@ export function isAllowedProductDrillKpi(kpiName) {
 // Paint Weight is published under Production, even though its card belongs
 // on Quality's Product screen. Keep each KPI family in its factual scope.
 function scopedKpiPredicate(kpiNames) {
-  const uniformity = kpiNames.filter((name) => !PAINT_WEIGHT_KPIS.has(name));
+  const overallYield = "Overall_Production_Yield";
+  const uniformity = kpiNames.filter(
+    (name) => name !== overallYield && !PAINT_WEIGHT_KPIS.has(name),
+  );
   const paint = kpiNames.filter((name) => PAINT_WEIGHT_KPIS.has(name));
   const scopes = [];
+  if (kpiNames.includes(overallYield)) {
+    scopes.push(
+      `(${departmentPredicate()} AND category = ${escapeLiteral(PRODUCT_CATEGORY)} ` +
+        `AND UPPER(plant) = 'BTP' AND kpi_name = ${escapeLiteral(overallYield)})`,
+    );
+  }
   if (uniformity.length) {
     scopes.push(
       `(${productScopePredicate()} AND kpi_name IN (${uniformity.map(escapeLiteral).join(", ")}))`,
@@ -165,8 +175,7 @@ export function uniformityTrendQuery({
   return (
     "SELECT date, granularity, kpi_name, machine, actual_value, unit_of_measurement " +
     `FROM ${qualitySourceForRange(from, to, granularities)} ` +
-    `WHERE ${productScopePredicate()} ` +
-    `AND kpi_name IN (${kpiNames.map(escapeLiteral).join(", ")}) ` +
+    `WHERE ${scopedKpiPredicate(kpiNames)} ` +
     `AND ${machinePredicate} ` +
     `AND granularity IN (${granularities.map(escapeLiteral).join(", ")}) ` +
     `AND ${DATE_YYYYMMDD} >= ${escapeLiteral(isoToYyyymmdd(from))} ` +
