@@ -9,6 +9,7 @@
 import {
   Box,
   IconButton,
+  Skeleton,
   Stack,
   Tooltip,
   Typography,
@@ -68,10 +69,16 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         ? 100
         : 0;
   const value = hasValue
-    ? `${formatIndianNumber(numVal)}${isPct ? "%" : ""}`
+    ? `${kpi.valuePrefix ?? ""}${formatIndianNumber(numVal)}${isPct ? "%" : ""}`
     : "–";
-  const canTrend = !kpi.na && kpi.trendApi && typeof onTrend === "function";
-  const canDrill = Boolean(kpi.drill);
+  const skeletonLoading =
+    kpi.isLoading && kpi.loadingPresentation === "skeleton";
+  const canTrend =
+    !skeletonLoading &&
+    !kpi.na &&
+    kpi.trendApi &&
+    typeof onTrend === "function";
+  const canDrill = !skeletonLoading && Boolean(kpi.drill);
   const Icon =
     QUALITY_KPI_ICON[kpi.id] ?? (isPct ? TaskAltOutlinedIcon : GridViewIcon);
   const caption =
@@ -87,11 +94,12 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         : null;
   const trendPct = hasValue ? kpi.trendPct : null;
   const hasTrend = Number.isFinite(trendPct);
-  const trendColor = !hasTrend
-    ? theme.palette.text.secondary
-    : trendPct === 0 || trendPct > 0 !== Boolean(kpi.lowerIsBetter)
-      ? theme.custom.status.green
-      : theme.custom.status.red;
+  const trendColor =
+    !hasTrend || kpi.neutralTrend
+      ? theme.palette.text.secondary
+      : trendPct === 0 || trendPct > 0 !== Boolean(kpi.lowerIsBetter)
+        ? theme.custom.status.green
+        : theme.custom.status.red;
   const iconButtonSx = {
     p: 0.25,
     color: "text.secondary",
@@ -101,6 +109,8 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
   return (
     <Box
       onClick={canDrill ? onToggle : undefined}
+      aria-busy={kpi.isLoading || undefined}
+      aria-label={skeletonLoading ? `Loading ${kpi.n}` : undefined}
       role={canDrill ? "button" : undefined}
       tabIndex={canDrill ? 0 : undefined}
       aria-expanded={canDrill ? isOpen : undefined}
@@ -210,7 +220,15 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
                 whiteSpace: "nowrap",
               }}
             >
-              {kpi.isLoading ? (
+              {skeletonLoading ? (
+                <Skeleton
+                  animation="wave"
+                  variant="rounded"
+                  width={132}
+                  height={30}
+                  sx={{ borderRadius: 1 }}
+                />
+              ) : kpi.isLoading ? (
                 <Box
                   sx={{
                     "& .jk-enhanced-loader": { p: 0, alignItems: "flex-start" },
@@ -242,21 +260,30 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
               </Typography>
             )}
           </Stack>
-          {caption && (
-            <Typography
-              title={caption}
-              sx={{
-                mt: 0.25,
-                fontSize: 11,
-                fontWeight: 500,
-                color: "text.secondary",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {caption}
-            </Typography>
+          {skeletonLoading ? (
+            <Skeleton
+              animation="wave"
+              width="65%"
+              height={16}
+              sx={{ mt: 0.25 }}
+            />
+          ) : (
+            caption && (
+              <Typography
+                title={caption}
+                sx={{
+                  mt: 0.25,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: "text.secondary",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {caption}
+              </Typography>
+            )
           )}
           {hasValue && kpi.subLine?.text && (
             <Typography
@@ -335,7 +362,9 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         spacing={1}
         sx={{ mt: 0.5, minHeight: 22 }}
       >
-        {hasTrend ? (
+        {skeletonLoading ? (
+          <Skeleton animation="wave" width={90} height={16} />
+        ) : hasTrend ? (
           <Stack
             direction="row"
             alignItems="center"

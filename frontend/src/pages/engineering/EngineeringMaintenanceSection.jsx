@@ -7,6 +7,14 @@ import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
 import ComplianceDrillPanel from "@/components/compliance/ComplianceDrillPanel.jsx";
 import SafetyDrillPanel from "@/components/safety/SafetyDrillPanel.jsx";
 import useSafetyQuery from "@/hooks/useSafetyQuery.js";
+import useStockCostQuery from "@/hooks/useStockCostQuery.js";
+import StockCostDrillPanel from "@/components/stock-cost/StockCostDrillPanel.jsx";
+import StockCostTrendModal from "@/components/stock-cost/StockCostTrendModal.jsx";
+import {
+  stockCostCard,
+  stockCostRange,
+  STOCK_COST_PERIOD_HELP,
+} from "@/lib/stockCost.js";
 import { safetyCard, safetyPeriod, SAFETY_PERIOD_HELP } from "@/lib/safety.js";
 import {
   complianceCard,
@@ -20,6 +28,9 @@ export default function EngineeringMaintenanceSection({
   shift,
 }) {
   const [open, setOpen] = useState(null);
+  const [stockTrend, setStockTrend] = useState(null);
+  const stockRange = stockCostRange(selectedPeriod);
+  const stock = useStockCostQuery(stockRange);
   const period = storedCompliancePeriod({ ...selectedPeriod, shift });
   const query = usePolledQuery(
     () => getCompliance({ ids: ["pm", "daily"], ...period }),
@@ -38,7 +49,14 @@ export default function EngineeringMaintenanceSection({
   const safety = useSafetyQuery(
     safetyScope ? { ...safetyScope, level: "overall" } : null,
   );
-  const drillOpen = Boolean(open && (open === "safety" ? safetyScope : period));
+  const drillOpen = Boolean(
+    open &&
+    (open === "stock-cost"
+      ? stockRange
+      : open === "safety"
+        ? safetyScope
+        : period),
+  );
 
   return (
     <Stack spacing={2}>
@@ -52,15 +70,28 @@ export default function EngineeringMaintenanceSection({
         </Alert>
       )}
       {!safetyScope && <Alert severity="info">{SAFETY_PERIOD_HELP}</Alert>}
-      {safety.error && (
+      {!stockRange && <Alert severity="info">{STOCK_COST_PERIOD_HELP}</Alert>}
+      {stock.error && (
         <Alert severity="error">
-          Safety unavailable: {safety.error.message}
+          Stock Cost unavailable: {stock.error.message}
         </Alert>
       )}
       <KpiSplitLayout
         open={drillOpen}
-        stackCards
         cards={[
+          <QKpiCard
+            key="stock-cost"
+            kpi={stockCostCard(stock.data, {
+              range: stockRange,
+              error: stock.error,
+              isLoading: stock.isLoading,
+            })}
+            isOpen={drillOpen && open === "stock-cost"}
+            onToggle={() =>
+              setOpen(open === "stock-cost" ? null : "stock-cost")
+            }
+            onTrend={() => setStockTrend({ category: "" })}
+          />,
           ...["pm", "daily"].map((id) => (
             <QKpiCard
               key={id}
@@ -86,7 +117,13 @@ export default function EngineeringMaintenanceSection({
         ]}
         panel={
           drillOpen &&
-          (open === "safety" ? (
+          (open === "stock-cost" ? (
+            <StockCostDrillPanel
+              query={stock}
+              onClose={() => setOpen(null)}
+              onTrend={(category) => setStockTrend({ category })}
+            />
+          ) : open === "safety" ? (
             <SafetyDrillPanel
               key={JSON.stringify(safetyScope)}
               period={safetyScope}
@@ -102,6 +139,14 @@ export default function EngineeringMaintenanceSection({
           ))
         }
       />
+      {stockTrend && stockRange && (
+        <StockCostTrendModal
+          key={`${stockRange.from}|${stockRange.to}|${stockTrend.category}`}
+          range={stockRange}
+          initialCategory={stockTrend.category}
+          onClose={() => setStockTrend(null)}
+        />
+      )}
     </Stack>
   );
 }

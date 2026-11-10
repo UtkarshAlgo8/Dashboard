@@ -38,6 +38,7 @@ import {
 import { router as engineeringReliabilityRouter } from "./engineering/routes/reliability.routes.js";
 import { router as complianceRouter } from "./compliance/routes.js";
 import { router as safetyRouter } from "./safety/routes.js";
+import { router as stockCostRouter } from "./stock-cost/routes.js";
 
 // Auth slice — see backend/src/middlewares/auth.middleware.js
 import authRouter from "./routes/auth.js";
@@ -143,6 +144,7 @@ app.use("/api/v1/engineering/reliability", gate, engineeringReliabilityRouter);
 // BTP compliance is selected by exact KPI names, independent of department/category.
 app.use("/api/v1/compliance", gate, complianceRouter);
 app.use("/api/v1/engineering/safety", gate, safetyRouter);
+app.use("/api/v1/engineering/stock-cost", gate, stockCostRouter);
 
 app.use(notFound);
 app.use(errorHandler);

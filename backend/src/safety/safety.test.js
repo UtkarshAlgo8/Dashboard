@@ -307,6 +307,47 @@ test("empty SUM is null; wrong/missing/truncated/ambiguous/parity/quality source
   }
 });
 
+test("upstream empty-string SQL NULLs preserve empty, published zero and valid paged scopes", () => {
+  const transport = (rows) =>
+    rows.map((row) =>
+      Object.fromEntries(
+        Object.entries(row).map(([key, value]) => [
+          key,
+          value === null ? "" : value,
+        ]),
+      ),
+    );
+  for (const level of ["overall", "types", "reports"]) {
+    const p = input({ level, ...(level === "reports" ? { type: TYPE } : {}) });
+    for (const source of [[], scopeRows(), scopeRows({}, [0, 0])]) {
+      const rows = execute(safetyQuery(p), source);
+      const result = safetyResult(transport(rows), p);
+      assert.deepEqual(result, safetyResult(rows, p));
+      if (source.length === 0) {
+        assert.equal(result.value, null);
+        assert.equal(result.page.total, 0);
+        assert.deepEqual(result.rows, []);
+      }
+    }
+  }
+  const p = input({ level: "reports", type: TYPE });
+  const rows = transport(execute(safetyQuery(p)));
+  const missingPosition = structuredClone(rows);
+  missingPosition[0].position = "";
+  assert.throws(() => safetyResult(missingPosition, p), /missing|truncated/);
+  const missingQuality = structuredClone(rows);
+  for (const row of missingQuality) row.invalid_rows = "";
+  assert.throws(
+    () => safetyResult(missingQuality, p),
+    /quality metadata is missing/,
+  );
+  for (const value of ["  ", "NaN", "-1", "1.5"]) {
+    const invalid = structuredClone(rows);
+    invalid[0].overall_total = value;
+    assert.throws(() => safetyResult(invalid, p), /Invalid Safety/);
+  }
+});
+
 test("published zero with no report rows preserves empty SUM null and honest no-reports metadata", () => {
   const rows = scopeRows({}, [0, 0]);
   const p = input({ level: "reports", type: TYPE });

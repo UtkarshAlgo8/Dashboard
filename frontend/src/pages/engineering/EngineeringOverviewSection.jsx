@@ -5,6 +5,7 @@
  * (Breakdown, MTBF, MTTR, Zero Breakdown — NOT Top Machine Breakdowns).
  */
 import { useEffect, useState } from "react";
+import { Box } from "@mui/material";
 import { getEngineeringLossTree } from "@/api/engineering.js";
 import { getReliabilitySummary } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
@@ -55,7 +56,18 @@ function EngineeringOverviewSection({ period }) {
   }, [period.kind, date, granularity, from, to]);
 
   if (lossLoading || summaryLoading) {
-    return <JKLoader message="Loading Engineering overview" />;
+    return (
+      <Box
+        sx={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <JKLoader message="Loading Engineering overview" />
+      </Box>
+    );
   }
 
   return (
