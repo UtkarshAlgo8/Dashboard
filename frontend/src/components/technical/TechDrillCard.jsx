@@ -35,6 +35,8 @@ function TechDrillCard({
   downloadFilename,
   isLoading = false,
   onClose,
+  onRowClick,
+  emptyMessage,
 }) {
   const theme = useTheme();
   return (
@@ -134,6 +136,8 @@ function TechDrillCard({
             rows={rows}
             downloadFilename={downloadFilename}
             legend={false}
+            onRowClick={onRowClick}
+            emptyMessage={emptyMessage}
           />
 
           {footnote && (

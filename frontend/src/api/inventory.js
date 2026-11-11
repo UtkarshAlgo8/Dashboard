@@ -65,16 +65,50 @@ export function getCtpInventoryMaster({
   return client.get(`/plants/${plantId}/inventory/master${suffix}`);
 }
 
-/**
- * Fetch the Overage Material snapshot (specs/17-overage-material.md):
- * section / sub-section / component totals and per-SKU rows, per unit.
- * Reads every production date, so it takes no date or shift filter.
- * Mock mode has no overage fixture and returns empty lists.
- *
- * @param {object} params
- * @param {string} params.plantId
- * @returns {Promise<{ totals: Array<object>, skus: Array<object> }>}
- */
+/** Live Silver overage: summary only at open; item/barcode pages are lazy. */
+function liveOverageRequest(
+  kind,
+  {
+    plantId = "banmore",
+    section,
+    productType,
+    itemCode,
+    unit,
+    limit = 100,
+    offset = 0,
+    refresh = false,
+  },
+) {
+  if (USE_MOCK) {
+    return Promise.reject(
+      new Error(
+        "Live Silver overage requires API mode (VITE_USE_MOCK_DATA=false).",
+      ),
+    );
+  }
+  const params = new URLSearchParams();
+  if (section !== undefined) params.set("section", section);
+  if (productType !== undefined) params.set("product_type", productType);
+  if (itemCode !== undefined) params.set("item_code", itemCode);
+  if (unit !== undefined && unit !== null) params.set("unit", unit);
+  if (kind !== "summary") {
+    params.set("limit", limit);
+    params.set("offset", offset);
+  }
+  if (refresh) params.set("refresh", "1");
+  return client.get(
+    `/plants/${encodeURIComponent(plantId)}/inventory/overage/${kind}?${params}`,
+  );
+}
+
+export const getLiveOverageSummary = (params) =>
+  liveOverageRequest("summary", params);
+export const getLiveOverageItems = (params) =>
+  liveOverageRequest("items", params);
+export const getLiveOverageBarcodes = (params) =>
+  liveOverageRequest("barcodes", params);
+
+/** Legacy Gold snapshot contract. Technical now uses the live endpoints above. */
 export function getOverage({ plantId }) {
   if (USE_MOCK) {
     return mockDelay({ totals: [], skus: [] });

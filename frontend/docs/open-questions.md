@@ -182,6 +182,33 @@ audit trail.
   - Frontend env flipped: `VITE_USE_MOCK_DATA=false`,
     `VITE_API_BASE_URL=http://localhost:3001/api/v1`.
 
+### 2026-11-11 — Live Overage implementation decisions
+
+- **RESOLVED:** retain the existing Technical → Stock area-based layout; use
+  inline Athena SQL and lazy item/barcode drill-downs, not seven new cards/pages.
+- **RESOLVED (performance):** batch all six compact summaries into one query and
+  shared five-minute cache. Area switches select existing aggregated display rows;
+  they do not trigger new summary queries. Item/barcode details remain lazy.
+- **RESOLVED:** BTP plant scope verified through Silver queries. Source calculations
+  remain in Athena; the application only normalizes and displays result rows.
+- **RESOLVED:** upstream does not expose bound parameters. User approved strict
+  allowlists and centralized Athena literal encoding for all request values.
+- **RESOLVED:** repeated production barcodes use the latest-ingested record,
+  with event time/stable ID tie-breakers, before quality and stock filters.
+- **RESOLVED (temporary override):** user confirmed `JT444` is Final Compound.
+  Silver currently contains both Master and Final categories, including current
+  item records. Override this item until the source fix is verified; fail future
+  unresolved classification conflicts rather than double-counting barcodes.
+- **DEFERRED:** Green Tyre. The two required master tables are now readable, but
+  `silver.fct_curingncm` is still absent. Building/Curing remain unchanged.
+- **OPEN / source-team follow-up:** cold queries take about 20–25 seconds despite
+  compact results (all-six summary batch: about 5 KB). Inspect Athena scan/plan metrics and Delta data layout;
+  a normal view does not precompute the calculation. See spec 17 for measurements.
+- **OPEN / inherited guide caveat:** Three Roll's supplied SQL additionally checks
+  the Inner Liner BOM category even though the prose describes machine-fixed
+  classification. Items without that category remain excluded, as in the guide;
+  confirm before changing that rule.
+
 ### Pending (broader BRD walk)
 
 The 122-row intake table at
