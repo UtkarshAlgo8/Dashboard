@@ -1124,6 +1124,7 @@ function KpiGrid({
             }
           : `repeat(auto-fit, minmax(min(${minWidth}px, 100%), 1fr))`,
         gap: dashboardLayout ? 2 : 1,
+        alignItems: dashboardLayout ? "start" : undefined,
       }}
     >
       {kpis.map(({ definition, live, unavailableReason, cardLoading }) =>

@@ -80,12 +80,16 @@ item/barcode routes and optional for the shared all-area summary.
 
 - Technical Stock/Building/Curing cards use the Engineering-style responsive grid:
   four columns on desktop, three on medium screens, two on tablets, one on mobile,
-  with 16px gutters. Other dashboards and specialized Technical grids are unchanged.
-  Quantity/unit pairs stay together; snapshot time sits in the card footer and the
-  refresh action sits beside the section heading.
-- Cards show all unit totals and product-type lines, always with two decimals
-  where units exist. Preserve KG, M, NOS and `Not set`; never convert KG to MT,
-  hide secondary units or sum different units. Empty quantities show `0`.
+  with 16px gutters. Cards are top-aligned at their natural height, so the Overage
+  breakdown does not stretch neighboring KPIs. Other dashboards and specialized
+  Technical grids are unchanged. Quantity/unit pairs stay together; snapshot time
+  sits in the card footer and the refresh action sits beside the section heading.
+- Cards show all unit totals and product-type lines using Indian compact suffixes
+  (`k`, `L`, `Cr`) with two decimals, e.g. `1.27Cr KG` or `65.23L KG`. Hover or
+  keyboard focus on any quantity reveals the full exact value and original unit.
+  Drill-downs and exports retain unabridged quantities. Preserve KG, M, NOS and
+  `Not set`; never convert KG to MT, hide secondary units or sum different units.
+  Empty quantities show `0`. Product names and values use a shared baseline-aligned grid.
 - Open card → lazy item page; click an item row → lazy barcode page. No item or
   barcode requests happen on initial card load. Product filters execute in SQL.
 - Show assumed quantity, barcode count, machines, shelf life, oldest production
