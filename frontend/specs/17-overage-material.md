@@ -84,6 +84,11 @@ item/barcode routes and optional for the shared all-area summary.
   breakdown does not stretch neighboring KPIs. Other dashboards and specialized
   Technical grids are unchanged. Quantity/unit pairs stay together; snapshot time
   sits in the card footer and the refresh action sits beside the section heading.
+- Technical KPI drills follow Production's split layout: on desktop (`lg+`),
+  all KPI cards stack in a 340px left rail and the selected drill fills the right.
+  Closing the drill restores the normal grid; below `lg` the rail and panel stack.
+  Overage item/barcode navigation remains inside the right panel; refresh/back
+  actions live in its header. Specialized dashboard sections remain unchanged.
 - Cards show all unit totals and product-type lines using Indian compact suffixes
   (`k`, `L`, `Cr`) with two decimals, e.g. `1.27Cr KG` or `65.23L KG`. Hover or
   keyboard focus on any quantity reveals the full exact value and original unit.

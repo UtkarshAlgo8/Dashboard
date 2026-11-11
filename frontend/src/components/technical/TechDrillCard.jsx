@@ -21,6 +21,7 @@ import DrillSkeleton from "@/components/drills/shared/DrillSkeleton.jsx";
  * @param {string} [props.footnote]
  * @param {string} [props.downloadFilename]
  * @param {boolean} [props.isLoading]
+ * @param {import("react").ReactNode} [props.actions] Header navigation/refresh controls
  * @param {() => void} props.onClose
  */
 function TechDrillCard({
@@ -37,6 +38,7 @@ function TechDrillCard({
   onClose,
   onRowClick,
   emptyMessage,
+  actions,
 }) {
   const theme = useTheme();
   return (
@@ -58,12 +60,32 @@ function TechDrillCard({
         alignItems="center"
         justifyContent="space-between"
         spacing={1}
+        useFlexGap
+        flexWrap="wrap"
         sx={{ mb: 0.5 }}
       >
-        <Typography sx={{ fontSize: 16, fontWeight: 750, color: accent }}>
+        <Typography
+          sx={{
+            fontSize: 16,
+            fontWeight: 750,
+            color: accent,
+            minWidth: 0,
+            overflowWrap: "anywhere",
+            flex: "1 1 240px",
+          }}
+        >
           {title}
         </Typography>
-        <DrillCloseButton onClose={onClose} />
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1}
+          useFlexGap
+          flexWrap="wrap"
+        >
+          {actions}
+          <DrillCloseButton onClose={onClose} />
+        </Stack>
       </Stack>
       <Breadcrumbs
         separator="›"

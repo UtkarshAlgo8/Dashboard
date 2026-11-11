@@ -27,6 +27,7 @@ import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import KpiCard from "@/components/production/KpiCard.jsx";
+import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
 import { getAsOf, getPlant } from "@/api/plants.js";
 import { getLiveRunningSkus } from "@/api/technical.js";
 import LiveRunningSkusDrill from "@/components/technical/LiveRunningSkusDrill.jsx";
@@ -720,6 +721,7 @@ function BanmoreTechnical() {
         date={uniformityDate}
         shift={uniformityShift}
         granularity={uniformityGranularity}
+        embedded
         breadcrumb={[areaLabel, "GT Weight Variation"]}
         onClose={handleCloseDrill}
       />
@@ -747,7 +749,7 @@ function BanmoreTechnical() {
         const wholeWindow =
           drillState.granularity === "MONTH" || drillState.mode === "aggregate";
         return (
-          <Box sx={{ mt: 2 }}>
+          <Box>
             <TechnicalDrillPanel
               key={`${drillScope}|${openDrillKpiId}`}
               kpiId={openDrillKpiId}
@@ -935,11 +937,11 @@ function BanmoreTechnical() {
               }
               error={isLiveTab ? error : null}
               openDrillKpiId={openDrillKpiId}
+              drillPanel={drillPanel}
               onDrillKpi={handleDrillKpi}
               onTrendOpen={handleTrendOpen}
               onCloseDrill={handleCloseDrill}
             />
-            {drillPanel}
             <TrendModal
               open={Boolean(trendKpi)}
               onClose={() => setOpenTrend(null)}
@@ -1038,6 +1040,7 @@ function TechnicalKpiSection({
   overageError,
   error,
   openDrillKpiId,
+  drillPanel,
   onDrillKpi,
   onTrendOpen,
   onCloseDrill,
@@ -1084,15 +1087,23 @@ function TechnicalKpiSection({
           Period values unavailable: {error.message}
         </Typography>
       )}
-      <KpiGrid
-        kpis={kpis}
-        dashboardLayout={dashboardLayout}
-        isLoading={isLoading}
-        isLiveLoading={isLiveLoading}
-        openDrillKpiId={openDrillKpiId}
-        onDrillKpi={onDrillKpi}
-        onTrendOpen={onTrendOpen}
-        onCloseDrill={onCloseDrill}
+      <KpiSplitLayout
+        open={Boolean(drillPanel)}
+        stackCards={Boolean(drillPanel)}
+        cards={
+          <KpiGrid
+            kpis={kpis}
+            dashboardLayout={dashboardLayout}
+            isLoading={isLoading}
+            isLiveLoading={isLiveLoading}
+            isDrilldown={Boolean(drillPanel)}
+            openDrillKpiId={openDrillKpiId}
+            onDrillKpi={onDrillKpi}
+            onTrendOpen={onTrendOpen}
+            onCloseDrill={onCloseDrill}
+          />
+        }
+        panel={drillPanel}
       />
     </Box>
   );
@@ -1104,6 +1115,7 @@ function KpiGrid({
   dashboardLayout = false,
   isLoading = false,
   isLiveLoading = false,
+  isDrilldown = false,
   openDrillKpiId = null,
   onDrillKpi,
   onTrendOpen,
@@ -1115,14 +1127,18 @@ function KpiGrid({
       aria-label={dashboardLayout ? "Technical KPI cards" : undefined}
       sx={{
         display: "grid",
-        gridTemplateColumns: dashboardLayout
-          ? {
-              xs: "minmax(0, 1fr)",
-              sm: "repeat(2, minmax(0, 1fr))",
-              md: "repeat(3, minmax(0, 1fr))",
-              lg: "repeat(4, minmax(0, 1fr))",
-            }
-          : `repeat(auto-fit, minmax(min(${minWidth}px, 100%), 1fr))`,
+        gridColumn: "1 / -1",
+        minWidth: 0,
+        gridTemplateColumns: isDrilldown
+          ? "minmax(0, 1fr)"
+          : dashboardLayout
+            ? {
+                xs: "minmax(0, 1fr)",
+                sm: "repeat(2, minmax(0, 1fr))",
+                md: "repeat(3, minmax(0, 1fr))",
+                lg: "repeat(4, minmax(0, 1fr))",
+              }
+            : `repeat(auto-fit, minmax(min(${minWidth}px, 100%), 1fr))`,
         gap: dashboardLayout ? 2 : 1,
         alignItems: dashboardLayout ? "start" : undefined,
       }}
@@ -1141,6 +1157,7 @@ function KpiGrid({
             key={definition.id}
             kpi={onDrillKpi ? live : { ...live, drillable: false }}
             isDrilling={openDrillKpiId === definition.id}
+            isDrilldown={isDrilldown}
             alignMetrics={dashboardLayout}
             onClick={onDrillKpi}
             onTrendOpen={onTrendOpen}

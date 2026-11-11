@@ -173,23 +173,25 @@ function OverageDrill({
   };
 
   return (
-    <Box sx={{ mt: 2 }}>
-      <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-        {selected && (
-          <Button size="small" onClick={() => dispatch({ type: "back" })}>
-            Back to item codes
-          </Button>
-        )}
-        <Button size="small" disabled={query.isLoading} onClick={refresh}>
-          Refresh overage
-        </Button>
-      </Stack>
+    <Box sx={{ minWidth: 0 }}>
       {query.error && (
         <Alert severity="error" sx={{ mb: 1 }}>
           {query.error.message}
         </Alert>
       )}
       <TechDrillCard
+        actions={
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            {selected && (
+              <Button size="small" onClick={() => dispatch({ type: "back" })}>
+                Back to item codes
+              </Button>
+            )}
+            <Button size="small" disabled={query.isLoading} onClick={refresh}>
+              Refresh overage
+            </Button>
+          </Stack>
+        }
         title={selected ? `${title} · ${selected.item_code}` : title}
         accent={theme.custom.brand.amber}
         breadcrumb={
