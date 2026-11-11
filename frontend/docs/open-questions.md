@@ -92,6 +92,14 @@ the remainder.
 - **Q-BTP-SAFETY-01 — OPEN (data team):** Live Gold has no November Safety rows; latest DAY/SHIFT data for all three names is 10-Jun-2026, with MONTH anchor 01-Jun-2026. Confirm source coverage and backfill if observations exist. See [data-team handoff](../../docs/btp-safety-data-team-handoff-2026-11-10.md).
 - **Q-BTP-SAFETY-02 — RESOLVED (dashboard):** User approved Safety-specific handling of upstream SQL NULL encoded as exactly `""`, preserving missing data as null and explicit zero as zero. Strict numeric, pagination and reconciliation validation remains in place. User requested removing the page-level red Safety error banner; unavailable/no-published-data card states remain. Upstream JSON-null preservation is a separate data-team follow-up.
 
+## BTP Calibration Due follow-up (2026-11-11)
+
+See [spec 20](../specs/20-btp-calibration-due.md).
+
+- **Q-BTP-CAL-01 — RESOLVED:** User chose Engineering → Maintenance, the existing right-hand drill, and a project-specific panel using shared table/MUI controls. Calibration always uses today in IST, independent of header period and shift; label this exception explicitly.
+- **Q-BTP-CAL-02 — OPEN (data team):** Live Athena probe returned `TABLE_NOT_FOUND` for `silver.fct_equipment_calibration`. User chose to retain Athena and provision the table; expose an unavailable state until then. See [data-team handoff](../../docs/btp-calibration-data-team-handoff-2026-11-11.md).
+- **Q-BTP-CAL-03 — OPEN (data owner):** Confirm whether BTPMI001 (due in 2023) is a real overdue machine or an obsolete record. User explicitly approved including all source records as overdue until confirmed; no special exclusions or age cutoff.
+
 ## BTP Stock Cost follow-up (2026-11-10)
 
 See [spec 19](../specs/19-btp-stock-cost.md).
