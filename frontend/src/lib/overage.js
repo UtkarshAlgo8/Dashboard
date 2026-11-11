@@ -29,6 +29,77 @@ import { toDisplayQuantity } from "./units.js";
  *   section
  */
 
+/** Guide section names; Bead is unsupported, never represented as zero stock. */
+export function liveOverageSection(areaId) {
+  return (
+    {
+      mixing: "Mixing",
+      "4roll": "Four Roll",
+      "3roll": "Three Roll",
+      extruder: "Extruder",
+      cutter: "Cutter",
+      slitter: "Slitter",
+    }[areaId] ?? null
+  );
+}
+
+const LIVE_QUANTITY = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Preserve the source unit and two decimals: no KG→MT or whole-metre conversion. */
+export function formatLiveOverageQty(value, unit) {
+  if (!unit) return Number(value) === 0 ? "0" : LIVE_QUANTITY.format(value);
+  return `${LIVE_QUANTITY.format(value)} ${unit}`;
+}
+
+/** Display an API timestamp explicitly in IST, irrespective of browser timezone. */
+export function formatOverageTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (name) => parts.find((part) => part.type === name)?.value;
+  return `${get("day")}-${get("month")}-${get("year")} ${get("hour")}:${get("minute")} IST`;
+}
+
+/** Shape small, SQL-aggregated rows for display only; never recalculate totals. */
+export function toLiveOverageCard(data, definition) {
+  const products = new Map();
+  for (const row of data.products ?? []) {
+    if (!products.has(row.product_type)) products.set(row.product_type, []);
+    products
+      .get(row.product_type)
+      .push(formatLiveOverageQty(row.overage_qty, row.unit));
+  }
+  return {
+    ...definition,
+    value: data.totals?.[0]?.overage_qty ?? 0,
+    unit: "",
+    formattedValue:
+      (data.totals ?? [])
+        .map((row) => formatLiveOverageQty(row.overage_qty, row.unit))
+        .join(" · ") || "0",
+    quantityLines: [...products].map(([label, quantities]) => ({
+      label,
+      value: quantities.join(" · "),
+    })),
+    note: `Live · rolling 30 days · ${formatOverageTime(data.as_of)}`,
+    hideTrend: true,
+    hideProgress: true,
+    drillable: true,
+  };
+}
+
 function inScope(row, { section, subSection }) {
   return (
     row.section === section && (!subSection || row.sub_section === subSection)

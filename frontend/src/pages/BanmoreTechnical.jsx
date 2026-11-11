@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -65,9 +65,9 @@ import {
 import TechnicalUniformityBalancingSection from "@/components/technical/TechnicalUniformityBalancingSection.jsx";
 import { technicalUniformityPeriod } from "@/lib/uniformityDrill.js";
 import InventoryPage from "@/components/inventory/InventoryPage.jsx";
-import { getOverage } from "@/api/inventory.js";
+import { getLiveOverageSummary } from "@/api/inventory.js";
 import OverageDrill from "@/components/technical/OverageDrill.jsx";
-import { areaTotals, toOverageCard } from "@/lib/overage.js";
+import { liveOverageSection, toLiveOverageCard } from "@/lib/overage.js";
 
 const TECHNICAL_TABS = [
   { id: "overall", label: "Overall", icon: DonutLargeOutlinedIcon },
@@ -298,14 +298,44 @@ function BanmoreTechnical() {
     keepPreviousData: true,
   });
 
-  // Stock › Overage Material is a current snapshot over every production
-  // date, so it ignores the date and shift filters (spec 17).
-  const overage = usePolledQuery(() => getOverage({ plantId: "banmore" }), {
-    enabled: tab === "stock",
-    interval: 0,
-    cacheKey: "technical:banmore:overage",
-    staleTime: 5 * 60 * 1000,
-  });
+  // All six tiny summaries share one query/cache. Area switches only filter
+  // aggregate display rows; item/barcode details remain lazy in OverageDrill.
+  const overageSection = liveOverageSection(stockArea);
+  const forceOverageRefresh = useRef(false);
+  const overage = usePolledQuery(
+    () => {
+      const refresh = forceOverageRefresh.current;
+      forceOverageRefresh.current = false;
+      return getLiveOverageSummary({ refresh });
+    },
+    {
+      enabled: tab === "stock",
+      interval: 0,
+      cacheKey: "technical:banmore:overage-live:all:v3",
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+  const overageError =
+    overage.error ??
+    overage.data?.unavailable_sections?.find(
+      (row) => row.dashboard_section === overageSection,
+    );
+  const overageData =
+    !overageError && overage.data && overageSection
+      ? {
+          ...overage.data,
+          totals: overage.data.totals.filter(
+            (row) => row.dashboard_section === overageSection,
+          ),
+          products: overage.data.products.filter(
+            (row) => row.dashboard_section === overageSection,
+          ),
+        }
+      : null;
+  const refreshOverage = () => {
+    forceOverageRefresh.current = true;
+    overage.refetch();
+  };
 
   // Production-tab KPIs (Production) and Quality-tab KPIs (Scrap, NCM Hold)
   // come from separate category fetches — see technicalKpiSources.js.
@@ -333,10 +363,6 @@ function BanmoreTechnical() {
           ? "cur"
           : null;
   const subSection = tab === "stock" ? activeStockArea.subSection : null;
-  const overageScope = {
-    section: SECTION_NAMES[activeStockArea.section],
-    subSection: activeStockArea.subSection,
-  };
   const isOverageCard = (id) => tab === "stock" && id === "ovg";
   const isLiveTab = Boolean(section) && !activeTab?.pending;
 
@@ -528,21 +554,23 @@ function BanmoreTechnical() {
             : isBuildingAttributed(definition.id)
               ? (buildingKpis.find((kpi) => kpi.id === definition.id) ?? null)
               : isOverageCard(definition.id)
-                ? overage.data && !overage.error
-                  ? toOverageCard(
-                      areaTotals(overage.data.totals, overageScope),
-                      definition,
-                    )
+                ? overageSection && overageData && !overageError
+                  ? toLiveOverageCard(overageData, definition)
                   : null
                 : resolveTechnicalKpi(definition, kpisByCategory),
+      cardLoading: isOverageCard(definition.id)
+        ? Boolean(overageSection) && !overageData && !overageError
+        : undefined,
       unavailableReason:
-        definition.id === "rsku" && liveSnapshot.error
-          ? "Live source unavailable"
-          : definition.id === "gtw" && productSummary.error
-            ? "Quality source unavailable"
-            : isOverageCard(definition.id) && overage.error
-              ? "Inventory source unavailable"
-              : undefined,
+        isOverageCard(definition.id) && !overageSection
+          ? "Bead is not covered by the overage guide"
+          : definition.id === "rsku" && liveSnapshot.error
+            ? "Live source unavailable"
+            : definition.id === "gtw" && productSummary.error
+              ? "Quality source unavailable"
+              : isOverageCard(definition.id) && overageError
+                ? "Inventory source unavailable"
+                : undefined,
     }));
   const displayKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
 
@@ -555,7 +583,6 @@ function BanmoreTechnical() {
     isLiveTab &&
     (isLoading ||
       productivity.isDowntimeLoading ||
-      (tab === "stock" && !overage.data && !overage.error) ||
       (hasCard("gtw") &&
         Boolean(uniformityDate) &&
         !productSummary.data &&
@@ -698,14 +725,12 @@ function BanmoreTechnical() {
     ) : isOverageCard(openDrillKpiId) ? (
       <OverageDrill
         key={stockArea}
-        data={overage.data}
-        error={overage.error}
-        isLoading={overage.isLoading}
-        scope={overageScope}
+        data={overageData}
+        section={overageSection}
         areaLabel={areaLabel}
         title={`Overage Material — ${areaLabel}`}
         breadcrumb={["Stock", areaLabel, "Overage Material"]}
-        asOf={asOfData?.asOf ?? null}
+        onRefresh={refreshOverage}
         onClose={handleCloseDrill}
       />
     ) : openDrillKpi ? (
@@ -861,6 +886,31 @@ function BanmoreTechnical() {
               setStockArea(value);
             }}
           />
+        )}
+
+        {tab === "stock" && overageSection && (
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ mb: 1.5 }}
+          >
+            <Button
+              size="small"
+              disabled={overage.isLoading}
+              onClick={refreshOverage}
+            >
+              Refresh overage
+            </Button>
+            {overageError && (
+              <Typography
+                role="alert"
+                sx={{ fontSize: 12, color: "error.main" }}
+              >
+                Live overage unavailable: {overageError.message}
+              </Typography>
+            )}
+          </Stack>
         )}
 
         {tab === "overall" ? (
@@ -1051,8 +1101,9 @@ function KpiGrid({
         gap: 1,
       }}
     >
-      {kpis.map(({ definition, live, unavailableReason }) =>
-        (definition.id === "rsku" ? isLiveLoading : isLoading) ? (
+      {kpis.map(({ definition, live, unavailableReason, cardLoading }) =>
+        (cardLoading ??
+        (definition.id === "rsku" ? isLiveLoading : isLoading)) ? (
           <UnavailableKpiCard
             key={definition.id}
             name={definition.name}

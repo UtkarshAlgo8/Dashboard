@@ -1,5 +1,122 @@
 # Spec: overage-material
 
+## Current implementation — live inline Athena (2026-11-11)
+
+Supersedes the Gold-based Technical UI described in the historical section below.
+Source: **Overage KPI Dashboard — UI and Backend Guide**, updated 10 Nov 2026.
+
+### Confirmed scope and decisions
+
+- Keep Technical → Stock's existing area chips and Overage Material KPI card.
+- Supported: Mixing, Four Roll, Three Roll, Extruder, Cutter and Slitter.
+- Bead shows **unsupported**, not zero. Building/Curing are unchanged.
+- Green Tyre is deferred: `silver.fct_curingncm` remains absent in Athena.
+- Use inline Athena CTEs, not a view. All reads go through `runQuery` with
+  `engine: "athena"`, `tables: []`; no DDL, Gold writes or raw-source downloads.
+- Every source is plant-scoped to `plant_code = 'BTP'` (verified live).
+- No binding interface exists in the upstream API. The user approved strict
+  section/product allowlists and centralized Athena literal encoding for item
+  and unit values. Apostrophes are doubled; identifiers never come from requests.
+
+### SQL and data rules
+
+Implementation: `backend/src/queries/overage-live.js`.
+
+- Rolling 720 hours in IST, non-future production, positive stock and age strictly
+  greater than shelf life. Only Ready To Use, Decision Pending and Consumed.
+- Shelf-life conversions, BOM/machine classification, aging precedence, assumed
+  quantity, unit decisions, production date/shift and every metric execute in SQL.
+- Silver timestamps retain the existing live-SKU IST wall-clock contract. API
+  timestamps carry `+05:30`; the browser renders IST explicitly.
+- Unit-master IDs are VARCHAR in Athena; join them using `try_cast(... AS INTEGER)`.
+- Athena category arrays discard nulls, matching Spark `COLLECT_SET` semantics.
+- **Approved extension:** repeated production barcodes use the latest ingestion
+  record, then event time and stable record ID, before quality/stock decisions.
+  Ranking is among eligible mapped-machine records in the rolling window. This
+  uses the chosen record's event time; production-time semantics remain a source
+  data responsibility.
+- **Temporary plant-confirmed override:** Mixing item `JT444` is **Final Compound**.
+  Both Master and Final current-category records were observed. Override the
+  category membership for this item so it is counted once. Remove the override
+  only after verifying the corrected data and rerunning uniqueness checks. A live
+  all-area audit after this override confirmed unique barcode counts in all six areas.
+- An unresolved multi-classification is detected in SQL before product/unit
+  filtering and paging. The API fails the affected section with
+  `OVERAGE_CLASSIFICATION_CONFLICT`, rather than returning inflated totals.
+- Product/unit rows and section/unit totals come from **one** `GROUPING SETS`
+  query with a zero-filled layout; unclassified FRC is retained last.
+
+### Additive API contracts
+
+All paths below are under `/api/v1/plants/:plantId/inventory/overage` and accept
+Banmore aliases only. Header dates/shifts are ignored. `section` is required for
+item/barcode routes and optional for the shared all-area summary.
+
+| Route | Inputs | Result |
+| --- | --- | --- |
+| `/summary` | optional `section` | `{ as_of, timezone, lookback_hours, totals, products, unavailable_sections }` |
+| `/items` | `section`, optional `product_type`, `limit`, `offset` | `{ as_of, timezone, lookback_hours, rows, limit, offset, has_more }` |
+| `/barcodes` | `section`, `product_type`, `item_code`, optional `unit`, `limit`, `offset` | same page envelope |
+
+- Detail page size defaults to 100, maximum 200; offset range is 0–100000.
+- SQL fetches at most `limit + 1`; the extra row determines `has_more`.
+- Level 2 includes Level 1's unit so multi-unit item rows reconcile correctly.
+- The old `/overage` Gold endpoint/response remains for compatibility; Technical
+  no longer calls it. The legacy frontend helpers remain for those consumers.
+- All six compact summaries share **one five-minute cache and one SQL query**.
+  The UI fetches this batch once; switching area chips only selects display rows
+  and causes no new summary query. Scoped summary consumers use this same cache.
+  Detail caches remain section/filter/page-keyed, with in-flight deduplication.
+  `refresh=1` bypasses a cached result; a 15-second guard limits repeated refreshes.
+  Source-access failures and classification failures are remembered for 60 seconds
+  (classification failures are section-specific). A batch with a conflicting
+  section omits that section's totals/products and lists its error under
+  `unavailable_sections`; other sections remain usable. A scoped request for that
+  section returns 503. Never cache an invented zero.
+- `as_of` is the SQL clock; empty detail pages use query-start time. Each screen
+  is independently queried/cached, so results may differ as live stock changes.
+
+### UI
+
+- Cards show all unit totals and product-type lines, always with two decimals
+  where units exist. Preserve KG, M, NOS and `Not set`; never convert KG to MT,
+  hide secondary units or sum different units. Empty quantities show `0`.
+- Open card → lazy item page; click an item row → lazy barcode page. No item or
+  barcode requests happen on initial card load. Product filters execute in SQL.
+- Show assumed quantity, barcode count, machines, shelf life, oldest production
+  and worst delay; barcode detail includes location, expiry, shift, aging source,
+  quantity source and quality status. Product/unit selection is preserved.
+- Previous/Next are server-side pages. Export is explicitly **current page only**.
+- Refresh control on Stock and drill; error/retry states do not present zero stock.
+- Live overage loading is independent of the period-bound KPI loader.
+- Mock mode reports that the live API is required; it does not fabricate stock.
+
+### Verification and remaining performance work
+
+- Focused SQL/controller tests cover validation, escaping, cache/refresh behavior,
+  lazy bounded pages, timestamp normalization, source failures and conflicts.
+- Live Athena: all six area summaries execute; product lines reconcile by unit.
+  An Extruder item reconciled to 39 distinct barcodes and 3753.88 M via SQL.
+- Deterministic Athena VALUES fixtures exercised strict window/expiry boundaries,
+  status exclusions, consumed/assumed stock, deduplication, own-machine product
+  classification, tread units, direct item aging and the 07:00 shift rule.
+- Browser checks exercised lazy loading, product selection, row click, pagination,
+  unit-preserving display, unsupported Bead, refresh and error states.
+- Final batch measurement: **5117-byte API response**, **27 aggregated rows**
+  (10 unit totals + 17 product/unit lines), **24.8-second cold call**. All six
+  subsequent scoped summaries used that shared cache in **2–3 ms**. No second
+  summary request occurs on UI area switches.
+- Detail measurement: one-row item page **486 bytes / 21.9 seconds cold**;
+  two-row barcode page **1170 bytes / 19.8 seconds cold**. A 201-row maximum
+  barcode query returned about **97 KB** upstream, with no pagination token.
+- A logical view would not fix that cold latency. Further speed improvements need
+  Athena execution-plan/scan metrics and upstream Delta layout/partition tuning;
+  the current API does not report bytes scanned. No partition-pruning claim is made.
+
+---
+
+## Historical Gold contract (legacy endpoint only)
+
 **Phase:** 1 (Technical dashboard, Stock tab)
 **Route:** `/banmore/technical` (Stock tab → "Overage Material" card + drill)
 **Status:** in-progress

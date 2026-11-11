@@ -46,6 +46,8 @@ export function DrillTable({
   downloadSheetName,
   legend,
   onClose,
+  onRowClick,
+  emptyMessage = "No data for this period.",
 }) {
   const tableRef = useRef(null);
   const excelHeaders = downloadHeaders ?? cols ?? [];
@@ -190,7 +192,7 @@ export function DrillTable({
                   align="center"
                   sx={{ fontSize: 12, color: "text.disabled", py: 3 }}
                 >
-                  No data for this period.
+                  {emptyMessage}
                 </TableCell>
               </TableRow>
             ) : (
@@ -204,7 +206,20 @@ export function DrillTable({
                   <TableRow
                     key={ri}
                     hover
+                    tabIndex={onRowClick ? 0 : undefined}
+                    onClick={onRowClick ? () => onRowClick(row, ri) : undefined}
+                    onKeyDown={
+                      onRowClick
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onRowClick(row, ri);
+                            }
+                          }
+                        : undefined
+                    }
                     sx={{
+                      cursor: onRowClick ? "pointer" : undefined,
                       backgroundColor: (t) =>
                         ri % 2 === 0
                           ? "background.paper"

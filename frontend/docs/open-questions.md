@@ -92,6 +92,14 @@ the remainder.
 - **Q-BTP-SAFETY-01 — OPEN (data team):** Live Gold has no November Safety rows; latest DAY/SHIFT data for all three names is 10-Jun-2026, with MONTH anchor 01-Jun-2026. Confirm source coverage and backfill if observations exist. See [data-team handoff](../../docs/btp-safety-data-team-handoff-2026-11-10.md).
 - **Q-BTP-SAFETY-02 — RESOLVED (dashboard):** User approved Safety-specific handling of upstream SQL NULL encoded as exactly `""`, preserving missing data as null and explicit zero as zero. Strict numeric, pagination and reconciliation validation remains in place. User requested removing the page-level red Safety error banner; unavailable/no-published-data card states remain. Upstream JSON-null preservation is a separate data-team follow-up.
 
+## BTP Calibration Due follow-up (2026-11-11)
+
+See [spec 20](../specs/20-btp-calibration-due.md).
+
+- **Q-BTP-CAL-01 — RESOLVED:** User chose Engineering → Maintenance, the existing right-hand drill, and a project-specific panel using shared table/MUI controls. Calibration always uses today in IST, independent of header period and shift; label this exception explicitly.
+- **Q-BTP-CAL-02 — OPEN (data team):** Live Athena probe returned `TABLE_NOT_FOUND` for `silver.fct_equipment_calibration`. User chose to retain Athena and provision the table; expose an unavailable state until then. See [data-team handoff](../../docs/btp-calibration-data-team-handoff-2026-11-11.md).
+- **Q-BTP-CAL-03 — OPEN (data owner):** Confirm whether BTPMI001 (due in 2023) is a real overdue machine or an obsolete record. User explicitly approved including all source records as overdue until confirmed; no special exclusions or age cutoff.
+
 ## BTP Stock Cost follow-up (2026-11-10)
 
 See [spec 19](../specs/19-btp-stock-cost.md).
@@ -181,6 +189,33 @@ audit trail.
     tab disabled in CategoryTabs with "Phase 2" tooltip.
   - Frontend env flipped: `VITE_USE_MOCK_DATA=false`,
     `VITE_API_BASE_URL=http://localhost:3001/api/v1`.
+
+### 2026-11-11 — Live Overage implementation decisions
+
+- **RESOLVED:** retain the existing Technical → Stock area-based layout; use
+  inline Athena SQL and lazy item/barcode drill-downs, not seven new cards/pages.
+- **RESOLVED (performance):** batch all six compact summaries into one query and
+  shared five-minute cache. Area switches select existing aggregated display rows;
+  they do not trigger new summary queries. Item/barcode details remain lazy.
+- **RESOLVED:** BTP plant scope verified through Silver queries. Source calculations
+  remain in Athena; the application only normalizes and displays result rows.
+- **RESOLVED:** upstream does not expose bound parameters. User approved strict
+  allowlists and centralized Athena literal encoding for all request values.
+- **RESOLVED:** repeated production barcodes use the latest-ingested record,
+  with event time/stable ID tie-breakers, before quality and stock filters.
+- **RESOLVED (temporary override):** user confirmed `JT444` is Final Compound.
+  Silver currently contains both Master and Final categories, including current
+  item records. Override this item until the source fix is verified; fail future
+  unresolved classification conflicts rather than double-counting barcodes.
+- **DEFERRED:** Green Tyre. The two required master tables are now readable, but
+  `silver.fct_curingncm` is still absent. Building/Curing remain unchanged.
+- **OPEN / source-team follow-up:** cold queries take about 20–25 seconds despite
+  compact results (all-six summary batch: about 5 KB). Inspect Athena scan/plan metrics and Delta data layout;
+  a normal view does not precompute the calculation. See spec 17 for measurements.
+- **OPEN / inherited guide caveat:** Three Roll's supplied SQL additionally checks
+  the Inner Liner BOM category even though the prose describes machine-fixed
+  classification. Items without that category remain excluded, as in the guide;
+  confirm before changing that rule.
 
 ### Pending (broader BRD walk)
 

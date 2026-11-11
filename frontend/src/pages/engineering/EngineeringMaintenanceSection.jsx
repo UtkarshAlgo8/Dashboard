@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Alert, Stack, Typography } from "@mui/material";
 import { getCompliance } from "@/api/compliance.js";
+import { getCalibration } from "@/api/calibration.js";
+import { calibrationCard } from "@/lib/calibration.js";
+import CalibrationDrillPanel from "@/components/calibration/CalibrationDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
 import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
@@ -29,6 +32,9 @@ export default function EngineeringMaintenanceSection({
 }) {
   const [open, setOpen] = useState(null);
   const [stockTrend, setStockTrend] = useState(null);
+  const calibration = usePolledQuery(getCalibration, {
+    interval: 60000,
+  });
   const stockRange = stockCostRange(selectedPeriod);
   const stock = useStockCostQuery(stockRange);
   const period = storedCompliancePeriod({ ...selectedPeriod, shift });
@@ -51,11 +57,13 @@ export default function EngineeringMaintenanceSection({
   );
   const drillOpen = Boolean(
     open &&
-    (open === "stock-cost"
-      ? stockRange
-      : open === "safety"
-        ? safetyScope
-        : period),
+    (open === "calibration"
+      ? true
+      : open === "stock-cost"
+        ? stockRange
+        : open === "safety"
+          ? safetyScope
+          : period),
   );
 
   return (
@@ -79,6 +87,17 @@ export default function EngineeringMaintenanceSection({
       <KpiSplitLayout
         open={drillOpen}
         cards={[
+          <QKpiCard
+            key="calibration"
+            kpi={calibrationCard(calibration.data, {
+              error: calibration.error,
+              isLoading: calibration.isLoading,
+            })}
+            isOpen={drillOpen && open === "calibration"}
+            onToggle={() =>
+              setOpen(open === "calibration" ? null : "calibration")
+            }
+          />,
           <QKpiCard
             key="stock-cost"
             kpi={stockCostCard(stock.data, {
@@ -117,7 +136,12 @@ export default function EngineeringMaintenanceSection({
         ]}
         panel={
           drillOpen &&
-          (open === "stock-cost" ? (
+          (open === "calibration" ? (
+            <CalibrationDrillPanel
+              query={calibration}
+              onClose={() => setOpen(null)}
+            />
+          ) : open === "stock-cost" ? (
             <StockCostDrillPanel
               query={stock}
               onClose={() => setOpen(null)}

@@ -214,7 +214,7 @@ function KpiCard({
           </Typography>
         </Stack>
 
-        {!disabled && (
+        {!disabled && !kpi.quantityLines && (
           <Tooltip title="KPI Details & Calculation Info" arrow>
             <InfoOutlinedIcon
               sx={{
@@ -246,14 +246,15 @@ function KpiCard({
           >
             <Typography
               sx={{
-                fontSize: { xs: 24, md: 26, lg: 28 },
+                fontSize: kpi.quantityLines ? 20 : { xs: 24, md: 26, lg: 28 },
                 fontWeight: 800,
                 lineHeight: 1.1,
                 color: cardTheme.textColor,
-                whiteSpace: "nowrap",
+                whiteSpace: kpi.quantityLines ? "normal" : "nowrap",
+                overflowWrap: "anywhere",
               }}
             >
-              {formattedVal}
+              {kpi.formattedValue ?? formattedVal}
             </Typography>
             {subtitle && !disabled && (
               <Typography
@@ -287,7 +288,7 @@ function KpiCard({
                     fontSize: 11,
                     fontWeight: 500,
                     color: "text.secondary",
-                    whiteSpace: "nowrap",
+                    whiteSpace: kpi.quantityLines ? "normal" : "nowrap",
                   }}
                 >
                   {kpi.note}
@@ -391,8 +392,47 @@ function KpiCard({
         )}
       </Stack>
 
+      {kpi.quantityLines && (
+        <Stack
+          spacing={0.5}
+          sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: "divider" }}
+        >
+          {kpi.quantityLines.map(({ label, value }) => (
+            <Stack
+              key={label}
+              direction="row"
+              justifyContent="space-between"
+              spacing={1}
+            >
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  color: "text.secondary",
+                  flexShrink: 0,
+                  maxWidth: "45%",
+                  overflowWrap: "break-word",
+                }}
+              >
+                {label}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  textAlign: "right",
+                  minWidth: 0,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {value}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
+      )}
+
       {/* 3. Horizontal Target / Progress Bar with Gradient */}
-      {!disabled && !isDrilling && !isDrilldown && (
+      {!disabled && !kpi.hideProgress && !isDrilling && !isDrilldown && (
         <Box
           sx={{
             width: "100%",
