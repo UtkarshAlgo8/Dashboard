@@ -31,6 +31,7 @@ function KpiCard({
   onClick,
   onTrendOpen,
   onCloseDrill,
+  alignMetrics = false,
 }) {
   const theme = useTheme();
   if (!kpi) return null;
@@ -177,7 +178,7 @@ function KpiCard({
         transition: "all 0.15s ease",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: alignMetrics ? "flex-start" : "space-between",
         minHeight: 136,
         "&:hover": {
           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
@@ -244,18 +245,89 @@ function KpiCard({
             spacing={0.75}
             sx={{ minWidth: 0 }}
           >
-            <Typography
-              sx={{
-                fontSize: kpi.quantityLines ? 20 : { xs: 24, md: 26, lg: 28 },
-                fontWeight: 800,
-                lineHeight: 1.1,
-                color: cardTheme.textColor,
-                whiteSpace: kpi.quantityLines ? "normal" : "nowrap",
-                overflowWrap: "anywhere",
-              }}
-            >
-              {kpi.formattedValue ?? formattedVal}
-            </Typography>
+            {kpi.quantityTotals ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "baseline",
+                  columnGap: 1,
+                  rowGap: 0.5,
+                  minWidth: 0,
+                }}
+              >
+                {kpi.quantityTotals.map(({ value, unit, fullValue }, index) => (
+                  <Tooltip
+                    key={unit || value}
+                    title={fullValue ?? `${value} ${unit}`}
+                    arrow
+                    describeChild
+                  >
+                    <Stack
+                      tabIndex={0}
+                      aria-label={fullValue ?? `${value} ${unit}`}
+                      direction="row"
+                      alignItems="baseline"
+                      spacing={0.75}
+                      sx={{
+                        whiteSpace: "nowrap",
+                        borderRadius: 0.5,
+                        "&:focus-visible": {
+                          outline: "2px solid",
+                          outlineColor: "primary.main",
+                          outlineOffset: 3,
+                        },
+                      }}
+                    >
+                      <Typography
+                        component="span"
+                        sx={{
+                          fontSize: { xs: 24, md: 26, lg: 28 },
+                          fontWeight: 800,
+                          fontVariantNumeric: "tabular-nums",
+                          lineHeight: 1.2,
+                          color: cardTheme.textColor,
+                        }}
+                      >
+                        {value}
+                      </Typography>
+                      {unit && (
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "text.secondary",
+                          }}
+                        >
+                          {unit}
+                        </Typography>
+                      )}
+                      {index < kpi.quantityTotals.length - 1 && (
+                        <Typography
+                          component="span"
+                          sx={{ fontSize: 14, color: "text.disabled" }}
+                        >
+                          ·
+                        </Typography>
+                      )}
+                    </Stack>
+                  </Tooltip>
+                ))}
+              </Box>
+            ) : (
+              <Typography
+                sx={{
+                  fontSize: { xs: 24, md: 26, lg: 28 },
+                  fontWeight: 800,
+                  lineHeight: 1.1,
+                  color: cardTheme.textColor,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {kpi.formattedValue ?? formattedVal}
+              </Typography>
+            )}
             {subtitle && !disabled && (
               <Typography
                 sx={{
@@ -397,36 +469,103 @@ function KpiCard({
           spacing={0.5}
           sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: "divider" }}
         >
-          {kpi.quantityLines.map(({ label, value }) => (
-            <Stack
+          {kpi.quantityLines.map(({ label, value, quantities }) => (
+            <Box
               key={label}
-              direction="row"
-              justifyContent="space-between"
-              spacing={1}
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)",
+                columnGap: 1.5,
+                alignItems: "baseline",
+              }}
             >
               <Typography
                 sx={{
-                  fontSize: 11.5,
+                  fontSize: 12,
+                  lineHeight: 1.5,
                   color: "text.secondary",
-                  flexShrink: 0,
-                  maxWidth: "45%",
+                  minWidth: 0,
                   overflowWrap: "break-word",
                 }}
               >
                 {label}
               </Typography>
-              <Typography
-                sx={{
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  textAlign: "right",
-                  minWidth: 0,
-                  overflowWrap: "anywhere",
-                }}
+              <Stack
+                direction="row"
+                useFlexGap
+                flexWrap="wrap"
+                justifyContent="flex-end"
+                alignItems="baseline"
+                columnGap={0.75}
+                rowGap={0.25}
+                sx={{ minWidth: 0 }}
               >
-                {value}
-              </Typography>
-            </Stack>
+                {(quantities ?? [value]).map((quantity, index, items) => {
+                  const display =
+                    typeof quantity === "string"
+                      ? { value: quantity, unit: "", fullValue: quantity }
+                      : quantity;
+                  return (
+                    <Tooltip
+                      key={display.unit || display.value}
+                      title={display.fullValue}
+                      arrow
+                      describeChild
+                    >
+                      <Stack
+                        component="span"
+                        direction="row"
+                        alignItems="baseline"
+                        spacing={0.5}
+                        tabIndex={0}
+                        aria-label={display.fullValue}
+                        sx={{
+                          whiteSpace: "nowrap",
+                          borderRadius: 0.5,
+                          "&:focus-visible": {
+                            outline: "2px solid",
+                            outlineColor: "primary.main",
+                            outlineOffset: 2,
+                          },
+                        }}
+                      >
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            lineHeight: 1.5,
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          {display.value}
+                        </Typography>
+                        {display.unit && (
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: 11.5,
+                              color: "text.secondary",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {display.unit}
+                          </Typography>
+                        )}
+                        {index < items.length - 1 && (
+                          <Typography
+                            component="span"
+                            sx={{ fontSize: 12, color: "text.disabled" }}
+                          >
+                            ·
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Tooltip>
+                  );
+                })}
+              </Stack>
+            </Box>
           ))}
         </Stack>
       )}
@@ -548,39 +687,47 @@ function KpiCard({
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          sx={{ mt: 0.5 }}
+          sx={{ mt: alignMetrics ? "auto" : 0.5, pt: alignMetrics ? 1.25 : 0 }}
         >
-          {/* Trend Indicator */}
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={0.5}
-            sx={{ visibility: kpi.hideTrend ? "hidden" : "visible" }}
-          >
-            {trendUp ? (
-              <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
-            ) : (
-              <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
-            )}
+          {/* Snapshot metadata replaces the hidden trend placeholder. */}
+          {kpi.snapshotLabel ? (
             <Typography
-              sx={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: trendColor,
-              }}
+              sx={{ fontSize: 11, color: "text.secondary", lineHeight: 1.5 }}
             >
-              {trendVal}
+              {kpi.snapshotLabel}
             </Typography>
-            <Typography
-              sx={{
-                fontSize: 12.5,
-                fontWeight: 500,
-                color: "text.secondary",
-              }}
+          ) : (
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.5}
+              sx={{ visibility: kpi.hideTrend ? "hidden" : "visible" }}
             >
-              {trendLabel}
-            </Typography>
-          </Stack>
+              {trendUp ? (
+                <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
+              ) : (
+                <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
+              )}
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: trendColor,
+                }}
+              >
+                {trendVal}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  color: "text.secondary",
+                }}
+              >
+                {trendLabel}
+              </Typography>
+            </Stack>
+          )}
 
           {/* Action Drilldown & Table Icons */}
           <Stack direction="row" alignItems="center" spacing={0.5}>

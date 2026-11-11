@@ -31,6 +31,7 @@ import {
  * @param {string} props.shift - All / A / B / C
  * @param {string} props.granularity - DAY / MONTH / YEAR / SHIFT X
  * @param {string[]} props.breadcrumb
+ * @param {boolean} [props.embedded=false] Align with the adjacent KPI rail
  * @param {() => void} props.onClose
  */
 export default function PaintWeightDrill({
@@ -39,6 +40,7 @@ export default function PaintWeightDrill({
   granularity,
   breadcrumb,
   onClose,
+  embedded = false,
 }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
@@ -68,7 +70,11 @@ export default function PaintWeightDrill({
   const { overall, tableRows } = groupPaintWeightRows(rows ?? []);
 
   return (
-    <Paper component="section" variant="outlined" sx={{ mt: 2, p: 2 }}>
+    <Paper
+      component="section"
+      variant="outlined"
+      sx={{ mt: embedded ? 0 : 2, p: 2 }}
+    >
       <Stack
         direction="row"
         alignItems="center"

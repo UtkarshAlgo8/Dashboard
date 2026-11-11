@@ -31,7 +31,7 @@ function LiveRunningSkusDrill({
         ];
       });
   return (
-    <Box sx={{ mt: 2 }}>
+    <Box sx={{ minWidth: 0 }}>
       {error && (
         <Typography
           role="alert"

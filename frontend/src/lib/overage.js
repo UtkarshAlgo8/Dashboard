@@ -54,6 +54,38 @@ export function formatLiveOverageQty(value, unit) {
   return `${LIVE_QUANTITY.format(value)} ${unit}`;
 }
 
+/** Card-only Indian suffixes; exact source quantities remain unchanged. */
+export function formatCompactOverageValue(value) {
+  const number = Number(value);
+  if (value == null || value === "" || !Number.isFinite(number)) return "—";
+  const scales = [
+    [1e7, "Cr"],
+    [1e5, "L"],
+    [1e3, "k"],
+    [1, ""],
+  ];
+  let index = scales.findIndex(([divisor]) => Math.abs(number) >= divisor);
+  if (index === -1) index = scales.length - 1;
+  // Promote rounding boundaries: 99.999k should read 1.00L, not 100.00k.
+  if (
+    index > 0 &&
+    Number((Math.abs(number) / scales[index][0]).toFixed(2)) >=
+      scales[index - 1][0] / scales[index][0]
+  )
+    index -= 1;
+  const [divisor, suffix] = scales[index];
+  return `${LIVE_QUANTITY.format(number / divisor)}${suffix}`;
+}
+
+function cardQuantity(value, unit) {
+  return {
+    value:
+      !unit && Number(value) === 0 ? "0" : formatCompactOverageValue(value),
+    unit: unit ?? "",
+    fullValue: formatLiveOverageQty(value, unit),
+  };
+}
+
 /** Display an API timestamp explicitly in IST, irrespective of browser timezone. */
 export function formatOverageTime(value) {
   if (!value) return "—";
@@ -79,21 +111,28 @@ export function toLiveOverageCard(data, definition) {
     if (!products.has(row.product_type)) products.set(row.product_type, []);
     products
       .get(row.product_type)
-      .push(formatLiveOverageQty(row.overage_qty, row.unit));
+      .push(cardQuantity(row.overage_qty, row.unit));
   }
   return {
     ...definition,
     value: data.totals?.[0]?.overage_qty ?? 0,
     unit: "",
+    quantityTotals: (data.totals ?? []).map((row) =>
+      cardQuantity(row.overage_qty, row.unit),
+    ),
     formattedValue:
       (data.totals ?? [])
         .map((row) => formatLiveOverageQty(row.overage_qty, row.unit))
         .join(" · ") || "0",
     quantityLines: [...products].map(([label, quantities]) => ({
       label,
-      value: quantities.join(" · "),
+      value: quantities
+        .map(({ value, unit }) => `${value}${unit ? ` ${unit}` : ""}`)
+        .join(" · "),
+      quantities,
     })),
-    note: `Live · rolling 30 days · ${formatOverageTime(data.as_of)}`,
+    note: "Live stock · last 30 days",
+    snapshotLabel: formatOverageTime(data.as_of),
     hideTrend: true,
     hideProgress: true,
     drillable: true,
