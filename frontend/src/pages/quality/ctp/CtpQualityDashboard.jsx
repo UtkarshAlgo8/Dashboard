@@ -20,6 +20,7 @@ import { getCtpQualitySummary, getCtpQualityTrend } from "@/api/ctpQuality.js";
 import { CTP_TAB_CARDS, buildCtpCards } from "./ctpCards.js";
 import CtpProcessDrillPanel from "./CtpProcessDrillPanel.jsx";
 import CtpProductDrillPanel from "./CtpProductDrillPanel.jsx";
+import CtpSpcDashboard from "./CtpSpcDashboard.jsx";
 
 const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -109,7 +110,7 @@ const SUB_TABS = [
   { id: "process", label: "Process" },
   { id: "product", label: "Product" },
   { id: "complaint", label: "Customer Complaint", enabled: false },
-  { id: "spc", label: "SPC", enabled: false },
+  { id: "spc", label: "SPC" },
 ];
 
 export default function CtpQualityDashboard({ plant }) {
@@ -142,6 +143,7 @@ export default function CtpQualityDashboard({ plant }) {
   const periodLabel = formatPeriod(grain, date, activeShift);
 
   useEffect(() => {
+    if (tab === "spc") return;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
@@ -171,12 +173,14 @@ export default function CtpQualityDashboard({ plant }) {
   const view = TAB_VIEW[tab];
   const cards = useMemo(
     () =>
-      buildCtpCards(CTP_TAB_CARDS[tab], summary?.cards, {
-        grain,
-        isShift: activeShift !== "All",
-        periodLabel,
-        emptyReason: TAB_VIEW[tab].emptyReason,
-      }),
+      tab === "spc"
+        ? []
+        : buildCtpCards(CTP_TAB_CARDS[tab], summary?.cards, {
+            grain,
+            isShift: activeShift !== "All",
+            periodLabel,
+            emptyReason: TAB_VIEW[tab].emptyReason,
+          }),
     [tab, summary, grain, activeShift, periodLabel],
   );
   const openObj = openKpi
@@ -189,7 +193,7 @@ export default function CtpQualityDashboard({ plant }) {
   );
 
   const onTabChange = (next) => {
-    if (next === tab || !TAB_VIEW[next]) return;
+    if (next === tab || (next !== "spc" && !TAB_VIEW[next])) return;
     setTab(next);
     setSummary(null);
     setLoading(true);
@@ -231,6 +235,17 @@ export default function CtpQualityDashboard({ plant }) {
         onTrend={setTrendKpi}
       />
     );
+
+  if (tab === "spc") {
+    return (
+      <CtpSpcDashboard
+        plant={plant}
+        initialTyre={tyre}
+        categoryTabs={SUB_TABS}
+        onCategoryChange={onTabChange}
+      />
+    );
+  }
 
   const trendRange = trendWindow(grain, date);
   // Pills inside the trend pop-up centre on the selected day; for a month or

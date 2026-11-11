@@ -34,6 +34,7 @@ import { router as qualityRouter } from "./quality/routes/quality.routes.js";
 import {
   router as ctpQualityProcessRouter,
   productRouter as ctpQualityProductRouter,
+  spcRouter as ctpQualitySpcRouter,
 } from "./quality/ctp/routes.js";
 import { router as engineeringReliabilityRouter } from "./engineering/routes/reliability.routes.js";
 import { router as complianceRouter } from "./compliance/routes.js";
@@ -136,6 +137,7 @@ app.use("/api/v1/quality/spc", gate, qualitySpcRouter);
 //   /api/v1/quality/ctp/process/{summary,trend}          → CTP Process Audit
 app.use("/api/v1/quality/ctp/process", gate, ctpQualityProcessRouter);
 app.use("/api/v1/quality/ctp/product", gate, ctpQualityProductRouter);
+app.use("/api/v1/quality/ctp/spc", gate, ctpQualitySpcRouter);
 app.use("/api/v1/quality", gate, qualityRouter);
 
 // Engineering Head dashboard (additive; separate data family — spec 16/17).
