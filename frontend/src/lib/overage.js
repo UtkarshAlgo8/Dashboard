@@ -85,6 +85,12 @@ export function toLiveOverageCard(data, definition) {
     ...definition,
     value: data.totals?.[0]?.overage_qty ?? 0,
     unit: "",
+    quantityTotals: (data.totals ?? []).map((row) => ({
+      value: row.unit
+        ? LIVE_QUANTITY.format(row.overage_qty)
+        : formatLiveOverageQty(row.overage_qty, null),
+      unit: row.unit ?? "",
+    })),
     formattedValue:
       (data.totals ?? [])
         .map((row) => formatLiveOverageQty(row.overage_qty, row.unit))
@@ -92,8 +98,10 @@ export function toLiveOverageCard(data, definition) {
     quantityLines: [...products].map(([label, quantities]) => ({
       label,
       value: quantities.join(" · "),
+      quantities,
     })),
-    note: `Live · rolling 30 days · ${formatOverageTime(data.as_of)}`,
+    note: "Live stock · last 30 days",
+    snapshotLabel: formatOverageTime(data.as_of),
     hideTrend: true,
     hideProgress: true,
     drillable: true,

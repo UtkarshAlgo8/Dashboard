@@ -24,6 +24,7 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import WarehouseOutlinedIcon from "@mui/icons-material/WarehouseOutlined";
 import DonutLargeOutlinedIcon from "@mui/icons-material/DonutLargeOutlined";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import KpiCard from "@/components/production/KpiCard.jsx";
 import { getAsOf, getPlant } from "@/api/plants.js";
@@ -888,31 +889,6 @@ function BanmoreTechnical() {
           />
         )}
 
-        {tab === "stock" && overageSection && (
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-            sx={{ mb: 1.5 }}
-          >
-            <Button
-              size="small"
-              disabled={overage.isLoading}
-              onClick={refreshOverage}
-            >
-              Refresh overage
-            </Button>
-            {overageError && (
-              <Typography
-                role="alert"
-                sx={{ fontSize: 12, color: "error.main" }}
-              >
-                Live overage unavailable: {overageError.message}
-              </Typography>
-            )}
-          </Stack>
-        )}
-
         {tab === "overall" ? (
           <TechnicalOverallGroups mapKpis={mapDisplayKpis} />
         ) : tab === "inventory" ? (
@@ -947,8 +923,16 @@ function BanmoreTechnical() {
             <TechnicalKpiSection
               title={tab === "stock" ? activeStockArea.label : activeTab?.label}
               kpis={displayKpis}
+              dashboardLayout={["stock", "building", "curing"].includes(tab)}
               isLoading={kpisLoading}
               isLiveLoading={!liveSnapshot.data && !liveSnapshot.error}
+              onRefreshOverage={
+                tab === "stock" && overageSection ? refreshOverage : undefined
+              }
+              isRefreshingOverage={overage.isLoading}
+              overageError={
+                tab === "stock" && overageSection ? overageError : null
+              }
               error={isLiveTab ? error : null}
               openDrillKpiId={openDrillKpiId}
               onDrillKpi={handleDrillKpi}
@@ -1046,8 +1030,12 @@ function TechnicalOverallGroups({ mapKpis }) {
 function TechnicalKpiSection({
   title,
   kpis,
+  dashboardLayout = false,
   isLoading,
   isLiveLoading,
+  onRefreshOverage,
+  isRefreshingOverage,
+  overageError,
   error,
   openDrillKpiId,
   onDrillKpi,
@@ -1056,15 +1044,41 @@ function TechnicalKpiSection({
 }) {
   return (
     <Box component="section" aria-labelledby="technical-kpis-heading">
-      <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 1.5 }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={1}
+        sx={{ mb: 1.5 }}
+      >
         <Typography
           id="technical-kpis-heading"
           sx={{ fontSize: 18, fontWeight: 750, color: "text.primary" }}
         >
           {title}
         </Typography>
+        {onRefreshOverage && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<RefreshOutlinedIcon sx={{ fontSize: 16 }} />}
+            disabled={isRefreshingOverage}
+            onClick={onRefreshOverage}
+            sx={{ flexShrink: 0 }}
+          >
+            Refresh overage
+          </Button>
+        )}
       </Stack>
 
+      {overageError && (
+        <Typography
+          role="alert"
+          sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}
+        >
+          Live overage unavailable: {overageError.message}
+        </Typography>
+      )}
       {error && (
         <Typography sx={{ mb: 1.5, fontSize: 12.5, color: "error.main" }}>
           Period values unavailable: {error.message}
@@ -1072,6 +1086,7 @@ function TechnicalKpiSection({
       )}
       <KpiGrid
         kpis={kpis}
+        dashboardLayout={dashboardLayout}
         isLoading={isLoading}
         isLiveLoading={isLiveLoading}
         openDrillKpiId={openDrillKpiId}
@@ -1086,6 +1101,7 @@ function TechnicalKpiSection({
 function KpiGrid({
   kpis,
   minWidth = 220,
+  dashboardLayout = false,
   isLoading = false,
   isLiveLoading = false,
   openDrillKpiId = null,
@@ -1095,10 +1111,19 @@ function KpiGrid({
 }) {
   return (
     <Box
+      role={dashboardLayout ? "group" : undefined}
+      aria-label={dashboardLayout ? "Technical KPI cards" : undefined}
       sx={{
         display: "grid",
-        gridTemplateColumns: `repeat(auto-fit, minmax(min(${minWidth}px, 100%), 1fr))`,
-        gap: 1,
+        gridTemplateColumns: dashboardLayout
+          ? {
+              xs: "minmax(0, 1fr)",
+              sm: "repeat(2, minmax(0, 1fr))",
+              md: "repeat(3, minmax(0, 1fr))",
+              lg: "repeat(4, minmax(0, 1fr))",
+            }
+          : `repeat(auto-fit, minmax(min(${minWidth}px, 100%), 1fr))`,
+        gap: dashboardLayout ? 2 : 1,
       }}
     >
       {kpis.map(({ definition, live, unavailableReason, cardLoading }) =>
@@ -1107,6 +1132,7 @@ function KpiGrid({
           <UnavailableKpiCard
             key={definition.id}
             name={definition.name}
+            alignMetrics={dashboardLayout}
             isLoading
           />
         ) : live && hasKpiValue(live.value) ? (
@@ -1114,6 +1140,7 @@ function KpiGrid({
             key={definition.id}
             kpi={onDrillKpi ? live : { ...live, drillable: false }}
             isDrilling={openDrillKpiId === definition.id}
+            alignMetrics={dashboardLayout}
             onClick={onDrillKpi}
             onTrendOpen={onTrendOpen}
             onCloseDrill={onCloseDrill}
@@ -1122,6 +1149,7 @@ function KpiGrid({
           <UnavailableKpiCard
             key={definition.id}
             name={definition.name}
+            alignMetrics={dashboardLayout}
             reason={unavailableReason}
           />
         ),
@@ -1338,6 +1366,7 @@ function UnavailableKpiCard({
   name,
   reason = "Data unavailable",
   isLoading = false,
+  alignMetrics = false,
 }) {
   const theme = useTheme();
   return (
@@ -1348,7 +1377,7 @@ function UnavailableKpiCard({
         p: 1.75,
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: alignMetrics ? "flex-start" : "space-between",
         backgroundColor: "background.paper",
         border: 1,
         borderColor: "divider",
@@ -1360,14 +1389,14 @@ function UnavailableKpiCard({
         direction="row"
         alignItems="center"
         spacing={1}
-        sx={{ minWidth: 0 }}
+        sx={{ minWidth: 0, mb: alignMetrics ? 1 : 0 }}
       >
         <GridViewOutlinedIcon sx={{ fontSize: 20, color: "text.disabled" }} />
         <Typography
           sx={{
             minWidth: 0,
             overflowWrap: "anywhere",
-            fontSize: name.length > 30 ? 13 : 14.5,
+            fontSize: alignMetrics ? 15 : name.length > 30 ? 13 : 14.5,
             lineHeight: 1.25,
             fontWeight: 700,
             color: "text.primary",
@@ -1390,7 +1419,14 @@ function UnavailableKpiCard({
           NA
         </Typography>
       )}
-      <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+      <Typography
+        sx={{
+          fontSize: 12,
+          color: "text.disabled",
+          mt: alignMetrics ? "auto" : 0,
+          pt: alignMetrics ? 1.25 : 0,
+        }}
+      >
         {isLoading ? "Loading…" : reason}
       </Typography>
     </Box>

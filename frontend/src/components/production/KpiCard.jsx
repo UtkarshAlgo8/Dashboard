@@ -31,6 +31,7 @@ function KpiCard({
   onClick,
   onTrendOpen,
   onCloseDrill,
+  alignMetrics = false,
 }) {
   const theme = useTheme();
   if (!kpi) return null;
@@ -177,7 +178,7 @@ function KpiCard({
         transition: "all 0.15s ease",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: alignMetrics ? "flex-start" : "space-between",
         minHeight: 136,
         "&:hover": {
           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
@@ -244,18 +245,73 @@ function KpiCard({
             spacing={0.75}
             sx={{ minWidth: 0 }}
           >
-            <Typography
-              sx={{
-                fontSize: kpi.quantityLines ? 20 : { xs: 24, md: 26, lg: 28 },
-                fontWeight: 800,
-                lineHeight: 1.1,
-                color: cardTheme.textColor,
-                whiteSpace: kpi.quantityLines ? "normal" : "nowrap",
-                overflowWrap: "anywhere",
-              }}
-            >
-              {kpi.formattedValue ?? formattedVal}
-            </Typography>
+            {kpi.quantityTotals ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "baseline",
+                  columnGap: 1,
+                  rowGap: 0.5,
+                  minWidth: 0,
+                }}
+              >
+                {kpi.quantityTotals.map(({ value, unit }, index) => (
+                  <Stack
+                    key={unit || value}
+                    direction="row"
+                    alignItems="baseline"
+                    spacing={0.75}
+                    sx={{ whiteSpace: "nowrap" }}
+                  >
+                    <Typography
+                      component="span"
+                      sx={{
+                        fontSize: { xs: 24, md: 26, lg: 28 },
+                        fontWeight: 800,
+                        fontVariantNumeric: "tabular-nums",
+                        lineHeight: 1.2,
+                        color: cardTheme.textColor,
+                      }}
+                    >
+                      {value}
+                    </Typography>
+                    {unit && (
+                      <Typography
+                        component="span"
+                        sx={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: "text.secondary",
+                        }}
+                      >
+                        {unit}
+                      </Typography>
+                    )}
+                    {index < kpi.quantityTotals.length - 1 && (
+                      <Typography
+                        component="span"
+                        sx={{ fontSize: 14, color: "text.disabled" }}
+                      >
+                        ·
+                      </Typography>
+                    )}
+                  </Stack>
+                ))}
+              </Box>
+            ) : (
+              <Typography
+                sx={{
+                  fontSize: { xs: 24, md: 26, lg: 28 },
+                  fontWeight: 800,
+                  lineHeight: 1.1,
+                  color: cardTheme.textColor,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {kpi.formattedValue ?? formattedVal}
+              </Typography>
+            )}
             {subtitle && !disabled && (
               <Typography
                 sx={{
@@ -394,10 +450,10 @@ function KpiCard({
 
       {kpi.quantityLines && (
         <Stack
-          spacing={0.5}
-          sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: "divider" }}
+          spacing={0.75}
+          sx={{ mt: 1.25, pt: 1.25, borderTop: 1, borderColor: "divider" }}
         >
-          {kpi.quantityLines.map(({ label, value }) => (
+          {kpi.quantityLines.map(({ label, value, quantities }) => (
             <Stack
               key={label}
               direction="row"
@@ -406,7 +462,8 @@ function KpiCard({
             >
               <Typography
                 sx={{
-                  fontSize: 11.5,
+                  fontSize: 12,
+                  lineHeight: 1.5,
                   color: "text.secondary",
                   flexShrink: 0,
                   maxWidth: "45%",
@@ -415,17 +472,39 @@ function KpiCard({
               >
                 {label}
               </Typography>
-              <Typography
-                sx={{
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  textAlign: "right",
-                  minWidth: 0,
-                  overflowWrap: "anywhere",
-                }}
+              <Stack
+                direction="row"
+                useFlexGap
+                flexWrap="wrap"
+                justifyContent="flex-end"
+                columnGap={0.75}
+                rowGap={0.25}
+                sx={{ minWidth: 0 }}
               >
-                {value}
-              </Typography>
+                {(quantities ?? [value]).map((quantity, index, items) => (
+                  <Typography
+                    key={quantity}
+                    component="span"
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      lineHeight: 1.5,
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {quantity}
+                    {index < items.length - 1 && (
+                      <Box
+                        component="span"
+                        sx={{ ml: 0.75, color: "text.disabled" }}
+                      >
+                        ·
+                      </Box>
+                    )}
+                  </Typography>
+                ))}
+              </Stack>
             </Stack>
           ))}
         </Stack>
@@ -548,39 +627,47 @@ function KpiCard({
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          sx={{ mt: 0.5 }}
+          sx={{ mt: alignMetrics ? "auto" : 0.5, pt: alignMetrics ? 1.25 : 0 }}
         >
-          {/* Trend Indicator */}
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={0.5}
-            sx={{ visibility: kpi.hideTrend ? "hidden" : "visible" }}
-          >
-            {trendUp ? (
-              <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
-            ) : (
-              <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
-            )}
+          {/* Snapshot metadata replaces the hidden trend placeholder. */}
+          {kpi.snapshotLabel ? (
             <Typography
-              sx={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: trendColor,
-              }}
+              sx={{ fontSize: 11, color: "text.secondary", lineHeight: 1.5 }}
             >
-              {trendVal}
+              {kpi.snapshotLabel}
             </Typography>
-            <Typography
-              sx={{
-                fontSize: 12.5,
-                fontWeight: 500,
-                color: "text.secondary",
-              }}
+          ) : (
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.5}
+              sx={{ visibility: kpi.hideTrend ? "hidden" : "visible" }}
             >
-              {trendLabel}
-            </Typography>
-          </Stack>
+              {trendUp ? (
+                <ArrowOutwardIcon sx={{ fontSize: 15, color: trendColor }} />
+              ) : (
+                <SouthEastIcon sx={{ fontSize: 15, color: trendColor }} />
+              )}
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: trendColor,
+                }}
+              >
+                {trendVal}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  color: "text.secondary",
+                }}
+              >
+                {trendLabel}
+              </Typography>
+            </Stack>
+          )}
 
           {/* Action Drilldown & Table Icons */}
           <Stack direction="row" alignItems="center" spacing={0.5}>
