@@ -84,6 +84,9 @@ item/barcode routes and optional for the shared all-area summary.
   breakdown does not stretch neighboring KPIs. Other dashboards and specialized
   Technical grids are unchanged. Quantity/unit pairs stay together; snapshot time
   sits in the card footer and the refresh action sits beside the section heading.
+- Stock lists active KPIs first, followed by unavailable/NA cards, preserving the
+  catalog order within each group. Zero is a valid active value. This same order
+  is used in the drill's left rail; Building/Curing ordering is unchanged.
 - Technical KPI drills follow Production's split layout: on desktop (`lg+`),
   all KPI cards stack in a 340px left rail and the selected drill fills the right.
   Closing the drill restores the normal grid; below `lg` the rail and panel stack.

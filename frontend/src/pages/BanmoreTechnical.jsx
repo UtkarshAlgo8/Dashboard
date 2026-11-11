@@ -574,7 +574,16 @@ function BanmoreTechnical() {
                 ? "Inventory source unavailable"
                 : undefined,
     }));
-  const displayKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
+  const mappedKpis = mapDisplayKpis(TECHNICAL_KPI_CATALOG[tab] ?? []);
+  // Stock: keep usable values (including zero) consecutive, without changing
+  // catalog order within either group or mutating the source definitions.
+  const displayKpis =
+    tab === "stock"
+      ? [
+          ...mappedKpis.filter(hasLiveKpiValue),
+          ...mappedKpis.filter((entry) => !hasLiveKpiValue(entry)),
+        ]
+      : mappedKpis;
 
   // Period-bound cards wait for their sources, but never gate the live card.
   // Its first load/error is independent; background polls keep its last answer
@@ -1449,6 +1458,10 @@ function UnavailableKpiCard({
       </Typography>
     </Box>
   );
+}
+
+function hasLiveKpiValue({ live }) {
+  return Boolean(live) && hasKpiValue(live.value);
 }
 
 function hasKpiValue(value) {
