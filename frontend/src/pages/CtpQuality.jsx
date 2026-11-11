@@ -2,8 +2,8 @@ import CtpQualityDashboard from "@/pages/quality/ctp/CtpQualityDashboard.jsx";
 
 /**
  * Route wrapper for the CTP (Chennai) Quality dashboard. Reached from the
- * landing "Quality" function on the Chennai plant. Only the Process tab is
- * live; Product, Customer Complaint and SPC show as Phase 2.
+ * landing "Quality" function on the Chennai plant. Process, Product and SPC
+ * use live data; Customer Complaint remains Phase 2.
  */
 const CTP_PLANT = {
   id: "chennai",
