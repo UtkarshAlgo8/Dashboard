@@ -24,7 +24,6 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import WarehouseOutlinedIcon from "@mui/icons-material/WarehouseOutlined";
 import DonutLargeOutlinedIcon from "@mui/icons-material/DonutLargeOutlined";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
-import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import ProductionHeader from "@/components/production/ProductionHeader.jsx";
 import KpiCard from "@/components/production/KpiCard.jsx";
 import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
@@ -762,6 +761,7 @@ function BanmoreTechnical() {
             <TechnicalDrillPanel
               key={`${drillScope}|${openDrillKpiId}`}
               kpiId={openDrillKpiId}
+              individualProductsOnly={tab === "stock"}
               title={`${definition.name} — ${areaLabel}`}
               breadcrumb={
                 tab === "stock"
@@ -937,10 +937,6 @@ function BanmoreTechnical() {
               dashboardLayout={["stock", "building", "curing"].includes(tab)}
               isLoading={kpisLoading}
               isLiveLoading={!liveSnapshot.data && !liveSnapshot.error}
-              onRefreshOverage={
-                tab === "stock" && overageSection ? refreshOverage : undefined
-              }
-              isRefreshingOverage={overage.isLoading}
               overageError={
                 tab === "stock" && overageSection ? overageError : null
               }
@@ -1044,8 +1040,6 @@ function TechnicalKpiSection({
   dashboardLayout = false,
   isLoading,
   isLiveLoading,
-  onRefreshOverage,
-  isRefreshingOverage,
   overageError,
   error,
   openDrillKpiId,
@@ -1069,18 +1063,6 @@ function TechnicalKpiSection({
         >
           {title}
         </Typography>
-        {onRefreshOverage && (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<RefreshOutlinedIcon sx={{ fontSize: 16 }} />}
-            disabled={isRefreshingOverage}
-            onClick={onRefreshOverage}
-            sx={{ flexShrink: 0 }}
-          >
-            Refresh overage
-          </Button>
-        )}
       </Stack>
 
       {overageError && (

@@ -179,7 +179,7 @@ function KpiCard({
         display: "flex",
         flexDirection: "column",
         justifyContent: alignMetrics ? "flex-start" : "space-between",
-        minHeight: 136,
+        minHeight: alignMetrics && kpi.quantityTotals ? 160 : 136,
         "&:hover": {
           boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
         },
@@ -215,7 +215,7 @@ function KpiCard({
           </Typography>
         </Stack>
 
-        {!disabled && !kpi.quantityLines && (
+        {!disabled && !kpi.quantityLines && !kpi.hideInfo && (
           <Tooltip title="KPI Details & Calculation Info" arrow>
             <InfoOutlinedIcon
               sx={{
@@ -235,7 +235,15 @@ function KpiCard({
         alignItems="center"
         justifyContent="space-between"
         spacing={1}
-        sx={{ my: 0.25, minWidth: 0 }}
+        sx={{
+          my: 0.25,
+          minWidth: 0,
+          ...(kpi.quantityBreakdown?.length && {
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            rowGap: 0.5,
+          }),
+        }}
       >
         {/* Left: Value, Unit & Sub-Badges */}
         <Stack sx={{ minWidth: 0, flex: 1 }}>
@@ -282,9 +290,14 @@ function KpiCard({
                       <Typography
                         component="span"
                         sx={{
-                          fontSize: { xs: 24, md: 26, lg: 28 },
+                          fontSize: kpi.quantityBreakdown?.length
+                            ? { xs: 21, md: 22, lg: 23 }
+                            : { xs: 24, md: 26, lg: 28 },
                           fontWeight: 800,
                           fontVariantNumeric: "tabular-nums",
+                          ...(kpi.quantityBreakdown?.length && {
+                            "@container (max-width: 300px)": { fontSize: 19 },
+                          }),
                           lineHeight: 1.2,
                           color: cardTheme.textColor,
                         }}
@@ -298,6 +311,9 @@ function KpiCard({
                             fontSize: 13,
                             fontWeight: 500,
                             color: "text.secondary",
+                            ...(kpi.quantityBreakdown?.length && {
+                              "@container (max-width: 300px)": { fontSize: 11 },
+                            }),
                           }}
                         >
                           {unit}
@@ -438,6 +454,69 @@ function KpiCard({
             </Stack>
           )}
         </Stack>
+
+        {Boolean(kpi.quantityBreakdown?.length) && (
+          <Stack spacing={0.25} sx={{ minWidth: 0, flexShrink: 0 }}>
+            {kpi.quantityBreakdown.map(({ label, quantities }) => (
+              <Stack
+                key={label}
+                direction="row"
+                alignItems="baseline"
+                justifyContent="space-between"
+                spacing={0.75}
+              >
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: 10.5,
+                    color: "text.secondary",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {label.replace(" Compound", "")}
+                </Typography>
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  useFlexGap
+                  flexWrap="wrap"
+                  justifyContent="flex-end"
+                >
+                  {quantities.map(({ value, unit, fullValue }, index) => (
+                    <Tooltip
+                      key={`${unit}-${index}`}
+                      title={fullValue}
+                      arrow
+                      describeChild
+                    >
+                      <Typography
+                        component="span"
+                        tabIndex={0}
+                        aria-label={`${label}: ${fullValue}`}
+                        sx={{
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          color: "text.primary",
+                          whiteSpace: "nowrap",
+                          borderRadius: 0.5,
+                          "&:focus-visible": {
+                            outline: "2px solid",
+                            outlineColor: "primary.main",
+                            outlineOffset: 2,
+                          },
+                        }}
+                      >
+                        {value}
+                        {unit ? ` ${unit}` : ""}
+                      </Typography>
+                    </Tooltip>
+                  ))}
+                </Stack>
+              </Stack>
+            ))}
+          </Stack>
+        )}
 
         {/* Sparkline Graph — Auto-hides when card is too narrow (<215px) to prevent text collision */}
         {hasSpark && (
