@@ -761,6 +761,7 @@ function BanmoreTechnical() {
             <TechnicalDrillPanel
               key={`${drillScope}|${openDrillKpiId}`}
               kpiId={openDrillKpiId}
+              individualProductsOnly={tab === "stock"}
               title={`${definition.name} — ${areaLabel}`}
               breadcrumb={
                 tab === "stock"

@@ -105,6 +105,7 @@ function ProductionDrill({
   rawRows,
   card,
   planCard,
+  individualProductsOnly = false,
   isLoading,
   onClose,
 }) {
@@ -112,17 +113,19 @@ function ProductionDrill({
   const byMachine = rowsOf(rawRows, "Production_m", sectionName);
   const products = distinctValues(byMachine, "product_type");
   const aggregate = AGGREGATE_PRODUCT[sectionName];
-  const productOptions = products.includes(aggregate)
-    ? [aggregate, ...products.filter((p) => p !== aggregate)]
-    : [ALL_PRODUCTS, ...products];
+  const productOptions = individualProductsOnly
+    ? products.filter((p) => String(p).trim().toLowerCase() !== "all")
+    : products.includes(aggregate)
+      ? [aggregate, ...products.filter((p) => p !== aggregate)]
+      : [ALL_PRODUCTS, ...products];
   const [productPick, setProduct] = useState(null);
   const product = productOptions.includes(productPick)
     ? productPick
     : productOptions[0];
   const inProduct = (rows) =>
-    product === ALL_PRODUCTS
+    !individualProductsOnly && product === ALL_PRODUCTS
       ? rows
-      : rows.filter((r) => r.product_type === product);
+      : rows.filter((r) => product != null && r.product_type === product);
 
   // Mixing (Batch / KG) and Stock (NOS / M) record one output in two units
   // that may never be added together — pick one, defaulting to the card's.
@@ -164,7 +167,9 @@ function ProductionDrill({
   // Plan only exists for Building / Curing (SKU Plan Fulfillment), and it
   // covers the section total — so it is shown for the aggregate product only.
   const hasPlan =
-    planCard?.planned != null && (product === aggregate || !aggregate);
+    !individualProductsOnly &&
+    planCard?.planned != null &&
+    (product === aggregate || !aggregate);
   const tiles = [
     ["Actual", quantity(actual, unit)],
     ["Plan", hasPlan ? quantity(planCard.planned, unit) : "—"],
@@ -206,7 +211,7 @@ function ProductionDrill({
       ]}
       cols={groupedCols(view, unit)}
       rows={groupedRows(groups, unit)}
-      footnote={`${product === ALL_PRODUCTS ? "All products" : product} — ${quantity(actual, unit)} in this window.${cappedNote(groups.length)}`}
+      footnote={`${!individualProductsOnly && product === ALL_PRODUCTS ? "All products" : (product ?? "No product available")} — ${quantity(actual, unit)} in this window.${cappedNote(groups.length)}`}
       downloadFilename={`technical-production-${sectionName}`.toLowerCase()}
       isLoading={isLoading && byMachine.length === 0}
       onClose={onClose}
