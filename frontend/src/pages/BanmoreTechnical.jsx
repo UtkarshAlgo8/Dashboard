@@ -312,7 +312,7 @@ function BanmoreTechnical() {
     {
       enabled: tab === "stock",
       interval: 0,
-      cacheKey: "technical:banmore:overage-live:all:v3",
+      cacheKey: "technical:banmore:overage-live:all:v4",
       staleTime: 5 * 60 * 1000,
     },
   );
