@@ -22,7 +22,7 @@ Source: **Overage KPI Dashboard — UI and Backend Guide**, updated 10 Nov 2026.
 
 Implementation: `backend/src/queries/overage-live.js`.
 
-- Rolling 720 hours in IST, non-future production, positive stock and age strictly
+- Rolling 240 hours (10 days) in IST, non-future production, positive stock and age strictly
   greater than shelf life. Only Ready To Use, Decision Pending and Consumed.
 - Shelf-life conversions, BOM/machine classification, aging precedence, assumed
   quantity, unit decisions, production date/shift and every metric execute in SQL.
@@ -68,6 +68,7 @@ item/barcode routes and optional for the shared all-area summary.
   and causes no new summary query. Scoped summary consumers use this same cache.
   Detail caches remain section/filter/page-keyed, with in-flight deduplication.
   `refresh=1` bypasses a cached result; a 15-second guard limits repeated refreshes.
+  Cache namespaces change with the lookback so 30-day entries cannot be reused.
   Source-access failures and classification failures are remembered for 60 seconds
   (classification failures are section-specific). A batch with a conflicting
   section omits that section's totals/products and lists its error under

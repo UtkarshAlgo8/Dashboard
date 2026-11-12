@@ -6,7 +6,11 @@ import {
   getLiveOverageBarcodes,
 } from "@/api/inventory.js";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
-import { formatLiveOverageQty, formatOverageTime } from "@/lib/overage.js";
+import {
+  formatLiveOverageQty,
+  formatOverageLookback,
+  formatOverageTime,
+} from "@/lib/overage.js";
 import { toDisplayDate } from "@/lib/dateFormat.js";
 
 const PAGE_SIZE = 100;
@@ -68,7 +72,7 @@ function OverageDrill({
       enabled: !state.selected,
       deps: [section, productType, state.itemOffset],
       interval: 0,
-      cacheKey: `overage:items:${JSON.stringify([section, productType, state.itemOffset])}`,
+      cacheKey: `overage:v4:items:${JSON.stringify([section, productType, state.itemOffset])}`,
       staleTime: 5 * 60_000,
     },
   );
@@ -94,11 +98,14 @@ function OverageDrill({
         state.barcodeOffset,
       ],
       interval: 0,
-      cacheKey: `overage:barcodes:${JSON.stringify([section, selected?.product_type, selected?.item_code, selected?.unit, state.barcodeOffset])}`,
+      cacheKey: `overage:v4:barcodes:${JSON.stringify([section, selected?.product_type, selected?.item_code, selected?.unit, state.barcodeOffset])}`,
       staleTime: 5 * 60_000,
     },
   );
   const query = selected ? barcodes : items;
+  const lookback = formatOverageLookback(
+    query.data?.lookback_hours ?? data?.lookback_hours,
+  );
   const offset = selected ? state.barcodeOffset : state.itemOffset;
   const rawRows = query.error ? [] : (query.data?.rows ?? []);
   const productTypes = [
@@ -240,7 +247,7 @@ function OverageDrill({
             : `No overage stock for this selection in ${areaLabel}.`
         }
         downloadFilename={`technical-overage-${section}-${selected ? "barcodes" : "items"}-page-${offset / PAGE_SIZE + 1}`.toLowerCase()}
-        footnote="Live Silver snapshot · rolling 720 hours · ignores dashboard date and shift filters. Different units are never added. Assumed Qty uses produced quantity when live quantity is not posted. Export contains this page only; independently queried screens may differ as stock changes."
+        footnote={`Live Silver snapshot${lookback ? ` · rolling ${lookback}` : ""} · ignores dashboard date and shift filters. Different units are never added. Assumed Qty uses produced quantity when live quantity is not posted. Export contains this page only; independently queried screens may differ as stock changes.`}
         onClose={onClose}
       />
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>

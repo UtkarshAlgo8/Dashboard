@@ -99,9 +99,20 @@ export function formatOverageTime(value) {
   return `${get("day")}-${get("month")}-${get("year")} ${get("hour")}:${get("minute")} IST`;
 }
 
+/** Describe the server-reported lookback without inventing a time window. */
+export function formatOverageLookback(hours) {
+  if (typeof hours !== "number" || !Number.isFinite(hours) || hours <= 0)
+    return null;
+  const days = hours / 24;
+  return Number.isInteger(days)
+    ? `${days} ${days === 1 ? "day" : "days"}`
+    : `${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
 /** Shape small, SQL-aggregated rows for display only; never recalculate totals. */
 export function toLiveOverageCard(data, definition) {
   const totals = data.totals ?? [];
+  const lookback = formatOverageLookback(data.lookback_hours);
   const quantityBreakdown = ["Master Compound", "Final Compound"].flatMap(
     (label) => {
       const quantities = (data.products ?? [])
@@ -121,7 +132,7 @@ export function toLiveOverageCard(data, definition) {
       (data.totals ?? [])
         .map((row) => formatLiveOverageQty(row.overage_qty, row.unit))
         .join(" · ") || "0",
-    note: "Live stock · last 30 days",
+    note: lookback ? `Live stock · last ${lookback}` : "Live stock",
     quantityBreakdown,
     hideInfo: true,
     snapshotLabel: formatOverageTime(data.as_of),

@@ -20,7 +20,7 @@ test("live overage uses only Silver Athena sources, one summary aggregation and 
   assert.match(sql, /FULL OUTER JOIN agg/);
   assert.match(sql, /WHERE dashboard_section = 'Extruder'/);
   assert.match(sql, /p\.plant_code = 'BTP'/);
-  assert.match(sql, /INTERVAL '720' HOUR/);
+  assert.match(sql, /INTERVAL '240' HOUR/);
   assert.match(sql, /CAST\(p\.event_time AS timestamp\) <= k\.as_of/);
   assert.match(sql, /Asia\/Kolkata/);
   assert.match(sql, /COALESCE\(a\.overage_qty, 0\)/);

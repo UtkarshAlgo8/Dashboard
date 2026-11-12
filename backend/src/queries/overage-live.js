@@ -4,6 +4,8 @@
  * production/master datasets leave Athena. No view or Gold writes are needed.
  * Green Tyre is deliberately deferred: its curing-NCM Silver source is absent.
  */
+export const OVERAGE_LOOKBACK_HOURS = 10 * 24;
+
 export const OVERAGE_LAYOUT = Object.freeze([
   ["Mixing", 1, "Master Compound", 1],
   ["Mixing", 1, "Final Compound", 2],
@@ -209,7 +211,7 @@ export function overageCtes(scope) {
       FROM silver.fct_o_production p CROSS JOIN clock k
       WHERE p.plant_code = 'BTP'
         AND LOWER(p.source_machine) IN (SELECT source_machine FROM comp_all)
-        AND CAST(p.event_time AS timestamp) > k.as_of - INTERVAL '720' HOUR
+        AND CAST(p.event_time AS timestamp) > k.as_of - INTERVAL '${OVERAGE_LOOKBACK_HOURS}' HOUR
         AND CAST(p.event_time AS timestamp) <= k.as_of
         AND NULLIF(${clean("p.production_id")}, '') IS NOT NULL
     ) p WHERE barcode_rank = 1
