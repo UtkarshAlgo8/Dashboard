@@ -97,7 +97,7 @@ the remainder.
 See [spec 20](../specs/20-btp-calibration-due.md).
 
 - **Q-BTP-CAL-01 — RESOLVED:** User chose Engineering → Maintenance, the existing right-hand drill, and a project-specific panel using shared table/MUI controls. Calibration always uses today in IST, independent of header period and shift; label this exception explicitly.
-- **Q-BTP-CAL-02 — OPEN (data team):** Live Athena probe returned `TABLE_NOT_FOUND` for `silver.fct_equipment_calibration`. User chose to retain Athena and provision the table; expose an unavailable state until then. See [data-team handoff](../../docs/btp-calibration-data-team-handoff-2026-11-11.md).
+- **Q-BTP-CAL-02 — RESOLVED (2026-11-12):** `silver.fct_equipment_calibration` is accessible through the backend's Athena connection. Live schema confirms `plant_code` is BIGINT, so the filter uses numeric `1300`, not the guide's quoted value. Query/result validation returned 48 machines: 13 due this week, 3 overdue, 32 OK as of 12-Nov-2026 IST. Previously deployed backends need the numeric-filter fix. See [source verification](../../docs/btp-calibration-data-team-handoff-2026-11-11.md).
 - **Q-BTP-CAL-03 — OPEN (data owner):** Confirm whether BTPMI001 (due in 2023) is a real overdue machine or an obsolete record. User explicitly approved including all source records as overdue until confirmed; no special exclusions or age cutoff.
 
 ## BTP Stock Cost follow-up (2026-11-10)

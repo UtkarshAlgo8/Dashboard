@@ -5,7 +5,7 @@ Source: user-supplied `calibration_due_kpi_dev_guide (1).md` (2026-11-11).
 ## Confirmed scope
 
 - Add **Calibration Due** to Maintenance using the existing KPI card and right-hand drill area.
-- Read Silver `fct_equipment_calibration`, strictly `plant_code = '1300'`. One row is one machine; do not sum instrument counts for the KPI.
+- Read Silver `fct_equipment_calibration`, strictly `plant_code = 1300` (Athena BIGINT, confirmed live on 2026-11-12). One row is one machine; do not sum instrument counts for the KPI.
 - Main number: machines with 0–7 days left, inclusive. Small red text: all machines with negative days left, including BTPMI001 (2023 due date) until the data owner confirms it is obsolete.
 - User confirmed a current IST snapshot independent of header dates, arbitrary ranges, and shifts. Explicitly label this exception on the card and drill.
 - Six columns: Machine No, Machine Name, Instruments, Due Date (`dd-MMM-yyyy`), Days Left, Status. Earliest due date first; local Status filter defaults to All statuses.
@@ -25,11 +25,15 @@ Source: user-supplied `calibration_due_kpi_dev_guide (1).md` (2026-11-11).
 
 - Backend inline checks: IST midnight, negative/0/7/8-day boundaries, old overdue rows, quote cleaning, one-machine grain, missing instruments, invalid/duplicate/truncated source data, HTTP validation, Athena transport, cache reuse and IST-day rollover, missing-source error envelope.
 - Executed the SQL against SQLite fixtures with Athena DATE syntax adapted: plant 1300 isolation, integer casting, completeness window and due-date ordering.
-- Mock-backed browser walkthrough at desktop/tablet sizes: counts, six columns, all status filters, date ordering, quote cleaning, close, valid zero vs empty vs unavailable, Retry, no header filters in requests and no runtime errors. Live data verification remains blocked below.
+- Mock-backed browser walkthrough at desktop/tablet sizes: counts, six columns, all status filters, date ordering, quote cleaning, close, valid zero vs empty vs unavailable, Retry, no header filters in requests and no runtime errors. Live verification after provisioning is recorded below.
 - Focused frontend ESLint/Prettier and production build passed; 57 existing Compliance/Safety/Stock Cost/upstream regressions passed.
 - Full `npm run check`: lint, formatting and build pass; forbidden-pattern checks fail on existing hex colors, one deep relative import and one component-level fetch. A baseline comparison against the pre-feature HEAD, including untracked Calibration source files, confirms zero new violations. User approved leaving pre-existing violations untouched; do not weaken the checks or expand this PR into unrelated cleanup.
 - Separate existing live route smoke check: three passed, one failed because `test/routes.test.js` expects the historical anchor `2026-07-16` but the live source now returns `2026-11-10`. No unrelated test expectations were changed.
 
-## Open dependency
+## Live source verification (2026-11-12)
 
-Live Athena probe on 2026-11-11 returned `TABLE_NOT_FOUND` for `awsdatacatalog.silver.fct_equipment_calibration`. User chose to keep Athena and provision the Silver table rather than use the legacy Databricks transport. The feature cannot display live counts until that table is exposed. See [data-team handoff](../../docs/btp-calibration-data-team-handoff-2026-11-11.md) and Q-BTP-CAL-02 in the open-questions registry.
+The table is now accessible through the backend's Athena connection. Its actual `plant_code` type is BIGINT; the guide's quoted `'1300'` produced a type mismatch, so the query now uses numeric `1300`. The live query and result validation returned 48 distinct machines as of 12-Nov-2026 IST: **13 due this week, 3 overdue, 32 OK**. Machine names with extra quotes are cleaned and BTPMI001 remains included as approved.
+
+The backend route was exercised locally against live Athena and returned HTTP 200. An independent aggregate query reconciled all counts and confirmed 48 unique machines; the frontend card/filter helpers matched the live response. All 60 focused backend regressions (including three new Calibration regressions) passed.
+
+The original missing-table dependency is resolved. A backend deployment containing the numeric-filter fix is required for previously deployed builds; no frontend change is needed. See [source handoff and verification](../../docs/btp-calibration-data-team-handoff-2026-11-11.md) and Q-BTP-CAL-02 in the open-questions registry.
