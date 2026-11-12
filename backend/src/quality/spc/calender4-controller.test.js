@@ -48,7 +48,7 @@ test("Merged SPC controllers agree across snapshots, filters, detail, trends and
   await t.test("Excel-only data survives an empty gold snapshot", async () => {
     await _clear();
     const { body: board } = await invoke("getSpcWidgets", base);
-    assert.equal(board.count, 7);
+    assert.equal(board.count, 5);
     assert.equal(board.context.snapshot_date, null); // never invent a gold snapshot
     const { body: summary } = await invoke("getSpcSummary", base);
     assert.equal(summary.total_parameters, board.count);
@@ -60,7 +60,6 @@ test("Merged SPC controllers agree across snapshots, filters, detail, trends and
     assert.deepEqual(filters.machines, [selection.machine]);
     assert.deepEqual(filters.recipes, [
       "CPJ1218",
-      "CPJ1218_B370",
       "ECOPOLY 1500",
       "UNIHT1330",
     ]);
@@ -90,7 +89,7 @@ test("Merged SPC controllers agree across snapshots, filters, detail, trends and
         from: "2026-10-01",
         to: "2026-11-30",
       });
-      assert.equal(range.count, 7);
+      assert.equal(range.count, 5);
       const { body: rangeFilters } = await invoke("getSpcFilterOptions", {
         plant: "BANMORE",
         from: "2026-10-01",
@@ -185,7 +184,7 @@ test("Merged SPC controllers agree across snapshots, filters, detail, trends and
   await t.test(
     "Flag disable uses a separate cache identity without flushing other caches",
     async () => {
-      assert.equal((await invoke("getSpcWidgets", base)).body.count, 7);
+      assert.equal((await invoke("getSpcWidgets", base)).body.count, 5);
       config.quality.spcCalender4StaticEnabled = false;
       try {
         assert.equal((await invoke("getSpcWidgets", base)).body.count, 0);
@@ -197,7 +196,7 @@ test("Merged SPC controllers agree across snapshots, filters, detail, trends and
       } finally {
         config.quality.spcCalender4StaticEnabled = true;
       }
-      assert.equal((await invoke("getSpcWidgets", base)).body.count, 7);
+      assert.equal((await invoke("getSpcWidgets", base)).body.count, 5);
     },
   );
   await t.test(
@@ -250,10 +249,10 @@ test("Merged SPC controllers agree across snapshots, filters, detail, trends and
             ];
       };
       const { body: board } = await invoke("getSpcWidgets", base);
-      assert.equal(board.count, 8);
+      assert.equal(board.count, 6);
       assert.equal(
         board.widgets.filter((w) => w.source.kind === "static_excel").length,
-        7,
+        5,
       );
       assert.equal(
         board.widgets.filter((w) => w.source.kind === "live").length,
@@ -261,7 +260,7 @@ test("Merged SPC controllers agree across snapshots, filters, detail, trends and
       );
       assert.equal(
         (await invoke("getSpcSummary", base)).body.total_parameters,
-        8,
+        6,
       );
       const { body: liveDetail } = await invoke("getSpcDetail", {
         ...base,

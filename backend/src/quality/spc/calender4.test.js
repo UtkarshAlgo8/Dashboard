@@ -90,13 +90,13 @@ function workbookBuffer(combinations = fixture.combinations) {
 }
 
 test("Calender 4 fixture inventory, published capability and headline reconciliation", () => {
-  assert.equal(fixture.source_file, "SPC_Calender4_11Nov.xlsx");
-  assert.equal(fixture.source_sha256, "d43078a357debab51c8fc2fce024e5671bb32c693d780c9a5640aebe22e5ee39");
-  assert.equal(fixture.version, "calender4-v1-d43078a357de");
-  assert.equal(fixture.kpi_rows, 42);
-  assert.equal(fixture.reading_rows, 473);
-  assert.equal(fixture.combinations.length, 7);
-  assert.ok(fixture.combinations.every((c) => c.recipe !== "CPJ114"));
+  assert.equal(fixture.source_file, "SPC_Calender4_11Nov_v2 (2).xlsx");
+  assert.equal(fixture.source_sha256, "8da6fdc2fe85c84a677fab4fb098d6159ebdd769a18d416d9986d2c1eba982d4");
+  assert.equal(fixture.version, "calender4-v1-8da6fdc2fe85");
+  assert.equal(fixture.kpi_rows, 30);
+  assert.equal(fixture.reading_rows, 375);
+  assert.equal(fixture.combinations.length, 5);
+  assert.ok(fixture.combinations.every((c) => c.recipe !== "CPJ1218_B370"));
   assert.ok(
     fixture.combinations.every(
       (c) => c.machine === "ROLL_CALENDER_4_0501" && c.snapshot_date === date,
@@ -104,30 +104,25 @@ test("Calender 4 fixture inventory, published capability and headline reconcilia
   );
   assert.deepEqual(
     fixture.combinations
-      .filter((c) => c.recipe === "CPJ1218_B370" || c.recipe === "ECOPOLY 1500")
+      .filter((c) => c.recipe === "ECOPOLY 1500")
       .map((c) => c.parameter),
-    [
-      "Scanner Drive Zone",
-      "Scanner Drive Zone",
-      "Scanner Water Zone",
-      "Scanner Water Zone",
-    ],
+    ["Scanner Drive Zone", "Scanner Water Zone"],
   );
   assert.deepEqual(
     fixture.combinations.map((c) => c.readings.length),
-    [44, 48, 124, 33, 35, 41, 148],
+    [44, 113, 33, 35, 150],
   );
   assert.equal(
     fixture.combinations.reduce((n, c) => n + c.readings.length, 0),
-    473,
+    375,
   );
   const widgets = mergeSpcSources([], eligibleCalender4({ date }), deps());
   assert.deepEqual(summaryFromWidgets(widgets), {
-    total_parameters: 7,
+    total_parameters: 5,
     out_of_specification: 2,
     marginal: 1,
     not_capable: 0,
-    capable: 4,
+    capable: 2,
     insufficient_data: 0,
   });
   const healthy = widgets.find(
@@ -135,7 +130,7 @@ test("Calender 4 fixture inventory, published capability and headline reconcilia
   );
   assert.equal(
     widgets.filter((w) => w.headline_status === "Healthy").length,
-    4,
+    2,
   );
   assert.equal(healthy.recipe, "CPJ1218");
   assert.equal(healthy.parameter, "Scanner Water Zone");
@@ -149,8 +144,8 @@ test("Calender 4 fixture inventory, published capability and headline reconcilia
 
 test("Offline importer validates both sheets and preserves numeric values and wall-clock dates", () => {
   const imported = importCalender4(workbookBuffer(), "roundtrip.xlsx");
-  assert.equal(imported.reading_rows, 473);
-  assert.equal(imported.kpi_rows, 42);
+  assert.equal(imported.reading_rows, 375);
+  assert.equal(imported.kpi_rows, 30);
   assert.deepEqual(imported.combinations, fixture.combinations);
   assert.throws(
     () => importCalender4(Buffer.from("not a workbook"), "bad.xlsx"),
@@ -180,18 +175,18 @@ test("Excel serial decoding is independent of process timezone", () => {
 });
 
 test("Exact day / inclusive range eligibility, plant gating, shifts and disable", () => {
-  assert.equal(eligibleCalender4({ date }).length, 7);
+  assert.equal(eligibleCalender4({ date }).length, 5);
   assert.equal(eligibleCalender4({ date: "2026-11-09" }).length, 0);
   assert.equal(eligibleCalender4({ date: "2026-11-10" }).length, 0);
   assert.equal(eligibleCalender4({ date: "2026-11-12" }).length, 0);
-  assert.equal(eligibleCalender4({ from: date, to: date }).length, 7);
+  assert.equal(eligibleCalender4({ from: date, to: date }).length, 5);
   assert.equal(
     eligibleCalender4({ from: "2026-10-01", to: "2026-11-01" }).length,
     0,
   );
   assert.equal(
     eligibleCalender4({ from: "2026-11-01", to: "2026-11-30" }).length,
-    7,
+    5,
   );
   assert.equal(eligibleCalender4({ date, plant: "CHENNAI" }).length, 0);
   assert.equal(eligibleCalender4({ date }, false).length, 0);
@@ -264,7 +259,7 @@ test("Whole-combination merge keeps partial live data from overwriting Excel; co
       plant: "BTP",
     }),
   );
-  assert.equal(mergeSpcSources(rows, fixture.combinations, deps()).length, 7);
+  assert.equal(mergeSpcSources(rows, fixture.combinations, deps()).length, 5);
 });
 
 test("Every fixture detail preserves readings, spec scale, MR gaps, histogram memberships and alert linkage", () => {
