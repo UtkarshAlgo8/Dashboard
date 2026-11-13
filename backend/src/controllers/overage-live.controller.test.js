@@ -84,7 +84,7 @@ test("summaries share one compact batch cache across sections and ignore date/sh
     assert.equal(data.products[1].overage_qty, 0);
     assert.equal(data.products[1].unit, null);
     assert.equal(data.as_of, "2026-11-11T12:00:00.123+05:30");
-    assert.equal(data.lookback_hours, 720);
+    assert.equal(data.lookback_hours, 240);
     assert.equal(data.rows, undefined);
     assert.equal(data.skus, undefined);
     assert.equal(
@@ -142,6 +142,7 @@ test("lazy item/barcode endpoints are bounded, safely scoped and preserve audit 
     assert.equal(items.status, 200);
     const { data } = await items.json();
     assert.equal(data.rows.length, 2);
+    assert.equal(data.lookback_hours, 240);
     assert.equal(data.has_more, true);
     assert.equal(data.rows[0].overage_qty, 2.5);
     assert.equal(data.rows[0].quality_status, "Consumed");
@@ -156,12 +157,16 @@ test("lazy item/barcode endpoints are bounded, safely scoped and preserve audit 
     });
     const response = await nativeFetch(`${base}/barcodes?${params}`);
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).data.offset, 2);
+    const barcodePage = (await response.json()).data;
+    assert.equal(barcodePage.offset, 2);
+    assert.equal(barcodePage.lookback_hours, 240);
     assert.match(requests[1].sql, /A\/\(''B''\)/);
     assert.match(requests[1].sql, /AND unit = 'NOS'/);
     assert.match(requests[1].sql, /OFFSET 2 ROWS LIMIT 3/);
   });
   assert.equal(requests.length, 2);
+  for (const request of requests)
+    assert.match(request.sql, /INTERVAL '240' HOUR/);
 });
 
 test("invalid scopes and pages are rejected before contacting Athena", async (t) => {

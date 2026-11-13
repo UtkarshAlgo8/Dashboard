@@ -24,7 +24,7 @@ export function calibrationQuery(asOfDate) {
     date_diff('day', DATE '${asOfDate}', CAST(calibration_due_date AS DATE)) AS days_left,
     COUNT(*) OVER () AS result_rows
   FROM ${CALIBRATION_TABLE}
-  WHERE plant_code = '1300'
+  WHERE plant_code = 1300
   ORDER BY CAST(calibration_due_date AS DATE), machine_no
   LIMIT ${MAX_ROWS + 1}`;
 }

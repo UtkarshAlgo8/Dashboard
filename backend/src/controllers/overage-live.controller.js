@@ -1,5 +1,6 @@
 import {
   OVERAGE_SECTIONS,
+  OVERAGE_LOOKBACK_HOURS,
   overageSummaryQuery,
   overageItemsQuery,
   overageBarcodesQuery,
@@ -9,9 +10,9 @@ import { runQuery, UpstreamError } from "../utils/upstream.js";
 import { normalizePlantId } from "../utils/normalize.js";
 
 const TTL = 5 * 60_000;
-const SOURCE_FAILURE_KEY = "overage-live:v3:source-failure";
+const SOURCE_FAILURE_KEY = "overage-live:v4:source-failure";
 const conflictKey = (section) =>
-  buildCacheKey("overage-live:v3:classification-failure", { section });
+  buildCacheKey("overage-live:v4:classification-failure", { section });
 const conflictMessage = (section) =>
   `Overage classification conflict in ${section}: a barcode maps to multiple product types. Master-data correction is required; totals are not shown.`;
 const NUMERIC_FIELDS = new Set([
@@ -141,7 +142,7 @@ function handler(kind) {
       // All six tiny summaries share ONE query/cache, including scoped consumers.
       // Only the already-aggregated display rows are filtered after this cache.
       const key = buildCacheKey(
-        `/overage-live/v3/${kind}`,
+        `/overage-live/v4/${kind}`,
         kind === "summary" ? {} : scope,
       );
       if (req.query.refresh === "1") {
@@ -185,7 +186,7 @@ function handler(kind) {
           const metadata = {
             as_of: istTimestamp(raw[0]?.as_of) ?? startedAt,
             timezone: "Asia/Kolkata",
-            lookback_hours: 720,
+            lookback_hours: OVERAGE_LOOKBACK_HOURS,
           };
           if (kind === "summary")
             return {

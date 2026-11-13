@@ -22,7 +22,7 @@ Source: **Overage KPI Dashboard — UI and Backend Guide**, updated 10 Nov 2026.
 
 Implementation: `backend/src/queries/overage-live.js`.
 
-- Rolling 720 hours in IST, non-future production, positive stock and age strictly
+- Rolling 240 hours (10 days) in IST, non-future production, positive stock and age strictly
   greater than shelf life. Only Ready To Use, Decision Pending and Consumed.
 - Shelf-life conversions, BOM/machine classification, aging precedence, assumed
   quantity, unit decisions, production date/shift and every metric execute in SQL.
@@ -68,6 +68,7 @@ item/barcode routes and optional for the shared all-area summary.
   and causes no new summary query. Scoped summary consumers use this same cache.
   Detail caches remain section/filter/page-keyed, with in-flight deduplication.
   `refresh=1` bypasses a cached result; a 15-second guard limits repeated refreshes.
+  Cache namespaces change with the lookback so 30-day entries cannot be reused.
   Source-access failures and classification failures are remembered for 60 seconds
   (classification failures are section-specific). A batch with a conflicting
   section omits that section's totals/products and lists its error under
@@ -80,10 +81,12 @@ item/barcode routes and optional for the shared all-area summary.
 
 - Technical Stock/Building/Curing cards use the Engineering-style responsive grid:
   four columns on desktop, three on medium screens, two on tablets, one on mobile,
-  with 16px gutters. Cards are top-aligned at their natural height, so the Overage
-  breakdown does not stretch neighboring KPIs. Other dashboards and specialized
-  Technical grids are unchanged. Quantity/unit pairs stay together; snapshot time
-  sits in the card footer and the refresh action sits beside the section heading.
+  with 16px gutters. Cards are top-aligned at their natural height. Overage uses
+  the same compact card structure as its neighbors; Mixing shows Master and Final
+  Compound in two compact rows to the right of its total, with detailed product
+  breakdown in the drill. Other dashboards and specialized grids are unchanged.
+  Quantity/unit pairs stay together; snapshot time
+  sits in the card footer. The refresh action is available inside the drill header.
 - Stock lists active KPIs first, followed by unavailable/NA cards, preserving the
   catalog order within each group. Zero is a valid active value. This same order
   is used in the drill's left rail; Building/Curing ordering is unchanged.
@@ -92,12 +95,14 @@ item/barcode routes and optional for the shared all-area summary.
   Closing the drill restores the normal grid; below `lg` the rail and panel stack.
   Overage item/barcode navigation remains inside the right panel; refresh/back
   actions live in its header. Specialized dashboard sections remain unchanged.
-- Cards show all unit totals and product-type lines using Indian compact suffixes
-  (`k`, `L`, `Cr`) with two decimals, e.g. `1.27Cr KG` or `65.23L KG`. Hover or
-  keyboard focus on any quantity reveals the full exact value and original unit.
-  Drill-downs and exports retain unabridged quantities. Preserve KG, M, NOS and
-  `Not set`; never convert KG to MT, hide secondary units or sum different units.
-  Empty quantities show `0`. Product names and values use a shared baseline-aligned grid.
+- Cards show KG totals as metric tonnes (MT, 1 MT = 1,000 KG), normally with
+  two decimals; small nonzero MT totals retain enough precision to avoid reading
+  as zero. M, NOS and `Not set` stay in their original units. Totals use Indian
+  digit grouping without `k`, `L` or `Cr` suffixes; secondary units are never
+  hidden or summed. Hover or keyboard focus reveals the full source quantity and
+  original unit. Drill-downs and exports retain the source units and quantities.
+  Empty quantities show `0`. Mixing compound values also retain source-unit
+  tooltips; other product-type details remain available in the drill.
 - Open card → lazy item page; click an item row → lazy barcode page. No item or
   barcode requests happen on initial card load. Product filters execute in SQL.
 - Show assumed quantity, barcode count, machines, shelf life, oldest production

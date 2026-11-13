@@ -54,34 +54,29 @@ export function formatLiveOverageQty(value, unit) {
   return `${LIVE_QUANTITY.format(value)} ${unit}`;
 }
 
-/** Card-only Indian suffixes; exact source quantities remain unchanged. */
-export function formatCompactOverageValue(value) {
-  const number = Number(value);
-  if (value == null || value === "" || !Number.isFinite(number)) return "—";
-  const scales = [
-    [1e7, "Cr"],
-    [1e5, "L"],
-    [1e3, "k"],
-    [1, ""],
-  ];
-  let index = scales.findIndex(([divisor]) => Math.abs(number) >= divisor);
-  if (index === -1) index = scales.length - 1;
-  // Promote rounding boundaries: 99.999k should read 1.00L, not 100.00k.
-  if (
-    index > 0 &&
-    Number((Math.abs(number) / scales[index][0]).toFixed(2)) >=
-      scales[index - 1][0] / scales[index][0]
-  )
-    index -= 1;
-  const [divisor, suffix] = scales[index];
-  return `${LIVE_QUANTITY.format(number / divisor)}${suffix}`;
-}
-
 function cardQuantity(value, unit) {
+  const number = Number(value);
+  const isKg =
+    String(unit ?? "")
+      .trim()
+      .toUpperCase() === "KG";
+  const displayed = isKg ? number / 1000 : number;
+  // Do not round a small, nonzero quantity down to 0.00 MT.
+  const format =
+    isKg && displayed !== 0 && Math.abs(displayed) < 0.005
+      ? new Intl.NumberFormat("en-IN", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 5,
+        })
+      : LIVE_QUANTITY;
   return {
     value:
-      !unit && Number(value) === 0 ? "0" : formatCompactOverageValue(value),
-    unit: unit ?? "",
+      value == null || value === "" || !Number.isFinite(number)
+        ? "—"
+        : !unit && number === 0
+          ? "0"
+          : format.format(displayed),
+    unit: isKg ? "MT" : (unit ?? ""),
     fullValue: formatLiveOverageQty(value, unit),
   };
 }
@@ -104,34 +99,42 @@ export function formatOverageTime(value) {
   return `${get("day")}-${get("month")}-${get("year")} ${get("hour")}:${get("minute")} IST`;
 }
 
+/** Describe the server-reported lookback without inventing a time window. */
+export function formatOverageLookback(hours) {
+  if (typeof hours !== "number" || !Number.isFinite(hours) || hours <= 0)
+    return null;
+  const days = hours / 24;
+  return Number.isInteger(days)
+    ? `${days} ${days === 1 ? "day" : "days"}`
+    : `${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
 /** Shape small, SQL-aggregated rows for display only; never recalculate totals. */
 export function toLiveOverageCard(data, definition) {
-  const products = new Map();
-  for (const row of data.products ?? []) {
-    if (!products.has(row.product_type)) products.set(row.product_type, []);
-    products
-      .get(row.product_type)
-      .push(cardQuantity(row.overage_qty, row.unit));
-  }
+  const totals = data.totals ?? [];
+  const lookback = formatOverageLookback(data.lookback_hours);
+  const quantityBreakdown = ["Master Compound", "Final Compound"].flatMap(
+    (label) => {
+      const quantities = (data.products ?? [])
+        .filter((row) => row.product_type === label)
+        .map((row) => cardQuantity(row.overage_qty, row.unit));
+      return quantities.length ? [{ label, quantities }] : [];
+    },
+  );
   return {
     ...definition,
     value: data.totals?.[0]?.overage_qty ?? 0,
     unit: "",
-    quantityTotals: (data.totals ?? []).map((row) =>
-      cardQuantity(row.overage_qty, row.unit),
-    ),
+    quantityTotals: totals.length
+      ? totals.map((row) => cardQuantity(row.overage_qty, row.unit))
+      : [cardQuantity(0, "")],
     formattedValue:
       (data.totals ?? [])
         .map((row) => formatLiveOverageQty(row.overage_qty, row.unit))
         .join(" · ") || "0",
-    quantityLines: [...products].map(([label, quantities]) => ({
-      label,
-      value: quantities
-        .map(({ value, unit }) => `${value}${unit ? ` ${unit}` : ""}`)
-        .join(" · "),
-      quantities,
-    })),
-    note: "Live stock · last 30 days",
+    note: lookback ? `Live stock · last ${lookback}` : "Live stock",
+    quantityBreakdown,
+    hideInfo: true,
     snapshotLabel: formatOverageTime(data.as_of),
     hideTrend: true,
     hideProgress: true,
