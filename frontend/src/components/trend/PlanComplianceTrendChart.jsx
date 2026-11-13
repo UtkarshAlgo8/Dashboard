@@ -48,9 +48,9 @@ export default function PlanComplianceTrendChart({
   const options = useMemo(() => {
     const isDark = theme.palette.mode === "dark";
     const colors = {
-      planned: "#FFA3A3", // Coral / Light pink
-      produced: theme.custom?.brand?.red || "#E52E2E", // Solid red
-      fulfillment: theme.custom?.brand?.red || "#E52E2E",
+      planned: theme.custom.charts.planned,
+      produced: theme.custom.brand.red,
+      fulfillment: theme.custom.brand.red,
       grid: theme.palette.divider,
       text: theme.palette.text.secondary,
       textPrimary: theme.palette.text.primary,
@@ -142,7 +142,9 @@ export default function PlanComplianceTrendChart({
       tooltip: {
         shared: true,
         useHTML: true,
-        backgroundColor: isDark ? "#1E1E1E" : "#FFFFFF",
+        backgroundColor: isDark
+          ? theme.custom.charts.tooltipDark
+          : theme.palette.common.white,
         borderColor: colors.grid,
         borderRadius: 8,
         shadow: true,
@@ -173,7 +175,7 @@ export default function PlanComplianceTrendChart({
                 ${dateLabel}
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span style="color: #FFA3A3; font-weight: 600;">■ Planned:</span>
+                <span style="color: ${colors.planned}; font-weight: 600;">■ Planned:</span>
                 <span style="font-weight: 700; color: ${colors.textPrimary};">${planned != null ? planned.toLocaleString() + " " + unit : "—"}</span>
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -211,7 +213,7 @@ export default function PlanComplianceTrendChart({
               fontSize: "10.5px",
               fontWeight: "600",
               color: colors.textPrimary,
-              textOutline: isDark ? "1px #000" : "1px #FFF",
+              textOutline: `1px ${isDark ? theme.palette.common.black : theme.palette.common.white}`,
             },
             inside: false,
             verticalAlign: "bottom",
@@ -225,7 +227,9 @@ export default function PlanComplianceTrendChart({
             symbol: "circle",
             fillColor: colors.fulfillment,
             lineWidth: 2,
-            lineColor: isDark ? "#1E1E1E" : "#FFFFFF",
+            lineColor: isDark
+              ? theme.custom.charts.tooltipDark
+              : theme.palette.common.white,
           },
           dataLabels: {
             enabled: labels.length > 0 && labels.length <= 31,
@@ -236,7 +240,7 @@ export default function PlanComplianceTrendChart({
               fontSize: "11px",
               fontWeight: "700",
               color: colors.fulfillment,
-              textOutline: isDark ? "1px #000" : "1px #FFF",
+              textOutline: `1px ${isDark ? theme.palette.common.black : theme.palette.common.white}`,
             },
             y: -10,
           },

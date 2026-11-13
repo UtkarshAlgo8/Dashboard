@@ -21,6 +21,7 @@ import { useToast } from "@/components/common";
 import { getFunctions, getPlants } from "@/api/plants.js";
 import jkTyreLogo from "@/assets/portal/jk-tyre-logo.svg";
 import dnaCoreLogo from "@/assets/portal/dna-core.webp";
+import theme from "@/theme.js";
 
 /**
  * Project INFINITI branded login screen.
@@ -93,7 +94,7 @@ export default function LoginPage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#F4F6FA",
+        backgroundColor: theme.custom.surface.soft,
         fontFamily: "Montserrat, sans-serif",
         p: { xs: 2, md: 4 },
       }}
@@ -102,7 +103,7 @@ export default function LoginPage() {
         sx={{
           width: "100%",
           maxWidth: 1080,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: theme.palette.background.paper,
           borderRadius: 3,
           border: "1px solid rgba(15, 23, 42, 0.06)",
           boxShadow: "0 30px 60px -30px rgba(15, 23, 42, 0.25)",
@@ -132,7 +133,7 @@ export default function LoginPage() {
             gridColumn: 1,
             gridRow: 1,
             width: "1px",
-            backgroundColor: "#E5E7EB",
+            backgroundColor: theme.palette.divider,
             justifySelf: "end",
             height: "100%",
           }}
@@ -155,7 +156,7 @@ export default function LoginPage() {
                 fontFamily: "Montserrat, sans-serif",
                 fontSize: 25,
                 fontWeight: 500,
-                color: "#404040",
+                color: theme.custom.login.text,
                 mb: 3,
               }}
             >
@@ -167,7 +168,7 @@ export default function LoginPage() {
                 <Typography
                   sx={{
                     fontSize: 13,
-                    color: "#666",
+                    color: theme.palette.text.secondary,
                     mb: 0.5,
                     fontFamily: "Montserrat, sans-serif",
                   }}
@@ -185,13 +186,13 @@ export default function LoginPage() {
                     autoComplete="username"
                     autoFocus
                     sx={{
-                      borderBottom: "1px solid #ccc",
+                      borderBottom: `1px solid ${theme.custom.login.border}`,
                       fontFamily: "Montserrat, sans-serif",
                       "&.Mui-focused": {
-                        borderBottom: "2px solid #1976d2",
+                        borderBottom: `2px solid ${theme.custom.login.focus}`,
                       },
                       "&:focus-within": {
-                        borderBottom: "2px solid #1976d2",
+                        borderBottom: `2px solid ${theme.custom.login.focus}`,
                       },
                     }}
                   />
@@ -202,7 +203,7 @@ export default function LoginPage() {
                 <Typography
                   sx={{
                     fontSize: 13,
-                    color: "#666",
+                    color: theme.palette.text.secondary,
                     mb: 0.5,
                     fontFamily: "Montserrat, sans-serif",
                   }}
@@ -230,10 +231,10 @@ export default function LoginPage() {
                       </InputAdornment>
                     }
                     sx={{
-                      borderBottom: "1px solid #ccc",
+                      borderBottom: `1px solid ${theme.custom.login.border}`,
                       fontFamily: "Montserrat, sans-serif",
                       "&:focus-within": {
-                        borderBottom: "2px solid #1976d2",
+                        borderBottom: `2px solid ${theme.custom.login.focus}`,
                       },
                     }}
                   />
@@ -265,16 +266,16 @@ export default function LoginPage() {
                     height: 36,
                     minWidth: 110,
                     borderRadius: "20px",
-                    backgroundColor: "#0077B6",
+                    backgroundColor: theme.custom.login.accent,
                     fontFamily: "Montserrat, sans-serif",
                     fontWeight: 600,
                     fontSize: 14,
                     textTransform: "none",
                     boxShadow: "none",
-                    "&:hover": { backgroundColor: "#005f94" },
+                    "&:hover": { backgroundColor: theme.custom.login.hover },
                     "&.Mui-disabled": {
-                      backgroundColor: "#ccc",
-                      color: "#FFFFFF",
+                      backgroundColor: theme.custom.login.border,
+                      color: theme.palette.common.white,
                     },
                   }}
                 >
@@ -300,7 +301,7 @@ function BrandPanel() {
         gridColumn: { xs: 1, md: 1 },
         gridRow: 1,
         position: "relative",
-        backgroundColor: "#FFFFFF",
+        backgroundColor: theme.palette.background.paper,
         display: "flex",
         flexDirection: "column",
         p: { xs: 3, md: 4 },
@@ -331,7 +332,7 @@ function BrandPanel() {
       </Box>
 
       {/* Hairline above the project title */}
-      <Divider sx={{ mt: 2, mb: 2, borderColor: "#E5E7EB" }} />
+      <Divider sx={{ mt: 2, mb: 2, borderColor: theme.palette.divider }} />
 
       {/* Project title */}
       <Typography
@@ -339,7 +340,7 @@ function BrandPanel() {
           fontFamily: "Montserrat, sans-serif",
           fontSize: { xs: 18, md: 20 },
           fontWeight: 600,
-          color: "#404040",
+          color: theme.custom.login.text,
           textAlign: "center",
           mb: 4,
         }}

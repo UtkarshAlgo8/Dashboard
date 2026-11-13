@@ -125,7 +125,7 @@ export function TrendChart({
               cy={y(v)}
               r={isBest || isWorst ? 4.5 : 3}
               fill={isBest ? C.gn : isWorst ? C.rd : color}
-              stroke="#fff"
+              stroke={C.cd}
               strokeWidth="1.5"
             >
               <title>{`${labels[i] || "Point " + (i + 1)}: ${fmt2(v)}`}</title>
@@ -359,7 +359,7 @@ export function TrendProgress({
             style={{
               fontSize: 15,
               fontWeight: 700,
-              color: "#fff",
+              color: C.cd,
               whiteSpace: "nowrap",
             }}
           >

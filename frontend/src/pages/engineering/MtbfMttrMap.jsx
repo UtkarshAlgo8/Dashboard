@@ -137,7 +137,7 @@ function MtbfMttrMap({ points, plant, onPick }) {
           minSize: 6,
           maxSize: 42,
           opacity: 0.7,
-          marker: { lineWidth: 1, lineColor: "#ffffff" },
+          marker: { lineWidth: 1, lineColor: theme.palette.common.white },
           cursor: points.some((p) => p.clickable) ? "pointer" : undefined,
           point: {
             events: {

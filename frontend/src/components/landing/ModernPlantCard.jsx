@@ -1,6 +1,9 @@
 import { Box, Stack, Typography } from "@mui/material";
 import GridViewRoundedIcon from "@mui/icons-material/GridViewRounded";
 import LayersClearRoundedIcon from "@mui/icons-material/LayersClearRounded";
+import theme from "@/theme.js";
+
+const colors = theme.custom.landing;
 
 /**
  * Format numeric tyre count with Indian numbering format (e.g. 7,14,248)
@@ -16,7 +19,7 @@ function formatTyreCount(val, isLive) {
 
 /**
  * Modern Plant Menu Card matching the reference design:
- * - Solid pure white container (#FFFFFF) with 16px radius and clean drop shadow
+ * - Solid paper-white container with 16px radius and clean drop shadow
  * - Full plant name (e.g. "Banmore Tyre Plant") with red "● Live" or "Phase 2" badge
  * - Production Row: 4-square grid icon + "Production : [Value] Tyres"
  * - Scrap Row: Slashed layers icon + "Scrap : [Value] Tyres"
@@ -47,13 +50,13 @@ function ModernPlantCard({
         position: "relative",
         borderRadius: "16px",
         p: { xs: 1.75, md: 2 },
-        backgroundColor: "#FFFFFF",
+        backgroundColor: theme.palette.background.paper,
         border: "1px solid",
         borderColor: highlighted
           ? "rgba(37, 99, 235, 0.6)"
           : "rgba(226, 232, 240, 0.85)",
         boxShadow: highlighted
-          ? "0 12px 28px rgba(0, 0, 0, 0.16), 0 0 0 1.5px #2563EB"
+          ? `0 12px 28px rgba(0, 0, 0, 0.16), 0 0 0 1.5px ${colors.blue}`
           : "0 4px 16px rgba(0, 0, 0, 0.08)",
         cursor: active ? "pointer" : "default",
         opacity: active ? 1 : 0.88,
@@ -76,7 +79,7 @@ function ModernPlantCard({
           sx={{
             fontSize: { xs: 13, sm: 13.5, md: 14 },
             fontWeight: 600,
-            color: "#1E293B",
+            color: colors.text,
             lineHeight: 1.2,
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -98,7 +101,7 @@ function ModernPlantCard({
                 width: 6,
                 height: 6,
                 borderRadius: "50%",
-                backgroundColor: "#DC2626",
+                backgroundColor: colors.live,
                 boxShadow: "0 0 4px rgba(220, 38, 38, 0.6)",
               }}
             />
@@ -106,7 +109,7 @@ function ModernPlantCard({
               sx={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: "#DC2626",
+                color: colors.live,
               }}
             >
               Live
@@ -117,7 +120,7 @@ function ModernPlantCard({
             sx={{
               fontSize: 12,
               fontWeight: 500,
-              color: "#64748B",
+              color: colors.muted,
               flexShrink: 0,
             }}
           >
@@ -138,12 +141,12 @@ function ModernPlantCard({
         }}
       >
         {/* Production Row */}
-        <GridViewRoundedIcon sx={{ fontSize: 17, color: "#2563EB" }} />
+        <GridViewRoundedIcon sx={{ fontSize: 17, color: colors.blue }} />
         <Typography
           sx={{
             fontSize: 13,
             fontWeight: 600,
-            color: "#1E293B",
+            color: colors.text,
           }}
         >
           Production
@@ -152,7 +155,7 @@ function ModernPlantCard({
           sx={{
             fontSize: 13,
             fontWeight: 600,
-            color: "#1E293B",
+            color: colors.text,
           }}
         >
           :
@@ -161,7 +164,7 @@ function ModernPlantCard({
           sx={{
             fontSize: 13,
             fontWeight: 700,
-            color: "#1E293B",
+            color: colors.text,
             whiteSpace: "nowrap",
           }}
         >
@@ -172,7 +175,7 @@ function ModernPlantCard({
               sx={{
                 fontSize: 12.5,
                 fontWeight: 400,
-                color: "#64748B",
+                color: colors.muted,
                 ml: 0.5,
               }}
             >
@@ -182,12 +185,12 @@ function ModernPlantCard({
         </Typography>
 
         {/* Scrap Row */}
-        <LayersClearRoundedIcon sx={{ fontSize: 17, color: "#0284C7" }} />
+        <LayersClearRoundedIcon sx={{ fontSize: 17, color: colors.scrap }} />
         <Typography
           sx={{
             fontSize: 13,
             fontWeight: 600,
-            color: "#1E293B",
+            color: colors.text,
           }}
         >
           Scrap
@@ -196,7 +199,7 @@ function ModernPlantCard({
           sx={{
             fontSize: 13,
             fontWeight: 600,
-            color: "#1E293B",
+            color: colors.text,
           }}
         >
           :
@@ -205,7 +208,7 @@ function ModernPlantCard({
           sx={{
             fontSize: 13,
             fontWeight: 700,
-            color: "#1E293B",
+            color: colors.text,
             whiteSpace: "nowrap",
           }}
         >
@@ -216,7 +219,7 @@ function ModernPlantCard({
               sx={{
                 fontSize: 12.5,
                 fontWeight: 400,
-                color: "#64748B",
+                color: colors.muted,
                 ml: 0.5,
               }}
             >

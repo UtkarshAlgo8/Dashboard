@@ -1,4 +1,5 @@
 import { formatIndianNumber } from "@/lib/numberFormat.js";
+import theme from "@/theme.js";
 
 /**
  * Shared vocabulary of the Engineering plot drills (plot_drilldown_spec):
@@ -7,14 +8,14 @@ import { formatIndianNumber } from "@/lib/numberFormat.js";
 
 export const UNMAPPED = "Unmapped";
 
-const GREY = "#959EA6";
+const GREY = theme.palette.text.disabled;
 
 // Spec §4: "A red · B amber · C blue · D teal · Unmapped grey (last)".
 export const CATEGORY_COLORS = [
-  { id: "A", name: "Category A", color: "#D70014" },
-  { id: "B", name: "Category B", color: "#FF9601" },
-  { id: "C", name: "Category C", color: "#147EFB" },
-  { id: "D", name: "Category D", color: "#0F9D9A" },
+  { id: "A", name: "Category A", color: theme.custom.status.red },
+  { id: "B", name: "Category B", color: theme.custom.status.amber },
+  { id: "C", name: "Category C", color: theme.palette.primary.main },
+  { id: "D", name: "Category D", color: theme.custom.charts.teal },
   { id: UNMAPPED, name: UNMAPPED, color: GREY },
 ];
 
@@ -31,11 +32,11 @@ export function categoryGroups(statuses) {
 // Spec §4: "one fixed colour per discipline". The five the spec names, then
 // gold's sixth, 'Other', which is drawn only when it has a value.
 export const DISCIPLINES = [
-  { id: "Mechanical", color: "#5856D6" },
-  { id: "Electrical", color: "#E8590C" },
-  { id: "Electronics", color: "#147EFB" },
-  { id: "Instrumentation", color: "#0F9D9A" },
-  { id: "Utility", color: "#A0522D" },
+  { id: "Mechanical", color: theme.custom.brand.purple },
+  { id: "Electrical", color: theme.custom.charts.electrical },
+  { id: "Electronics", color: theme.palette.primary.main },
+  { id: "Instrumentation", color: theme.custom.charts.teal },
+  { id: "Utility", color: theme.custom.charts.utility },
 ];
 export const OTHER_DISCIPLINE = { id: "Other", color: GREY };
 

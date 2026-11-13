@@ -126,7 +126,7 @@ export default function JkAgentChart({ plotSpec, resultId }) {
     try {
       await exportElementToPdf(chartRef.current, {
         filename: chatChartFilename(resultId, "pdf"),
-        backgroundColor: "#ffffff",
+        backgroundColor: theme.palette.common.white,
       });
     } finally {
       setDownloadBusy(false);

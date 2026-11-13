@@ -61,6 +61,8 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { postRcaPdfForm } from "@/api/rca.js";
+import theme from "@/theme.js";
 import { toPdfFormData } from "./rcaPdfForm.js";
 
 /* ------------------------------------------------------------------------ */
@@ -252,11 +254,12 @@ function toOutput(r, status) {
 /* Scoped CSS                                                               */
 /* ------------------------------------------------------------------------ */
 
+const rcaColors = theme.custom.rca;
 const CSS = `
 .rcad-overlay{
-  --rcad-accent:#1f4e79; --rcad-accent-soft:#e8eff7; --rcad-text:#1d2329; --rcad-muted:#5f6b76;
-  --rcad-border:#d4dae0; --rcad-bg:#ffffff; --rcad-surface:#f6f8fa; --rcad-error:#b42318; --rcad-error-soft:#fdecea;
-  --rcad-ok:#1e7a46; --rcad-radius:8px;
+  --rcad-accent:${rcaColors.accent}; --rcad-accent-soft:${rcaColors.accentSoft}; --rcad-text:${rcaColors.text}; --rcad-muted:${rcaColors.muted};
+  --rcad-border:${rcaColors.border}; --rcad-bg:${rcaColors.background}; --rcad-surface:${rcaColors.surface}; --rcad-error:${rcaColors.error}; --rcad-error-soft:${rcaColors.errorSoft};
+  --rcad-ok:${rcaColors.success}; --rcad-contrast:${theme.palette.common.white}; --rcad-radius:8px;
   position:fixed; inset:0; background:rgba(16,24,32,.55); display:flex; align-items:center; justify-content:center;
   z-index:1000; padding:16px; font-family:inherit; color:var(--rcad-text);
 }
@@ -274,7 +277,7 @@ const CSS = `
 .rcad-sec{padding:16px 0; border-bottom:1px solid var(--rcad-border)}
 .rcad-sec:last-child{border-bottom:0}
 .rcad-sec h3{margin:0 0 12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px}
-.rcad-num{display:inline-flex; width:22px; height:22px; border-radius:50%; background:var(--rcad-accent); color:#fff; font-size:12px; align-items:center; justify-content:center; flex:none}
+.rcad-num{display:inline-flex; width:22px; height:22px; border-radius:50%; background:var(--rcad-accent); color:var(--rcad-contrast); font-size:12px; align-items:center; justify-content:center; flex:none}
 .rcad-hint{font-weight:400; color:var(--rcad-muted); font-size:12px}
 .rcad-grid{display:grid; gap:12px}
 .rcad-g4{grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -292,17 +295,17 @@ const CSS = `
 .rcad-field{display:flex; flex-direction:column; gap:4px; min-width:0}
 .rcad-label{font-size:12px; font-weight:600; color:var(--rcad-muted)}
 .rcad-req{color:var(--rcad-error); margin-left:2px}
-.rcad-input,.rcad-ta,.rcad-select{width:100%; border:1px solid var(--rcad-border); border-radius:var(--rcad-radius); padding:8px 10px; font:inherit; color:inherit; background:#fff}
+.rcad-input,.rcad-ta,.rcad-select{width:100%; border:1px solid var(--rcad-border); border-radius:var(--rcad-radius); padding:8px 10px; font:inherit; color:inherit; background:var(--rcad-bg)}
 .rcad-ta{resize:vertical; min-height:64px}
 .rcad-input:focus,.rcad-ta:focus,.rcad-select:focus{outline:2px solid var(--rcad-accent); outline-offset:-1px; border-color:var(--rcad-accent)}
 .rcad-bad .rcad-input,.rcad-bad .rcad-ta,.rcad-input.rcad-bad,.rcad-ta.rcad-bad{border-color:var(--rcad-error); background:var(--rcad-error-soft)}
 .rcad-err{color:var(--rcad-error); font-size:12px}
 .rcad-seg{display:inline-flex; border:1px solid var(--rcad-border); border-radius:var(--rcad-radius); overflow:hidden; width:fit-content}
-.rcad-seg button{border:0; background:#fff; padding:8px 16px; cursor:pointer; font:inherit; border-right:1px solid var(--rcad-border)}
+.rcad-seg button{border:0; background:var(--rcad-bg); padding:8px 16px; cursor:pointer; font:inherit; border-right:1px solid var(--rcad-border)}
 .rcad-seg button:last-child{border-right:0}
-.rcad-seg button[aria-pressed="true"]{background:var(--rcad-accent); color:#fff}
+.rcad-seg button[aria-pressed="true"]{background:var(--rcad-accent); color:var(--rcad-contrast)}
 .rcad-chips{display:flex; flex-wrap:wrap; gap:8px}
-.rcad-chip{border:1px solid var(--rcad-border); background:#fff; border-radius:999px; padding:6px 12px; cursor:pointer; font:inherit; display:inline-flex; gap:6px; align-items:center}
+.rcad-chip{border:1px solid var(--rcad-border); background:var(--rcad-bg); border-radius:999px; padding:6px 12px; cursor:pointer; font:inherit; display:inline-flex; gap:6px; align-items:center}
 .rcad-chip[aria-pressed="true"]{background:var(--rcad-accent-soft); border-color:var(--rcad-accent); color:var(--rcad-accent); font-weight:600}
 .rcad-chip .rcad-tick{width:14px; height:14px; border:1.5px solid currentColor; border-radius:3px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; line-height:1}
 .rcad-cft{display:grid; grid-template-columns:120px 1fr; gap:6px 10px; align-items:center}
@@ -315,14 +318,14 @@ const CSS = `
 .rcad-why + .rcad-why{margin-top:8px}
 .rcad-whylab{padding-top:8px; font-weight:600; font-size:13px}
 .rcad-whylab small{display:block; font-weight:400; color:var(--rcad-muted); font-size:11px}
-.rcad-btn{border:1px solid var(--rcad-border); background:#fff; border-radius:var(--rcad-radius); padding:8px 14px; cursor:pointer; font:inherit; color:inherit}
+.rcad-btn{border:1px solid var(--rcad-border); background:var(--rcad-bg); border-radius:var(--rcad-radius); padding:8px 14px; cursor:pointer; font:inherit; color:inherit}
 .rcad-btn:hover{background:var(--rcad-surface)}
 .rcad-btn:disabled{opacity:.5; cursor:not-allowed}
 .rcad-btn-link{border:0; background:transparent; color:var(--rcad-accent); cursor:pointer; font:inherit; padding:4px 0; font-size:13px}
 .rcad-btn-link:disabled{color:var(--rcad-muted); cursor:not-allowed}
 .rcad-btn-icon{border:0; background:transparent; color:var(--rcad-muted); cursor:pointer; padding:8px; font-size:16px; line-height:1; border-radius:6px}
 .rcad-btn-icon:hover{background:var(--rcad-surface); color:var(--rcad-error)}
-.rcad-primary{background:var(--rcad-accent); border-color:var(--rcad-accent); color:#fff}
+.rcad-primary{background:var(--rcad-accent); border-color:var(--rcad-accent); color:var(--rcad-contrast)}
 .rcad-primary:hover{background:var(--rcad-accent); filter:brightness(1.1)}
 .rcad-row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
 .rcad-radio{display:inline-flex; gap:6px; align-items:center; cursor:pointer}
@@ -647,24 +650,9 @@ export default function RCAEntryDialog({
       if (onDownloadPdf) {
         blob = await onDownloadPdf(record);
       } else {
-        const res = await fetch(pdfEndpoint, {
-          method: "POST",
-          body: toPdfFormData(record),
-        });
-        if (!res.ok) {
-          let msg = `${res.status} ${res.statusText}`;
-          try {
-            const j = await res.json();
-            if (j && j.detail) msg = j.detail;
-          } catch {
-            /* not JSON */
-          }
-          throw new Error(msg);
-        }
-        const cd = res.headers.get("Content-Disposition") || "";
-        const m = cd.match(/filename="?([^";]+)"?/i);
-        if (m) filename = m[1];
-        blob = await res.blob();
+        const result = await postRcaPdfForm(pdfEndpoint, toPdfFormData(record));
+        filename = result.filename || filename;
+        blob = result.blob;
       }
       if (blob) saveBlob(blob, filename);
     } catch (e) {
