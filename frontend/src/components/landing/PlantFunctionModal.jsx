@@ -16,6 +16,9 @@ import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 import DomainRoundedIcon from "@mui/icons-material/DomainRounded";
 import BuildRoundedIcon from "@mui/icons-material/BuildRounded";
 import EngineeringRoundedIcon from "@mui/icons-material/EngineeringRounded";
+import theme from "@/theme.js";
+
+const colors = theme.custom.landing;
 
 /**
  * Modern icon map for functions matching the enterprise design system
@@ -62,7 +65,7 @@ function PlantFunctionModal({
         sx: {
           borderRadius: "18px",
           p: 0.5,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: theme.palette.background.paper,
           border: "1px solid rgba(226, 232, 240, 0.95)",
           boxShadow:
             "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)",
@@ -84,7 +87,7 @@ function PlantFunctionModal({
                 sx={{
                   fontSize: 19,
                   fontWeight: 800,
-                  color: "#0F172A",
+                  color: colors.heading,
                   lineHeight: 1.2,
                 }}
               >
@@ -111,12 +114,12 @@ function PlantFunctionModal({
                       width: 6,
                       height: 6,
                       borderRadius: "50%",
-                      backgroundColor: "#DC2626",
+                      backgroundColor: colors.live,
                       boxShadow: "0 0 5px rgba(220, 38, 38, 0.6)",
                     }}
                   />
                   <Typography
-                    sx={{ fontSize: 11, fontWeight: 700, color: "#DC2626" }}
+                    sx={{ fontSize: 11, fontWeight: 700, color: colors.live }}
                   >
                     Live
                   </Typography>
@@ -126,8 +129,8 @@ function PlantFunctionModal({
                   sx={{
                     fontSize: 11,
                     fontWeight: 600,
-                    color: "#64748B",
-                    backgroundColor: "#F1F5F9",
+                    color: colors.muted,
+                    backgroundColor: theme.custom.surface.soft,
                     px: 1,
                     py: 0.25,
                     borderRadius: "6px",
@@ -140,7 +143,7 @@ function PlantFunctionModal({
             </Stack>
 
             <Typography
-              sx={{ fontSize: 13, color: "#64748B", fontWeight: 500 }}
+              sx={{ fontSize: 13, color: colors.muted, fontWeight: 500 }}
             >
               {plant.sub || `${plant.location}, ${plant.state}`}
             </Typography>
@@ -151,9 +154,12 @@ function PlantFunctionModal({
             onClick={onClose}
             aria-label="Close"
             sx={{
-              color: "#64748B",
-              backgroundColor: "#F1F5F9",
-              "&:hover": { backgroundColor: "#E2E8F0", color: "#0F172A" },
+              color: colors.muted,
+              backgroundColor: theme.custom.surface.soft,
+              "&:hover": {
+                backgroundColor: theme.palette.divider,
+                color: colors.heading,
+              },
             }}
           >
             <CloseRoundedIcon fontSize="small" />
@@ -163,8 +169,8 @@ function PlantFunctionModal({
         {/* Solid KPI Summary Strip */}
         <Box
           sx={{
-            backgroundColor: "#F8FAFC",
-            border: "1px solid #E2E8F0",
+            backgroundColor: theme.custom.surface.default,
+            border: `1px solid ${theme.palette.divider}`,
             borderRadius: "14px",
             px: 2,
             py: 1.5,
@@ -180,13 +186,13 @@ function PlantFunctionModal({
             <Divider
               orientation="vertical"
               flexItem
-              sx={{ borderColor: "#E2E8F0", my: 0.5 }}
+              sx={{ borderColor: theme.palette.divider, my: 0.5 }}
             />
             <KpiPill label="OTIF" value={plant.otif} />
             <Divider
               orientation="vertical"
               flexItem
-              sx={{ borderColor: "#E2E8F0", my: 0.5 }}
+              sx={{ borderColor: theme.palette.divider, my: 0.5 }}
             />
             <KpiPill label="YIELD" value={plant.yield} />
           </Stack>
@@ -202,7 +208,7 @@ function PlantFunctionModal({
           <Typography
             sx={{
               fontSize: 11,
-              color: "#64748B",
+              color: colors.muted,
               textTransform: "uppercase",
               letterSpacing: 0.8,
               fontWeight: 700,
@@ -214,7 +220,7 @@ function PlantFunctionModal({
             <Stack direction="row" alignItems="center" spacing={0.75}>
               <CircularProgress size={12} thickness={5} />
               <Typography
-                sx={{ fontSize: 11, color: "#2563EB", fontWeight: 600 }}
+                sx={{ fontSize: 11, color: colors.blue, fontWeight: 600 }}
               >
                 Loading functions…
               </Typography>
@@ -223,7 +229,7 @@ function PlantFunctionModal({
           {functionsStatus === "error" && (
             <Stack direction="row" alignItems="center" spacing={0.5}>
               <Typography
-                sx={{ fontSize: 11, color: "#DC2626", fontWeight: 600 }}
+                sx={{ fontSize: 11, color: colors.live, fontWeight: 600 }}
               >
                 Couldn't load functions
               </Typography>
@@ -271,7 +277,7 @@ function KpiPill({ label, value }) {
       <Typography
         sx={{
           fontSize: 11,
-          color: "#64748B",
+          color: colors.muted,
           textTransform: "uppercase",
           letterSpacing: 0.6,
           fontWeight: 700,
@@ -290,14 +296,16 @@ function KpiPill({ label, value }) {
           sx={{
             fontSize: 22,
             fontWeight: 800,
-            color: hasValue ? "#16A34A" : "#94A3B8",
+            color: hasValue ? colors.green : colors.disabled,
             lineHeight: 1,
           }}
         >
           {hasValue ? displayValue : "—"}
         </Typography>
         {hasValue && (
-          <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#16A34A" }}>
+          <Typography
+            sx={{ fontSize: 12, fontWeight: 700, color: colors.green }}
+          >
             %
           </Typography>
         )}
@@ -322,16 +330,20 @@ function FunctionRow({ fn, active, pending = false, onClick }) {
         py: 1.25,
         borderRadius: "12px",
         cursor: active ? "pointer" : "default",
-        backgroundColor: active ? "#FFFFFF" : "#F8FAFC",
+        backgroundColor: active
+          ? theme.palette.background.paper
+          : theme.custom.surface.default,
         border: "1.5px solid",
-        borderColor: active ? "#E2E8F0" : "rgba(226, 232, 240, 0.6)",
+        borderColor: active
+          ? theme.palette.divider
+          : "rgba(226, 232, 240, 0.6)",
         opacity: active ? 1 : 0.65,
         transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
         boxShadow: active ? "0 1px 3px rgba(0,0,0,0.04)" : "none",
         "&:hover": active
           ? {
-              borderColor: "#2563EB",
-              backgroundColor: "#F8FAFC",
+              borderColor: colors.blue,
+              backgroundColor: theme.custom.surface.default,
               boxShadow: "0 4px 12px rgba(37, 99, 235, 0.08)",
               transform: "translateX(4px)",
             }
@@ -346,8 +358,10 @@ function FunctionRow({ fn, active, pending = false, onClick }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: active ? "#EFF6FF" : "#F1F5F9",
-          color: active ? "#2563EB" : "#94A3B8",
+          backgroundColor: active
+            ? theme.custom.pills.activeBg
+            : theme.custom.surface.soft,
+          color: active ? colors.blue : colors.disabled,
           flexShrink: 0,
         }}
       >
@@ -359,28 +373,30 @@ function FunctionRow({ fn, active, pending = false, onClick }) {
           sx={{
             fontSize: 14,
             fontWeight: 700,
-            color: active ? "#0F172A" : "#64748B",
+            color: active ? colors.heading : colors.muted,
           }}
         >
           {fn.name}
         </Typography>
         {!active && !pending && (
-          <Typography sx={{ fontSize: 11, color: "#94A3B8", fontWeight: 500 }}>
+          <Typography
+            sx={{ fontSize: 11, color: colors.disabled, fontWeight: 500 }}
+          >
             Under Phase 2
           </Typography>
         )}
       </Box>
 
       {active ? (
-        <ChevronRightRoundedIcon sx={{ color: "#2563EB", fontSize: 22 }} />
+        <ChevronRightRoundedIcon sx={{ color: colors.blue, fontSize: 22 }} />
       ) : pending ? null : (
         <Box
           sx={{
             fontSize: 10,
             fontWeight: 700,
             letterSpacing: 0.6,
-            color: "#64748B",
-            backgroundColor: "#E2E8F0",
+            color: colors.muted,
+            backgroundColor: theme.palette.divider,
             borderRadius: "6px",
             px: 1,
             py: 0.35,

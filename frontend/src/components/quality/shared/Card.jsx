@@ -99,7 +99,7 @@ export function Card({ title, children, accent, style: s, hideExport }) {
                   height: 22,
                   borderRadius: 4,
                   border: "1px solid " + C.bd,
-                  background: "#F8FAFC",
+                  background: C.c2,
                   color: C.bl,
                   fontSize: 14,
                   cursor: "pointer",

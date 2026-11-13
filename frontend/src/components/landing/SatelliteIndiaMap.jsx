@@ -8,6 +8,7 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Box, Button } from "@mui/material";
+import theme from "@/theme.js";
 import MapPlantMarker from "./MapPlantMarker.jsx";
 
 // Explicitly register the worker URL so Vite production bundles emit and load the worker script
@@ -83,7 +84,7 @@ function SatelliteIndiaMap({
             type: "fill",
             source: "india-mask",
             paint: {
-              "fill-color": "#070D18",
+              "fill-color": theme.custom.map.mask,
               "fill-opacity": 0.38,
             },
           },
@@ -93,7 +94,7 @@ function SatelliteIndiaMap({
             type: "line",
             source: "india-boundary",
             paint: {
-              "line-color": "#000000",
+              "line-color": theme.palette.common.black,
               "line-width": [
                 "interpolate",
                 ["linear"],
@@ -113,7 +114,7 @@ function SatelliteIndiaMap({
             type: "line",
             source: "india-boundary",
             paint: {
-              "line-color": "#38BDF8",
+              "line-color": theme.custom.map.glow,
               "line-width": [
                 "interpolate",
                 ["linear"],
@@ -141,7 +142,7 @@ function SatelliteIndiaMap({
             type: "line",
             source: "india-boundary",
             paint: {
-              "line-color": "#F0F9FF",
+              "line-color": theme.custom.map.glowCore,
               "line-width": [
                 "interpolate",
                 ["linear"],
@@ -165,7 +166,7 @@ function SatelliteIndiaMap({
               "line-cap": "round",
             },
             paint: {
-              "line-color": "#FFFFFF",
+              "line-color": theme.palette.common.white,
               "line-width": [
                 "interpolate",
                 ["linear"],
@@ -398,7 +399,7 @@ function SatelliteIndiaMap({
             backgroundColor: "rgba(15, 23, 42, 0.85)",
             backdropFilter: "blur(10px)",
             border: "1px solid rgba(255,255,255,0.2)",
-            color: "#FFFFFF",
+            color: theme.palette.common.white,
             fontSize: 12,
             fontWeight: 600,
             textTransform: "none",

@@ -2,6 +2,10 @@ import { Box, Stack, Typography } from "@mui/material";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import TrackChangesRoundedIcon from "@mui/icons-material/TrackChangesRounded";
 import StarsRoundedIcon from "@mui/icons-material/StarsRounded";
+import theme from "@/theme.js";
+
+// MapLibre mounts markers in separate React roots, outside App's ThemeProvider.
+const colors = theme.custom.landing;
 
 /**
  * Format numeric percentage or return 'NA' fallback
@@ -63,7 +67,7 @@ function MapPlantMarker({
           transition:
             "transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease, visibility 0.22s",
           transformOrigin: "bottom center",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: theme.palette.background.paper,
           borderRadius: "16px",
           p: "11px 14px",
           width: "270px",
@@ -85,7 +89,7 @@ function MapPlantMarker({
             sx={{
               fontSize: 13.5,
               fontWeight: 600,
-              color: "#1E293B",
+              color: colors.text,
               lineHeight: 1.2,
             }}
           >
@@ -99,7 +103,7 @@ function MapPlantMarker({
                   width: 6,
                   height: 6,
                   borderRadius: "50%",
-                  backgroundColor: "#DC2626",
+                  backgroundColor: colors.live,
                   boxShadow: "0 0 5px rgba(220, 38, 38, 0.6)",
                 }}
               />
@@ -107,7 +111,7 @@ function MapPlantMarker({
                 sx={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "#DC2626",
+                  color: colors.live,
                 }}
               >
                 Live
@@ -118,7 +122,7 @@ function MapPlantMarker({
               sx={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: "#64748B",
+                color: colors.muted,
               }}
             >
               Phase 2
@@ -132,8 +136,8 @@ function MapPlantMarker({
           <Box
             sx={{
               flex: 1,
-              backgroundColor: "#F0FDF4",
-              border: "1px solid #DCFCE7",
+              backgroundColor: theme.custom.cards.green,
+              border: `1px solid ${colors.greenBorder}`,
               borderRadius: "10px",
               py: 0.75,
               px: 0.85,
@@ -143,12 +147,14 @@ function MapPlantMarker({
             }}
           >
             <Stack direction="row" alignItems="center" spacing={0.4}>
-              <SettingsRoundedIcon sx={{ fontSize: 13.5, color: "#16A34A" }} />
+              <SettingsRoundedIcon
+                sx={{ fontSize: 13.5, color: colors.green }}
+              />
               <Typography
                 sx={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: "#374151",
+                  color: colors.body,
                 }}
               >
                 OEE
@@ -158,7 +164,7 @@ function MapPlantMarker({
               sx={{
                 fontSize: 13,
                 fontWeight: 700,
-                color: "#16A34A",
+                color: colors.green,
                 lineHeight: 1.2,
               }}
             >
@@ -170,8 +176,8 @@ function MapPlantMarker({
           <Box
             sx={{
               flex: 1,
-              backgroundColor: "#FFF7ED",
-              border: "1px solid #FFEDD5",
+              backgroundColor: theme.custom.cards.amber,
+              border: `1px solid ${colors.orangeBorder}`,
               borderRadius: "10px",
               py: 0.75,
               px: 0.85,
@@ -182,13 +188,13 @@ function MapPlantMarker({
           >
             <Stack direction="row" alignItems="center" spacing={0.4}>
               <TrackChangesRoundedIcon
-                sx={{ fontSize: 13.5, color: "#EA580C" }}
+                sx={{ fontSize: 13.5, color: colors.orange }}
               />
               <Typography
                 sx={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: "#374151",
+                  color: colors.body,
                 }}
               >
                 OTIF
@@ -198,7 +204,7 @@ function MapPlantMarker({
               sx={{
                 fontSize: 13,
                 fontWeight: 700,
-                color: "#EA580C",
+                color: colors.orange,
                 lineHeight: 1.2,
               }}
             >
@@ -210,8 +216,8 @@ function MapPlantMarker({
           <Box
             sx={{
               flex: 1,
-              backgroundColor: "#FFF1F2",
-              border: "1px solid #FFE4E6",
+              backgroundColor: theme.custom.cards.red,
+              border: `1px solid ${colors.yieldBorder}`,
               borderRadius: "10px",
               py: 0.75,
               px: 0.85,
@@ -221,12 +227,12 @@ function MapPlantMarker({
             }}
           >
             <Stack direction="row" alignItems="center" spacing={0.4}>
-              <StarsRoundedIcon sx={{ fontSize: 13.5, color: "#E11D48" }} />
+              <StarsRoundedIcon sx={{ fontSize: 13.5, color: colors.yield }} />
               <Typography
                 sx={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: "#374151",
+                  color: colors.body,
                 }}
               >
                 Yield
@@ -236,7 +242,7 @@ function MapPlantMarker({
               sx={{
                 fontSize: 13,
                 fontWeight: 700,
-                color: "#E11D48",
+                color: colors.yield,
                 lineHeight: 1.2,
               }}
             >
@@ -263,10 +269,10 @@ function MapPlantMarker({
             width: 10,
             height: 10,
             borderRadius: "50%",
-            backgroundColor: "#2563EB",
-            border: "2px solid #FFFFFF",
+            backgroundColor: colors.blue,
+            border: `2px solid ${theme.palette.common.white}`,
             boxShadow: isFocused
-              ? "0 0 10px #3B82F6, 0 2px 4px rgba(0,0,0,0.8)"
+              ? `0 0 10px ${colors.pinGlow}, 0 2px 4px rgba(0,0,0,0.8)`
               : "0 1px 4px rgba(0,0,0,0.8)",
           }}
         />
@@ -274,10 +280,9 @@ function MapPlantMarker({
           sx={{
             fontSize: 12,
             fontWeight: 700,
-            color: "#FFFFFF",
+            color: theme.palette.common.white,
             letterSpacing: "0.4px",
-            textShadow:
-              "0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px #000, 0 0 5px rgba(0,0,0,0.8)",
+            textShadow: `0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px ${theme.palette.common.black}, 0 0 5px rgba(0,0,0,0.8)`,
           }}
         >
           {plant.code || plant.id.toUpperCase()}

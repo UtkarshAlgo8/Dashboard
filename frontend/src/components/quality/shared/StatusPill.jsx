@@ -1,4 +1,11 @@
+import { alpha } from "@mui/material/styles";
+import theme from "@/theme.js";
 import { C } from "./theme.js";
+
+const manualColors = {
+  bg: alpha(theme.palette.text.disabled, 0.094),
+  fg: theme.palette.text.secondary,
+};
 
 /* ─── STATUS PILL ─── */
 export function StatusPill({ status }) {
@@ -6,7 +13,7 @@ export function StatusPill({ status }) {
     Green: { bg: C.gn + "18", fg: C.gn, t: "Green" },
     Yellow: { bg: C.am + "18", fg: C.am, t: "Yellow" },
     Red: { bg: C.rd + "18", fg: C.rd, t: "Red" },
-    Grey: { bg: "#9CA3AF18", fg: "#6B7280", t: "Manual" },
+    Grey: { ...manualColors, t: "Manual" },
     Open: { bg: C.am + "18", fg: C.am, t: "Open" },
     Closed: { bg: C.gn + "18", fg: C.gn, t: "Closed" },
     Overdue: { bg: C.rd + "18", fg: C.rd, t: "Overdue" },
@@ -15,8 +22,8 @@ export function StatusPill({ status }) {
     Hold: { bg: C.rd + "18", fg: C.rd, t: "Hold" },
     Accepted: { bg: C.gn + "18", fg: C.gn, t: "Accepted" },
     Rejected: { bg: C.rd + "18", fg: C.rd, t: "Rejected" },
-    Manual: { bg: "#9CA3AF18", fg: "#6B7280", t: "Manual" },
-    Insufficient: { bg: "#9CA3AF18", fg: "#6B7280", t: "Insufficient" },
+    Manual: { ...manualColors, t: "Manual" },
+    Insufficient: { ...manualColors, t: "Insufficient" },
     Marginal: { bg: C.ac + "18", fg: C.ac, t: "Marginal" },
   };
   const s = map[status] || { bg: C.bd, fg: C.mu, t: status };

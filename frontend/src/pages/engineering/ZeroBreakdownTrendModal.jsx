@@ -160,7 +160,7 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
               style={{
                 fontSize: 15,
                 fontWeight: 700,
-                color: "#fff",
+                color: C.cd,
                 whiteSpace: "nowrap",
               }}
             >

@@ -1,3 +1,5 @@
+import theme from "@/theme.js";
+
 export function chatChartFilename(resultId, extension) {
   const ext = String(extension || "").replace(/^\./, "");
   const safeId = String(resultId ?? "")
@@ -11,7 +13,7 @@ export async function downloadElementAsPng(el, filename) {
   if (!el) return;
   const { toPng } = await import("html-to-image");
   const dataUrl = await toPng(el, {
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.palette.common.white,
     pixelRatio: 2,
     cacheBust: true,
   });

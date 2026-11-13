@@ -1,4 +1,4 @@
-import { denanDimension } from "../../lib/dashboardRowScopes.js";
+import { denanDimension } from "@/lib/dashboardRowScopes.js";
 
 /** The machine's name from gold's eqname; null when gold has none. */
 export function machineName(row) {

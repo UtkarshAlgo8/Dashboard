@@ -3,8 +3,8 @@
  * Shared primitives for the Engineering Head dashboard's Overview +
  * Reliability tabs (spec 16/17). Self-contained, inline-styled — same
  * convention as pages/quality/QualityDashboard.jsx: local Card/DTable/
- * Breadcrumb/TrendIcon, a local `C` theme-color object (values copied from
- * QualityDashboard.jsx so the visual language matches), fetch-in-useEffect
+ * Breadcrumb/TrendIcon, a shared `C` theme-color object (centralized in
+ * theme.js so the visual language matches Quality), fetch-in-useEffect
  * drill panels. Backend wiring is real (not mock) — see api/engineering.js.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +12,7 @@ import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
+import theme from "@/theme.js";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { toExportTable, toFileSlug } from "@/lib/tableExport.js";
 import { MACHINE_NAME_COLUMN } from "./machineName.js";
@@ -26,30 +27,8 @@ import {
 // CJS-interop shape (mirrors components/trend/LineChart.jsx).
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
-/* ─── LIGHT THEME (copied from QualityDashboard.jsx's `C`) ─── */
-export const C = {
-  bg: "#F3F4F8",
-  cd: "#FFFFFF",
-  c2: "#F7F8FA",
-  bd: "#E0E3EA",
-  tx: "#1A1D26",
-  md: "#4A5168",
-  mu: "#8891A5",
-  ac: "#E8651A",
-  aL: "rgba(232,101,26,.07)",
-  aB: "rgba(232,101,26,.28)",
-  rowAlt: "rgba(0,119,182,0.04)",
-  thBg: "#EAEDF3",
-  tl: "#1A9A3E",
-  bl: "#2563EB",
-  rd: "#DC2626",
-  am: "#CA8A04",
-  gn: "#1A9A3E",
-  pp: "#7C3AED",
-  cy: "#0D9488",
-  sh: "0 1px 3px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04)",
-  r: 8,
-};
+/* ─── Shared Quality / Engineering palette ─── */
+export const C = theme.custom.dashboard;
 
 /** Today in IST as `YYYY-MM-DD` (mirrors QualityDashboard's todayInIST). */
 export function todayInIST() {

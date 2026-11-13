@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box } from "@mui/material";
+import theme from "@/theme.js";
 import LandingHeader from "@/components/landing/LandingHeader.jsx";
 import LandingSkeleton from "@/components/landing/LandingSkeleton.jsx";
 import PlantCardList from "@/components/landing/PlantCardList.jsx";
@@ -180,7 +181,7 @@ function LandingPage() {
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        backgroundColor: "#0B132B",
+        backgroundColor: theme.custom.map.background,
       }}
     >
       <LandingHeader

@@ -1,4 +1,5 @@
 /** Download helpers behind the Quality Card export button. */
+import { C } from "./theme.js";
 
 export function _safeName(s) {
   return (
@@ -49,7 +50,7 @@ export function _svgToPNG(svg, scale, onDone) {
     canvas.width = w * scale;
     canvas.height = h * scale;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = C.cd;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const img = new Image();
     img.onload = () => {

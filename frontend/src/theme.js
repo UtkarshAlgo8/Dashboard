@@ -1,4 +1,4 @@
-import { createTheme } from "@mui/material/styles";
+import { alpha, createTheme } from "@mui/material/styles";
 
 /**
  * Adobe XD Design System Palette Tokens
@@ -53,6 +53,35 @@ const C = {
   purple: "#5856D6",
   drillCloseBg: "#8E959E",
   drillCloseHover: "#737B85",
+
+  // Distinct brand, chart and map shades without a close palette equivalent.
+  deepBlue: "#2563EB",
+  skyBlue: "#0284C7",
+  orangeAccent: "#E8651A",
+  orangeStrong: "#E8590C",
+  liveRed: "#DC2626",
+  rose: "#E11D48",
+  liveGreen: "#16A34A",
+  teal: "#0F9D9A",
+  utilityBrown: "#A0522D",
+  planned: "#FFA3A3",
+  slateHeading: "#0F172A",
+  slateText: "#1E293B",
+  slateBody: "#374151",
+  slateMuted: "#64748B",
+  slateDisabled: "#94A3B8",
+  mapSpace: "#0B132B",
+  mapMask: "#070D18",
+  mapGlow: "#38BDF8",
+  mapGlowCore: "#F0F9FF",
+  pinGlow: "#3B82F6",
+  loginAccent: "#0077B6",
+  loginHover: "#005F94",
+  borderStrong: "#CCCCCC",
+  formAccent: "#1F4E79",
+  formBorder: "#D4DAE0",
+  formError: "#B42318",
+  tooltipDark: "#1E1E1E",
   sh: "0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.03)",
   navbarShadow: "0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04)",
   floatingShadow: "0 3px 12px rgba(0,0,0,0.09), 0 1px 4px rgba(0,0,0,0.05)",
@@ -83,6 +112,19 @@ const theme = createTheme({
     borderRadius: C.r,
   },
   components: {
+    // A ripple can remain visible if its release event is lost when the
+    // browser tab changes. Keep keyboard focus visible without relying on it.
+    MuiButtonBase: {
+      defaultProps: { disableRipple: true },
+      styleOverrides: {
+        root: {
+          "&.Mui-focusVisible": {
+            outline: `2px solid ${C.ac}`,
+            outlineOffset: -2,
+          },
+        },
+      },
+    },
     MuiTableCell: {
       styleOverrides: {
         root: {
@@ -124,6 +166,81 @@ const theme = createTheme({
  */
 theme.custom = {
   surface: { default: C.bg, paper: C.cd, soft: C.c2 },
+  // Close neutral surfaces reuse the main palette; distinct accents stay intact.
+  landing: {
+    heading: C.slateHeading,
+    text: C.slateText,
+    body: C.slateBody,
+    muted: C.slateMuted,
+    blue: C.deepBlue,
+    scrap: C.skyBlue,
+    live: C.liveRed,
+    green: C.liveGreen,
+    orange: C.orangeStrong,
+    yield: C.rose,
+    disabled: C.slateDisabled,
+    yieldBorder: "#FFE4E6",
+    greenBorder: "#DCFCE7",
+    orangeBorder: "#FFEDD5",
+    pinGlow: C.pinGlow,
+  },
+  map: {
+    background: C.mapSpace,
+    mask: C.mapMask,
+    glow: C.mapGlow,
+    glowCore: C.mapGlowCore,
+  },
+  login: {
+    text: "#404040",
+    accent: C.loginAccent,
+    hover: C.loginHover,
+    focus: "#1976D2",
+    border: C.borderStrong,
+  },
+  rca: {
+    accent: C.formAccent,
+    accentSoft: C.activePillBg,
+    text: "#1D2329",
+    muted: C.md,
+    border: C.formBorder,
+    background: C.cd,
+    surface: C.bg,
+    error: C.formError,
+    errorSoft: C.rdCard,
+    success: "#1E7A46",
+  },
+  charts: {
+    planned: C.planned,
+    tooltipDark: C.tooltipDark,
+    teal: C.teal,
+    electrical: C.orangeStrong,
+    utility: C.utilityBrown,
+  },
+  // Shared Quality / Engineering vocabulary, including hex-valued accents
+  // consumed by their SVG charts and opacity helpers.
+  dashboard: {
+    bg: C.c2,
+    cd: C.cd,
+    c2: C.bg,
+    bd: C.bd,
+    tx: "#1A1D26",
+    md: "#4A5168",
+    mu: "#8891A5",
+    ac: C.orangeAccent,
+    aL: alpha(C.orangeAccent, 0.07),
+    aB: alpha(C.orangeAccent, 0.28),
+    rowAlt: "rgba(0,119,182,0.04)",
+    thBg: "#EAEDF3",
+    tl: "#1A9A3E",
+    bl: C.deepBlue,
+    rd: C.liveRed,
+    am: "#CA8A04",
+    gn: "#1A9A3E",
+    pp: "#7C3AED",
+    cy: "#0D9488",
+    sh: C.navbarShadow,
+    r: 8,
+  },
   text: { strong: C.tx, medium: C.md, muted: C.mu },
   table: { alternateRow: C.rowAlt, headerBg: C.thBg },
   cards: {

@@ -1,6 +1,24 @@
 import client from "./client.js";
 import { toPdfFormData } from "@/pages/engineering/rca/rcaPdfForm.js";
 
+/** Post a PDF form to the dialog's configurable export endpoint. */
+export async function postRcaPdfForm(endpoint, formData) {
+  const res = await fetch(endpoint, { method: "POST", body: formData });
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body && body.detail) message = body.detail;
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(message);
+  }
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  return { blob: await res.blob(), filename: match?.[1] };
+}
+
 /**
  * The RCA Why-Why record as a PDF of the official UTQM.00.SQ-156 sheet.
  *
