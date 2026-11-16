@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -18,6 +18,8 @@ import HighchartsReactImport from "highcharts-react-official";
 import JKLoader from "@/components/JKLoader.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
 import useStockCostQuery from "@/hooks/useStockCostQuery.js";
+import MaintenanceDownloadButton from "@/components/engineering/MaintenanceDownloadButton.jsx";
+import { maintenanceExportFilename } from "@/lib/maintenanceDownloads.js";
 import {
   stockCategoryLabel,
   stockCostRange,
@@ -34,6 +36,8 @@ export default function StockCostTrendModal({
   onClose,
 }) {
   const theme = useTheme();
+  const contentRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
   const [range, setRange] = useState(initialRange);
   const [draft, setDraft] = useState(initialRange);
   const [category, setCategory] = useState(initialCategory);
@@ -48,6 +52,16 @@ export default function StockCostTrendModal({
   // A category shortcut may be absent in a later range. Fall back visibly to All, never another category.
   const selectedCategory = optionsCategories.includes(category) ? category : "";
   const trend = stockCostTrend(query.data, range, selectedCategory);
+  const headers = [
+    "Date",
+    "Cost ₹",
+    ...trend.quantities.map(({ unit }) => `Qty (${unit})`),
+  ];
+  const exportRows = trend.dates.map((date, index) => [
+    date,
+    trend.cost[index] ?? "—",
+    ...trend.quantities.map(({ values }) => values[index] ?? "—"),
+  ]);
   const colors = [
     theme.palette.secondary.main,
     theme.palette.info.main,
@@ -126,8 +140,33 @@ export default function StockCostTrendModal({
       maxWidth="lg"
       aria-labelledby="stock-cost-trend-title"
     >
-      <DialogTitle id="stock-cost-trend-title">Stock Cost Trend</DialogTitle>
-      <DialogContent dividers>
+      <DialogTitle id="stock-cost-trend-title">
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={1}
+        >
+          <span>Stock Cost Trend</span>
+          <MaintenanceDownloadButton
+            cardRef={contentRef}
+            headers={headers}
+            rows={exportRows}
+            filename={maintenanceExportFilename(
+              "stock-cost-trend",
+              { ...range, granularity: "DAY" },
+              selectedCategory || "all",
+            )}
+            disabled={
+              query.isLoading ||
+              Boolean(query.error) ||
+              (!query.data?.overall.length && !optionsCategories.length)
+            }
+            onBusyChange={setExporting}
+          />
+        </Stack>
+      </DialogTitle>
+      <DialogContent ref={contentRef} dividers>
         <Stack spacing={2}>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
             BTP · DAY · All shifts · {range.from} – {range.to}
@@ -139,6 +178,7 @@ export default function StockCostTrendModal({
           >
             <TextField
               label="From"
+              disabled={exporting}
               type="date"
               size="small"
               value={draft.from}
@@ -149,6 +189,7 @@ export default function StockCostTrendModal({
             />
             <TextField
               label="To"
+              disabled={exporting}
               type="date"
               size="small"
               value={draft.to}
@@ -159,7 +200,7 @@ export default function StockCostTrendModal({
             />
             <Button
               variant="outlined"
-              disabled={!canApply}
+              disabled={exporting || !canApply}
               onClick={() => {
                 setRange(validRange);
                 setCategory("");
@@ -172,7 +213,7 @@ export default function StockCostTrendModal({
               label="Category"
               size="small"
               value={selectedCategory}
-              disabled={query.isLoading || Boolean(query.error)}
+              disabled={exporting || query.isLoading || Boolean(query.error)}
               onChange={(event) => setCategory(event.target.value)}
               sx={{ minWidth: 230, maxWidth: 420 }}
             >
@@ -221,11 +262,7 @@ export default function StockCostTrendModal({
                   : "Overall cost only — quantity units are mixed across categories. Missing plant totals are left unpublished, not fabricated."}
               </Typography>
               <DTable
-                cols={[
-                  "Date",
-                  "Cost ₹",
-                  ...trend.quantities.map(({ unit }) => `Qty (${unit})`),
-                ]}
+                cols={headers}
                 rows={trend.dates.map((date, index) => [
                   date,
                   stockMoney(trend.cost[index]),

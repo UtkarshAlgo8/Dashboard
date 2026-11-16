@@ -20,6 +20,9 @@ import { exportRowsAsExcel } from "@/lib/xlsx.js";
  *   cardRef        : ref to the card root element — enables PDF capture
  *   rows + headers : tabular data — enables Excel export
  *   filename       : base file name (extension added per format)
+ *   excelExport    : optional async Excel action for server-generated workbooks
+ *   onExportError / onBusyChange : optional lifecycle callbacks
+ *   expandScrollContainers : opt-in nested-scroll PDF capture (default false)
  *
  *   - cardRef only                 → single PDF button
  *   - rows + headers only          → single Excel button
@@ -36,6 +39,11 @@ function CardDownloadButton({
   headers,
   filename,
   sheetName,
+  excelExport,
+  onExportError,
+  onBusyChange,
+  expandScrollContainers = false,
+  disabled = false,
   sx,
   ...rest
 }) {
@@ -47,7 +55,9 @@ function CardDownloadButton({
   // eslint-disable-next-line react-hooks/refs
   const hasPdf = Boolean(cardRef);
   const hasExcel =
-    Array.isArray(rows) && Array.isArray(headers) && headers.length > 0;
+    (Array.isArray(rows) || typeof excelExport === "function") &&
+    Array.isArray(headers) &&
+    headers.length > 0;
 
   const [anchor, setAnchor] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -59,13 +69,19 @@ function CardDownloadButton({
     const el = cardRef?.current;
     if (!el || busy) return;
     setBusy(true);
+    onBusyChange?.(true);
     try {
       await exportElementToPdf(el, {
         filename: `${filename ?? "card"}.pdf`,
         backgroundColor: theme.palette.background.default,
+        expandScrollContainers,
       });
+    } catch (error) {
+      if (!onExportError) throw error;
+      onExportError(error);
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   };
 
@@ -73,15 +89,24 @@ function CardDownloadButton({
     setAnchor(null);
     if (busy) return;
     setBusy(true);
+    onBusyChange?.(true);
     try {
-      await exportRowsAsExcel({
-        headers,
-        rows,
-        filename: filename ?? "data",
-        sheetName,
-      });
+      if (excelExport) {
+        await excelExport();
+      } else {
+        await exportRowsAsExcel({
+          headers,
+          rows,
+          filename: filename ?? "data",
+          sheetName,
+        });
+      }
+    } catch (error) {
+      if (!onExportError) throw error;
+      onExportError(error);
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   };
 
@@ -110,7 +135,7 @@ function CardDownloadButton({
         <IconButton
           size="small"
           onClick={onPdf}
-          disabled={busy}
+          disabled={busy || disabled}
           aria-label="Download PDF"
           sx={buttonSx}
           {...rest}
@@ -128,7 +153,7 @@ function CardDownloadButton({
         <IconButton
           size="small"
           onClick={onExcel}
-          disabled={busy}
+          disabled={busy || disabled}
           aria-label="Download Excel"
           sx={buttonSx}
           {...rest}
@@ -146,7 +171,7 @@ function CardDownloadButton({
         <IconButton
           size="small"
           onClick={(e) => setAnchor(e.currentTarget)}
-          disabled={busy}
+          disabled={busy || disabled}
           aria-label="Download"
           aria-haspopup="menu"
           sx={buttonSx}
@@ -161,7 +186,7 @@ function CardDownloadButton({
         onClose={() => setAnchor(null)}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <MenuItem onClick={onPdf} disabled={busy}>
+        <MenuItem onClick={onPdf} disabled={busy || disabled}>
           <ListItemIcon>
             <PictureAsPdfIcon fontSize="small" />
           </ListItemIcon>
@@ -170,7 +195,7 @@ function CardDownloadButton({
             primaryTypographyProps={{ fontSize: 13 }}
           />
         </MenuItem>
-        <MenuItem onClick={onExcel} disabled={busy}>
+        <MenuItem onClick={onExcel} disabled={busy || disabled}>
           <ListItemIcon>
             <GridOnIcon fontSize="small" />
           </ListItemIcon>

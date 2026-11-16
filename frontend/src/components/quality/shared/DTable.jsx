@@ -1,7 +1,8 @@
 /**
  * Sortable drill table used by the Quality drill panels. `searchable` adds a
  * search box (same look as the shared DataTable search) that keeps the rows
- * whose text cells contain the query.
+ * whose text cells contain the query. Optional controlled-search props let an
+ * export-enabled caller share that filter; legacy callers keep local search state.
  */
 import { useEffect, useState } from "react";
 import { IconButton, InputAdornment, Stack, TextField } from "@mui/material";
@@ -16,6 +17,9 @@ export function DTable({
   isRowClickable,
   searchable = false,
   searchPlaceholder = "Search…",
+  searchValue,
+  onSearchValueChange,
+  searchDisabled = false,
   renderCell,
   rowKey,
   compareCells,
@@ -51,7 +55,9 @@ export function DTable({
     if (s && typeof s === "object" && s.props) s = "";
     return String(s == null ? "" : s).toLowerCase();
   };
-  const q = searchable ? query.trim().toLowerCase() : "";
+  const activeQuery = searchValue ?? query;
+  const changeQuery = onSearchValueChange ?? setQuery;
+  const q = searchable ? activeQuery.trim().toLowerCase() : "";
   let disp = q
     ? rows.filter((row) => row.some((c) => txt(c).includes(q)))
     : rows;
@@ -87,8 +93,9 @@ export function DTable({
     >
       <TextField
         size="small"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        disabled={searchDisabled}
+        value={activeQuery}
+        onChange={(e) => changeQuery(e.target.value)}
         placeholder={searchPlaceholder}
         sx={{ maxWidth: 320, "& .MuiOutlinedInput-root": { fontSize: 13 } }}
         InputProps={{
@@ -97,9 +104,13 @@ export function DTable({
               <SearchIcon sx={{ fontSize: 16, color: "text.disabled" }} />
             </InputAdornment>
           ),
-          endAdornment: query ? (
+          endAdornment: activeQuery ? (
             <InputAdornment position="end">
-              <IconButton size="small" onClick={() => setQuery("")}>
+              <IconButton
+                size="small"
+                disabled={searchDisabled}
+                onClick={() => changeQuery("")}
+              >
                 <CloseIcon sx={{ fontSize: 14 }} />
               </IconButton>
             </InputAdornment>
@@ -123,7 +134,7 @@ export function DTable({
             fontSize: 14,
           }}
         >
-          No rows match “{query.trim()}”.
+          No rows match “{activeQuery.trim()}”.
         </div>
       </>
     );

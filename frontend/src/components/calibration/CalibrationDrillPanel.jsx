@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -10,6 +10,11 @@ import {
   Typography,
 } from "@mui/material";
 import JKLoader from "@/components/JKLoader.jsx";
+import MaintenanceDownloadButton from "@/components/engineering/MaintenanceDownloadButton.jsx";
+import {
+  MAINTENANCE_HEADERS,
+  maintenanceExportFilename,
+} from "@/lib/maintenanceDownloads.js";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
 import {
   CALIBRATION_STATUSES,
@@ -30,10 +35,13 @@ const renderCell = (cell, column) =>
 
 /** BTP's current machine list, ordered by due date with overdue machines first. */
 export default function CalibrationDrillPanel({ query, onClose }) {
+  const panelRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
   const [status, setStatus] = useState("all");
   const rows = calibrationRows(query.error ? null : query.data, status);
   return (
     <Paper
+      ref={panelRef}
       component="section"
       variant="outlined"
       aria-label="Calibration Due machines"
@@ -49,9 +57,23 @@ export default function CalibrationDrillPanel({ query, onClose }) {
         <Typography component="h2" sx={{ fontSize: 17, fontWeight: 700 }}>
           Calibration Due
         </Typography>
-        <Button size="small" onClick={onClose}>
-          Close
-        </Button>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <MaintenanceDownloadButton
+            cardRef={panelRef}
+            headers={MAINTENANCE_HEADERS.calibration}
+            rows={rows}
+            filename={maintenanceExportFilename(
+              "calibration",
+              query.data?.context,
+              status,
+            )}
+            disabled={Boolean(query.error) || query.isLoading || !rows.length}
+            onBusyChange={setExporting}
+          />
+          <Button size="small" onClick={onClose}>
+            Close
+          </Button>
+        </Stack>
       </Stack>
       <Typography sx={{ mb: 1, fontSize: 12, color: "text.secondary" }}>
         BTP ·{" "}
@@ -86,6 +108,7 @@ export default function CalibrationDrillPanel({ query, onClose }) {
             select
             size="small"
             label="Status"
+            disabled={exporting}
             value={status}
             onChange={(event) => setStatus(event.target.value)}
             sx={{ width: 200 }}
@@ -99,14 +122,7 @@ export default function CalibrationDrillPanel({ query, onClose }) {
           </TextField>
           {rows.length ? (
             <DTable
-              cols={[
-                "Machine No",
-                "Machine Name",
-                "Instruments",
-                "Due Date",
-                "Days Left",
-                "Status",
-              ]}
+              cols={MAINTENANCE_HEADERS.calibration}
               rows={rows}
               sortable={false}
               statusColors={false}

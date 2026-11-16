@@ -155,6 +155,7 @@ export default function EngineeringMaintenanceSection({
             />
           ) : (
             <ComplianceDrillPanel
+              enableDownloads
               key={`${open}|${period.date}|${period.granularity}`}
               id={open}
               period={period}

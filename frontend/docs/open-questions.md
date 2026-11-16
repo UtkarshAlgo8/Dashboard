@@ -92,6 +92,14 @@ the remainder.
 - **Q-BTP-SAFETY-01 — OPEN (data team):** Live Gold has no November Safety rows; latest DAY/SHIFT data for all three names is 10-Jun-2026, with MONTH anchor 01-Jun-2026. Confirm source coverage and backfill if observations exist. See [data-team handoff](../../docs/btp-safety-data-team-handoff-2026-11-10.md).
 - **Q-BTP-SAFETY-02 — RESOLVED (dashboard):** User approved Safety-specific handling of upstream SQL NULL encoded as exactly `""`, preserving missing data as null and explicit zero as zero. Strict numeric, pagination and reconciliation validation remains in place. User requested removing the page-level red Safety error banner; unavailable/no-published-data card states remain. Upstream JSON-null preservation is a separate data-team follow-up.
 
+## Engineering Maintenance downloads
+
+See [spec 22](../specs/22-maintenance-downloads.md).
+
+- **Q-MAINT-EXPORT-01 — RESOLVED:** User chose Production-style PDF/Excel menus on all Maintenance drills and the Stock Cost trend; keep the existing header export unchanged.
+- **Q-MAINT-EXPORT-02 — RESOLVED:** Safety Excel exports all matching rows for the selected scope, not only the displayed page. PDF captures the current panel/page.
+- **Q-MAINT-EXPORT-03 — RESOLVED:** User chose shared opt-in export controls/schema helpers plus a backend Safety workbook endpoint, rather than server exports for every Maintenance KPI. Do not change other pages' behavior or existing Safety paging; apply explicit bounded export limits and never download partial data.
+
 ## BTP Calibration Due follow-up (2026-11-11)
 
 See [spec 20](../specs/20-btp-calibration-due.md).
