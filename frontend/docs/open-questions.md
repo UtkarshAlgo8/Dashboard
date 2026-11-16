@@ -92,6 +92,13 @@ the remainder.
 - **Q-BTP-SAFETY-01 — OPEN (data team):** Live Gold has no November Safety rows; latest DAY/SHIFT data for all three names is 10-Jun-2026, with MONTH anchor 01-Jun-2026. Confirm source coverage and backfill if observations exist. See [data-team handoff](../../docs/btp-safety-data-team-handoff-2026-11-10.md).
 - **Q-BTP-SAFETY-02 — RESOLVED (dashboard):** User approved Safety-specific handling of upstream SQL NULL encoded as exactly `""`, preserving missing data as null and explicit zero as zero. Strict numeric, pagination and reconciliation validation remains in place. User requested removing the page-level red Safety error banner; unavailable/no-published-data card states remain. Upstream JSON-null preservation is a separate data-team follow-up.
 
+## Engineering Maintenance KPI consistency
+
+See [spec 23](../specs/23-maintenance-kpi-presentation.md).
+
+- **Q-MAINT-CARD-01 — RESOLVED:** User chose neutral cards for every Maintenance KPI, uniform skeleton loading and consistent state handling. Follow the existing Production/Quality design language; preserve meaningful alert colors and do not invent RAG thresholds or targets.
+- **Q-MAINT-CARD-02 — RESOLVED:** User explicitly limited this implementation to Maintenance. Preserve Production/Quality and other Engineering tabs' appearance, loaders and data behavior. A Maintenance-only presentation adapter overrides Compliance's previous blue styling without changing the shared Compliance source model or other consumers.
+
 ## Engineering Maintenance downloads
 
 See [spec 22](../specs/22-maintenance-downloads.md).
