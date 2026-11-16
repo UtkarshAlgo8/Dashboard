@@ -109,8 +109,14 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
   return (
     <Box
       onClick={canDrill ? onToggle : undefined}
-      aria-busy={kpi.isLoading || undefined}
-      aria-label={skeletonLoading ? `Loading ${kpi.n}` : undefined}
+      aria-busy={kpi.isLoading || kpi.isRefreshing || undefined}
+      aria-label={
+        skeletonLoading
+          ? `Loading ${kpi.n}`
+          : kpi.isRefreshing
+            ? `Refreshing ${kpi.n}`
+            : undefined
+      }
       role={canDrill ? "button" : undefined}
       tabIndex={canDrill ? 0 : undefined}
       aria-expanded={canDrill ? isOpen : undefined}
@@ -143,8 +149,8 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         transition: "all 0.15s ease",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        minHeight: 136,
+        justifyContent: kpi.alignMetrics ? "flex-start" : "space-between",
+        minHeight: kpi.cardMinHeight ?? 136,
         "&:hover": canDrill ? { boxShadow: "0 4px 12px rgba(0,0,0,0.06)" } : {},
         "&:focus-visible": {
           outline: "2px solid",
@@ -360,7 +366,7 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         alignItems="center"
         justifyContent="space-between"
         spacing={1}
-        sx={{ mt: 0.5, minHeight: 22 }}
+        sx={{ mt: kpi.alignMetrics ? "auto" : 0.5, minHeight: 22 }}
       >
         {skeletonLoading ? (
           <Skeleton animation="wave" width={90} height={16} />

@@ -13,11 +13,15 @@
  * failures that made the download (and its button animation) never fire.
  *
  * @param {HTMLElement} el
- * @param {{ filename?: string, backgroundColor?: string }} [opts]
+ * @param {{ filename?: string, backgroundColor?: string, expandScrollContainers?: boolean }} [opts]
  */
 export async function exportElementToPdf(el, opts = {}) {
   if (!el) return;
-  const { filename = "dashboard.pdf", backgroundColor } = opts;
+  const {
+    filename = "dashboard.pdf",
+    backgroundColor,
+    expandScrollContainers = false,
+  } = opts;
 
   const [{ default: jsPDF }, { toPng }] = await Promise.all([
     import("jspdf"),
@@ -25,14 +29,29 @@ export async function exportElementToPdf(el, opts = {}) {
   ]);
 
   // Expand so overflow/scrolled content is fully captured, then restore.
-  const prev = {
-    height: el.style.height,
-    maxHeight: el.style.maxHeight,
-    overflow: el.style.overflow,
-  };
-  el.style.height = "auto";
-  el.style.maxHeight = "none";
-  el.style.overflow = "visible";
+  // Opt-in for panels with nested tables; existing callers keep their original capture behavior.
+  const elements = [
+    el,
+    ...(expandScrollContainers
+      ? [...el.querySelectorAll("*")].filter((node) => {
+          const style = window.getComputedStyle(node);
+          return /(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`);
+        })
+      : []),
+  ];
+  const previous = elements.map((node) => ({
+    node,
+    height: node.style.height,
+    maxHeight: node.style.maxHeight,
+    overflow: node.style.overflow,
+    overflowX: node.style.overflowX,
+    overflowY: node.style.overflowY,
+  }));
+  for (const { node } of previous) {
+    node.style.height = "auto";
+    node.style.maxHeight = "none";
+    node.style.overflow = "visible";
+  }
 
   // Reflow so scrollWidth/scrollHeight reflect the expanded size.
   const width = el.scrollWidth;
@@ -56,8 +75,22 @@ export async function exportElementToPdf(el, opts = {}) {
     pdf.addImage(dataUrl, "PNG", 0, 0, width, height);
     pdf.save(filename);
   } finally {
-    el.style.height = prev.height;
-    el.style.maxHeight = prev.maxHeight;
-    el.style.overflow = prev.overflow;
+    for (const {
+      node,
+      height,
+      maxHeight,
+      overflow,
+      overflowX,
+      overflowY,
+    } of previous) {
+      node.style.height = height;
+      node.style.maxHeight = maxHeight;
+      node.style.overflow = overflow;
+      if (expandScrollContainers) {
+        // Restoring only the shorthand loses an original overflow-x:auto declaration.
+        node.style.overflowX = overflowX;
+        node.style.overflowY = overflowY;
+      }
+    }
   }
 }

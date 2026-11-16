@@ -83,20 +83,22 @@ export function stockCostCard(data, { range, error, isLoading } = {}) {
 }
 
 /** Each quantity stays in its own unit; a unit price exists only for a nonzero single-UoM quantity. */
-export function stockCategoryCells(row) {
+export function stockCategoryCells(row, { rawNumbers = false } = {}) {
   const quantities = [...row.quantities].sort((a, b) =>
     a.unit.localeCompare(b.unit),
   );
   return [
     stockCategoryLabel(row.category),
-    stockMoney(row.cost),
+    rawNumbers ? (row.cost ?? "—") : stockMoney(row.cost),
     quantities.length
       ? quantities
           .map(({ unit, value }) => `${stockMoney(value)} ${unit}`)
           .join(" + ")
       : "—",
     quantities.length === 1 && quantities[0].value !== 0 && row.cost !== null
-      ? stockMoney(row.cost / quantities[0].value)
+      ? rawNumbers
+        ? row.cost / quantities[0].value
+        : stockMoney(row.cost / quantities[0].value)
       : "—",
   ];
 }

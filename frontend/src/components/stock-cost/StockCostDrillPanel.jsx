@@ -1,4 +1,10 @@
+import { useRef } from "react";
 import { Alert, Button, Paper, Stack, Typography } from "@mui/material";
+import MaintenanceDownloadButton from "@/components/engineering/MaintenanceDownloadButton.jsx";
+import {
+  MAINTENANCE_HEADERS,
+  maintenanceExportFilename,
+} from "@/lib/maintenanceDownloads.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
 import {
@@ -10,10 +16,11 @@ import {
 
 /** One date, one material-category level; row shortcuts open category trends, never items. */
 export default function StockCostDrillPanel({ query, onClose, onTrend }) {
+  const panelRef = useRef(null);
   const { current, rows } = stockCostSnapshot(query.data);
   const { costRows, total, topThree } = stockCostCategorySummary(rows);
   const tableRows = [
-    ...rows.map(stockCategoryCells),
+    ...rows.map((row) => stockCategoryCells(row)),
     ["Total", stockMoney(total), "—", ""],
   ];
   const mismatch = query.data?.reconciliation.some(
@@ -21,6 +28,7 @@ export default function StockCostDrillPanel({ query, onClose, onTrend }) {
   );
   return (
     <Paper
+      ref={panelRef}
       component="section"
       variant="outlined"
       aria-label="Stock Cost by Category"
@@ -36,9 +44,31 @@ export default function StockCostDrillPanel({ query, onClose, onTrend }) {
         <Typography component="h2" sx={{ fontSize: 17, fontWeight: 700 }}>
           Stock Cost by Category
         </Typography>
-        <Button size="small" onClick={onClose}>
-          Close
-        </Button>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <MaintenanceDownloadButton
+            cardRef={panelRef}
+            headers={MAINTENANCE_HEADERS.stockCost}
+            rows={[
+              ...rows.map((row) =>
+                stockCategoryCells(row, { rawNumbers: true }),
+              ),
+              ["Total", total, "—", ""],
+            ]}
+            filename={maintenanceExportFilename("stock-cost", {
+              date: current?.date,
+              granularity: "DAY",
+            })}
+            disabled={
+              Boolean(query.error) ||
+              query.isLoading ||
+              !current ||
+              !rows.length
+            }
+          />
+          <Button size="small" onClick={onClose}>
+            Close
+          </Button>
+        </Stack>
       </Stack>
       <Typography sx={{ mb: 1, fontSize: 12, color: "text.secondary" }}>
         {current?.date ?? "Selected period"} · BTP · DAY · All shifts
@@ -70,7 +100,7 @@ export default function StockCostDrillPanel({ query, onClose, onTrend }) {
           {rows.length ? (
             <>
               <DTable
-                cols={["Category", "Cost ₹", "Qty", "₹ / unit"]}
+                cols={MAINTENANCE_HEADERS.stockCost}
                 rows={tableRows}
                 sortable={false}
                 statusColors={false}

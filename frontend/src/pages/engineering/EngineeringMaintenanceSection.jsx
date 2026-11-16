@@ -3,6 +3,7 @@ import { Alert, Stack, Typography } from "@mui/material";
 import { getCompliance } from "@/api/compliance.js";
 import { getCalibration } from "@/api/calibration.js";
 import { calibrationCard } from "@/lib/calibration.js";
+import { maintenanceKpiPresentation } from "@/lib/maintenanceKpiPresentation.js";
 import CalibrationDrillPanel from "@/components/calibration/CalibrationDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
@@ -66,6 +67,38 @@ export default function EngineeringMaintenanceSection({
           : period),
   );
 
+  const complianceState = {
+    error: period ? query.error : null,
+    isLoading:
+      Boolean(period) && (query.isLoading || (!matches && !query.error)),
+  };
+  const cards = [
+    {
+      id: "calibration",
+      kpi: calibrationCard(calibration.data, calibration),
+      state: calibration,
+    },
+    {
+      id: "stock-cost",
+      kpi: stockCostCard(stock.data, { range: stockRange, ...stock }),
+      state: stock,
+      onTrend: () => setStockTrend({ category: "" }),
+    },
+    ...["pm", "daily"].map((id) => ({
+      id,
+      kpi: complianceCard(id, matches ? query.data.kpis[id] : null, {
+        period,
+        ...complianceState,
+      }),
+      state: complianceState,
+    })),
+    {
+      id: "safety",
+      kpi: safetyCard(safety.data, { period: safetyScope, ...safety }),
+      state: safety,
+    },
+  ];
+
   return (
     <Stack spacing={2}>
       <Typography component="h1" sx={{ fontSize: 20, fontWeight: 700 }}>
@@ -86,54 +119,15 @@ export default function EngineeringMaintenanceSection({
       )}
       <KpiSplitLayout
         open={drillOpen}
-        cards={[
+        cards={cards.map(({ id, kpi, state, onTrend }) => (
           <QKpiCard
-            key="calibration"
-            kpi={calibrationCard(calibration.data, {
-              error: calibration.error,
-              isLoading: calibration.isLoading,
-            })}
-            isOpen={drillOpen && open === "calibration"}
-            onToggle={() =>
-              setOpen(open === "calibration" ? null : "calibration")
-            }
-          />,
-          <QKpiCard
-            key="stock-cost"
-            kpi={stockCostCard(stock.data, {
-              range: stockRange,
-              error: stock.error,
-              isLoading: stock.isLoading,
-            })}
-            isOpen={drillOpen && open === "stock-cost"}
-            onToggle={() =>
-              setOpen(open === "stock-cost" ? null : "stock-cost")
-            }
-            onTrend={() => setStockTrend({ category: "" })}
-          />,
-          ...["pm", "daily"].map((id) => (
-            <QKpiCard
-              key={id}
-              kpi={complianceCard(id, matches ? query.data.kpis[id] : null, {
-                period,
-                error: query.error,
-                isLoading: query.isLoading || (period && !matches),
-              })}
-              isOpen={drillOpen && open === id}
-              onToggle={() => setOpen(open === id ? null : id)}
-            />
-          )),
-          <QKpiCard
-            key="safety"
-            kpi={safetyCard(safety.data, {
-              period: safetyScope,
-              error: safety.error,
-              isLoading: safety.isLoading,
-            })}
-            isOpen={drillOpen && open === "safety"}
-            onToggle={() => setOpen(open === "safety" ? null : "safety")}
-          />,
-        ]}
+            key={id}
+            kpi={maintenanceKpiPresentation(kpi, state)}
+            isOpen={drillOpen && open === id}
+            onToggle={() => setOpen(open === id ? null : id)}
+            onTrend={onTrend}
+          />
+        ))}
         panel={
           drillOpen &&
           (open === "calibration" ? (
@@ -155,6 +149,7 @@ export default function EngineeringMaintenanceSection({
             />
           ) : (
             <ComplianceDrillPanel
+              enableDownloads
               key={`${open}|${period.date}|${period.granularity}`}
               id={open}
               period={period}

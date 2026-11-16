@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { runQuery, UpstreamError } from "../utils/upstream.js";
 import { safetyQuery, safetyResult } from "./queries.js";
+import { createSafetyExportService } from "./export.js";
+import { EXCEL_CONTENT_TYPE } from "../utils/excel-export.js";
 
 const GRAINS = new Set(["DAY", "MONTH", "SHIFT A", "SHIFT B", "SHIFT C"]);
 const ALLOWED = new Set([
@@ -146,8 +148,40 @@ export function createSafetyService(
   };
 }
 
-export function createSafetyRouter(service = createSafetyService()) {
+/** Export accepts the same strict scope, but never client-controlled paging. */
+export function parseSafetyExportRequest(query) {
+  if (Object.hasOwn(query, "offset") || Object.hasOwn(query, "limit"))
+    throw new Error(
+      "Safety exports include all matching rows; paging filters are not supported.",
+    );
+  const input = parseSafetyRequest(query);
+  if (!["types", "reports"].includes(input.level))
+    throw new Error("Select Safety types or a report type to export.");
+  return input;
+}
+
+export function createSafetyRouter(
+  service = createSafetyService(),
+  exportService = createSafetyExportService(),
+) {
   const router = Router();
+  router.get("/export", async (req, res, next) => {
+    let input;
+    try {
+      input = parseSafetyExportRequest(req.query);
+    } catch (error) {
+      return res
+        .status(400)
+        .json({ error: { code: "VALIDATION_ERROR", message: error.message } });
+    }
+    try {
+      const { buffer, filename } = await exportService(input);
+      res.set("Cache-Control", "no-store");
+      res.attachment(filename).type(EXCEL_CONTENT_TYPE).send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  });
   router.get("/", async (req, res, next) => {
     let input;
     try {

@@ -8,12 +8,20 @@ process.env.AWS_DATA_API_KEY = "placeholder";
 process.env.CACHE_DRIVER = "memory";
 const { safetyQuery, safetyResult, SAFETY_NAMES } =
   await import("./queries.js");
-const { parseSafetyRequest, createSafetyService, createSafetyRouter } =
-  await import("./routes.js");
+const {
+  parseSafetyRequest,
+  parseSafetyExportRequest,
+  createSafetyService,
+  createSafetyRouter,
+} = await import("./routes.js");
 const { GOLD_ALL_COLUMNS, freshCutoffKey } =
   await import("../queries/gold-source.js");
 const { config } = await import("../config.js");
 const { errorHandler } = await import("../middlewares/errorHandler.js");
+
+const { createSafetyExportService } = await import("./export.js");
+const { buildExcelExport } = await import("../utils/excel-export.js");
+const XLSX = (await import("xlsx")).default;
 
 const TYPE = "New ' type & <b>条件</b>";
 const input = (extra = {}) =>
@@ -580,10 +588,169 @@ test("actual app mounts Safety behind existing auth; no unauthenticated upstream
       `http://127.0.0.1:${server.address().port}/api/v1/engineering/safety?date=2026-08-01&granularity=MONTH`,
     );
     assert.equal(response.status, 401);
+    const exportResponse = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/v1/engineering/safety/export?date=2026-08-01&granularity=MONTH&level=types`,
+    );
+    assert.equal(exportResponse.status, 401);
     assert.equal(queries, 0);
   } finally {
     process.env.NODE_ENV = prior;
     server.closeAllConnections();
     await new Promise((r) => server.close(r));
   }
+});
+
+test("export validation shares strict Safety scope but rejects client paging and summary exports", () => {
+  const scope = {
+    date: "2026-08-01",
+    granularity: "MONTH",
+    level: "reports",
+    type: TYPE,
+  };
+  assert.equal(parseSafetyExportRequest(scope).type, TYPE);
+  for (const extra of [
+    { offset: "0" },
+    { limit: "10000" },
+    { plant: "BTP" },
+    { date: "2026-02-30" },
+    { unsupported: "x" },
+    { level: "overall", type: undefined },
+  ])
+    assert.throws(() => parseSafetyExportRequest({ ...scope, ...extra }));
+});
+
+test("server export reads all matching reports in one validated snapshot and preserves typed cells and scope", async () => {
+  const selected = input({ level: "reports", type: TYPE });
+  const before = { ...selected };
+  const source = scopeRows({}, [151, 2]).map((row) => ({
+    ...row,
+    remarks: "=2+3",
+  }));
+  let calls = 0;
+  const service = createSafetyExportService(async (sql, transport) => {
+    calls++;
+    assert.deepEqual(transport, { engine: "athena", tables: [] });
+    assert.match(sql, /p.position <= 10001/);
+    return execute(sql, source);
+  });
+  const { buffer, filename } = await service(selected);
+  assert.equal(calls, 1);
+  assert.deepEqual(selected, before);
+  assert.match(filename, /^btp-safety-2026-08-01-MONTH-reports-.*\.xlsx$/);
+  const book = XLSX.read(buffer, { type: "buffer" });
+  const reports = XLSX.utils.sheet_to_json(book.Sheets.Reports, { header: 1 });
+  assert.equal(reports.length, 152); // header plus all 151, never just the first UI page
+  assert.equal(book.Sheets.Reports.F2.t, "s");
+  assert.equal(book.Sheets.Reports.F2.v, "=2+3");
+  assert.equal(book.Sheets.Reports.F2.f, undefined);
+  assert.equal(reports[1][1], "—");
+  assert.ok(
+    XLSX.utils
+      .sheet_to_json(book.Sheets.Scope, { header: 1 })
+      .some((row) => row[0] === "Type" && row[1] === TYPE),
+  );
+  const types = await service(input({ level: "types" }));
+  const typeSheet = XLSX.read(types.buffer, { type: "buffer" }).Sheets.Types;
+  assert.equal(typeSheet.B2.t, "n");
+  assert.equal(typeSheet.B2.v, 151);
+});
+
+test("export rejects oversized or truncated data without a partial workbook and isolates capacity", async () => {
+  const selected = input({ level: "reports", type: TYPE });
+  let workbookCalls = 0;
+  const workbook = async () => {
+    workbookCalls++;
+    return Buffer.from("workbook");
+  };
+  const oversized = createSafetyExportService(async (sql) => execute(sql), {
+    maxRows: 3,
+    workbook,
+  });
+  await assert.rejects(
+    oversized(selected),
+    (error) => error.status === 413 && /limited/.test(error.message),
+  );
+  const truncated = createSafetyExportService(
+    async (sql) => execute(sql).slice(0, 1),
+    { workbook },
+  );
+  await assert.rejects(truncated(selected), /missing|truncated/);
+  assert.equal(workbookCalls, 0);
+  let release;
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  const service = createSafetyExportService(
+    async (sql) => {
+      await blocked;
+      return execute(sql);
+    },
+    { workbook },
+  );
+  const first = service(selected);
+  await assert.rejects(
+    service(selected),
+    (error) => error.status === 503 && error.type === "SAFETY_EXPORT_BUSY",
+  );
+  release();
+  await first;
+  await service(selected); // capacity is released, with no persistent binary cache
+  assert.equal(workbookCalls, 2);
+});
+
+test("export HTTP route returns a real workbook and leaves existing JSON paging unchanged", async () => {
+  let exports = 0;
+  const service = createSafetyService(async (sql) => execute(sql));
+  const exportService = createSafetyExportService(async (sql) => {
+    exports++;
+    return execute(sql);
+  });
+  const app = express();
+  app.use("/safety", createSafetyRouter(service, exportService));
+  app.use(errorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  const url = `http://127.0.0.1:${server.address().port}/safety`;
+  const params = new URLSearchParams({
+    date: "2026-08-01",
+    granularity: "MONTH",
+    level: "reports",
+    type: TYPE,
+  });
+  try {
+    assert.equal((await fetch(`${url}/export?${params}&limit=25`)).status, 400);
+    assert.equal(exports, 0);
+    const response = await fetch(`${url}/export?${params}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type"), /spreadsheetml/);
+    assert.match(
+      response.headers.get("content-disposition"),
+      /attachment; filename=/,
+    );
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const book = XLSX.read(Buffer.from(await response.arrayBuffer()), {
+      type: "buffer",
+    });
+    assert.equal(XLSX.utils.sheet_to_json(book.Sheets.Reports).length, 4);
+    const normal = await fetch(`${url}?${params}&limit=2`);
+    const data = (await normal.json()).data;
+    assert.equal(data.rows.length, 2);
+    assert.equal(data.page.total, 4);
+    assert.equal(data.page.hasMore, true);
+    assert.equal(exports, 1);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("workbook rejects oversized Excel text rather than silently truncating it", async () => {
+  await assert.rejects(
+    buildExcelExport({
+      columns: [{ key: "text", label: "Text" }],
+      rows: [{ text: "x".repeat(32768) }],
+      scope: {},
+    }),
+    (error) => error.status === 413,
+  );
 });

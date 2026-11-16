@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -12,11 +12,19 @@ import JKLoader from "@/components/JKLoader.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
 import useSafetyQuery from "@/hooks/useSafetyQuery.js";
 import { safetyPeriodLabel } from "@/lib/safety.js";
+import { getSafetyExport } from "@/api/safety.js";
+import MaintenanceDownloadButton from "@/components/engineering/MaintenanceDownloadButton.jsx";
+import {
+  MAINTENANCE_HEADERS,
+  maintenanceExportFilename,
+} from "@/lib/maintenanceDownloads.js";
 
 const display = (value) => (value == null ? "—" : value);
 
 /** Selected type is the only route to report text; every page is scoped in SQL. */
 export default function SafetyDrillPanel({ period, onClose }) {
+  const panelRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
   const [selection, setSelection] = useState({ type: null, offset: 0 });
   const { type, offset } = selection;
   const level = type === null ? "types" : "reports";
@@ -33,6 +41,7 @@ export default function SafetyDrillPanel({ period, onClose }) {
   const back = () => setSelection({ type: null, offset: 0 });
   return (
     <Paper
+      ref={panelRef}
       component="section"
       variant="outlined"
       aria-label="Safety Observations drill"
@@ -48,12 +57,39 @@ export default function SafetyDrillPanel({ period, onClose }) {
         <Typography component="h2" sx={{ fontSize: 17, fontWeight: 700 }}>
           Safety Observations
         </Typography>
-        <Button size="small" onClick={onClose}>
-          Close
-        </Button>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <MaintenanceDownloadButton
+            cardRef={panelRef}
+            headers={
+              type === null
+                ? MAINTENANCE_HEADERS.safetyTypes
+                : MAINTENANCE_HEADERS.safetyReports
+            }
+            filename={maintenanceExportFilename(
+              "safety",
+              period,
+              `${level}-${type ?? "all"}`,
+            )}
+            disabled={Boolean(query.error) || query.isLoading || !page?.total}
+            onBusyChange={setExporting}
+            downloadExcel={(options) =>
+              getSafetyExport(
+                {
+                  ...period,
+                  level,
+                  ...(type !== null ? { type } : {}),
+                },
+                options,
+              )
+            }
+          />
+          <Button size="small" onClick={onClose}>
+            Close
+          </Button>
+        </Stack>
       </Stack>
       <Breadcrumbs sx={{ mb: 1, fontSize: 13 }}>
-        <Button size="small" onClick={back}>
+        <Button size="small" onClick={back} disabled={exporting}>
           Banmore · Types
         </Button>
         {type !== null && (
@@ -66,7 +102,7 @@ export default function SafetyDrillPanel({ period, onClose }) {
         {safetyPeriodLabel(period)} · Published observations · NOS
       </Typography>
       {type !== null && (
-        <Button size="small" onClick={back} sx={{ mb: 1 }}>
+        <Button size="small" onClick={back} disabled={exporting} sx={{ mb: 1 }}>
           Back to types
         </Button>
       )}
@@ -90,8 +126,8 @@ export default function SafetyDrillPanel({ period, onClose }) {
           keyboardRows
           cols={
             type === null
-              ? ["Type", "Count"]
-              : ["Date", "Shift", "Department", "Location", "Status", "Details"]
+              ? MAINTENANCE_HEADERS.safetyTypes
+              : MAINTENANCE_HEADERS.safetyReports
           }
           rows={rows.map((row) =>
             type === null
@@ -106,7 +142,7 @@ export default function SafetyDrillPanel({ period, onClose }) {
                 ],
           )}
           onRowClick={
-            type === null
+            type === null && !exporting
               ? (row) => setSelection({ type: row[0], offset: 0 })
               : undefined
           }
@@ -128,7 +164,7 @@ export default function SafetyDrillPanel({ period, onClose }) {
         >
           <Button
             size="small"
-            disabled={offset === 0}
+            disabled={exporting || offset === 0}
             onClick={() =>
               setSelection({ type, offset: Math.max(0, offset - 25) })
             }
@@ -141,12 +177,18 @@ export default function SafetyDrillPanel({ period, onClose }) {
           </Typography>
           <Button
             size="small"
-            disabled={!page.hasMore}
+            disabled={exporting || !page.hasMore}
             onClick={() => setSelection({ type, offset: offset + 25 })}
           >
             Next
           </Button>
         </Stack>
+      )}
+      {!query.error && !query.isLoading && page?.total > 0 && (
+        <Typography sx={{ mt: 1, fontSize: 12, color: "text.secondary" }}>
+          PDF captures the displayed page. Excel includes all matching{" "}
+          {type === null ? "types" : "reports"} (up to 10,000 rows).
+        </Typography>
       )}
       {type === null && rows.length > 0 && (
         <Typography sx={{ mt: 1, fontSize: 12, color: "text.secondary" }}>
