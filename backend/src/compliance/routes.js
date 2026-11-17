@@ -2,7 +2,12 @@ import { Router } from "express";
 import { cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { COMPLIANCE_KPIS, LEVEL_SUFFIX } from "./registry.js";
-import { complianceQuery, toCompliance } from "./queries.js";
+import {
+  complianceQuery,
+  toCompliance,
+  complianceHistoryQuery,
+  toComplianceHistory,
+} from "./queries.js";
 
 export const router = Router();
 const GRANULARITIES = new Set([
@@ -68,6 +73,40 @@ export function parseComplianceRequest(query) {
     ...(level === "machine" ? { section } : {}),
   };
 }
+
+/** A window selects individual stored snapshots, not an aggregated rate. */
+export function parseComplianceHistoryRequest(query) {
+  const { id, from, to, granularity, plant } = query;
+  const validDate = (value) =>
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(`${value}T00:00:00Z`)) &&
+    new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+  if (plant != null && plant !== "BTP") throw new Error("Only plant BTP is supported.");
+  if (!["pm", "daily"].includes(id)) throw new Error("Unknown compliance trend KPI.");
+  if (!["DAY", "MONTH"].includes(granularity)) throw new Error("Unsupported trend granularity.");
+  if (!validDate(from) || !validDate(to) || from > to ||
+      Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 366 * 86400000)
+    throw new Error("A valid date window of at most 366 days is required.");
+  return { id, from, to, granularity };
+}
+
+router.get("/history", async (req, res, next) => {
+  let input;
+  try {
+    input = parseComplianceHistoryRequest(req.query);
+  } catch (error) {
+    return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: error.message } });
+  }
+  try {
+    const data = await cached(buildCacheKey("/compliance/history", input), async () => {
+      const rows = await runQuery(complianceHistoryQuery(input), { engine: "athena", tables: [] });
+      return { context: { plant: "BTP", ...input }, points: toComplianceHistory(rows) };
+    }, 60_000);
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.get("/", async (req, res, next) => {
   let input;

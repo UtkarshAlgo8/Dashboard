@@ -9,6 +9,7 @@ import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
 import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
 import ComplianceDrillPanel from "@/components/compliance/ComplianceDrillPanel.jsx";
+import ComplianceTrendModal from "@/components/compliance/ComplianceTrendModal.jsx";
 import SafetyDrillPanel from "@/components/safety/SafetyDrillPanel.jsx";
 import useSafetyQuery from "@/hooks/useSafetyQuery.js";
 import useStockCostQuery from "@/hooks/useStockCostQuery.js";
@@ -33,6 +34,7 @@ export default function EngineeringMaintenanceSection({
 }) {
   const [open, setOpen] = useState(null);
   const [stockTrend, setStockTrend] = useState(null);
+  const [complianceTrend, setComplianceTrend] = useState(null);
   const calibration = usePolledQuery(getCalibration, {
     interval: 60000,
   });
@@ -86,11 +88,15 @@ export default function EngineeringMaintenanceSection({
     },
     ...["pm", "daily"].map((id) => ({
       id,
-      kpi: complianceCard(id, matches ? query.data.kpis[id] : null, {
-        period,
-        ...complianceState,
-      }),
+      kpi: {
+        ...complianceCard(id, matches ? query.data.kpis[id] : null, {
+          period,
+          ...complianceState,
+        }),
+        trendApi: true,
+      },
       state: complianceState,
+      onTrend: () => setComplianceTrend(id),
     })),
     {
       id: "safety",
@@ -158,6 +164,14 @@ export default function EngineeringMaintenanceSection({
           ))
         }
       />
+      {complianceTrend && (
+        <ComplianceTrendModal
+          key={complianceTrend}
+          id={complianceTrend}
+          anchor={selectedPeriod.date}
+          onClose={() => setComplianceTrend(null)}
+        />
+      )}
       {stockTrend && stockRange && (
         <StockCostTrendModal
           key={`${stockRange.from}|${stockRange.to}|${stockTrend.category}`}
