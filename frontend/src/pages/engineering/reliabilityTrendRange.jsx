@@ -4,11 +4,11 @@ import TimeRangeSelect from "@/components/production/TimeRangeSelect.jsx";
 /**
  * Shared date-range state for Engineering KPI trend modals.
  *
- * This intentionally mirrors the BTP production trend modal: Daily and
- * Monthly are named by granularity, Yearly remains disabled until the gold
+ * Monthly is named by granularity, Yearly remains disabled until the gold
  * feed publishes yearly rows, and Date Range is an exact custom window.
+ * Daily is hidden for all Reliability KPI trends.
  */
-export function useReliabilityTrendRange({ open, hiddenPresets = [] }) {
+export function useReliabilityTrendRange({ open }) {
   const [preset, setPreset] = useState("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -30,7 +30,7 @@ export function useReliabilityTrendRange({ open, hiddenPresets = [] }) {
       preset={preset}
       variant="trend"
       presetLabels={{ today: "Daily", month: "Monthly", year: "Yearly" }}
-      hiddenPresets={hiddenPresets}
+      hiddenPresets={["today"]}
       from={from}
       to={to}
       onPresetChange={(next) => {
