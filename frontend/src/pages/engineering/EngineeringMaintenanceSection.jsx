@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Stack, Typography } from "@mui/material";
+import { Alert, Box, Stack, Typography } from "@mui/material";
 import { getCompliance } from "@/api/compliance.js";
 import { getCalibration } from "@/api/calibration.js";
 import { calibrationCard } from "@/lib/calibration.js";
@@ -7,8 +7,7 @@ import { maintenanceKpiPresentation } from "@/lib/maintenanceKpiPresentation.js"
 import CalibrationDrillPanel from "@/components/calibration/CalibrationDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
-import { KpiSplitLayout } from "@/components/quality/shared/KpiSplitLayout.jsx";
+import MaintenanceSummaryCard from "./MaintenanceSummaryCard.jsx";
 import ComplianceDrillPanel from "@/components/compliance/ComplianceDrillPanel.jsx";
 import ComplianceTrendModal from "@/components/compliance/ComplianceTrendModal.jsx";
 import SafetyDrillPanel from "@/components/safety/SafetyDrillPanel.jsx";
@@ -133,47 +132,71 @@ export default function EngineeringMaintenanceSection({
       {loading ? (
         <JKLoader message="Loading Maintenance KPIs" />
       ) : (
-        <KpiSplitLayout
-          open={drillOpen}
-          cards={cards.map(({ id, kpi, state, onTrend }) => (
-            <QKpiCard
-              key={id}
-              kpi={maintenanceKpiPresentation(kpi, state)}
-              isOpen={drillOpen && open === id}
-              onToggle={() => setOpen(open === id ? null : id)}
-              onTrend={onTrend}
-            />
-          ))}
-          panel={
-            drillOpen &&
-            (open === "calibration" ? (
-              <CalibrationDrillPanel
-                query={calibration}
-                onClose={() => setOpen(null)}
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", lg: drillOpen ? "row" : "column" },
+            gap: 1.5,
+            alignItems: "flex-start",
+            width: "100%",
+          }}
+        >
+          <Box
+            sx={{
+              display: "grid",
+              gap: 1.5,
+              width: { xs: "100%", lg: drillOpen ? 340 : "100%" },
+              flex: { lg: drillOpen ? "0 0 340px" : "1 1 auto" },
+              gridTemplateColumns: drillOpen
+                ? "1fr"
+                : {
+                    xs: "1fr",
+                    sm: "repeat(2, minmax(0, 1fr))",
+                    md: "repeat(3, minmax(0, 1fr))",
+                  },
+            }}
+          >
+            {cards.map(({ id, kpi, state, onTrend }) => (
+              <MaintenanceSummaryCard
+                key={id}
+                kpi={maintenanceKpiPresentation(kpi, state)}
+                isOpen={drillOpen && open === id}
+                onToggle={() => setOpen(open === id ? null : id)}
+                onTrend={onTrend}
               />
-            ) : open === "stock-cost" ? (
-              <StockCostDrillPanel
-                query={stock}
-                onClose={() => setOpen(null)}
-                onTrend={(category) => setStockTrend({ category })}
-              />
-            ) : open === "safety" ? (
-              <SafetyDrillPanel
-                key={JSON.stringify(safetyScope)}
-                period={safetyScope}
-                onClose={() => setOpen(null)}
-              />
-            ) : (
-              <ComplianceDrillPanel
-                enableDownloads
-                key={`${open}|${period.date}|${period.granularity}`}
-                id={open}
-                period={period}
-                onClose={() => setOpen(null)}
-              />
-            ))
-          }
-        />
+            ))}
+          </Box>
+          {drillOpen && (
+            <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+              {open === "calibration" ? (
+                <CalibrationDrillPanel
+                  query={calibration}
+                  onClose={() => setOpen(null)}
+                />
+              ) : open === "stock-cost" ? (
+                <StockCostDrillPanel
+                  query={stock}
+                  onClose={() => setOpen(null)}
+                  onTrend={(category) => setStockTrend({ category })}
+                />
+              ) : open === "safety" ? (
+                <SafetyDrillPanel
+                  key={JSON.stringify(safetyScope)}
+                  period={safetyScope}
+                  onClose={() => setOpen(null)}
+                />
+              ) : (
+                <ComplianceDrillPanel
+                  enableDownloads
+                  key={`${open}|${period.date}|${period.granularity}`}
+                  id={open}
+                  period={period}
+                  onClose={() => setOpen(null)}
+                />
+              )}
+            </Box>
+          )}
+        </Box>
       )}
       {complianceTrend && (
         <ComplianceTrendModal

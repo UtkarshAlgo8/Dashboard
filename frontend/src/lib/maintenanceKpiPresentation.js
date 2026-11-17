@@ -1,5 +1,5 @@
 const BRAND_HELP =
-  "Blue is presentation only, not a performance status. No RAG threshold or target is defined for this KPI.";
+  "Card accent colors are decorative, not a performance status. No RAG threshold or target is defined for this KPI.";
 
 const hasValue = (value) =>
   (typeof value === "number" ||
