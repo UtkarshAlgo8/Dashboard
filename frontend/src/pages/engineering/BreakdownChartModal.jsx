@@ -694,7 +694,11 @@ function DailyReasonTrend({ rows, measureDef, title, loading, error }) {
           ) : null
         }
       >
-        <HighchartsReact highcharts={Highcharts} options={options} />
+        <HighchartsReact
+          highcharts={Highcharts}
+          options={options}
+          containerProps={{ style: { width: "100%", minWidth: 0 } }}
+        />
       </ChartPanel>
     </Box>
   );
