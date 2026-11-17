@@ -649,7 +649,20 @@ function DailyReasonTrend({ rows, measureDef, title, loading, error }) {
         categories: rows.map((r) => toDisplayDate(r.date)),
         title: { text: "Date" },
         lineColor: theme.palette.divider,
-        labels: { style: { color: theme.palette.text.secondary } },
+        // Keep daily data intact; only thin the date labels as width changes.
+        tickPositioner: function () {
+          const count = this.categories.length;
+          const intervals = Math.max(1, Math.floor(this.len / 110));
+          const step = Math.max(1, Math.ceil((count - 1) / intervals));
+          const ticks = [];
+          for (let i = 0; i < count; i += step) ticks.push(i);
+          return ticks;
+        },
+        labels: {
+          rotation: 0,
+          autoRotation: [],
+          style: { color: theme.palette.text.secondary },
+        },
       },
       yAxis: {
         min: 0,
