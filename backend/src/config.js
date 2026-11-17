@@ -156,6 +156,11 @@ export const config = {
       path.join(projectRoot, "data", ".engineering_gold.cache.json"),
     ),
     sqlTable: optional("ENGINEERING_SQL_TABLE", "gold.gold"),
+    // Same fresh/history policy as Production/Quality. An explicit empty value disables it.
+    // Ignored by the Excel source; MONTH snapshots always remain on sqlTable.
+    dailySqlTable:
+      process.env.ENGINEERING_SQL_TABLE_DAILY?.trim() ??
+      optional("AWS_DATA_SQL_TABLE_DAILY", "gold.gold_daily"),
   },
   // RCA Why-Why export service (FastAPI + LibreOffice, RCA_WhyWhy_Module):
   // fills the official UTQM.00.SQ-156 sheet and returns it as a PDF.

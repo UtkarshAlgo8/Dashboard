@@ -6,13 +6,11 @@
  * `ENGINEERING_DATA_SOURCE` in the environment to change the backing store:
  *
  *   excel → in-process alasql over the reference workbook
- *   db    → the same remote data API Production/Quality use — live against
- *           gold.gold, category='Reliability', at BOTH DAY and MONTH grain
- *           (re-verified 2026-09-17); see queries/reliability.queries.js's
- *           TABLE() comment for why gold.gold_daily is deliberately not
- *           unioned in
+ *   db    → the same remote data API Production/Quality use. The query layer
+ *           resolves recent DAY rows from the daily table and historical/MONTH
+ *           rows from gold.gold using the shared disjoint source policy.
  *
- * The SQL is identical across both; only the executor changes.
+ * Excel queries remain single-table; only DB queries use the daily/history split.
  */
 import { config } from "../../config.js";
 import { runQuery as excelRunQuery } from "./excelSource.js";

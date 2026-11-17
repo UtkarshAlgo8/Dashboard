@@ -10,6 +10,7 @@
 import { CACHE_TTL, cached, buildCacheKey } from "../../utils/cache.js";
 import { runQuery } from "../datasource/index.js";
 import { resolveGranularity } from "../normalize.js";
+import { engineeringSourceCacheScope } from "../queries/gold-source.js";
 import {
   kpiValueBatchQuery,
   kpiChildrenQuery,
@@ -30,6 +31,14 @@ import {
   toZeroBreakdownCount,
   withLossCategoryPct,
 } from "../transformers/reliability.transformers.js";
+
+// Invalidate cached empty/base-only responses after the source-policy correction.
+function reliabilityCacheKey(route, query) {
+  return buildCacheKey(`${route}:fresh-history-v1`, {
+    ...query,
+    __source: engineeringSourceCacheScope(),
+  });
+}
 
 function badRequest(res, message) {
   res.status(400).json({ error: { code: "VALIDATION_ERROR", message } });
@@ -107,7 +116,7 @@ export async function getSummary(req, res, next) {
       return badRequest(res, `Unsupported granularity: ${req.query.granularity}`);
     }
 
-    const key = buildCacheKey("/engineering/reliability/summary", req.query);
+    const key = reliabilityCacheKey("/engineering/reliability/summary", req.query);
     const values = await cached(
       key,
       async () => {
@@ -180,7 +189,7 @@ export async function getKpiChildren(req, res, next) {
       return badRequest(res, `Unsupported granularity: ${req.query.granularity}`);
     }
 
-    const key = buildCacheKey("/engineering/reliability/kpi-children", req.query);
+    const key = reliabilityCacheKey("/engineering/reliability/kpi-children", req.query);
     const body = await cached(
       key,
       async () => {
@@ -266,7 +275,7 @@ export async function getKpiHistory(req, res, next) {
       return badRequest(res, `Unsupported granularity: ${req.query.granularity}`);
     }
 
-    const key = buildCacheKey("/engineering/reliability/kpi-history", req.query);
+    const key = reliabilityCacheKey("/engineering/reliability/kpi-history", req.query);
     const body = await cached(
       key,
       async () => {
@@ -314,7 +323,7 @@ export async function getLatestDate(req, res, next) {
       return badRequest(res, `Unsupported granularity: ${req.query.granularity}`);
     }
 
-    const key = buildCacheKey("/engineering/reliability/latest-date", req.query);
+    const key = reliabilityCacheKey("/engineering/reliability/latest-date", req.query);
     const body = await cached(
       key,
       async () => {
@@ -353,7 +362,7 @@ export async function getLossTree(req, res, next) {
       return badRequest(res, `Unsupported granularity: ${req.query.granularity}`);
     }
 
-    const key = buildCacheKey("/engineering/reliability/loss-tree", req.query);
+    const key = reliabilityCacheKey("/engineering/reliability/loss-tree", req.query);
     const body = await cached(
       key,
       async () => {
@@ -402,7 +411,7 @@ const ZERO_BREAKDOWN_MIN_DAYS = 30;
  */
 export async function getZeroBreakdownCount(req, res, next) {
   try {
-    const key = buildCacheKey("/engineering/reliability/zero-breakdown-count", {});
+    const key = reliabilityCacheKey("/engineering/reliability/zero-breakdown-count", {});
     const body = await cached(
       key,
       async () => {

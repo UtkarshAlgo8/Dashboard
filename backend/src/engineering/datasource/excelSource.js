@@ -3,7 +3,7 @@
  *
  * Mirrors quality/datasource/excelSource.js exactly: loads the reference
  * workbook once, registers it as an in-memory alasql table, and executes the
- * SAME SQL strings the query builders would send to the real DB.
+ * query builders' single-table Excel variant (no rolling daily/history union).
  */
 import alasql from "alasql";
 
