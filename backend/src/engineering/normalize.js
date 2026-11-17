@@ -80,27 +80,19 @@ export function excludeUnmappedPredicate() {
 export const GRAN_DAY = "DAY";
 export const GRAN_MONTH = "MONTH";
 
-// The two granularities Engineering Reliability is served at. Both are now
-// published upstream for EVERY KPI in the hierarchy (verified 2026-09-17
-// against gold.gold: all 40 Reliability kpi_names carry both DAY rows
-// Jan-01..today and MONTH rows Jan-01..Sep-01). The workbook carries the
-// same two (MONTH for every KPI, DAY only for the Zero-Breakdown pair).
+// Supported Reliability grains. Coverage can be partial for a running day;
+// selecting a grain does not imply that every KPI has been published for it.
+// The query layer independently resolves recent DAY versus historical/MONTH sources.
 const ALLOWED_GRANULARITIES = new Set([GRAN_DAY, GRAN_MONTH]);
 
 /**
  * Resolve the UI's granularity selection to a canonical gold token.
  *
- * MONTH is the default for both data sources. It used to depend on the
- * active source, because the live upstream carried no MONTH rows for
- * category='Reliability' and `db` mode had to fall back to DAY. That gap is
- * closed: every Reliability KPI now has a published MONTH row dated the 1st
- * of its month, so the page is month-first again — which is what the KPI
- * spec asks for and what the excel mock always did.
- *
- * MONTH rows are a live month-to-date rollup, not a frozen end-of-month
- * figure: the 2026-09-01 row's components equal the sum of that month's DAY
- * rows through today, checked KPI by KPI. So reading the published MONTH row
- * is exact for the running month too, never stale.
+ * MONTH remains the default for both sources, matching the month-first page.
+ * Read its stored first-day anchor as published; do not average daily rates
+ * or substitute today's DAY values into a MONTH response. The ETL determines
+ * how current that rollup is. Fresh daily rows do not imply the archive's
+ * monthly snapshot has already incorporated them.
  *
  * Returns null for anything not on the allow-list so callers can 400.
  *

@@ -2,9 +2,9 @@
  * SQL builders for the Engineering Reliability tab (Overview + Reliability,
  * spec 16/17). Pure functions, mirroring quality/queries/process.queries.js.
  *
- * These emit the SAME SQL whether it runs against the local alasql table or
- * the remote DB — the FROM target and every predicate come from the shared
- * normalize layer, so nothing here changes when the data-source switch flips.
+ * Business predicates are shared between the local alasql and remote DB paths.
+ * The Engineering source adapter keeps Excel single-table while resolving DB
+ * reads through the same recent/history policy as Production and Quality.
  *
  * String concatenation (not bind params) mirrors Production/Quality; every
  * value goes through `escapeLiteral`.
@@ -14,7 +14,7 @@
  * Breakdown Machines, Loss Tree) — only the scope filters and requested
  * kpi_names change per level/caller.
  */
-import { config } from "../../config.js";
+import { engineeringGoldSource } from "./gold-source.js";
 import {
   escapeLiteral,
   engineeringScopePredicate,
@@ -25,17 +25,9 @@ import {
   isoToYyyymmdd,
 } from "../normalize.js";
 
-// Deliberately `gold.gold` only — no `gold.gold_daily` union. `gold_daily`
-// carries the same Reliability KPI hierarchy but mislabeled under
-// category IN ('Breakdown Maintenance', 'Loss Tree') instead of
-// 'Reliability' (whatever ETL job writes it disagrees with the one that
-// writes `gold.gold`), and `gold.gold`'s own Reliability feed is as fresh —
-// re-checked 2026-09-17: it carries DAY rows through today and a MONTH
-// rollup that already includes today. That is the reverse of the general
-// "gold_daily is fresher" assumption `queries/gold-source.js` was built
-// around for Production, so unioning them would only risk double-counting.
-// Revisit if the ETL team fixes the category label.
-const TABLE = () => config.engineering.sqlTable;
+// Rechecked 2026-11-17: daily Reliability rows now carry the correct category,
+// while gold.gold has no rows for today. Use the existing disjoint fresh/history
+// resolver; never switch historical DAY reads or MONTH snapshots wholesale to daily.
 
 // Columns every Reliability response needs. drill_down_attribute is
 // selected raw and parsed in the transformer (parseDrillDown).
@@ -74,7 +66,7 @@ export const COMPONENT_KPIS = [
 export function componentAggregateQuery({ from, to }) {
   const list = COMPONENT_KPIS.map(escapeLiteral).join(", ");
   return (
-    `SELECT kpi_name, SUM(actual_value) AS component_sum FROM ${TABLE()} ` +
+    `SELECT kpi_name, SUM(actual_value) AS component_sum FROM ${engineeringGoldSource({ from, to, granularity: "DAY" })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = 'DAY' ` +
@@ -95,7 +87,7 @@ export function componentAggregateQuery({ from, to }) {
 export function lossTreeRangeQuery({ kpiNames, from, to }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT ${SELECT_COLS} FROM ${TABLE()} ` +
+    `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ from, to, granularity: "DAY" })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = 'DAY' ` +
@@ -106,7 +98,13 @@ export function lossTreeRangeQuery({ kpiNames, from, to }) {
 }
 
 /** Optional scope fragment shared by kpi-children / kpi-history. */
-function scopeFragment({ status, section, machine, subSection, productType } = {}) {
+function scopeFragment({
+  status,
+  section,
+  machine,
+  subSection,
+  productType,
+} = {}) {
   const parts = [];
   if (status) parts.push(`status = ${escapeLiteral(status)}`);
   if (section) parts.push(`section = ${escapeLiteral(section)}`);
@@ -145,7 +143,7 @@ function datePredicate({ date, from, to }) {
 export function kpiValueBatchQuery({ kpiNames, date, granularity }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT ${SELECT_COLS} FROM ${TABLE()} ` +
+    `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ date, granularity })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -184,7 +182,7 @@ export function kpiChildrenQuery({
 }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT ${SELECT_COLS} FROM ${TABLE()} ` +
+    `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ date, from, to, granularity })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -217,7 +215,7 @@ export function kpiHistoryQuery({
   subSection,
 }) {
   return (
-    `SELECT date, actual_value FROM ${TABLE()} ` +
+    `SELECT date, actual_value FROM ${engineeringGoldSource({ from, to, granularity })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -240,7 +238,7 @@ export function kpiHistoryQuery({
  */
 export function latestDateQuery({ kpiName, granularity }) {
   return (
-    `SELECT date AS max_date FROM ${TABLE()} ` +
+    `SELECT date AS max_date FROM ${engineeringGoldSource({ granularity })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -272,7 +270,7 @@ export function latestDateQuery({ kpiName, granularity }) {
 export function latestCompleteDateQuery({ kpiNames, granularity }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT date AS max_date FROM ${TABLE()} ` +
+    `SELECT date AS max_date FROM ${engineeringGoldSource({ granularity })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -288,10 +286,9 @@ export function latestCompleteDateQuery({ kpiNames, granularity }) {
  * those strictly above `minDays` (the "zero breakdown" machines).
  */
 export function daysWithoutBreakdownCountQuery({ minDays } = {}) {
-  const over =
-    minDays == null ? "" : `AND actual_value > ${Number(minDays)} `;
+  const over = minDays == null ? "" : `AND actual_value > ${Number(minDays)} `;
   return (
-    `SELECT date, COUNT(DISTINCT machine) AS machine_count FROM ${TABLE()} ` +
+    `SELECT date, COUNT(DISTINCT machine) AS machine_count FROM ${engineeringGoldSource({ granularity: "DAY" })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name = 'DaysWithoutBreakdown_m' ` +
     `AND granularity = 'DAY' ` +

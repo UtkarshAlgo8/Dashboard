@@ -92,6 +92,11 @@ the remainder.
 - **Q-BTP-SAFETY-01 — OPEN (data team):** Live Gold has no November Safety rows; latest DAY/SHIFT data for all three names is 10-Jun-2026, with MONTH anchor 01-Jun-2026. Confirm source coverage and backfill if observations exist. See [data-team handoff](../../docs/btp-safety-data-team-handoff-2026-11-10.md).
 - **Q-BTP-SAFETY-02 — RESOLVED (dashboard):** User approved Safety-specific handling of upstream SQL NULL encoded as exactly `""`, preserving missing data as null and explicit zero as zero. Strict numeric, pagination and reconciliation validation remains in place. User requested removing the page-level red Safety error banner; unavailable/no-published-data card states remain. Upstream JSON-null preservation is a separate data-team follow-up.
 
+## Engineering Reliability daily source (2026-11-17)
+
+- **Q-ENG-SOURCE-01 — RESOLVED:** User confirmed the common policy: recent/today's dates use daily; historical dates use Gold. Reliability now reuses Production/Quality's configured IST fresh-window resolver for all query families, retaining MONTH on the archive and preventing overlapping source slices. Excel and other dashboards' queries remain unchanged. See [root cause, configuration and verification](../../docs/btp-reliability-fresh-source-2026-11-17.md).
+- **Q-ENG-SOURCE-02 — OPEN (data team):** Today's `BreakdownMin_Overall` is not published in the accessible daily source even though MTBF/MTTR are present. Keep missing values null and preserve complete-period rules; do not fill from another date or infer unpublished data.
+
 ## Engineering Maintenance KPI consistency
 
 See [spec 23](../specs/23-maintenance-kpi-presentation.md).
