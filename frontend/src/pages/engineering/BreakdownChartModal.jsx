@@ -617,24 +617,33 @@ function ParetoLevel({
   );
 }
 
-/** Rolling six calendar months, inclusive of the report date. */
-function sixMonthDayWindow(anchor) {
-  const end = new Date(`${anchor}T00:00:00Z`);
-  const start = new Date(end);
-  start.setUTCDate(1);
-  start.setUTCMonth(start.getUTCMonth() - 6);
-  const lastDay = new Date(
-    Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  start.setUTCDate(Math.min(end.getUTCDate(), lastDay) + 1);
-  return { from: start.toISOString().slice(0, 10), to: anchor };
-}
-
-function DailyReasonTrend({ rows, measureDef, title, loading, error }) {
+function DailyReasonTrend({
+  rows,
+  measureDef,
+  title,
+  through,
+  loading,
+  error,
+}) {
   const theme = useTheme();
   const panelRef = useRef(null);
-  const options = useMemo(
-    () => ({
+  const options = useMemo(() => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const end = Date.parse(`${through}T00:00:00Z`);
+    const events = rows.map((r) => ({
+      x: Date.parse(`${r.date}T00:00:00Z`),
+      y: r[measureDef.key],
+    }));
+    const points = new Map(events.map((p) => [p.x, p.y]));
+    // Sparse baseline anchors preserve downtime spikes and calendar gaps
+    // without generating a point for every quiet day in the entire history.
+    for (const { x } of events) {
+      for (const neighbor of [x - dayMs, x + dayMs]) {
+        if (neighbor <= end && !points.has(neighbor)) points.set(neighbor, 0);
+      }
+    }
+    if (events.length && !points.has(end)) points.set(end, 0);
+    return {
       chart: {
         type: "line",
         height: 320,
@@ -646,21 +655,15 @@ function DailyReasonTrend({ rows, measureDef, title, loading, error }) {
       accessibility: { enabled: false },
       legend: { enabled: false },
       xAxis: {
-        categories: rows.map((r) => toDisplayDate(r.date)),
+        type: "datetime",
         title: { text: "Date" },
         lineColor: theme.palette.divider,
-        // Keep daily data intact; only thin the date labels as width changes.
-        tickPositioner: function () {
-          const count = this.categories.length;
-          const intervals = Math.max(1, Math.floor(this.len / 110));
-          const step = Math.max(1, Math.ceil((count - 1) / intervals));
-          const ticks = [];
-          for (let i = 0; i < count; i += step) ticks.push(i);
-          return ticks;
-        },
+        // Only event dates are labeled, while their true calendar distance stays intact.
+        tickPositioner: () => events.map((p) => p.x),
         labels: {
           rotation: 0,
           autoRotation: [],
+          format: "{value:%d-%m-%Y}",
           style: { color: theme.palette.text.secondary },
         },
       },
@@ -670,18 +673,22 @@ function DailyReasonTrend({ rows, measureDef, title, loading, error }) {
         gridLineColor: theme.palette.divider,
         allowDecimals: measureDef.key !== "occurrences",
       },
-      tooltip: { valueSuffix: measureDef.unit ? ` ${measureDef.unit}` : "" },
+      tooltip: {
+        xDateFormat: "%d-%m-%Y",
+        valueSuffix: measureDef.unit ? ` ${measureDef.unit}` : "",
+      },
       series: [
         {
           name: measureDef.label,
           color: theme.custom.brand.blue,
           marker: { enabled: true, radius: 3 },
-          data: rows.map((r) => r[measureDef.key]),
+          data: [...points.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([x, y]) => ({ x, y, marker: { enabled: y > 0 } })),
         },
       ],
-    }),
-    [rows, measureDef, theme],
-  );
+    };
+  }, [rows, measureDef, theme, through]);
   return (
     <Box ref={panelRef} sx={{ scrollMarginTop: 8 }}>
       <ChartPanel
@@ -694,7 +701,7 @@ function DailyReasonTrend({ rows, measureDef, title, loading, error }) {
             ? `Daily trend fetch failed: ${error.message || "Request failed"}`
             : loading
               ? "Loading…"
-              : "No daily data in this period."
+              : "No positive daily values in the available history."
         }
         action={
           !loading && !error && rows.length > 0 ? (
@@ -810,14 +817,15 @@ function ParetoView({
     { enabled: Boolean(picked), interval: 0, deps: [dailyKey] },
   );
 
-  const trendWindow = sixMonthDayWindow(aggregate ? to : (asOf ?? date));
-  const trendKey = JSON.stringify([trendWindow, dailyMachine]);
+  const trendThrough = aggregate ? to : (asOf ?? date);
+  const trendKey = JSON.stringify([trendThrough, dailyMachine, trendPick?.key]);
   const trendQuery = usePolledQuery(
     () =>
       getReliabilityKpiChildren({
-        date: trendWindow.from,
-        from: trendWindow.from,
-        to: trendWindow.to,
+        date: trendThrough,
+        to: trendThrough,
+        allTime: true,
+        remarks: trendPick?.key,
         granularity: "DAY",
         kpiNames: DAILY_FAILURE_KPIS,
         groupBy: "date,machine,remarks",
@@ -997,28 +1005,11 @@ function ParetoView({
       day.occurrences += num(row.BreakdownOcc_m_Failure) ?? 0;
       byDate.set(key, day);
     }
-    const result = [];
-    const end = new Date(`${trendWindow.to}T00:00:00Z`);
-    for (
-      const day = new Date(`${trendWindow.from}T00:00:00Z`);
-      day <= end;
-      day.setUTCDate(day.getUTCDate() + 1)
-    ) {
-      const dateKey = day.toISOString().slice(0, 10);
-      result.push({
-        date: dateKey,
-        ...(byDate.get(dateKey) ?? { minutes: 0, occurrences: 0 }),
-      });
-    }
-    return result;
-  }, [
-    trendPick,
-    trendQuery.data,
-    trendKey,
-    dailyMachine,
-    trendWindow.from,
-    trendWindow.to,
-  ]);
+    return [...byDate.entries()]
+      .map(([date, values]) => ({ date, ...values }))
+      .filter((r) => r[measureDef.key] > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [trendPick, trendQuery.data, trendKey, dailyMachine, measureDef.key]);
 
   useEffect(() => {
     if (trendPick) {
@@ -1209,7 +1200,8 @@ function ParetoView({
                 <DailyReasonTrend
                   rows={trendRows}
                   measureDef={measureDef}
-                  title={`${measureDef.label} day-wise · ${picked.label} · ${trendPick.label} · ${toDisplayDate(trendWindow.from)} – ${toDisplayDate(trendWindow.to)}`}
+                  title={`${measureDef.label} day-wise · ${picked.label} · ${trendPick.label} · All history through ${toDisplayDate(trendThrough)}`}
+                  through={trendThrough}
                   loading={
                     trendQuery.isLoading ||
                     (trendQuery.data?.key !== trendKey && !trendQuery.error)

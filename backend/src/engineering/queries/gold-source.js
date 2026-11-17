@@ -41,10 +41,12 @@ export function engineeringSourceCacheScope() {
 }
 
 /** Engineering's thin adapter over the existing Production/Quality fresh/history policy. */
-export function engineeringGoldSource({ date, from, to, granularity } = {}) {
+export function engineeringGoldSource({
+  date, from, to, granularity, allTime = false,
+} = {}) {
   const window = Boolean(from && to);
-  const fromKey = dateKey(window ? from : date);
-  const toKey = dateKey(window ? to : date);
+  const fromKey = allTime ? null : dateKey(window ? from : date);
+  const toKey = dateKey(allTime ? to : window ? to : date);
   if (fromKey && toKey && fromKey > toKey) invalidPeriod();
   if (config.engineering.dataSource === "excel")
     return config.engineering.sqlTable;

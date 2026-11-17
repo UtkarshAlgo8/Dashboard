@@ -179,8 +179,25 @@ export function kpiChildrenQuery({
   productType,
   includeUnmapped = false,
   nonZero = false,
+  remarks,
+  allTime = false,
 }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
+  // Validated all-time reason drill: filter and aggregate at the data source,
+  // so quiet days and unrelated reasons never enter the upstream response.
+  if (allTime) {
+    return (
+      `SELECT date, machine, remarks, kpi_name, SUM(actual_value) AS actual_value ` +
+      `FROM ${engineeringGoldSource({ to, granularity, allTime: true })} ` +
+      `WHERE ${engineeringScopePredicate()} ` +
+      `AND kpi_name IN (${list}) AND granularity = 'DAY' ` +
+      `AND actual_value > 0 ` +
+      `AND ${DATE_YYYYMMDD} <= ${escapeLiteral(isoToYyyymmdd(to))} ` +
+      `AND machine = ${escapeLiteral(machine)} ` +
+      `AND remarks = ${escapeLiteral(remarks)} ` +
+      `GROUP BY date, machine, remarks, kpi_name`
+    );
+  }
   return (
     `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ date, from, to, granularity })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
