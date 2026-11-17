@@ -658,13 +658,30 @@ function DailyReasonTrend({
         type: "datetime",
         title: { text: "Date" },
         lineColor: theme.palette.divider,
-        // Only event dates are labeled, while their true calendar distance stays intact.
-        tickPositioner: () => events.map((p) => p.x),
+        // Thin by calendar distance in pixels, not event count: consecutive
+        // breakdown dates can otherwise crowd together on an all-time axis.
+        tickPositioner: function () {
+          const ticks = [];
+          const span = this.max - this.min;
+          const minGap = this.len > 0 ? (72 * span) / this.len : Infinity;
+          for (const { x } of events) {
+            if (!ticks.length || x - ticks[ticks.length - 1] >= minGap) {
+              ticks.push(x);
+            }
+          }
+          // Keep the most recent event labeled instead of a nearby older one.
+          const latest = events.at(-1)?.x;
+          if (ticks.length > 1 && ticks.at(-1) !== latest) {
+            ticks[ticks.length - 1] = latest;
+          }
+          return ticks;
+        },
         labels: {
-          rotation: 0,
+          rotation: -45,
+          align: "right",
           autoRotation: [],
           format: "{value:%d-%m-%Y}",
-          style: { color: theme.palette.text.secondary },
+          style: { color: theme.palette.text.secondary, fontSize: "11px" },
         },
       },
       yAxis: {
