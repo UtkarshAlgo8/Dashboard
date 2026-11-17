@@ -3,10 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -16,6 +12,7 @@ import {
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import JKLoader from "@/components/JKLoader.jsx";
+import { ModalFrame, ChartPanel } from "@/components/trend/TrendModalParts.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
 import useStockCostQuery from "@/hooks/useStockCostQuery.js";
 import MaintenanceDownloadButton from "@/components/engineering/MaintenanceDownloadButton.jsx";
@@ -133,41 +130,27 @@ export default function StockCostTrendModal({
     new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
   const canApply = validRange && dateValid(draft.from) && dateValid(draft.to);
   return (
-    <Dialog
-      open
-      onClose={onClose}
-      fullWidth
-      maxWidth="lg"
-      aria-labelledby="stock-cost-trend-title"
-    >
-      <DialogTitle id="stock-cost-trend-title">
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          spacing={1}
-        >
-          <span>Stock Cost Trend</span>
-          <MaintenanceDownloadButton
-            cardRef={contentRef}
-            headers={headers}
-            rows={exportRows}
-            filename={maintenanceExportFilename(
-              "stock-cost-trend",
-              { ...range, granularity: "DAY" },
-              selectedCategory || "all",
-            )}
-            disabled={
-              query.isLoading ||
-              Boolean(query.error) ||
-              (!query.data?.overall.length && !optionsCategories.length)
-            }
-            onBusyChange={setExporting}
-          />
-        </Stack>
-      </DialogTitle>
-      <DialogContent ref={contentRef} dividers>
+    <ModalFrame open onClose={onClose} kpi={{ name: "Stock Cost", unit: "₹" }}>
+      <Box ref={contentRef}>
         <Stack spacing={2}>
+          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+            <MaintenanceDownloadButton
+              cardRef={contentRef}
+              headers={headers}
+              rows={exportRows}
+              filename={maintenanceExportFilename(
+                "stock-cost-trend",
+                { ...range, granularity: "DAY" },
+                selectedCategory || "all",
+              )}
+              disabled={
+                query.isLoading ||
+                Boolean(query.error) ||
+                (!query.data?.overall.length && !optionsCategories.length)
+              }
+              onBusyChange={setExporting}
+            />
+          </Box>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
             BTP · DAY · All shifts · {range.from} – {range.to}
           </Typography>
@@ -251,11 +234,16 @@ export default function StockCostTrendModal({
                   . Values are shown as published.
                 </Alert>
               )}
-              <Box sx={{ overflowX: "auto" }}>
-                <Box sx={{ minWidth: 600 }}>
-                  <HighchartsReact highcharts={Highcharts} options={options} />
+              <ChartPanel theme={theme} title="Stock cost trend">
+                <Box sx={{ overflowX: "auto", width: "100%" }}>
+                  <Box sx={{ minWidth: 600 }}>
+                    <HighchartsReact
+                      highcharts={Highcharts}
+                      options={options}
+                    />
+                  </Box>
                 </Box>
-              </Box>
+              </ChartPanel>
               <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
                 {selectedCategory
                   ? "Missing category dates are plotted as 0. Each quantity unit has its own series and axis."
@@ -277,10 +265,7 @@ export default function StockCostTrendModal({
             </>
           )}
         </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+      </Box>
+    </ModalFrame>
   );
 }

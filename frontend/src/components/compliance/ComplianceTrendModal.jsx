@@ -2,21 +2,19 @@ import { useState } from "react";
 import {
   Alert,
   Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
   useTheme,
 } from "@mui/material";
 import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import { getComplianceHistory } from "@/api/compliance.js";
+import {
+  ModalFrame,
+  ChartPanel,
+  SingleSelectRow,
+} from "@/components/trend/TrendModalParts.jsx";
 import JKLoader from "@/components/JKLoader.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { COMPLIANCE_DEFINITIONS } from "@/lib/compliance.js";
@@ -88,75 +86,66 @@ export default function ComplianceTrendModal({ id, anchor, onClose }) {
     ],
   };
   return (
-    <Dialog
+    <ModalFrame
       open
       onClose={onClose}
-      fullWidth
-      maxWidth="lg"
-      aria-labelledby="compliance-trend-title"
+      kpi={{ name: COMPLIANCE_DEFINITIONS[id].name, unit: "%" }}
     >
-      <DialogTitle id="compliance-trend-title">
-        {COMPLIANCE_DEFINITIONS[id].name} Trend
-      </DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={2}
-            alignItems={{ sm: "center" }}
-          >
-            <ToggleButtonGroup
-              exclusive
-              size="small"
-              value={granularity}
-              onChange={(_, value) => value && setGranularity(value)}
-              aria-label="Trend granularity"
-            >
-              <ToggleButton value="DAY">Daily</ToggleButton>
-              <ToggleButton value="MONTH">Monthly</ToggleButton>
-            </ToggleButtonGroup>
-            <TextField
-              label="Month"
-              type="month"
-              size="small"
-              value={month}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (
-                  /^\d{4}-(0[1-9]|1[0-2])$/.test(value) &&
-                  Number(value.slice(0, 4)) >= 100
-                )
-                  setMonth(value);
-              }}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-          </Stack>
-          <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-            BTP · All shifts · {granularity === "DAY" ? month : year}. Published
-            values; missing periods are gaps.
-          </Typography>
-          {query.error ? (
-            <Alert severity="error">
-              Compliance trend unavailable: {query.error.message}
-            </Alert>
-          ) : query.isLoading && !matching ? (
-            <JKLoader message="Loading compliance trend" />
-          ) : !points.some((point) => point.value != null) ? (
-            <Alert severity="info">
-              No published compliance data for this period.
-            </Alert>
-          ) : (
-            <Box sx={{ overflowX: "auto" }}>
+      <Stack spacing={2}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          alignItems={{ sm: "center" }}
+        >
+          <SingleSelectRow
+            label="View by"
+            value={granularity}
+            onChange={setGranularity}
+            options={[
+              { value: "DAY", label: "Daily" },
+              { value: "MONTH", label: "Monthly" },
+            ]}
+          />
+          <TextField
+            label="Month"
+            type="month"
+            size="small"
+            value={month}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (
+                /^\d{4}-(0[1-9]|1[0-2])$/.test(value) &&
+                Number(value.slice(0, 4)) >= 100
+              )
+                setMonth(value);
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </Stack>
+        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+          BTP · All shifts · {granularity === "DAY" ? month : year}. Published
+          values; missing periods are gaps.
+        </Typography>
+        {query.error ? (
+          <Alert severity="error">
+            Compliance trend unavailable: {query.error.message}
+          </Alert>
+        ) : query.isLoading && !matching ? (
+          <JKLoader message="Loading compliance trend" />
+        ) : !points.some((point) => point.value != null) ? (
+          <Alert severity="info">
+            No published compliance data for this period.
+          </Alert>
+        ) : (
+          <ChartPanel theme={theme} title="Compliance trend">
+            <Box sx={{ overflowX: "auto", width: "100%" }}>
               <Box sx={{ minWidth: 600 }}>
                 <HighchartsReact highcharts={Highcharts} options={options} />
               </Box>
             </Box>
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+          </ChartPanel>
+        )}
+      </Stack>
+    </ModalFrame>
   );
 }
