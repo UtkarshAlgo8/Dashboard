@@ -1,5 +1,5 @@
-const NEUTRAL_HELP =
-  "Neutral styling is not a performance status. No RAG threshold or target is defined for this KPI.";
+const BRAND_HELP =
+  "Blue is presentation only, not a performance status. No RAG threshold or target is defined for this KPI.";
 
 const hasValue = (value) =>
   (typeof value === "number" ||
@@ -22,7 +22,7 @@ export function maintenanceKpiPresentation(
   );
   return {
     ...kpi,
-    presentationTone: "neutral",
+    presentationTone: "brand",
     loadingPresentation: "skeleton",
     showProgress: false,
     showPeriodWhenEmpty: true,
@@ -36,7 +36,7 @@ export function maintenanceKpiPresentation(
     sp: showValue ? kpi.sp : null,
     ragInfo: [
       ...help,
-      NEUTRAL_HELP,
+      BRAND_HELP,
       ...(!supported && kpi.emptyReason ? [kpi.emptyReason] : []),
       ...(failed
         ? [`Data unavailable: ${error.message ?? "Request failed"}`]
