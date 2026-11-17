@@ -1113,7 +1113,7 @@ function BreakdownChartModal({
   maxBars,
 }) {
   // No Daily view here: Monthly and a custom Date Range only.
-  const trend = useReliabilityTrendRange({ open, hiddenPresets: ["today"] });
+  const trend = useReliabilityTrendRange({ open });
   // RCA Why-Why form (UTQM.00.SQ-156), filled here and downloaded as a PDF.
   const [rcaOpen, setRcaOpen] = useState(false);
   const request = reliabilityTrendRequest({

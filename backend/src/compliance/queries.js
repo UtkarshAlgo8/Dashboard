@@ -30,6 +30,47 @@ export function complianceQuery({ ids, date, granularity, level, section }) {
   );
 }
 
+/** Published overall values across a bounded window; rates are never aggregated. */
+export function complianceHistoryQuery({ id, from, to, granularity }) {
+  const table = goldSource({
+    plantId: "banmore",
+    fromKey: from.replaceAll("-", ""),
+    toKey: to.replaceAll("-", ""),
+    granularity,
+  });
+  const name = namesForCompliance(id, "overall").value;
+  return (
+    `SELECT CAST(date AS VARCHAR) AS date, actual_value FROM ${table} ` +
+    `WHERE plant = 'BTP' AND kpi_name = ${escapeLiteral(name)} ` +
+    `AND granularity = ${escapeLiteral(granularity)} ` +
+    `AND date BETWEEN DATE ${escapeLiteral(from)} AND DATE ${escapeLiteral(to)} ` +
+    `AND ${empty("section")} AND ${empty("machine")} ORDER BY date`
+  );
+}
+
+/** Reject conflicting snapshots and leave missing dates to the chart's date spine. */
+export function toComplianceHistory(rows) {
+  if (rows.length >= 5000) {
+    throw new UpstreamError("Compliance trend may be truncated.", {
+      type: "COMPLIANCE_TRUNCATED",
+      status: 502,
+    });
+  }
+  const points = new Map();
+  for (const row of rows) {
+    const date = String(row.date ?? "").slice(0, 10);
+    const value = numeric(row.actual_value);
+    if (points.has(date) && points.get(date) !== value) {
+      throw new UpstreamError(`Conflicting published compliance values for ${date}.`, {
+        type: "COMPLIANCE_DATA_CONFLICT",
+        status: 502,
+      });
+    }
+    points.set(date, value);
+  }
+  return [...points].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value }));
+}
+
 function numeric(value) {
   if (isEmptyValue(value)) return null;
   const n = Number(value);

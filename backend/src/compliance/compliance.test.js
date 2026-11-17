@@ -3,8 +3,8 @@ import test from "node:test";
 import express from "express";
 
 process.env.CACHE_DRIVER = "memory";
-const { router, parseComplianceRequest } = await import("./routes.js");
-const { complianceQuery, toCompliance } = await import("./queries.js");
+const { router, parseComplianceRequest, parseComplianceHistoryRequest } = await import("./routes.js");
+const { complianceQuery, toCompliance, complianceHistoryQuery, toComplianceHistory } = await import("./queries.js");
 const { namesForCompliance } = await import("./registry.js");
 const { config } = await import("../config.js");
 const { _clear } = await import("../utils/cache.js");
@@ -192,6 +192,45 @@ test("conflicting Gold values and potentially truncated output fail closed", () 
   );
 });
 
+test("trend requests validate bounded day/month windows and query published overall values", () => {
+  const input = parseComplianceHistoryRequest({ id: "pm", from: "2026-01-01", to: "2026-12-31", granularity: "MONTH" });
+  const sql = complianceHistoryQuery(input);
+  assert.match(sql, /technicalchecksheet_Plan_Compliance_pm_o/);
+  assert.match(sql, /date BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'/);
+  assert.ok(sql.includes(config.upstream.sqlTable));
+  assert.doesNotMatch(sql, /SUM\(|AVG\(|department|category/i);
+  for (const bad of [
+    { id: "critical" }, { id: "__proto__" }, { granularity: "YEAR" },
+    { from: "2026-02-30" }, { from: "2027-01-01" }, { to: "2028-01-01" },
+  ]) assert.throws(() => parseComplianceHistoryRequest({ ...input, ...bad }));
+});
+
+test("daily trend reads both historical and fresh Gold sources across the cutoff", () => {
+  const today = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+  const sql = complianceHistoryQuery({ id: "daily", from: "2022-01-01", to: today, granularity: "DAY" });
+  assert.ok(sql.includes(config.upstream.sqlTable));
+  assert.ok(sql.includes(config.upstream.dailySqlTable));
+  assert.match(sql, /UNION ALL/);
+});
+
+test("trend keeps zero, missing and duplicate values without aggregation", () => {
+  assert.deepEqual(toComplianceHistory([
+    { date: "2026-01-02", actual_value: "0" },
+    { date: "2026-01-01", actual_value: "100" },
+    { date: "2026-01-02", actual_value: "0" },
+    { date: "2026-01-03", actual_value: null },
+  ]), [
+    { date: "2026-01-01", value: 100 },
+    { date: "2026-01-02", value: 0 },
+    { date: "2026-01-03", value: null },
+  ]);
+  assert.throws(() => toComplianceHistory([
+    { date: "2026-01-01", actual_value: 50 },
+    { date: "2026-01-01", actual_value: 51 },
+  ]), /Conflicting/);
+  assert.throws(() => toComplianceHistory(Array(5000).fill({})), /truncated/);
+});
+
 async function withServer(fn) {
   const app = express();
   app.use("/api/v1/compliance", router);
@@ -205,6 +244,29 @@ async function withServer(fn) {
     await new Promise((r) => server.close(r));
   }
 }
+
+test("trend route returns published points, validates input and caches the window", async (t) => {
+  await _clear();
+  const native = globalThis.fetch;
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    if (String(url) !== config.upstream.url) return native(url, options);
+    requests.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ rows: [{ date: "2026-01-01", actual_value: "92.5" }] }));
+  });
+  await withServer(async (base) => {
+    assert.equal((await native(`${base}/history?id=critical&from=2026-01-01&to=2026-12-31&granularity=MONTH`)).status, 400);
+    assert.equal(requests.length, 0);
+    const url = `${base}/history?id=pm&from=2026-01-01&to=2026-12-31&granularity=MONTH`;
+    for (let i = 0; i < 2; i++) {
+      const response = await native(url);
+      assert.equal(response.status, 200);
+      assert.deepEqual((await response.json()).data.points, [{ date: "2026-01-01", value: 92.5 }]);
+    }
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].engine, "athena");
+});
 
 test("route uses Athena, caches exact inputs, and does not infer children from Gold metadata", async (t) => {
   await _clear();
