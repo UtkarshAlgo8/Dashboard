@@ -510,26 +510,35 @@ export function ZeroBreakdownPanel() {
  * figure, independent of the selected report period (see ZeroBreakdownPanel).
  */
 export function useZeroBreakdownTotal() {
-  const [total, setTotal] = useState(null);
-  const [asOf, setAsOf] = useState(null);
+  const [result, setResult] = useState({
+    total: null,
+    asOf: null,
+    loading: true,
+    error: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
     getZeroBreakdownCount()
       .then((res) => {
-        if (cancelled || !res?.date) return;
-        setAsOf(res.date);
-        setTotal(res.count);
+        if (cancelled) return;
+        setResult({
+          asOf: res?.date ?? null,
+          total: res?.date ? (res.count ?? null) : null,
+          loading: false,
+          error: null,
+        });
       })
-      .catch(() => {
-        /* card falls back to "—" */
+      .catch((error) => {
+        if (!cancelled)
+          setResult({ total: null, asOf: null, loading: false, error });
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return { total, asOf };
+  return result;
 }
 
 /** Fetch the ranked list once for both the headline card and expanded table. */

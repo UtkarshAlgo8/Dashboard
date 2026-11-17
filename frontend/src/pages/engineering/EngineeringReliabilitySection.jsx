@@ -60,6 +60,7 @@ function EngineeringReliabilitySection({ period }) {
       )}
       <ReliabilityCardsGrid
         values={result.values}
+        summaryError={result.error}
         period={period}
         includeTopMachines={true}
         includeMachinesAffected={true}

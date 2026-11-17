@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { Alert, Box, Stack, Typography } from "@mui/material";
+import ChecklistOutlinedIcon from "@mui/icons-material/ChecklistOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import HealthAndSafetyOutlinedIcon from "@mui/icons-material/HealthAndSafetyOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import { getCompliance } from "@/api/compliance.js";
 import { getCalibration } from "@/api/calibration.js";
 import { calibrationCard } from "@/lib/calibration.js";
@@ -7,7 +12,9 @@ import { maintenanceKpiPresentation } from "@/lib/maintenanceKpiPresentation.js"
 import CalibrationDrillPanel from "@/components/calibration/CalibrationDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import MaintenanceSummaryCard from "./MaintenanceSummaryCard.jsx";
+import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
+import { numericKpiValue } from "@/components/quality/shared/qualityKpi.js";
+import { engineeringKpiStatus } from "./engineeringKpiStatus.js";
 import ComplianceDrillPanel from "@/components/compliance/ComplianceDrillPanel.jsx";
 import ComplianceTrendModal from "@/components/compliance/ComplianceTrendModal.jsx";
 import SafetyDrillPanel from "@/components/safety/SafetyDrillPanel.jsx";
@@ -26,6 +33,14 @@ import {
   COMPLIANCE_PERIOD_HELP,
   storedCompliancePeriod,
 } from "@/lib/compliance.js";
+
+const KPI_ICONS = {
+  calibration: TuneOutlinedIcon,
+  "stock-cost": Inventory2OutlinedIcon,
+  pm: FactCheckOutlinedIcon,
+  daily: ChecklistOutlinedIcon,
+  safety: HealthAndSafetyOutlinedIcon,
+};
 
 /** BTP Maintenance: connected cards only, with one shared right-hand drill. */
 export default function EngineeringMaintenanceSection({
@@ -156,15 +171,59 @@ export default function EngineeringMaintenanceSection({
                   },
             }}
           >
-            {cards.map(({ id, kpi, state, onTrend }) => (
-              <MaintenanceSummaryCard
-                key={id}
-                kpi={maintenanceKpiPresentation(kpi, state)}
-                isOpen={drillOpen && open === id}
-                onToggle={() => setOpen(open === id ? null : id)}
-                onTrend={onTrend}
-              />
-            ))}
+            {cards.map(({ id, kpi, state, onTrend }) => {
+              const presentation = maintenanceKpiPresentation(kpi, state);
+              const { status, info, target } = engineeringKpiStatus(
+                id,
+                presentation.v,
+              );
+              const isCompliance = id === "pm" || id === "daily";
+              const progressValue = isCompliance
+                ? numericKpiValue(presentation.v)
+                : null;
+              const progressLabel =
+                isCompliance && progressValue != null
+                  ? "Compliance percentage on a 0–100% scale."
+                  : isCompliance
+                    ? "Compliance value unavailable."
+                    : "No target is used for this bar; the unfilled track is not a performance measure.";
+              const ragInfo = (presentation.ragInfo ?? []).filter(
+                (line) =>
+                  !line.startsWith("Card accent colors are decorative") &&
+                  !(
+                    status &&
+                    line.startsWith(
+                      "Published Gold value; no parent recomputation or invented target",
+                    )
+                  ),
+              );
+              return (
+                <QKpiCard
+                  key={id}
+                  kpi={{
+                    ...presentation,
+                    status,
+                    presentationTone: undefined,
+                    cardTintPalette: "engineering",
+                    target: target ?? presentation.target,
+                    footerLabel:
+                      target || presentation.target
+                        ? undefined
+                        : "No status target",
+                    showProgress: true,
+                    keepProgressWhenOpen: true,
+                    alignProgress: true,
+                    progressValue,
+                    progressLabel,
+                    ragInfo: [...ragInfo, ...info],
+                  }}
+                  iconComponent={KPI_ICONS[id]}
+                  isOpen={drillOpen && open === id}
+                  onToggle={() => setOpen(open === id ? null : id)}
+                  onTrend={onTrend}
+                />
+              );
+            })}
           </Box>
           {drillOpen && (
             <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>

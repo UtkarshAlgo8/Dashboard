@@ -93,6 +93,7 @@ function EngineeringOverviewSection({ period }) {
       )}
       <ReliabilityCardsGrid
         values={summaryValues}
+        summaryError={summaryError}
         period={period}
         includeTopMachines={false}
       />

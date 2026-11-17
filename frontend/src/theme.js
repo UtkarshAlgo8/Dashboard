@@ -249,6 +249,12 @@ theme.custom = {
     amber: C.amCard,
     red: C.rdCard,
   },
+  // Engineering uses stronger fills so status colors remain distinct.
+  engineeringKpiTints: {
+    green: { background: "#D6F3DC", foreground: "#176B2B" },
+    amber: { background: "#FFEAC8", foreground: "#985000" },
+    red: { background: "#FFE0DE", foreground: "#AE0010" },
+  },
   status: {
     green: C.gn,
     greenAccent: C.gnAccent,
