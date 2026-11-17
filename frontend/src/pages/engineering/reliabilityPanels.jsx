@@ -14,6 +14,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import Highcharts from "highcharts";
+import { Box, Tooltip } from "@mui/material";
 import HighchartsReactImport from "highcharts-react-official";
 import {
   getReliabilityKpiChildren,
@@ -165,18 +166,21 @@ export function LossTreePie({ rows, loading, error }) {
     );
   } else {
     body = (
-      <div
-        style={{
-          display: "flex",
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "minmax(0, 1fr)",
+            md: "minmax(320px, 420px) minmax(0, 1fr)",
+          },
           alignItems: "center",
-          gap: 28,
-          flexWrap: "wrap",
+          gap: { xs: 1, md: 3 },
         }}
       >
-        <div style={{ flex: "0 1 420px", width: 420, maxWidth: "100%" }}>
+        <div style={{ width: "100%", maxWidth: 420, margin: "0 auto" }}>
           <HighchartsReact highcharts={Highcharts} options={options} />
         </div>
-        <div style={{ flex: "1 1 320px", minWidth: 260 }}>
+        <div style={{ minWidth: 0 }}>
           {data.map((d, i) => (
             <div
               key={d.name}
@@ -227,7 +231,7 @@ export function LossTreePie({ rows, loading, error }) {
             </div>
           ))}
         </div>
-      </div>
+      </Box>
     );
   }
 
@@ -243,11 +247,9 @@ export function LossTreePie({ rows, loading, error }) {
       >
         <div
           style={{
-            fontSize: 14.5,
+            fontSize: 15,
             fontWeight: 700,
             color: C.tx,
-            textTransform: "uppercase",
-            letterSpacing: ".4px",
           }}
         >
           Lost Time by Category
@@ -265,18 +267,29 @@ export function LossTreePie({ rows, loading, error }) {
             filename="engineering-loss-tree"
             sx={{ width: 26, height: 26, borderRadius: 1 }}
           />
-          <InfoDot />
+          <Tooltip
+            arrow
+            title="Slice size shows share of downtime. Scheduled-time percentages use the published values."
+          >
+            <span
+              tabIndex={0}
+              aria-label="About lost time categories"
+              style={{ display: "flex" }}
+            >
+              <InfoDot />
+            </span>
+          </Tooltip>
         </div>
       </div>
       {!loading && !error && rows && rows.length > 0 && (
         <div
           style={{
             fontSize: 12.5,
-            color: C.mu,
+            color: C.md,
             lineHeight: 1.5,
-            marginTop: 4,
-            marginBottom: 16,
-            maxWidth: 640,
+            marginTop: 6,
+            marginBottom: 12,
+            maxWidth: 800,
           }}
         >
           <span style={{ fontWeight: 700, color: C.tx }}>
