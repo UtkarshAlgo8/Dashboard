@@ -4,7 +4,7 @@
  * §2 in the Production trend modal's look.
  *
  *   VIEW BY   Machine · Failure
- *   MEASURE   Downtime (min) · Occurrences
+ *   MEASURE   Downtime (min) · Frequency
  *   FILTER    Category · Section
  *
  * A click on a bar or a table row opens the second level in a drill panel
@@ -93,8 +93,9 @@ const VIEWS_BY = [
 ];
 
 const MEASURES = [
+  { value: "all", label: "All", key: "minutes", unit: "min" },
   { value: "downtime", label: "Downtime (min)", key: "minutes", unit: "min" },
-  { value: "occurrences", label: "Occurrences", key: "occurrences", unit: "" },
+  { value: "occurrences", label: "Frequency", key: "occurrences", unit: "" },
 ];
 
 // Date-wise table: machine always, its name (eqname) blank when gold has none.
@@ -117,7 +118,7 @@ const DAILY_COLUMNS = [
   },
   {
     key: "occurrences",
-    label: "Occurrences",
+    label: "Frequency",
     align: "right",
     render: (r) => formatIndianNumber(r.occurrences, { maxDecimals: 0 }),
   },
@@ -147,6 +148,7 @@ function ParetoChart({
   groupLabel,
   barsTo80,
   groups,
+  showOccurrences = false,
   selectedKey = null,
   onPick,
 }) {
@@ -169,7 +171,7 @@ function ParetoChart({
       .map(({ sum }) => (displayedTotal ? (sum / displayedTotal) * 100 : 0));
     const valueMax = displayedTotal || 1;
     // The same headroom on both axes for the final marker and label.
-    const headroom = 1.1;
+    const headroom = showOccurrences ? 1.2 : 1.1;
     const longest = rows.reduce(
       (n, r) => Math.max(n, truncate(r.label).length),
       0,
@@ -187,10 +189,17 @@ function ParetoChart({
         type: "column",
         height: 310 + labelRoom + 24 + (groups ? 30 : 0),
         backgroundColor: "transparent",
-        spacing: [12, 8, 8, 8],
+        spacing: [showOccurrences ? 24 : 12, 8, 8, 8],
         style: { fontFamily: theme.typography.fontFamily },
       },
       title: { text: null },
+      subtitle: showOccurrences
+        ? {
+            text: "Bar labels: downtime (min) / frequency",
+            align: "left",
+            style: { color: text, fontSize: "11px" },
+          }
+        : { text: null },
       credits: { enabled: false },
       accessibility: { enabled: false },
       legend: {
@@ -333,6 +342,11 @@ function ParetoChart({
           },
           dataLabels: {
             enabled: true,
+            backgroundColor: showOccurrences
+              ? theme.custom.surface.soft
+              : undefined,
+            borderRadius: showOccurrences ? 2 : 0,
+            padding: showOccurrences ? 2 : 5,
             style: {
               fontSize: "11px",
               fontWeight: "700",
@@ -340,7 +354,9 @@ function ParetoChart({
               textOutline: "none",
             },
             formatter: function () {
-              return fmt(this.y);
+              if (!showOccurrences) return fmt(this.y);
+              const occurrences = rows[this.point.index]?.occurrences;
+              return `${fmt(this.y)} min<br/><span style="color:${text};font-size:10px;font-weight:600">${occurrences == null ? "—" : fmt(occurrences)} freq.</span>`;
             },
           },
         },
@@ -353,6 +369,8 @@ function ParetoChart({
           showInLegend: false,
           data: rows.map((r, i) => ({
             y: r.value,
+            // Stagger the two-line labels so adjacent bars remain readable.
+            ...(showOccurrences ? { dataLabels: { y: i % 2 ? -34 : 0 } } : {}),
             // The drilled bar stands out; otherwise a discipline colour when
             // the level has one, else solid up to the 80% cut and faded after.
             color:
@@ -372,6 +390,7 @@ function ParetoChart({
           marker: { enabled: true, radius: 4, symbol: "circle" },
           dataLabels: {
             enabled: true,
+            y: showOccurrences ? -32 : -6,
             crop: false,
             overflow: "allow",
             style: {
@@ -402,6 +421,7 @@ function ParetoChart({
     groupLabel,
     barsTo80,
     groups,
+    showOccurrences,
     selectedKey,
     onPick,
     theme,
@@ -488,7 +508,7 @@ function tableColumns(groupLabel, withDiscipline) {
     },
     {
       key: "occurrences",
-      label: "Occurrences",
+      label: "Frequency",
       align: "right",
       render: (r) => fmt(r.occurrences),
     },
@@ -521,6 +541,7 @@ function ParetoLevel({
   error,
   emptyMessage,
   disciplineLegend,
+  showOccurrences = false,
   selectedKey,
   onPick,
 }) {
@@ -544,7 +565,7 @@ function ParetoLevel({
               ? [["Discipline", r.discipline]]
               : []),
           ["Downtime", `${fmt(r.minutes)} min`],
-          ["Occurrences", fmt(r.occurrences)],
+          ["Frequency", fmt(r.occurrences)],
           ...(r.pct == null ? [] : [["Breakdown %", `${fmt(r.pct, 2)}%`]]),
           ["Share of scope", `${fmt(r.share, 1)}%`],
         ],
@@ -596,6 +617,7 @@ function ParetoLevel({
             groupLabel={groupLabel}
             barsTo80={groups ? barRows.length : rowsTo80}
             groups={groups}
+            showOccurrences={showOccurrences}
             selectedKey={selectedKey}
             onPick={onPick}
           />
@@ -610,6 +632,8 @@ function ParetoLevel({
             ` Top ${maxBars} = ${fmt(plottedShare, 1)}% of scope; the remaining ${fmt(
               all.length - maxBars,
             )} carry ${fmt(100 - plottedShare, 1)}%.`}
+          {showOccurrences &&
+            " Bars and cumulative percentage are ranked by downtime; bar labels also show frequency. Drill-down charts show downtime."}
           {onPick && " Click a bar or a row to drill down."}
         </Typography>
       )}
@@ -617,8 +641,133 @@ function ParetoLevel({
   );
 }
 
+function DailyReasonTrend({
+  rows,
+  measureDef,
+  title,
+  through,
+  loading,
+  error,
+}) {
+  const theme = useTheme();
+  const panelRef = useRef(null);
+  const options = useMemo(() => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const end = Date.parse(`${through}T00:00:00Z`);
+    const events = rows.map((r) => ({
+      x: Date.parse(`${r.date}T00:00:00Z`),
+      y: r[measureDef.key],
+    }));
+    const points = new Map(events.map((p) => [p.x, p.y]));
+    // Sparse baseline anchors preserve downtime spikes and calendar gaps
+    // without generating a point for every quiet day in the entire history.
+    for (const { x } of events) {
+      for (const neighbor of [x - dayMs, x + dayMs]) {
+        if (neighbor <= end && !points.has(neighbor)) points.set(neighbor, 0);
+      }
+    }
+    if (events.length && !points.has(end)) points.set(end, 0);
+    return {
+      chart: {
+        type: "line",
+        height: 320,
+        backgroundColor: "transparent",
+        style: { fontFamily: theme.typography.fontFamily },
+      },
+      title: { text: null },
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+      legend: { enabled: false },
+      xAxis: {
+        type: "datetime",
+        title: { text: "Date" },
+        lineColor: theme.palette.divider,
+        // Thin by calendar distance in pixels, not event count: consecutive
+        // breakdown dates can otherwise crowd together on an all-time axis.
+        tickPositioner: function () {
+          const ticks = [];
+          const span = this.max - this.min;
+          const minGap = this.len > 0 ? (72 * span) / this.len : Infinity;
+          for (const { x } of events) {
+            if (!ticks.length || x - ticks[ticks.length - 1] >= minGap) {
+              ticks.push(x);
+            }
+          }
+          // Keep the most recent event labeled instead of a nearby older one.
+          const latest = events.at(-1)?.x;
+          if (ticks.length > 1 && ticks.at(-1) !== latest) {
+            ticks[ticks.length - 1] = latest;
+          }
+          return ticks;
+        },
+        labels: {
+          rotation: -45,
+          align: "right",
+          autoRotation: [],
+          format: "{value:%d-%m-%Y}",
+          style: { color: theme.palette.text.secondary, fontSize: "11px" },
+        },
+      },
+      yAxis: {
+        min: 0,
+        title: { text: measureDef.label },
+        gridLineColor: theme.palette.divider,
+        allowDecimals: measureDef.key !== "occurrences",
+      },
+      tooltip: {
+        xDateFormat: "%d-%m-%Y",
+        valueSuffix: measureDef.unit ? ` ${measureDef.unit}` : "",
+      },
+      series: [
+        {
+          name: measureDef.label,
+          color: theme.custom.brand.blue,
+          marker: { enabled: true, radius: 3 },
+          data: [...points.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([x, y]) => ({ x, y, marker: { enabled: y > 0 } })),
+        },
+      ],
+    };
+  }, [rows, measureDef, theme, through]);
+  return (
+    <Box ref={panelRef} sx={{ scrollMarginTop: 8 }}>
+      <ChartPanel
+        theme={theme}
+        title={title}
+        loading={loading}
+        empty={loading || Boolean(error) || rows.length === 0}
+        emptyMessage={
+          error
+            ? `Daily trend fetch failed: ${error.message || "Request failed"}`
+            : loading
+              ? "Loading…"
+              : "No positive daily values in the available history."
+        }
+        action={
+          !loading && !error && rows.length > 0 ? (
+            <ExportButton
+              targetRef={panelRef}
+              columns={[DAILY_COLUMNS[0], ...DAILY_COLUMNS.slice(-2)]}
+              rows={rows}
+              name={title}
+            />
+          ) : null
+        }
+      >
+        <HighchartsReact
+          highcharts={Highcharts}
+          options={options}
+          containerProps={{ style: { width: "100%", minWidth: 0 } }}
+        />
+      </ChartPanel>
+    </Box>
+  );
+}
+
 function ParetoView({
   date,
+  asOf,
   granularity,
   from,
   to,
@@ -636,10 +785,25 @@ function ParetoView({
   // The clicked bar: a machine (VIEW BY Machine) or a failure (VIEW BY
   // Failure). null = no drill panel.
   const [picked, setPicked] = useState(null);
+  const [trendSelection, setTrendSelection] = useState(null);
   const drillRef = useRef(null);
+  const trendRef = useRef(null);
 
   const period = { date, from, to, granularity };
   const periodKey = JSON.stringify(period);
+  const trendScope = JSON.stringify([
+    periodKey,
+    viewBy,
+    picked?.key,
+    category,
+    section,
+  ]);
+  const trendPick =
+    trendSelection?.scope === trendScope ? trendSelection.row : null;
+  const setTrendPick = useCallback(
+    (row) => setTrendSelection({ scope: trendScope, row }),
+    [trendScope],
+  );
   const withoutPct = (names) =>
     aggregate ? names.filter((n) => !PCT_KPIS.has(n)) : names;
 
@@ -672,8 +836,11 @@ function ParetoView({
   );
   // The drill panel's date-wise log: one row per (day, machine, failure)
   // across the period — a Monthly view reads its month's DAY rows. Fetched
-  // while a drill is open and filtered per pick.
+  // while a drill is open. Scope machine drills at the source: a plant-wide
+  // month of daily failure rows exceeds the upstream response-size limit.
   const dayWindow = aggregate ? { from, to } : monthRangeFromKey(date);
+  const dailyMachine = viewBy === "machine" ? picked?.key : undefined;
+  const dailyKey = JSON.stringify([periodKey, dailyMachine]);
   const dailyQuery = usePolledQuery(
     () =>
       getReliabilityKpiChildren({
@@ -683,10 +850,36 @@ function ParetoView({
         granularity: "DAY",
         kpiNames: DAILY_FAILURE_KPIS,
         groupBy: "date,machine,remarks",
+        machine: dailyMachine,
         agg: "sum",
         includeUnmapped: true,
-      }).then((res) => ({ key: periodKey, rows: res?.rows ?? [] })),
-    { enabled: Boolean(picked), interval: 0, deps: [periodKey] },
+        nonZero: true,
+      }).then((res) => ({ key: dailyKey, rows: res?.rows ?? [] })),
+    { enabled: Boolean(picked), interval: 0, deps: [dailyKey] },
+  );
+
+  const trendThrough = aggregate ? to : (asOf ?? date);
+  const trendKey = JSON.stringify([trendThrough, dailyMachine, trendPick?.key]);
+  const trendQuery = usePolledQuery(
+    () =>
+      getReliabilityKpiChildren({
+        date: trendThrough,
+        to: trendThrough,
+        allTime: true,
+        remarks: trendPick?.key,
+        granularity: "DAY",
+        kpiNames: DAILY_FAILURE_KPIS,
+        groupBy: "date,machine,remarks",
+        machine: dailyMachine,
+        agg: "sum",
+        includeUnmapped: true,
+        nonZero: true,
+      }).then((res) => ({ key: trendKey, rows: res?.rows ?? [] })),
+    {
+      enabled: Boolean(trendPick) && viewBy === "machine",
+      interval: 0,
+      deps: [trendKey],
+    },
   );
 
   const machineRows = useMemo(
@@ -757,7 +950,11 @@ function ParetoView({
     [category, activeSection],
   );
 
-  const measureDef = MEASURES.find((m) => m.value === measure);
+  // "All" combines measures only on the first-level chart. Downstream
+  // Pareto and daily trend remain downtime-based, matching the bar ranking.
+  const measureDef = MEASURES.find(
+    (m) => m.value === (measure === "all" ? "downtime" : measure),
+  );
   const mainGroupLabel = viewBy === "machine" ? "Machine" : "Failure";
   const drillGroupLabel = viewBy === "machine" ? "Failure" : "Machine";
 
@@ -810,12 +1007,12 @@ function ParetoView({
         color: disciplineColor(split[0]?.[0]),
       };
     });
-    return rankRows(built, measureDef.key, false);
+    return rankRows(built, measureDef.key, true);
   }, [picked, failureRows, viewBy, inScope, measureDef]);
 
   // The picked machine's (or failure's) breakdowns day by day, latest first.
   const dailyRows = useMemo(() => {
-    if (!picked || dailyQuery.data?.key !== periodKey) return null;
+    if (!picked || dailyQuery.data?.key !== dailyKey) return null;
     return dailyQuery.data.rows
       .map((r) => ({
         date: r.date,
@@ -839,10 +1036,35 @@ function ParetoView({
           String(b.date).localeCompare(String(a.date)) ||
           (b.minutes ?? 0) - (a.minutes ?? 0),
       );
-  }, [picked, dailyQuery.data, periodKey, viewBy, inScope]);
+  }, [picked, dailyQuery.data, dailyKey, viewBy, inScope]);
+
+  const trendRows = useMemo(() => {
+    if (!trendPick || trendQuery.data?.key !== trendKey) return [];
+    const byDate = new Map();
+    for (const row of trendQuery.data.rows) {
+      if (row.remarks !== trendPick.key || row.machine !== dailyMachine)
+        continue;
+      const key = String(row.date).slice(0, 10);
+      const day = byDate.get(key) ?? { minutes: 0, occurrences: 0 };
+      day.minutes += num(row.BreakdownMin_m_Failure) ?? 0;
+      day.occurrences += num(row.BreakdownOcc_m_Failure) ?? 0;
+      byDate.set(key, day);
+    }
+    return [...byDate.entries()]
+      .map(([date, values]) => ({ date, ...values }))
+      .filter((r) => r[measureDef.key] > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [trendPick, trendQuery.data, trendKey, dailyMachine, measureDef.key]);
+
+  useEffect(() => {
+    if (trendPick) {
+      trendRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [trendPick]);
 
   const pick = useCallback(
-    (row) =>
+    (row) => {
+      setTrendSelection(null);
       setPicked({
         key: row.key,
         // A picked machine is titled with its name; a failure is its own label.
@@ -850,7 +1072,8 @@ function ParetoView({
           viewBy === "machine"
             ? machineLabel({ machine: row.label, eqname: row.eqname })
             : row.label,
-      }),
+      });
+    },
     [viewBy],
   );
 
@@ -949,7 +1172,8 @@ function ParetoView({
         groupLabel={mainGroupLabel}
         measureDef={measureDef}
         maxBars={maxBars}
-        title={`${measureDef.label} by ${mainGroupLabel.toLowerCase()} · ${periodText}`}
+        title={`${measure === "all" ? "Downtime (min) & frequency" : measureDef.label} by ${mainGroupLabel.toLowerCase()} · ${periodText}`}
+        showOccurrences={measure === "all"}
         loading={loading}
         error={error}
         emptyMessage={
@@ -1014,12 +1238,30 @@ function ParetoView({
                 `No breakdowns for ${picked.label} in this period.`
               }
               disciplineLegend={viewBy === "machine"}
+              selectedKey={trendPick?.key ?? null}
+              onPick={viewBy === "machine" ? setTrendPick : undefined}
             />
+            {trendPick && (
+              <Box ref={trendRef} sx={{ scrollMarginTop: 8 }}>
+                <DailyReasonTrend
+                  rows={trendRows}
+                  measureDef={measureDef}
+                  title={`${measureDef.label} day-wise · ${picked.label} · ${trendPick.label} · All history through ${toDisplayDate(trendThrough)}`}
+                  through={trendThrough}
+                  loading={
+                    trendQuery.isLoading ||
+                    (trendQuery.data?.key !== trendKey && !trendQuery.error)
+                  }
+                  error={trendQuery.isLoading ? null : trendQuery.error}
+                />
+              </Box>
+            )}
             {!loading && !error && drillRows?.length > 0 && (
               <DataTable
                 columns={tableColumns(drillGroupLabel, viewBy === "machine")}
                 rows={drillRows}
                 getRowKey={(r) => r.key}
+                onRowClick={viewBy === "machine" ? setTrendPick : undefined}
                 searchPlaceholder={`Search ${drillGroupLabel.toLowerCase()}…`}
                 toolbarRight={
                   <ExportButton
@@ -1167,6 +1409,7 @@ function BreakdownChartModal({
       {open && (
         <ParetoView
           date={request.date}
+          asOf={asOf ?? date}
           from={request.from}
           to={request.to}
           granularity={request.granularity}

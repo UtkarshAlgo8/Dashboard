@@ -150,6 +150,7 @@ export async function getSummary(req, res, next) {
  *   [&status= &section= &machine= &sub_section= &product_type=]
  *   [&sort= &order=asc|desc &limit=] [&agg=sum] [&include_unmapped=1]
  *   [&nonzero=1]
+ *   [&all_time=1 &machine= &remarks= &date_to=] sparse daily reason history
  *
  * `group_by` is one dimension, or a comma-separated tuple ("remarks,date")
  * for a level keyed by more than one — with `date_from`/`date_to` and
@@ -180,6 +181,8 @@ export async function getKpiChildren(req, res, next) {
       agg,
       include_unmapped: includeUnmapped,
       nonzero,
+      remarks,
+      all_time: allTimeParam,
     } = req.query;
     if (kpiNames.length === 0 || !date || !groupBy) {
       return badRequest(res, "`kpi_names`, `date`, and `group_by` are required.");
@@ -187,6 +190,24 @@ export async function getKpiChildren(req, res, next) {
     const granularity = resolveGranularity(req.query);
     if (!granularity) {
       return badRequest(res, `Unsupported granularity: ${req.query.granularity}`);
+    }
+
+    const allTime = allTimeParam === "1" || allTimeParam === "true";
+    if (
+      allTime && (
+        !machine || !remarks || !to || from ||
+        granularity !== "DAY" || agg !== "sum" ||
+        groupBy !== "date,machine,remarks" ||
+        kpiNames.some((name) => ![
+          "BreakdownMin_m_Failure",
+          "BreakdownOcc_m_Failure",
+        ].includes(name))
+      )
+    ) {
+      return badRequest(
+        res,
+        "All-time reason history requires machine, remarks, date_to, DAY granularity, agg=sum, group_by=date,machine,remarks, and additive failure KPIs only (no date_from).",
+      );
     }
 
     const key = reliabilityCacheKey("/engineering/reliability/kpi-children", req.query);
@@ -216,6 +237,8 @@ export async function getKpiChildren(req, res, next) {
                 productType,
                 includeUnmapped: includeUnmapped === "1" || includeUnmapped === "true",
                 nonZero: nonzero === "1" || nonzero === "true",
+                remarks,
+                allTime,
               }),
             ),
           ),

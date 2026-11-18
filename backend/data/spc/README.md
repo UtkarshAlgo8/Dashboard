@@ -1,12 +1,12 @@
 # Temporary BTP SPC — Calender 4
 
-`calender4.json` is a validated conversion of `SPC_Calender4_11Nov_v2 (2).xlsx` following `SPC_Calender4_Dashboard_Guide.md`. Both files were provided externally. No workbook is opened on HTTP requests and no rows are written to gold.
+`calender4.json` is a validated conversion of `SPC_Calender4_18Nov.xlsx` following `SPC_Calender4_Dashboard_Guide.md`. Both files were provided externally. No workbook is opened on HTTP requests and no rows are written to gold.
 
 ## Behavior
 
 - Enabled by default; set `SPC_CALENDER4_STATIC_ENABLED=false` and restart the backend to disable.
-- Five combinations across three recipes and two parameters (not every recipe has both parameters), 20 published capability cells, 10 spec reference rows, 375 readings. This snapshot fully replaces the previous workbook; CPJ1218_B370 is no longer included. Actual event-time coverage: **2026-10-31 16:20:00** through **2026-11-11 22:10:00**, workbook wall-clock time (timezone unspecified). Shift C production dates can precede overnight event dates; both fields are preserved as supplied.
-- KPI snapshot: **2026-11-11**. Included only on that selected day or when that date is inside the requested inclusive range. With no date, the available snapshot is included.
+- Eight combinations across four recipes and two parameters, 32 published capability cells, 16 spec reference rows, 501 readings. This snapshot fully replaces the previous workbook. Actual event-time coverage: **2026-11-10 10:30:00** through **2026-11-18 03:40:00**, workbook wall-clock time (timezone unspecified). Shift C production dates can precede overnight event dates; both fields are preserved as supplied.
+- KPI snapshot: **2026-11-18**. Included only on that selected day or when that date is inside the requested inclusive range. With no date, the available snapshot is included.
 - Global shift does **not** filter Excel capability or measurements. All supporting readings are retained and their actual coverage is recorded in API metadata.
 - Source provenance stays in backend/API metadata for maintenance and removal. User-facing SPC cards, charts, trends and alerts do not display Excel/temporary-source labels or notices; snapshot, filter scope and statistical chart labels remain accurate.
 - Each overlapping combination stays wholly Excel-backed until a complete mapped live combination (four published metric rows, usable limits, nonempty measurements) is available. No mixed gold capability / Excel measurement combinations.
@@ -32,7 +32,7 @@ The JSON version includes the source SHA-256. All merged backend cache keys incl
 
 ## Retire
 
-Disabling the flag is a rollout safeguard, **not the final cleanup**. Once complete live data and chart methodology are verified for all five combinations, remove the temporary implementation in one cleanup PR.
+Disabling the flag is a rollout safeguard, **not the final cleanup**. Once complete live data and chart methodology are verified for all eight combinations, remove the temporary implementation in one cleanup PR.
 
 ### Removal checklist
 

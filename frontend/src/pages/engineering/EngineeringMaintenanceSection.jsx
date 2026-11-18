@@ -4,8 +4,8 @@ import ChecklistOutlinedIcon from "@mui/icons-material/ChecklistOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import HealthAndSafetyOutlinedIcon from "@mui/icons-material/HealthAndSafetyOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
-import { getCompliance } from "@/api/compliance.js";
 import { getCalibration } from "@/api/calibration.js";
 import { calibrationCard } from "@/lib/calibration.js";
 import { maintenanceKpiPresentation } from "@/lib/maintenanceKpiPresentation.js";
@@ -13,10 +13,7 @@ import CalibrationDrillPanel from "@/components/calibration/CalibrationDrillPane
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
-import { numericKpiValue } from "@/components/quality/shared/qualityKpi.js";
 import { engineeringKpiStatus } from "./engineeringKpiStatus.js";
-import ComplianceDrillPanel from "@/components/compliance/ComplianceDrillPanel.jsx";
-import ComplianceTrendModal from "@/components/compliance/ComplianceTrendModal.jsx";
 import SafetyDrillPanel from "@/components/safety/SafetyDrillPanel.jsx";
 import useSafetyQuery from "@/hooks/useSafetyQuery.js";
 import useStockCostQuery from "@/hooks/useStockCostQuery.js";
@@ -28,11 +25,8 @@ import {
   STOCK_COST_PERIOD_HELP,
 } from "@/lib/stockCost.js";
 import { safetyCard, safetyPeriod, SAFETY_PERIOD_HELP } from "@/lib/safety.js";
-import {
-  complianceCard,
-  COMPLIANCE_PERIOD_HELP,
-  storedCompliancePeriod,
-} from "@/lib/compliance.js";
+
+const MAINTENANCE_APP_URL = "http://35.208.174.2:3001/";
 
 const KPI_ICONS = {
   calibration: TuneOutlinedIcon,
@@ -42,6 +36,62 @@ const KPI_ICONS = {
   safety: HealthAndSafetyOutlinedIcon,
 };
 
+/** External links use the shared card's appearance without implying a KPI value. */
+function MaintenanceLinkCard({ name, description, href, iconComponent }) {
+  return (
+    <Box
+      component="a"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${name} — open maintenance app in a new tab`}
+      sx={{
+        display: "block",
+        minWidth: 0,
+        color: "inherit",
+        textDecoration: "none",
+        borderRadius: 2.5,
+        "&:hover > div": { borderColor: "primary.main", boxShadow: 3 },
+        "&:focus-visible": {
+          outline: "2px solid",
+          outlineColor: "primary.main",
+          outlineOffset: 2,
+        },
+      }}
+    >
+      <QKpiCard
+        kpi={{
+          n: name,
+          metricAvailable: true,
+          footerLabel: "Opens in a new tab",
+          showProgress: false,
+          alignMetrics: true,
+          cardMinHeight: 160,
+        }}
+        iconComponent={iconComponent}
+        metricContent={
+          <Box sx={{ flex: 1, minWidth: 0, mt: 0.5 }}>
+            <Stack direction="row" alignItems="center" spacing={0.75}>
+              <Typography
+                sx={{ fontSize: 18, fontWeight: 700, color: "text.primary" }}
+              >
+                Open maintenance app
+              </Typography>
+              <OpenInNewIcon
+                aria-hidden="true"
+                sx={{ fontSize: 17, color: "primary.main" }}
+              />
+            </Stack>
+            <Typography sx={{ mt: 0.5, fontSize: 12, color: "text.secondary" }}>
+              {description}
+            </Typography>
+          </Box>
+        }
+      />
+    </Box>
+  );
+}
+
 /** BTP Maintenance: connected cards only, with one shared right-hand drill. */
 export default function EngineeringMaintenanceSection({
   period: selectedPeriod,
@@ -49,52 +99,26 @@ export default function EngineeringMaintenanceSection({
 }) {
   const [open, setOpen] = useState(null);
   const [stockTrend, setStockTrend] = useState(null);
-  const [complianceTrend, setComplianceTrend] = useState(null);
   const calibration = usePolledQuery(getCalibration, {
     interval: 60000,
   });
   const stockRange = stockCostRange(selectedPeriod);
   const stock = useStockCostQuery(stockRange);
-  const period = storedCompliancePeriod({ ...selectedPeriod, shift });
-  const query = usePolledQuery(
-    () => getCompliance({ ids: ["pm", "daily"], ...period }),
-    {
-      enabled: Boolean(period),
-      interval: 0,
-      deps: [period?.date, period?.granularity],
-    },
-  );
-  const context = query.data?.context;
-  const matches =
-    period &&
-    context?.date === period.date &&
-    context?.granularity === period.granularity;
   const safetyScope = safetyPeriod(selectedPeriod, shift);
   const safety = useSafetyQuery(
     safetyScope ? { ...safetyScope, level: "overall" } : null,
   );
   const drillOpen = Boolean(
     open &&
-    (open === "calibration"
-      ? true
-      : open === "stock-cost"
-        ? stockRange
-        : open === "safety"
-          ? safetyScope
-          : period),
+    (open === "calibration" ||
+      (open === "stock-cost" && stockRange) ||
+      (open === "safety" && safetyScope)),
   );
-
-  const complianceState = {
-    error: period ? query.error : null,
-    isLoading:
-      Boolean(period) && (query.isLoading || (!matches && !query.error)),
-  };
   // Background calibration refreshes keep the existing cards visible.
   const loading =
     (calibration.isLoading && !calibration.data) ||
     stock.isLoading ||
-    safety.isLoading ||
-    (complianceState.isLoading && !matches);
+    safety.isLoading;
   const cards = [
     {
       id: "calibration",
@@ -107,18 +131,20 @@ export default function EngineeringMaintenanceSection({
       state: stock,
       onTrend: () => setStockTrend({ category: "" }),
     },
-    ...["pm", "daily"].map((id) => ({
-      id,
-      kpi: {
-        ...complianceCard(id, matches ? query.data.kpis[id] : null, {
-          period,
-          ...complianceState,
-        }),
-        trendApi: true,
+    {
+      id: "pm",
+      link: {
+        name: "PM Compliance",
+        description: "View preventive maintenance compliance",
       },
-      state: complianceState,
-      onTrend: () => setComplianceTrend(id),
-    })),
+    },
+    {
+      id: "daily",
+      link: {
+        name: "Daily Checksheet Compliance",
+        description: "View daily checksheet compliance",
+      },
+    },
     {
       id: "safety",
       kpi: safetyCard(safety.data, { period: safetyScope, ...safety }),
@@ -131,12 +157,6 @@ export default function EngineeringMaintenanceSection({
       <Typography component="h1" sx={{ fontSize: 20, fontWeight: 700 }}>
         Maintenance
       </Typography>
-      {!period && <Alert severity="info">{COMPLIANCE_PERIOD_HELP}</Alert>}
-      {query.error && period && (
-        <Alert severity="error">
-          Compliance unavailable: {query.error.message}
-        </Alert>
-      )}
       {!safetyScope && <Alert severity="info">{SAFETY_PERIOD_HELP}</Alert>}
       {!stockRange && <Alert severity="info">{STOCK_COST_PERIOD_HELP}</Alert>}
       {stock.error && (
@@ -171,31 +191,23 @@ export default function EngineeringMaintenanceSection({
                   },
             }}
           >
-            {cards.map(({ id, kpi, state, onTrend }) => {
+            {cards.map(({ id, kpi, state, onTrend, link }) => {
+              if (link)
+                return (
+                  <MaintenanceLinkCard
+                    key={id}
+                    {...link}
+                    href={MAINTENANCE_APP_URL}
+                    iconComponent={KPI_ICONS[id]}
+                  />
+                );
               const presentation = maintenanceKpiPresentation(kpi, state);
               const { status, info, target } = engineeringKpiStatus(
                 id,
                 presentation.v,
               );
-              const isCompliance = id === "pm" || id === "daily";
-              const progressValue = isCompliance
-                ? numericKpiValue(presentation.v)
-                : null;
-              const progressLabel =
-                isCompliance && progressValue != null
-                  ? "Compliance percentage on a 0–100% scale."
-                  : isCompliance
-                    ? "Compliance value unavailable."
-                    : "No target is used for this bar; the unfilled track is not a performance measure.";
               const ragInfo = (presentation.ragInfo ?? []).filter(
-                (line) =>
-                  !line.startsWith("Card accent colors are decorative") &&
-                  !(
-                    status &&
-                    line.startsWith(
-                      "Published Gold value; no parent recomputation or invented target",
-                    )
-                  ),
+                (line) => !line.startsWith("Card accent colors are decorative"),
               );
               return (
                 <QKpiCard
@@ -213,8 +225,9 @@ export default function EngineeringMaintenanceSection({
                     showProgress: true,
                     keepProgressWhenOpen: true,
                     alignProgress: true,
-                    progressValue,
-                    progressLabel,
+                    progressValue: null,
+                    progressLabel:
+                      "No target is used for this bar; the unfilled track is not a performance measure.",
                     ragInfo: [...ragInfo, ...info],
                   }}
                   iconComponent={KPI_ICONS[id]}
@@ -244,26 +257,10 @@ export default function EngineeringMaintenanceSection({
                   period={safetyScope}
                   onClose={() => setOpen(null)}
                 />
-              ) : (
-                <ComplianceDrillPanel
-                  enableDownloads
-                  key={`${open}|${period.date}|${period.granularity}`}
-                  id={open}
-                  period={period}
-                  onClose={() => setOpen(null)}
-                />
-              )}
+              ) : null}
             </Box>
           )}
         </Box>
-      )}
-      {complianceTrend && (
-        <ComplianceTrendModal
-          key={complianceTrend}
-          id={complianceTrend}
-          anchor={selectedPeriod.date}
-          onClose={() => setComplianceTrend(null)}
-        />
       )}
       {stockTrend && stockRange && (
         <StockCostTrendModal

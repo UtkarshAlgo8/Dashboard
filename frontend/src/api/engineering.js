@@ -104,6 +104,9 @@ export function getReliabilityKpiChildren({
   includeUnmapped = false,
   // Drop Gold's zero-valued rows server-side, for callers that ignore them.
   nonZero = false,
+  // Sparse, positive daily totals for one machine/reason through `to`.
+  allTime = false,
+  remarks,
 }) {
   const params = withScope({
     kpi_names: kpiNames.join(","),
@@ -123,6 +126,8 @@ export function getReliabilityKpiChildren({
     agg,
     include_unmapped: includeUnmapped ? "1" : null,
     nonzero: nonZero ? "1" : null,
+    all_time: allTime ? "1" : null,
+    remarks,
   });
   return cachedEngineeringGet(
     `/engineering/reliability/kpi-children?${params}`,

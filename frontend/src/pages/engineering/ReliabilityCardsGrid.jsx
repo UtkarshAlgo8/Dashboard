@@ -294,7 +294,7 @@ function ReliabilityCardsGrid({
     cards.push({
       id: "machinesAffected",
       label: "Machines Affected",
-      accent: C.rd,
+      accent: C.bl,
       body: <MachinesAffectedBody headline={affectedHeadline} />,
     });
   }
