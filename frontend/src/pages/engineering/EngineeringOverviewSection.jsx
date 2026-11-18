@@ -10,7 +10,6 @@ import { getEngineeringLossTree } from "@/api/engineering.js";
 import { getReliabilitySummary } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import {
-  Card,
   C,
   LOSS_TREE_LEVELS,
   ReliabilityDrillPanel,
@@ -79,7 +78,17 @@ function EngineeringOverviewSection({ period }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Card accent={C.rd}>
+      <Box
+        sx={{
+          bgcolor: "background.paper",
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 2.5,
+          p: 2,
+          boxShadow: (theme) => theme.custom.shadow,
+          minWidth: 0,
+        }}
+      >
         <LossTreePie
           rows={lossRows}
           loading={lossLoading}
@@ -100,7 +109,7 @@ function EngineeringOverviewSection({ period }) {
             />
           </div>
         )}
-      </Card>
+      </Box>
 
       {summaryError && (
         <div style={{ color: C.rd, fontSize: 13 }}>
@@ -109,6 +118,7 @@ function EngineeringOverviewSection({ period }) {
       )}
       <ReliabilityCardsGrid
         values={summaryValues}
+        summaryError={summaryError}
         period={period}
         includeTopMachines={false}
       />

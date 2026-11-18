@@ -37,7 +37,14 @@ import {
  * pages read as one product: same tiered background, icon + title header,
  * value with its unit, progress bar, and trend / drill icons in the footer.
  */
-export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
+export function QKpiCard({
+  kpi,
+  isOpen,
+  onToggle,
+  onTrend,
+  metricContent,
+  iconComponent,
+}) {
   const theme = useTheme();
   const tier = qualityCardTier(kpi);
   const cardTheme = {
@@ -55,21 +62,36 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
           trackColor: theme.palette.primary.light,
         }
       : {}),
+    ...(kpi.cardTintPalette === "engineering" && tier
+      ? {
+          cardBg: theme.custom.engineeringKpiTints[tier].background,
+          textColor: theme.custom.engineeringKpiTints[tier].foreground,
+          iconColor: theme.custom.engineeringKpiTints[tier].foreground,
+        }
+      : {}),
   };
   const neutral = kpi.presentationTone === "neutral";
   const v = kpi.v;
   const numVal = numericKpiValue(v);
   const hasValue = numVal != null;
   const isPct = kpi.u === "%";
-  const progressPct = !hasValue
-    ? 0
-    : isPct
-      ? Math.max(0, Math.min(100, numVal))
-      : numVal > 0
-        ? 100
-        : 0;
+  const explicitProgress = Object.hasOwn(kpi, "progressValue");
+  const progressValue = explicitProgress ? kpi.progressValue : null;
+  const progressAvailable = explicitProgress && Number.isFinite(progressValue);
+  const progressPct = explicitProgress
+    ? progressAvailable
+      ? Math.max(0, Math.min(100, progressValue))
+      : 0
+    : !hasValue
+      ? 0
+      : isPct
+        ? Math.max(0, Math.min(100, numVal))
+        : numVal > 0
+          ? 100
+          : 0;
   const value = hasValue
-    ? `${kpi.valuePrefix ?? ""}${formatIndianNumber(numVal)}${isPct ? "%" : ""}`
+    ? (kpi.valueDisplay ??
+      `${kpi.valuePrefix ?? ""}${formatIndianNumber(numVal)}${isPct ? "%" : ""}`)
     : "–";
   const skeletonLoading =
     kpi.isLoading && kpi.loadingPresentation === "skeleton";
@@ -80,18 +102,20 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
     typeof onTrend === "function";
   const canDrill = !skeletonLoading && Boolean(kpi.drill);
   const Icon =
-    QUALITY_KPI_ICON[kpi.id] ?? (isPct ? TaskAltOutlinedIcon : GridViewIcon);
+    iconComponent ??
+    QUALITY_KPI_ICON[kpi.id] ??
+    (isPct ? TaskAltOutlinedIcon : GridViewIcon);
   const caption =
     hasValue || kpi.showPeriodWhenEmpty
       ? [kpi.metricLabel, kpi.periodLabel].filter(Boolean).join(" · ")
       : "";
-  const footnote = !hasValue
-    ? (kpi.emptyReason ?? (kpi.na ? "Not available yet" : null))
-    : kpi.target
-      ? `Target ${kpi.target}`
-      : kpi.metricLabel && !kpi.periodLabel
-        ? kpi.metricLabel
-        : null;
+  const footnote =
+    !hasValue && !kpi.metricAvailable
+      ? (kpi.emptyReason ?? (kpi.na ? "Not available yet" : null))
+      : kpi.target
+        ? `Target ${kpi.target}`
+        : (kpi.footerLabel ??
+          (kpi.metricLabel && !kpi.periodLabel ? kpi.metricLabel : null));
   const trendPct = hasValue ? kpi.trendPct : null;
   const hasTrend = Number.isFinite(trendPct);
   const trendColor =
@@ -169,7 +193,10 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         <Icon
           sx={{
             fontSize: 20,
-            color: hasValue ? cardTheme.iconColor : "text.disabled",
+            color:
+              hasValue || kpi.metricAvailable
+                ? cardTheme.iconColor
+                : "text.disabled",
             flexShrink: 0,
           }}
         />
@@ -202,162 +229,189 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
       </Stack>
 
       {/* Value + unit, sparkline on the right when there is one */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        spacing={1}
-        sx={{ my: 0.25, minWidth: 0 }}
-      >
-        <Stack sx={{ minWidth: 0, flex: 1 }}>
-          <Stack
-            direction="row"
-            alignItems="baseline"
-            spacing={0.75}
-            sx={{ minWidth: 0 }}
-          >
-            <Typography
-              component={kpi.isLoading ? "div" : "p"}
-              sx={{
-                fontSize: { xs: 24, md: 26, lg: 28 },
-                fontWeight: 800,
-                lineHeight: 1.1,
-                color: hasValue ? cardTheme.textColor : "text.disabled",
-                whiteSpace: "nowrap",
-              }}
+      {metricContent ?? (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={1}
+          sx={{ my: 0.25, minWidth: 0 }}
+        >
+          <Stack sx={{ minWidth: 0, flex: 1 }}>
+            <Stack
+              direction="row"
+              alignItems="baseline"
+              spacing={0.75}
+              sx={{ minWidth: 0 }}
             >
-              {skeletonLoading ? (
-                <Skeleton
-                  animation="wave"
-                  variant="rounded"
-                  width={132}
-                  height={30}
-                  sx={{ borderRadius: 1 }}
-                />
-              ) : kpi.isLoading ? (
-                <Box
-                  sx={{
-                    "& .jk-enhanced-loader": { p: 0, alignItems: "flex-start" },
-                    "& .jk-wrapper": { width: 36, height: 36 },
-                    "& .jk-wait-text": {
-                      fontSize: 11,
-                      letterSpacing: 0,
-                      pl: 0,
-                      mt: 0.5,
-                    },
-                  }}
-                >
-                  <JKLoader message={`Loading ${kpi.n}`} />
-                </Box>
-              ) : (
-                value
-              )}
-            </Typography>
-            {hasValue && kpi.u && !isPct && (
               <Typography
+                component={kpi.isLoading ? "div" : "p"}
                 sx={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "text.secondary",
+                  fontSize: { xs: 24, md: 26, lg: 28 },
+                  fontWeight: 800,
+                  lineHeight: 1.1,
+                  color: hasValue ? cardTheme.textColor : "text.disabled",
                   whiteSpace: "nowrap",
                 }}
               >
-                {kpi.u}
+                {skeletonLoading ? (
+                  <Skeleton
+                    animation="wave"
+                    variant="rounded"
+                    width={132}
+                    height={30}
+                    sx={{ borderRadius: 1 }}
+                  />
+                ) : kpi.isLoading ? (
+                  <Box
+                    sx={{
+                      "& .jk-enhanced-loader": {
+                        p: 0,
+                        alignItems: "flex-start",
+                      },
+                      "& .jk-wrapper": { width: 36, height: 36 },
+                      "& .jk-wait-text": {
+                        fontSize: 11,
+                        letterSpacing: 0,
+                        pl: 0,
+                        mt: 0.5,
+                      },
+                    }}
+                  >
+                    <JKLoader message={`Loading ${kpi.n}`} />
+                  </Box>
+                ) : (
+                  value
+                )}
               </Typography>
+              {hasValue && kpi.u && !isPct && (
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "text.secondary",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {kpi.u}
+                </Typography>
+              )}
+            </Stack>
+            {skeletonLoading ? (
+              <Skeleton
+                animation="wave"
+                width="65%"
+                height={16}
+                sx={{ mt: 0.25 }}
+              />
+            ) : (
+              caption && (
+                <Typography
+                  title={caption}
+                  sx={{
+                    mt: 0.25,
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "text.secondary",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {caption}
+                </Typography>
+              )
             )}
-          </Stack>
-          {skeletonLoading ? (
-            <Skeleton
-              animation="wave"
-              width="65%"
-              height={16}
-              sx={{ mt: 0.25 }}
-            />
-          ) : (
-            caption && (
+            {hasValue && kpi.subLine?.text && (
               <Typography
-                title={caption}
+                title={kpi.subLine.text}
                 sx={{
                   mt: 0.25,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  color: "text.secondary",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: kpi.subLine.alert
+                    ? theme.custom.status.red
+                    : "text.secondary",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                 }}
               >
-                {caption}
+                {kpi.subLine.text}
               </Typography>
-            )
-          )}
-          {hasValue && kpi.subLine?.text && (
-            <Typography
-              title={kpi.subLine.text}
+            )}
+          </Stack>
+          {hasValue && Array.isArray(kpi.sp) && kpi.sp.length >= 2 && (
+            <Box
               sx={{
-                mt: 0.25,
-                fontSize: 11.5,
-                fontWeight: 600,
-                color: kpi.subLine.alert
-                  ? theme.custom.status.red
-                  : "text.secondary",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                flexShrink: 0,
+                ml: 1,
+                "@container (max-width: 215px)": { display: "none" },
               }}
             >
-              {kpi.subLine.text}
-            </Typography>
+              <Sparkline
+                data={kpi.sp}
+                color={cardTheme.sparkColor}
+                width={70}
+                height={22}
+                onClick={
+                  canTrend
+                    ? (e) => {
+                        e.stopPropagation();
+                        onTrend(kpi);
+                      }
+                    : undefined
+                }
+              />
+            </Box>
           )}
         </Stack>
-        {hasValue && Array.isArray(kpi.sp) && kpi.sp.length >= 2 && (
-          <Box
-            sx={{
-              flexShrink: 0,
-              ml: 1,
-              "@container (max-width: 215px)": { display: "none" },
-            }}
-          >
-            <Sparkline
-              data={kpi.sp}
-              color={cardTheme.sparkColor}
-              width={70}
-              height={22}
-              onClick={
-                canTrend
-                  ? (e) => {
-                      e.stopPropagation();
-                      onTrend(kpi);
-                    }
-                  : undefined
-              }
-            />
-          </Box>
-        )}
-      </Stack>
+      )}
 
       {/* Progress bar */}
-      {!isOpen && kpi.showProgress !== false && (
-        <Box
-          sx={{
-            width: "100%",
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: cardTheme.trackColor,
-            overflow: "hidden",
-            my: 0.75,
-          }}
-        >
+      {(!isOpen || kpi.keepProgressWhenOpen) && kpi.showProgress !== false && (
+        <Tooltip title={kpi.progressLabel ?? ""} arrow>
           <Box
+            role={
+              explicitProgress
+                ? progressAvailable
+                  ? "progressbar"
+                  : "img"
+                : undefined
+            }
+            aria-label={kpi.progressLabel}
+            aria-valuemin={
+              explicitProgress && progressAvailable ? 0 : undefined
+            }
+            aria-valuemax={
+              explicitProgress && progressAvailable ? 100 : undefined
+            }
+            aria-valuenow={
+              explicitProgress && progressAvailable
+                ? Math.round(progressPct)
+                : undefined
+            }
             sx={{
-              width: `${progressPct}%`,
-              height: "100%",
+              width: "100%",
+              height: 6,
               borderRadius: 3,
-              background: cardTheme.barGradient || cardTheme.barColor,
-              transition: "width 0.4s ease",
+              backgroundColor: cardTheme.trackColor,
+              overflow: "hidden",
+              mt: kpi.alignProgress ? "auto" : 0.75,
+              mb: 0.75,
             }}
-          />
-        </Box>
+          >
+            <Box
+              sx={{
+                width: `${progressPct}%`,
+                height: "100%",
+                borderRadius: 3,
+                background: cardTheme.barGradient || cardTheme.barColor,
+                transition: "width 0.4s ease",
+              }}
+            />
+          </Box>
+        </Tooltip>
       )}
 
       {/* Footer: target or why the value is missing; trend + drill icons */}
@@ -366,7 +420,10 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
         alignItems="center"
         justifyContent="space-between"
         spacing={1}
-        sx={{ mt: kpi.alignMetrics ? "auto" : 0.5, minHeight: 22 }}
+        sx={{
+          mt: kpi.alignMetrics && !kpi.alignProgress ? "auto" : 0.5,
+          minHeight: 22,
+        }}
       >
         {skeletonLoading ? (
           <Skeleton animation="wave" width={90} height={16} />
@@ -400,6 +457,7 @@ export function QKpiCard({ kpi, isOpen, onToggle, onTrend }) {
           </Stack>
         ) : (
           <Typography
+            title={footnote ?? undefined}
             sx={{
               fontSize: 12.5,
               fontWeight: 500,

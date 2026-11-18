@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { Alert, Box, Stack, Typography } from "@mui/material";
+import ChecklistOutlinedIcon from "@mui/icons-material/ChecklistOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import HealthAndSafetyOutlinedIcon from "@mui/icons-material/HealthAndSafetyOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import { getCalibration } from "@/api/calibration.js";
 import { calibrationCard } from "@/lib/calibration.js";
 import { maintenanceKpiPresentation } from "@/lib/maintenanceKpiPresentation.js";
 import CalibrationDrillPanel from "@/components/calibration/CalibrationDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import MaintenanceSummaryCard, {
-  MaintenanceLinkCard,
-} from "./MaintenanceSummaryCard.jsx";
-import { C } from "./reliabilityShared.jsx";
+import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
+import { engineeringKpiStatus } from "./engineeringKpiStatus.js";
 import SafetyDrillPanel from "@/components/safety/SafetyDrillPanel.jsx";
 import useSafetyQuery from "@/hooks/useSafetyQuery.js";
 import useStockCostQuery from "@/hooks/useStockCostQuery.js";
@@ -23,6 +27,70 @@ import {
 import { safetyCard, safetyPeriod, SAFETY_PERIOD_HELP } from "@/lib/safety.js";
 
 const MAINTENANCE_APP_URL = "http://35.208.174.2:3001/";
+
+const KPI_ICONS = {
+  calibration: TuneOutlinedIcon,
+  "stock-cost": Inventory2OutlinedIcon,
+  pm: FactCheckOutlinedIcon,
+  daily: ChecklistOutlinedIcon,
+  safety: HealthAndSafetyOutlinedIcon,
+};
+
+/** External links use the shared card's appearance without implying a KPI value. */
+function MaintenanceLinkCard({ name, description, href, iconComponent }) {
+  return (
+    <Box
+      component="a"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${name} — open maintenance app in a new tab`}
+      sx={{
+        display: "block",
+        minWidth: 0,
+        color: "inherit",
+        textDecoration: "none",
+        borderRadius: 2.5,
+        "&:hover > div": { borderColor: "primary.main", boxShadow: 3 },
+        "&:focus-visible": {
+          outline: "2px solid",
+          outlineColor: "primary.main",
+          outlineOffset: 2,
+        },
+      }}
+    >
+      <QKpiCard
+        kpi={{
+          n: name,
+          metricAvailable: true,
+          footerLabel: "Opens in a new tab",
+          showProgress: false,
+          alignMetrics: true,
+          cardMinHeight: 160,
+        }}
+        iconComponent={iconComponent}
+        metricContent={
+          <Box sx={{ flex: 1, minWidth: 0, mt: 0.5 }}>
+            <Stack direction="row" alignItems="center" spacing={0.75}>
+              <Typography
+                sx={{ fontSize: 18, fontWeight: 700, color: "text.primary" }}
+              >
+                Open maintenance app
+              </Typography>
+              <OpenInNewIcon
+                aria-hidden="true"
+                sx={{ fontSize: 17, color: "primary.main" }}
+              />
+            </Stack>
+            <Typography sx={{ mt: 0.5, fontSize: 12, color: "text.secondary" }}>
+              {description}
+            </Typography>
+          </Box>
+        }
+      />
+    </Box>
+  );
+}
 
 /** BTP Maintenance: connected cards only, with one shared right-hand drill. */
 export default function EngineeringMaintenanceSection({
@@ -67,7 +135,6 @@ export default function EngineeringMaintenanceSection({
       id: "pm",
       link: {
         name: "PM Compliance",
-        accent: C.cy,
         description: "View preventive maintenance compliance",
       },
     },
@@ -75,7 +142,6 @@ export default function EngineeringMaintenanceSection({
       id: "daily",
       link: {
         name: "Daily Checksheet Compliance",
-        accent: C.am,
         description: "View daily checksheet compliance",
       },
     },
@@ -125,23 +191,52 @@ export default function EngineeringMaintenanceSection({
                   },
             }}
           >
-            {cards.map(({ id, kpi, state, onTrend, link }) =>
-              link ? (
-                <MaintenanceLinkCard
+            {cards.map(({ id, kpi, state, onTrend, link }) => {
+              if (link)
+                return (
+                  <MaintenanceLinkCard
+                    key={id}
+                    {...link}
+                    href={MAINTENANCE_APP_URL}
+                    iconComponent={KPI_ICONS[id]}
+                  />
+                );
+              const presentation = maintenanceKpiPresentation(kpi, state);
+              const { status, info, target } = engineeringKpiStatus(
+                id,
+                presentation.v,
+              );
+              const ragInfo = (presentation.ragInfo ?? []).filter(
+                (line) => !line.startsWith("Card accent colors are decorative"),
+              );
+              return (
+                <QKpiCard
                   key={id}
-                  {...link}
-                  href={MAINTENANCE_APP_URL}
-                />
-              ) : (
-                <MaintenanceSummaryCard
-                  key={id}
-                  kpi={maintenanceKpiPresentation(kpi, state)}
+                  kpi={{
+                    ...presentation,
+                    status,
+                    presentationTone: undefined,
+                    cardTintPalette: "engineering",
+                    target: target ?? presentation.target,
+                    footerLabel:
+                      target || presentation.target
+                        ? undefined
+                        : "No status target",
+                    showProgress: true,
+                    keepProgressWhenOpen: true,
+                    alignProgress: true,
+                    progressValue: null,
+                    progressLabel:
+                      "No target is used for this bar; the unfilled track is not a performance measure.",
+                    ragInfo: [...ragInfo, ...info],
+                  }}
+                  iconComponent={KPI_ICONS[id]}
                   isOpen={drillOpen && open === id}
                   onToggle={() => setOpen(open === id ? null : id)}
                   onTrend={onTrend}
                 />
-              ),
-            )}
+              );
+            })}
           </Box>
           {drillOpen && (
             <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>

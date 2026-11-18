@@ -47,6 +47,7 @@ import HighchartsReactImport from "highcharts-react-official";
 import { getReliabilityKpiChildren } from "@/api/engineering.js";
 import { downloadRcaPdf } from "@/api/rca.js";
 import DataTable from "@/components/tables/DataTable.jsx";
+import FullscreenChartButton from "@/components/trend/FullscreenChartButton.jsx";
 import {
   ChartPanel,
   DrillBreadcrumb,
@@ -590,6 +591,18 @@ function ParetoLevel({
   const scopeMinutes = all.reduce((s, r) => s + (r.minutes ?? 0), 0);
   const scopeOcc = all.reduce((s, r) => s + (r.occurrences ?? 0), 0);
   const plural = groupLabel === "Machine" ? "machines" : "failures";
+  const chart = (
+    <ParetoChart
+      rows={barRows}
+      measureLabel={measureDef.label}
+      groupLabel={groupLabel}
+      barsTo80={groups ? barRows.length : rowsTo80}
+      groups={groups}
+      showOccurrences={showOccurrences}
+      selectedKey={selectedKey}
+      onPick={onPick}
+    />
+  );
 
   return (
     <>
@@ -601,26 +614,22 @@ function ParetoLevel({
           empty={loading || Boolean(error) || barRows.length === 0}
           emptyMessage={emptyMessage}
           action={
-            all.length > 0 ? (
-              <ExportButton
-                targetRef={panelRef}
-                columns={tableColumns(groupLabel, Boolean(disciplineLegend))}
-                rows={all}
-                name={title}
-              />
+            !loading && !error && barRows.length > 0 ? (
+              <Stack direction="row" spacing={0.5}>
+                <FullscreenChartButton title={title}>
+                  {chart}
+                </FullscreenChartButton>
+                <ExportButton
+                  targetRef={panelRef}
+                  columns={tableColumns(groupLabel, Boolean(disciplineLegend))}
+                  rows={all}
+                  name={title}
+                />
+              </Stack>
             ) : null
           }
         >
-          <ParetoChart
-            rows={barRows}
-            measureLabel={measureDef.label}
-            groupLabel={groupLabel}
-            barsTo80={groups ? barRows.length : rowsTo80}
-            groups={groups}
-            showOccurrences={showOccurrences}
-            selectedKey={selectedKey}
-            onPick={onPick}
-          />
+          {chart}
         </ChartPanel>
       </Box>
       {!loading && !error && barRows.length > 0 && (
@@ -730,6 +739,13 @@ function DailyReasonTrend({
       ],
     };
   }, [rows, measureDef, theme, through]);
+  const chart = (
+    <HighchartsReact
+      highcharts={Highcharts}
+      options={options}
+      containerProps={{ style: { width: "100%", minWidth: 0 } }}
+    />
+  );
   return (
     <Box ref={panelRef} sx={{ scrollMarginTop: 8 }}>
       <ChartPanel
@@ -746,20 +762,21 @@ function DailyReasonTrend({
         }
         action={
           !loading && !error && rows.length > 0 ? (
-            <ExportButton
-              targetRef={panelRef}
-              columns={[DAILY_COLUMNS[0], ...DAILY_COLUMNS.slice(-2)]}
-              rows={rows}
-              name={title}
-            />
+            <Stack direction="row" spacing={0.5}>
+              <FullscreenChartButton title={title}>
+                {chart}
+              </FullscreenChartButton>
+              <ExportButton
+                targetRef={panelRef}
+                columns={[DAILY_COLUMNS[0], ...DAILY_COLUMNS.slice(-2)]}
+                rows={rows}
+                name={title}
+              />
+            </Stack>
           ) : null
         }
       >
-        <HighchartsReact
-          highcharts={Highcharts}
-          options={options}
-          containerProps={{ style: { width: "100%", minWidth: 0 } }}
-        />
+        {chart}
       </ChartPanel>
     </Box>
   );

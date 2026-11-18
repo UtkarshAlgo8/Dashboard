@@ -18,10 +18,18 @@
  */
 import { useEffect, useState } from "react";
 import { getReliabilityLatestDate } from "@/api/engineering.js";
+import { Box, Typography } from "@mui/material";
+import BuildCircleOutlinedIcon from "@mui/icons-material/BuildCircleOutlined";
+import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
+import PrecisionManufacturingOutlinedIcon from "@mui/icons-material/PrecisionManufacturingOutlined";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
+import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
+import { QKpiCard } from "@/components/quality/shared/QualityKpiCard.jsx";
+import { engineeringKpiStatus } from "./engineeringKpiStatus.js";
+import { TARGETS } from "./reliabilityTargets.js";
 import {
   Card,
-  ChevronIcon,
-  TrendIcon,
   ReliabilityDrillPanel,
   BREAKDOWN_LEVELS,
   MTBF_LEVELS,
@@ -32,9 +40,10 @@ import {
   C,
   fmtNum,
   fmtMinHrs,
+  formatDayLabel,
+  formatMonthLabel,
 } from "./reliabilityShared.jsx";
 import {
-  AffectedBar,
   MachinesAffectedPanel,
   useMachinesAffectedGrades,
   ZeroBreakdownPanel,
@@ -48,133 +57,52 @@ import { machineName } from "./machineName.js";
 import MtbfMttrChartModal from "./MtbfMttrChartModal.jsx";
 import ZeroBreakdownTrendModal from "./ZeroBreakdownTrendModal.jsx";
 
+const KPI_ICONS = {
+  breakdown: BuildCircleOutlinedIcon,
+  mtbf: TimerOutlinedIcon,
+  mttr: HandymanOutlinedIcon,
+  zeroBreakdown: TaskAltOutlinedIcon,
+  topMachines: SettingsOutlinedIcon,
+  machinesAffected: PrecisionManufacturingOutlinedIcon,
+};
+
 const fmtHours = (minutes) =>
   minutes == null ? "—" : `${fmtNum(minutes / 60, 1)} hrs`;
 
-function SummaryCard({
-  label,
-  value,
-  unit,
-  accent,
-  featured,
-  body,
-  onTrend,
-  expanded,
-  onToggle,
-}) {
+function SummaryMetric({ value, unit, featured, body }) {
   return (
-    <div
-      onClick={onToggle}
-      style={{
-        background: C.cd,
-        borderRadius: 10,
-        border: "1px solid " + C.bd,
-        borderLeft: "4px solid " + accent,
-        padding: "14px 16px",
-        boxShadow: C.sh,
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        cursor: "pointer",
-        minHeight: 96,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <div
-          style={{
-            fontSize: 11.5,
-            fontWeight: 700,
-            letterSpacing: ".05em",
-            textTransform: "uppercase",
-            color: C.mu,
-          }}
-        >
-          {label}
-        </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {onTrend && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onTrend();
-              }}
-              title="Trend"
-              style={{
-                border: "1px solid " + C.bd,
-                background: C.c2,
-                borderRadius: 4,
-                width: 22,
-                height: 22,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: C.bl,
-                cursor: "pointer",
-              }}
-            >
-              <TrendIcon />
-            </button>
-          )}
-          <span style={{ color: C.mu }}>
-            <ChevronIcon open={expanded} />
-          </span>
-        </div>
-      </div>
+    <div>
       {body ? (
         body
       ) : featured ? (
         <>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              minWidth: 0,
+          <Typography
+            title={featured.machine ?? undefined}
+            sx={{
+              fontSize: { xs: 24, md: 26, lg: 28 },
+              fontWeight: 800,
+              lineHeight: 1.1,
+              color: "text.primary",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}
           >
-            <div
-              title={featured.machine ?? undefined}
-              style={{
-                fontSize: 24,
-                fontWeight: 700,
-                color: C.tx,
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {featured.machine ?? "—"}
-            </div>
-            <div
-              style={{
-                flexShrink: 0,
-                textAlign: "right",
-                fontSize: 12,
-                fontWeight: 600,
-                color: C.md,
-                lineHeight: 1.4,
-              }}
-            >
-              <div>
-                Downtime{" "}
-                {featured.machine
-                  ? `${fmtNum(featured.BreakdownMin_m)} min`
-                  : "—"}
-              </div>
-              <div>
-                Occurrences{" "}
-                {featured.machine ? fmtNum(featured.BreakdownOcc_m) : "—"}
-              </div>
-            </div>
-          </div>
+            {featured.machine ?? "—"}
+          </Typography>
+          <Typography
+            sx={{
+              mt: 0.25,
+              fontSize: 11.5,
+              fontWeight: 500,
+              color: "text.secondary",
+            }}
+          >
+            Downtime{" "}
+            {featured.machine ? `${fmtNum(featured.BreakdownMin_m)} min` : "—"}{" "}
+            · Occurrences{" "}
+            {featured.machine ? fmtNum(featured.BreakdownOcc_m) : "—"}
+          </Typography>
           {machineName(featured) && (
             <div
               title={machineName(featured)}
@@ -215,12 +143,20 @@ function SummaryCard({
   );
 }
 
-/** Machines Affected card body: "246 / 314", the bar, and the no-breakdown count. */
+/** Machines Affected card body: "246 / 314" and the no-breakdown count. */
 function MachinesAffectedBody({ headline }) {
   const { affected, total, pct, noBreakdown } = headline;
   return (
     <>
-      <div style={{ fontSize: 24, fontWeight: 700, color: C.tx }}>
+      <Typography
+        component="div"
+        sx={{
+          fontSize: { xs: 24, md: 26, lg: 28 },
+          lineHeight: 1.1,
+          fontWeight: 800,
+          color: "text.primary",
+        }}
+      >
         {fmtNum(affected)}
         <span
           style={{ fontSize: 13, fontWeight: 600, color: C.mu, marginLeft: 4 }}
@@ -239,8 +175,7 @@ function MachinesAffectedBody({ headline }) {
             {fmtNum(pct, 0)}%
           </span>
         )}
-      </div>
-      <AffectedBar affected={affected ?? 0} total={total} color={C.bl} />
+      </Typography>
       <div style={{ fontSize: 11, fontWeight: 600, color: C.mu }}>
         {noBreakdown == null
           ? "—"
@@ -258,6 +193,7 @@ function ReliabilityCardsGrid({
   period,
   includeTopMachines = false,
   includeMachinesAffected = false,
+  summaryError = null,
 }) {
   const { date, granularity } = period;
   // A published period drills through the stored rate rows. A custom window
@@ -301,10 +237,20 @@ function ReliabilityCardsGrid({
   }, []);
 
   const trendAnchor = trendAsOf ?? date;
+  const periodLabel =
+    period.kind === "range"
+      ? `${formatDayLabel(period.from)} – ${formatDayLabel(period.to)}`
+      : period.granularity === "MONTH"
+        ? formatMonthLabel(date)
+        : formatDayLabel(date);
 
   const toggle = (id) => setExpanded((e) => (e === id ? null : id));
   const closeTrend = () => setTrendCard(null);
 
+  const affectedHeadline = machinesAffectedHeadline(
+    machineGrades.rows,
+    values?.TotalMachines_Overall,
+  );
   const cards = [
     {
       id: "breakdown",
@@ -349,49 +295,175 @@ function ReliabilityCardsGrid({
       id: "machinesAffected",
       label: "Machines Affected",
       accent: C.bl,
-      body: (
-        <MachinesAffectedBody
-          headline={machinesAffectedHeadline(
-            machineGrades.rows,
-            values?.TotalMachines_Overall,
-          )}
-        />
-      ),
+      body: <MachinesAffectedBody headline={affectedHeadline} />,
     });
   }
 
   return (
     <div>
-      <div
-        style={{
+      <Box
+        sx={{
           display: "grid",
-          gap: 12,
-          // Six cards sit as two rows of three rather than six narrow tiles.
-          gridTemplateColumns: `repeat(${cards.length >= 6 ? 3 : cards.length >= 5 ? 5 : 4}, minmax(0, 1fr))`,
+          gap: 2,
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "repeat(2, minmax(0, 1fr))",
+            lg: `repeat(${cards.length >= 6 ? 3 : 4}, minmax(0, 1fr))`,
+          },
         }}
       >
-        {cards.map((c) => (
-          <SummaryCard
-            key={c.id}
-            label={c.label}
-            value={c.value}
-            unit={c.unit}
-            accent={c.accent}
-            featured={c.featured}
-            body={c.body}
-            expanded={expanded === c.id}
-            onToggle={() => toggle(c.id)}
-            // Keep the trend icon gated for custom ranges; the inline Top
-            // Machine table and card still cover the selected window.
-            onTrend={
-              c.id === "machinesAffected" ||
-              (isRange && (perRowCardIds.has(c.id) || c.id === "topMachines"))
-                ? undefined
-                : () => setTrendCard(c.id)
-            }
-          />
-        ))}
-      </div>
+        {cards.map((c) => {
+          const cardLoading =
+            (c.id === "zeroBreakdown" && zeroBreakdown.loading) ||
+            (c.id === "topMachines" && topMachines.loading) ||
+            (c.id === "machinesAffected" && machineGrades.loading);
+          const cardError =
+            c.id === "zeroBreakdown"
+              ? zeroBreakdown.error
+              : c.id === "topMachines"
+                ? topMachines.error
+                : c.id === "machinesAffected"
+                  ? machineGrades.error
+                  : summaryError;
+          const metricAvailable =
+            Boolean(c.featured?.machine) ||
+            (c.id === "machinesAffected" && affectedHeadline.affected != null);
+          const emptyReason = cardError
+            ? `Data unavailable: ${cardError.message ?? "Request failed"}`
+            : c.id === "machinesAffected" && machineGrades.unavailable
+              ? "Select a single day or month"
+              : c.id === "topMachines"
+                ? "No breakdowns recorded for this period"
+                : "No published data for this period";
+          const rawValue =
+            c.id === "breakdown"
+              ? values?.Breakdown_Pct_Overall
+              : c.id === "mtbf"
+                ? values?.MTBF_Overall
+                : c.id === "mttr"
+                  ? values?.MTTR_Overall
+                  : c.id === "zeroBreakdown"
+                    ? zeroBreakdown.total
+                    : null;
+          const { status, info, target } = engineeringKpiStatus(c.id, rawValue);
+          const numericValue = rawValue == null ? null : Number(rawValue);
+          const validValue =
+            numericValue != null && Number.isFinite(numericValue);
+          const progressValue =
+            c.id === "machinesAffected"
+              ? affectedHeadline.pct
+              : validValue && c.id === "breakdown"
+                ? (numericValue / TARGETS.breakdownPct) * 100
+                : validValue && c.id === "mttr"
+                  ? (numericValue / (TARGETS.mttrHrs * 60)) * 100
+                  : validValue && c.id === "mtbf"
+                    ? (numericValue / (TARGETS.mtbfHrs * 60)) * 100
+                    : validValue && c.id === "zeroBreakdown"
+                      ? (numericValue / TARGETS.zeroBreakdownMachines) * 100
+                      : null;
+          const progressLabel = cardLoading
+            ? "Loading KPI data."
+            : c.id === "machinesAffected" && progressValue != null
+              ? "Affected machines as a percentage of all machines."
+              : (c.id === "mtbf" || c.id === "zeroBreakdown") &&
+                  progressValue != null
+                ? "Progress toward the provisional target; the target requires plant review."
+                : (c.id === "breakdown" || c.id === "mttr") &&
+                    progressValue != null
+                  ? "Share of the specified threshold; 100% means the threshold is reached, not a success score."
+                  : c.id === "breakdown" ||
+                      c.id === "mttr" ||
+                      c.id === "mtbf" ||
+                      c.id === "zeroBreakdown" ||
+                      c.id === "machinesAffected"
+                    ? "Value unavailable."
+                    : "No target is used for this bar; the unfilled track is not a performance measure.";
+          const canTrend =
+            c.id !== "machinesAffected" &&
+            !(isRange && (perRowCardIds.has(c.id) || c.id === "topMachines"));
+          const isDuration = c.id === "mtbf" || c.id === "mttr";
+          const cardPeriod =
+            c.id === "zeroBreakdown"
+              ? zeroBreakdown.asOf
+                ? `As of ${formatDayLabel(zeroBreakdown.asOf)}`
+                : null
+              : periodLabel;
+          return (
+            <QKpiCard
+              key={c.id}
+              kpi={{
+                id: c.id,
+                n: c.label,
+                v: rawValue,
+                u: isDuration
+                  ? "min"
+                  : c.id === "zeroBreakdown"
+                    ? "machines"
+                    : c.unit,
+                valueDisplay:
+                  c.id === "breakdown" && rawValue != null
+                    ? `${c.value}%`
+                    : isDuration && rawValue != null
+                      ? fmtNum(rawValue)
+                      : undefined,
+                metricLabel:
+                  isDuration && rawValue != null
+                    ? `${fmtNum(rawValue / 60, 1)} hrs`
+                    : undefined,
+                periodLabel: cardPeriod,
+                metricAvailable: !cardLoading && !cardError && metricAvailable,
+                isLoading: cardLoading,
+                loadingPresentation: "skeleton",
+                cardMinHeight: 160,
+                status,
+                target,
+                footerLabel: target ? undefined : "No status target",
+                cardTintPalette: "engineering",
+                drill: c.id,
+                trendApi: canTrend,
+                showProgress: true,
+                keepProgressWhenOpen: true,
+                alignProgress: true,
+                progressValue,
+                progressLabel,
+                alignMetrics: true,
+                ragInfo: info,
+                emptyReason,
+              }}
+              metricContent={
+                !cardLoading &&
+                !cardError &&
+                metricAvailable &&
+                (c.featured || c.body) ? (
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <SummaryMetric featured={c.featured} body={c.body} />
+                    {cardPeriod && (
+                      <Typography
+                        title={cardPeriod}
+                        sx={{
+                          mt: 0.25,
+                          fontSize: 11,
+                          fontWeight: 500,
+                          color: "text.secondary",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {cardPeriod}
+                      </Typography>
+                    )}
+                  </Box>
+                ) : undefined
+              }
+              iconComponent={KPI_ICONS[c.id]}
+              isOpen={expanded === c.id}
+              onToggle={() => toggle(c.id)}
+              onTrend={canTrend ? () => setTrendCard(c.id) : undefined}
+            />
+          );
+        })}
+      </Box>
 
       {expanded && (
         <div style={{ marginTop: 14 }}>

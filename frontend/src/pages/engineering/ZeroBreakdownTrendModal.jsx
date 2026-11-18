@@ -24,7 +24,11 @@
  *     "as of" a running date rather than "during a month" (see
  *     reliabilityPanels.jsx). Only the trajectory follows the range chips.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Box, Stack } from "@mui/material";
+import CardDownloadButton from "@/components/CardDownloadButton.jsx";
+import { ModalFrame } from "@/components/trend/TrendModalParts.jsx";
+import FullscreenChartButton from "@/components/trend/FullscreenChartButton.jsx";
 import { getReliabilityZeroBreakdownCount } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C, TrendChart, fmtNum } from "./reliabilityShared.jsx";
@@ -32,13 +36,14 @@ import {
   reliabilityTrendHistory,
   useReliabilityTrendRange,
 } from "./reliabilityTrendRange.jsx";
-import { AnalysisModal, Block } from "./reliabilityChrome.jsx";
+import { Block } from "./reliabilityChrome.jsx";
 import { TARGETS } from "./reliabilityTargets.js";
 
 /**
  * @param {{ open: boolean, onClose: () => void, total: number|null, asOf: string|null }} props
  */
 function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
+  const panelRef = useRef(null);
   const [points, setPoints] = useState([]);
   const [loading, setLoading] = useState(true);
   const trend = useReliabilityTrendRange({ open });
@@ -103,145 +108,170 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
     Target: target,
   }));
 
+  const trajectory = (
+    <TrendChart
+      labels={points.map(([key]) =>
+        history.granularity === "DAY" ? key.slice(5) : key.slice(0, 7),
+      )}
+      values={points.map(([, value]) => value)}
+      unit=""
+      target={target}
+    />
+  );
+
   return (
-    <AnalysisModal
+    <ModalFrame
       open={open}
-      exportHeaders={exportHeaders}
-      exportRows={exportRows}
       onClose={onClose}
-      eyebrow="KPI Trend Analysis"
-      title="Zero Breakdown Machines"
-      headerExtra={trend.control}
-      maxWidth={740}
-      align="center"
-    >
-      <Block
-        title={`Progress to Target${selectedAsOf ? ` — as of ${selectedAsOf}` : ""}`}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            fontSize: 13,
-            color: C.mu,
-            marginBottom: 8,
-          }}
+      kpi={{ name: "Zero Breakdown Machines" }}
+      headerExtras={
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          flexWrap="wrap"
+          gap={1}
         >
-          <span style={{ fontWeight: 600 }}>0</span>
-          <span style={{ fontWeight: 700, color: C.am }}>
-            Target: {target} machines
-          </span>
-        </div>
-        <div
-          style={{
-            position: "relative",
-            height: 36,
-            background: C.cd,
-            borderRadius: 18,
-            border: "1px solid " + C.bd,
-            overflow: "hidden",
-          }}
+          {trend.control}
+          <CardDownloadButton
+            cardRef={panelRef}
+            headers={exportHeaders}
+            rows={exportRows}
+            filename="engineering-zero-breakdown-machines"
+          />
+        </Stack>
+      }
+    >
+      <Box ref={panelRef}>
+        <Block
+          title={`Progress to Target${selectedAsOf ? ` — as of ${selectedAsOf}` : ""}`}
         >
           <div
             style={{
-              width: `${Math.min(100, pct ?? 0)}%`,
-              minWidth: 64,
-              height: "100%",
-              background: onTarget ? C.gn : C.bl,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              paddingRight: 14,
-              transition: "width .4s",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              fontSize: 13,
+              color: C.mu,
+              marginBottom: 8,
             }}
           >
-            <span
-              style={{
-                fontSize: 15,
-                fontWeight: 700,
-                color: C.cd,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {selectedTotal == null
-                ? "—"
-                : `${fmtNum(selectedTotal)} machines`}
+            <span style={{ fontWeight: 600 }}>0</span>
+            <span style={{ fontWeight: 700, color: C.am }}>
+              Target: {target} machines (provisional; from mockup)
             </span>
           </div>
           <div
             style={{
-              position: "absolute",
-              left: `${tickPct}%`,
-              top: -3,
-              bottom: -3,
-              width: 2,
-              background: C.am,
-              transform: "translateX(-1px)",
+              position: "relative",
+              height: 36,
+              background: C.cd,
+              borderRadius: 18,
+              border: "1px solid " + C.bd,
+              overflow: "hidden",
             }}
-          />
-        </div>
-        <div
-          style={{
-            textAlign: "center",
-            marginTop: 12,
-            fontSize: 16,
-            fontWeight: 700,
-            color: onTarget ? C.gn : C.tx,
-          }}
-        >
-          {pct == null ? "—" : `${Math.round(pct)}% of target`}
-          {onTarget && (
-            <span
+          >
+            <div
               style={{
-                fontSize: 13,
-                marginLeft: 6,
-                padding: "2px 7px",
-                borderRadius: 4,
-                background: C.gn + "18",
-                color: C.gn,
+                width: `${Math.min(100, pct ?? 0)}%`,
+                minWidth: 64,
+                height: "100%",
+                background: onTarget ? C.gn : C.bl,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                paddingRight: 14,
+                transition: "width .4s",
               }}
             >
-              ON TRACK
-            </span>
-          )}
-        </div>
-        <div
-          style={{
-            fontSize: 12,
-            color: C.mu,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            marginTop: 14,
-            marginBottom: 2,
-          }}
-        >
-          Trajectory
-        </div>
-        {loading ? (
-          <JKLoader message="Loading trajectory" />
-        ) : points.length === 0 ? (
-          <div style={{ padding: 12, color: C.mu, fontSize: 13 }}>
-            No{" "}
-            {trend.preset === "today"
-              ? "daily"
-              : trend.preset === "month"
-                ? "monthly"
-                : "date range"}{" "}
-            rows in this window.
+              <span
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: C.cd,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {selectedTotal == null
+                  ? "—"
+                  : `${fmtNum(selectedTotal)} machines`}
+              </span>
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                left: `${tickPct}%`,
+                top: -3,
+                bottom: -3,
+                width: 2,
+                background: C.am,
+                transform: "translateX(-1px)",
+              }}
+            />
           </div>
-        ) : (
-          <TrendChart
-            labels={points.map(([key]) =>
-              history.granularity === "DAY" ? key.slice(5) : key.slice(0, 7),
+          <div
+            style={{
+              textAlign: "center",
+              marginTop: 12,
+              fontSize: 16,
+              fontWeight: 700,
+              color: onTarget ? C.gn : C.tx,
+            }}
+          >
+            {pct == null ? "—" : `${Math.round(pct)}% of target`}
+            {onTarget && (
+              <span
+                style={{
+                  fontSize: 13,
+                  marginLeft: 6,
+                  padding: "2px 7px",
+                  borderRadius: 4,
+                  background: C.gn + "18",
+                  color: C.gn,
+                }}
+              >
+                ON TRACK
+              </span>
             )}
-            values={points.map(([, value]) => value)}
-            unit=""
-            target={target}
-          />
-        )}
-      </Block>
-    </AnalysisModal>
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: C.mu,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              marginTop: 14,
+              marginBottom: 2,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            Trajectory
+            {!loading && points.length > 0 && (
+              <FullscreenChartButton title="Zero Breakdown Machines · Trajectory">
+                {trajectory}
+              </FullscreenChartButton>
+            )}
+          </div>
+          {loading ? (
+            <JKLoader message="Loading trajectory" />
+          ) : points.length === 0 ? (
+            <div style={{ padding: 12, color: C.mu, fontSize: 13 }}>
+              No{" "}
+              {trend.preset === "today"
+                ? "daily"
+                : trend.preset === "month"
+                  ? "monthly"
+                  : "date range"}{" "}
+              rows in this window.
+            </div>
+          ) : (
+            trajectory
+          )}
+        </Block>
+      </Box>
+    </ModalFrame>
   );
 }
 
