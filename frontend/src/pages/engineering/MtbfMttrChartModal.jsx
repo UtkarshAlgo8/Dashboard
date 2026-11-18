@@ -110,14 +110,12 @@ const MAX_BARS = 15;
 const ratio = (a, b) => (a != null && b ? a / b : null);
 const toHrs = (min) => (min == null ? null : min / 60);
 
-/** MTBF: low is worst. MTTR: high is worst. "No breakdown" goes last. */
-function worstFirst(measure) {
-  return (a, b) => {
-    if (a.value == null && b.value == null) return 0;
-    if (a.value == null) return 1;
-    if (b.value == null) return -1;
-    return measure === "mtbf" ? a.value - b.value : b.value - a.value;
-  };
+/** Both measures are displayed highest first; "no breakdown" stays last. */
+function descendingValue(a, b) {
+  if (a.value == null && b.value == null) return 0;
+  if (a.value == null) return 1;
+  if (b.value == null) return -1;
+  return b.value - a.value;
 }
 
 function periodLabel(request) {
@@ -384,8 +382,8 @@ function MtbfMttrChartModal({
   ]);
 
   const ranked = useMemo(
-    () => (rows ? [...rows].sort(worstFirst(measure)) : []),
-    [rows, measure],
+    () => (rows ? [...rows].sort(descendingValue) : []),
+    [rows],
   );
   const capped = levelId === "machine" || levelId === "failure";
   const shown = capped && !showAll ? ranked.slice(0, MAX_BARS) : ranked;
