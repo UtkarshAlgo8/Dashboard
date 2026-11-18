@@ -35,6 +35,9 @@ const SELECT_COLS =
   "date, status, section, sub_section, machine, eqname, product_type, " +
   "remarks, kpi_name, actual_value, unit_of_measurement, drill_down_attribute";
 
+const isZeroBreakdownKpi = (names) =>
+  names.length === 1 && names[0] === "DaysWithoutBreakdown_m";
+
 /**
  * The machine-level component measurements a multi-day period is rebuilt
  * from. MTBF, MTTR and Breakdown % are rates/means, so a period total can
@@ -143,7 +146,7 @@ function datePredicate({ date, from, to }) {
 export function kpiValueBatchQuery({ kpiNames, date, granularity }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ date, granularity })} ` +
+    `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ date, granularity, todayOnly: isZeroBreakdownKpi(kpiNames) })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -199,7 +202,7 @@ export function kpiChildrenQuery({
     );
   }
   return (
-    `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ date, from, to, granularity })} ` +
+    `SELECT ${SELECT_COLS} FROM ${engineeringGoldSource({ date, from, to, granularity, todayOnly: isZeroBreakdownKpi(kpiNames) })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -232,7 +235,7 @@ export function kpiHistoryQuery({
   subSection,
 }) {
   return (
-    `SELECT date, actual_value FROM ${engineeringGoldSource({ from, to, granularity })} ` +
+    `SELECT date, actual_value FROM ${engineeringGoldSource({ from, to, granularity, todayOnly: kpiName === "DaysWithoutBreakdown_m" })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -255,7 +258,7 @@ export function kpiHistoryQuery({
  */
 export function latestDateQuery({ kpiName, granularity }) {
   return (
-    `SELECT date AS max_date FROM ${engineeringGoldSource({ granularity })} ` +
+    `SELECT date AS max_date FROM ${engineeringGoldSource({ granularity, todayOnly: kpiName === "DaysWithoutBreakdown_m" })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name = ${escapeLiteral(kpiName)} ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -287,7 +290,7 @@ export function latestDateQuery({ kpiName, granularity }) {
 export function latestCompleteDateQuery({ kpiNames, granularity }) {
   const list = kpiNames.map(escapeLiteral).join(", ");
   return (
-    `SELECT date AS max_date FROM ${engineeringGoldSource({ granularity })} ` +
+    `SELECT date AS max_date FROM ${engineeringGoldSource({ granularity, todayOnly: isZeroBreakdownKpi(kpiNames) })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name IN (${list}) ` +
     `AND granularity = ${escapeLiteral(granularity)} ` +
@@ -305,7 +308,7 @@ export function latestCompleteDateQuery({ kpiNames, granularity }) {
 export function daysWithoutBreakdownCountQuery({ minDays } = {}) {
   const over = minDays == null ? "" : `AND actual_value > ${Number(minDays)} `;
   return (
-    `SELECT date, COUNT(DISTINCT machine) AS machine_count FROM ${engineeringGoldSource({ granularity: "DAY" })} ` +
+    `SELECT date, COUNT(DISTINCT machine) AS machine_count FROM ${engineeringGoldSource({ granularity: "DAY", todayOnly: true })} ` +
     `WHERE ${engineeringScopePredicate()} ` +
     `AND kpi_name = 'DaysWithoutBreakdown_m' ` +
     `AND granularity = 'DAY' ` +

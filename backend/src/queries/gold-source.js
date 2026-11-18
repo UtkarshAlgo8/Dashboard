@@ -78,9 +78,9 @@ function yyyymmddUTC(date) {
  * YYYYMMDD digit string. Dates on/after this are "fresh" (daily table);
  * dates before it are "historical" (base table).
  */
-export function freshCutoffKey() {
+export function freshCutoffKey(days = config.upstream.dailyFreshDays) {
   const istNow = new Date(Date.now() + IST_OFFSET_MS);
-  istNow.setUTCDate(istNow.getUTCDate() - config.upstream.dailyFreshDays);
+  istNow.setUTCDate(istNow.getUTCDate() - days);
   return yyyymmddUTC(istNow);
 }
 
@@ -139,6 +139,7 @@ export function resolveGoldSource({
   fromKey = null,
   toKey = null,
   granularity = null,
+  cutoffKey = null,
 }) {
   const grain = granularity == null
     ? null
@@ -151,7 +152,7 @@ export function resolveGoldSource({
   // disabled) — always the base table.
   if (!dailyTable || dailyTable === baseTable) return baseTable;
 
-  const cutoff = freshCutoffKey();
+  const cutoff = cutoffKey ?? freshCutoffKey();
 
   // Entirely historical: byte-identical to the pre-existing SQL, so this
   // is zero regression risk for every caller that never reads recent dates.
