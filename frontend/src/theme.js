@@ -295,4 +295,188 @@ theme.custom = {
   },
 };
 
+// Quintoplex reference palette. Applied only inside the anomaly workspace;
+// the primary dashboard navbar and all existing pages retain the main theme.
+const ANOMALY_PALETTES = {
+  slate: {
+    bg: "#c9d2dc",
+    paper: "#dde3ea",
+    raised: "#d3dae3",
+    track: "#bcc6d2",
+    line: "#b9c3cf",
+    strongLine: "#5f6d7e",
+    ink: "#0e1a2b",
+    muted: "#3f4d60",
+    accent: "#1a47b8",
+    accentWash: "#c8d5f1",
+    grid: "#c3cbd5",
+    Normal: "#055866",
+    Advisory: "#624500",
+    Degraded: "#853500",
+    Critical: "#9c1430",
+    Unknown: "#3a4758",
+    NormalWash: "#c4dfe2",
+    AdvisoryWash: "#eadcb4",
+    DegradedWash: "#efd2bd",
+    CriticalWash: "#efc9d1",
+    UnknownWash: "#cdd3db",
+    charts: ["#1a4fc9", "#9a2860", "#0a6445", "#6f4b00", "#34445a", "#a23812"],
+  },
+  dark: {
+    bg: "#0a0c0e",
+    paper: "#101316",
+    raised: "#161a1e",
+    track: "#1d2227",
+    line: "#2e363d",
+    strongLine: "#66717b",
+    ink: "#e8ebee",
+    muted: "#aeb6be",
+    accent: "#a996ff",
+    accentWash: "#221d3a",
+    grid: "#1f252b",
+    Normal: "#5fb8c8",
+    Advisory: "#e3c555",
+    Degraded: "#f0913a",
+    Critical: "#ff5c6c",
+    Unknown: "#8d96a0",
+    NormalWash: "#0f2226",
+    AdvisoryWash: "#2a2410",
+    DegradedWash: "#2c1b0c",
+    CriticalWash: "#2e1015",
+    UnknownWash: "#1b1f24",
+    charts: ["#6cb4ff", "#f29ec8", "#86d3ad", "#d8c08e", "#b8c6d4", "#ff9f80"],
+  },
+};
+
+/** A feature-local theme faithful to the supplied control-room reference. */
+export function createAnomalyTheme(mode = "slate") {
+  const p = ANOMALY_PALETTES[mode] ?? ANOMALY_PALETTES.slate;
+  return createTheme(theme, {
+    palette: {
+      mode: mode === "dark" ? "dark" : "light",
+      primary: {
+        main: p.accent,
+        contrastText: mode === "dark" ? p.bg : "#ffffff",
+      },
+      text: { primary: p.ink, secondary: p.muted, disabled: p.muted },
+      background: { default: p.bg, paper: p.paper },
+      action: {
+        active: p.muted,
+        hover: alpha(p.accent, 0.08),
+        selected: alpha(p.accent, 0.14),
+        disabled: alpha(p.muted, 0.5),
+        disabledBackground: alpha(p.muted, 0.12),
+      },
+      divider: p.line,
+      error: { main: p.Critical },
+      warning: { main: p.Advisory },
+      success: { main: p.Normal },
+    },
+    typography: {
+      fontFamily: "Geist, system-ui, sans-serif",
+      fontSize: 12,
+      ...Object.fromEntries(
+        [
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "subtitle1",
+          "subtitle2",
+          "body1",
+          "body2",
+          "caption",
+          "button",
+          "overline",
+        ].map((variant) => [
+          variant,
+          {
+            ...theme.typography[variant],
+            fontFamily: "Geist, system-ui, sans-serif",
+          },
+        ]),
+      ),
+      body1: {
+        fontFamily: "Geist, system-ui, sans-serif",
+        fontSize: 13,
+        lineHeight: "20px",
+      },
+      body2: {
+        fontFamily: "Geist, system-ui, sans-serif",
+        fontSize: 12,
+        lineHeight: "18px",
+      },
+      caption: {
+        fontFamily: "Geist, system-ui, sans-serif",
+        fontSize: 11,
+        lineHeight: "16px",
+      },
+    },
+    shape: { borderRadius: 4 },
+    custom: { ...theme.custom, anomaly: p },
+    components: {
+      MuiButton: {
+        styleOverrides: {
+          root: {
+            borderRadius: 2,
+            fontSize: 12,
+            minHeight: 28,
+            padding: "3px 10px",
+          },
+          outlined: { borderColor: p.strongLine },
+        },
+      },
+      MuiChip: {
+        styleOverrides: { root: { borderRadius: 2, height: 22, fontSize: 11 } },
+      },
+      MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
+      MuiToggleButton: {
+        styleOverrides: {
+          root: {
+            color: p.muted,
+            textTransform: "none",
+            "&.Mui-selected": { color: p.ink, backgroundColor: p.track },
+            "&.Mui-disabled": { color: p.Unknown },
+          },
+        },
+      },
+      MuiIconButton: { styleOverrides: { root: { color: p.muted } } },
+      MuiCheckbox: {
+        styleOverrides: {
+          root: { color: p.muted, "&.Mui-checked": { color: p.accent } },
+        },
+      },
+      MuiTableCell: {
+        styleOverrides: {
+          root: {
+            borderColor: p.line,
+            color: p.ink,
+            padding: "5px 8px",
+            fontSize: 12,
+          },
+          head: {
+            backgroundColor: p.raised,
+            color: p.muted,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+            borderBottom: `1px solid ${p.line}`,
+          },
+        },
+      },
+      MuiButtonBase: {
+        styleOverrides: {
+          root: {
+            "&.Mui-focusVisible": {
+              outline: `2px solid ${p.accent}`,
+              outlineOffset: -2,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 export default theme;
