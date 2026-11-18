@@ -171,6 +171,8 @@ function LandingPage() {
       navigate("/banmore/technical");
     } else if (fn.id === "eng" && modalPlant.id === "banmore") {
       navigate("/banmore/engineering");
+    } else if (fn.id === "eng" && modalPlant.id === "chennai") {
+      navigate("/chennai/engineering");
     }
   };
 

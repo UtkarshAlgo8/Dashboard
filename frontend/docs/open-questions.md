@@ -237,6 +237,22 @@ audit trail.
   classification. Items without that category remain excluded, as in the guide;
   confirm before changing that rule.
 
+### CTP Anomaly Detection — frontend integration (spec 24)
+
+- **RESOLVED by user:** separate CTP Engineering landing page; all six existing
+  sections disabled, Anomaly Detection enabled on its own primary-navbar-only route.
+- **RESOLVED by user:** use existing Highcharts, not a new Plotly dependency.
+- **DEFERRED / Q-ANOM-API-01:** live API endpoints, transport, data availability,
+  access control, and timestamp contract are not prepared. A demo provider is
+  isolated in `src/api/anomalyDetection.js`; no live endpoints are assumed.
+- **INFERRED / Q-ANOM-TIME-01:** naive export timestamps are IST, as explicitly
+  labeled by the reference UI. The adapter corrects the prototype's UTC parsing;
+  confirm the live source timezone before API integration.
+- **OPEN / Q-ANOM-DATA-01:** review redistribution of the historical PLC-export
+  fixture before deploying outside the intended demo environment. Static frontend
+  assets are not protected by the React login gate; live data must be authenticated.
+- See `docs/anomaly-api-handoff.md` for the presentation model and deferred contract.
+
 ### Pending (broader BRD walk)
 
 The 122-row intake table at
