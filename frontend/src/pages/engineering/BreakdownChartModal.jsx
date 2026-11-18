@@ -4,7 +4,7 @@
  * §2 in the Production trend modal's look.
  *
  *   VIEW BY   Machine · Failure
- *   MEASURE   Downtime (min) · Occurrences
+ *   MEASURE   Downtime (min) · Frequency
  *   FILTER    Category · Section
  *
  * A click on a bar or a table row opens the second level in a drill panel
@@ -93,8 +93,9 @@ const VIEWS_BY = [
 ];
 
 const MEASURES = [
+  { value: "all", label: "All", key: "minutes", unit: "min" },
   { value: "downtime", label: "Downtime (min)", key: "minutes", unit: "min" },
-  { value: "occurrences", label: "Occurrences", key: "occurrences", unit: "" },
+  { value: "occurrences", label: "Frequency", key: "occurrences", unit: "" },
 ];
 
 // Date-wise table: machine always, its name (eqname) blank when gold has none.
@@ -117,7 +118,7 @@ const DAILY_COLUMNS = [
   },
   {
     key: "occurrences",
-    label: "Occurrences",
+    label: "Frequency",
     align: "right",
     render: (r) => formatIndianNumber(r.occurrences, { maxDecimals: 0 }),
   },
@@ -147,6 +148,7 @@ function ParetoChart({
   groupLabel,
   barsTo80,
   groups,
+  showOccurrences = false,
   selectedKey = null,
   onPick,
 }) {
@@ -169,7 +171,7 @@ function ParetoChart({
       .map(({ sum }) => (displayedTotal ? (sum / displayedTotal) * 100 : 0));
     const valueMax = displayedTotal || 1;
     // The same headroom on both axes for the final marker and label.
-    const headroom = 1.1;
+    const headroom = showOccurrences ? 1.2 : 1.1;
     const longest = rows.reduce(
       (n, r) => Math.max(n, truncate(r.label).length),
       0,
@@ -187,10 +189,17 @@ function ParetoChart({
         type: "column",
         height: 310 + labelRoom + 24 + (groups ? 30 : 0),
         backgroundColor: "transparent",
-        spacing: [12, 8, 8, 8],
+        spacing: [showOccurrences ? 24 : 12, 8, 8, 8],
         style: { fontFamily: theme.typography.fontFamily },
       },
       title: { text: null },
+      subtitle: showOccurrences
+        ? {
+            text: "Bar labels: downtime (min) / frequency",
+            align: "left",
+            style: { color: text, fontSize: "11px" },
+          }
+        : { text: null },
       credits: { enabled: false },
       accessibility: { enabled: false },
       legend: {
@@ -333,6 +342,11 @@ function ParetoChart({
           },
           dataLabels: {
             enabled: true,
+            backgroundColor: showOccurrences
+              ? theme.custom.surface.soft
+              : undefined,
+            borderRadius: showOccurrences ? 2 : 0,
+            padding: showOccurrences ? 2 : 5,
             style: {
               fontSize: "11px",
               fontWeight: "700",
@@ -340,7 +354,9 @@ function ParetoChart({
               textOutline: "none",
             },
             formatter: function () {
-              return fmt(this.y);
+              if (!showOccurrences) return fmt(this.y);
+              const occurrences = rows[this.point.index]?.occurrences;
+              return `${fmt(this.y)} min<br/><span style="color:${text};font-size:10px;font-weight:600">${occurrences == null ? "—" : fmt(occurrences)} freq.</span>`;
             },
           },
         },
@@ -353,6 +369,8 @@ function ParetoChart({
           showInLegend: false,
           data: rows.map((r, i) => ({
             y: r.value,
+            // Stagger the two-line labels so adjacent bars remain readable.
+            ...(showOccurrences ? { dataLabels: { y: i % 2 ? -34 : 0 } } : {}),
             // The drilled bar stands out; otherwise a discipline colour when
             // the level has one, else solid up to the 80% cut and faded after.
             color:
@@ -372,6 +390,7 @@ function ParetoChart({
           marker: { enabled: true, radius: 4, symbol: "circle" },
           dataLabels: {
             enabled: true,
+            y: showOccurrences ? -32 : -6,
             crop: false,
             overflow: "allow",
             style: {
@@ -402,6 +421,7 @@ function ParetoChart({
     groupLabel,
     barsTo80,
     groups,
+    showOccurrences,
     selectedKey,
     onPick,
     theme,
@@ -488,7 +508,7 @@ function tableColumns(groupLabel, withDiscipline) {
     },
     {
       key: "occurrences",
-      label: "Occurrences",
+      label: "Frequency",
       align: "right",
       render: (r) => fmt(r.occurrences),
     },
@@ -521,6 +541,7 @@ function ParetoLevel({
   error,
   emptyMessage,
   disciplineLegend,
+  showOccurrences = false,
   selectedKey,
   onPick,
 }) {
@@ -544,7 +565,7 @@ function ParetoLevel({
               ? [["Discipline", r.discipline]]
               : []),
           ["Downtime", `${fmt(r.minutes)} min`],
-          ["Occurrences", fmt(r.occurrences)],
+          ["Frequency", fmt(r.occurrences)],
           ...(r.pct == null ? [] : [["Breakdown %", `${fmt(r.pct, 2)}%`]]),
           ["Share of scope", `${fmt(r.share, 1)}%`],
         ],
@@ -596,6 +617,7 @@ function ParetoLevel({
             groupLabel={groupLabel}
             barsTo80={groups ? barRows.length : rowsTo80}
             groups={groups}
+            showOccurrences={showOccurrences}
             selectedKey={selectedKey}
             onPick={onPick}
           />
@@ -610,6 +632,8 @@ function ParetoLevel({
             ` Top ${maxBars} = ${fmt(plottedShare, 1)}% of scope; the remaining ${fmt(
               all.length - maxBars,
             )} carry ${fmt(100 - plottedShare, 1)}%.`}
+          {showOccurrences &&
+            " Bars and cumulative percentage are ranked by downtime; bar labels also show frequency. Drill-down charts show downtime."}
           {onPick && " Click a bar or a row to drill down."}
         </Typography>
       )}
@@ -926,7 +950,11 @@ function ParetoView({
     [category, activeSection],
   );
 
-  const measureDef = MEASURES.find((m) => m.value === measure);
+  // "All" combines measures only on the first-level chart. Downstream
+  // Pareto and daily trend remain downtime-based, matching the bar ranking.
+  const measureDef = MEASURES.find(
+    (m) => m.value === (measure === "all" ? "downtime" : measure),
+  );
   const mainGroupLabel = viewBy === "machine" ? "Machine" : "Failure";
   const drillGroupLabel = viewBy === "machine" ? "Failure" : "Machine";
 
@@ -1144,7 +1172,8 @@ function ParetoView({
         groupLabel={mainGroupLabel}
         measureDef={measureDef}
         maxBars={maxBars}
-        title={`${measureDef.label} by ${mainGroupLabel.toLowerCase()} · ${periodText}`}
+        title={`${measure === "all" ? "Downtime (min) & frequency" : measureDef.label} by ${mainGroupLabel.toLowerCase()} · ${periodText}`}
+        showOccurrences={measure === "all"}
         loading={loading}
         error={error}
         emptyMessage={

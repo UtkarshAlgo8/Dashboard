@@ -240,7 +240,7 @@ function MachinesAffectedBody({ headline }) {
           </span>
         )}
       </div>
-      <AffectedBar affected={affected ?? 0} total={total} color={C.rd} />
+      <AffectedBar affected={affected ?? 0} total={total} color={C.bl} />
       <div style={{ fontSize: 11, fontWeight: 600, color: C.mu }}>
         {noBreakdown == null
           ? "—"
@@ -348,7 +348,7 @@ function ReliabilityCardsGrid({
     cards.push({
       id: "machinesAffected",
       label: "Machines Affected",
-      accent: C.rd,
+      accent: C.bl,
       body: (
         <MachinesAffectedBody
           headline={machinesAffectedHeadline(

@@ -1,5 +1,6 @@
 import { Box, IconButton, Tooltip } from "@mui/material";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { numericKpiValue } from "@/components/quality/shared/qualityKpi.js";
 import { formatIndianNumber } from "@/lib/numberFormat.js";
 import { C, ChevronIcon, TrendIcon } from "./reliabilityShared.jsx";
@@ -12,6 +13,85 @@ const ACCENTS = {
   daily: C.am,
   safety: C.gn,
 };
+
+/** Link cards keep the Maintenance grid's accent and scale without implying a KPI value. */
+export function MaintenanceLinkCard({ name, accent, description, href }) {
+  return (
+    <Box
+      component="a"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${name} — open maintenance app in a new tab`}
+      sx={{
+        background: C.cd,
+        borderRadius: "10px",
+        border: `1px solid ${C.bd}`,
+        borderLeft: `4px solid ${accent}`,
+        boxShadow: C.sh,
+        padding: "14px 16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 1,
+        minWidth: 0,
+        minHeight: 140,
+        textDecoration: "none",
+        color: "inherit",
+        transition: "box-shadow 160ms ease, border-color 160ms ease",
+        "&:hover": { borderColor: accent, boxShadow: 3 },
+        "&:focus-visible": { outline: `2px solid ${C.bl}`, outlineOffset: 2 },
+        "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 1,
+        }}
+      >
+        <Box
+          sx={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            letterSpacing: ".05em",
+            textTransform: "uppercase",
+            color: C.mu,
+            lineHeight: 1.4,
+          }}
+        >
+          {name}
+        </Box>
+        <OpenInNewIcon
+          aria-hidden="true"
+          sx={{ fontSize: 17, color: accent, flexShrink: 0 }}
+        />
+      </Box>
+      <Box
+        sx={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 0.5,
+        }}
+      >
+        <Box
+          sx={{ color: C.tx, fontSize: 17, fontWeight: 700, lineHeight: 1.25 }}
+        >
+          Open maintenance app
+        </Box>
+        <Box sx={{ color: C.md, fontSize: 12, lineHeight: 1.4 }}>
+          {description}
+        </Box>
+      </Box>
+      <Box sx={{ color: accent, fontSize: 11, fontWeight: 700 }}>
+        Opens in a new tab
+      </Box>
+    </Box>
+  );
+}
 
 /** Temporary Maintenance presentation matching the Engineering summary cards. */
 export default function MaintenanceSummaryCard({
