@@ -35,6 +35,7 @@ import {
 } from "@/api/engineering.js";
 import DataTable from "@/components/tables/DataTable.jsx";
 import DrillColumnChart from "@/components/trend/DrillColumnChart.jsx";
+import FullscreenChartButton from "@/components/trend/FullscreenChartButton.jsx";
 import {
   ChartPanel,
   DrillBreadcrumb,
@@ -462,6 +463,22 @@ function MtbfMttrChartModal({
     })),
   ];
 
+  const barChart = (
+    <DrillColumnChart
+      items={items}
+      unit={unit}
+      xTitle={LEVELS[level].label}
+      yTitle={`${measureLabel} (${unit})`}
+      refLine={refLine}
+      groups={
+        levelId === "machine"
+          ? categoryGroups(shown.map((r) => r.status))
+          : null
+      }
+      onPick={goTo}
+    />
+  );
+
   const mapPoints = isMap
     ? ranked
         .filter((r) => r.mtbf != null && r.mttr != null)
@@ -522,31 +539,26 @@ function MtbfMttrChartModal({
           emptyMessage={emptyMessage}
           action={
             !loading && !empty ? (
-              <ExportButton
-                targetRef={chartRef}
-                columns={columnsFor(levelId, measure)}
-                rows={ranked}
-                name={chartTitle}
-              />
+              <Stack direction="row" spacing={0.5}>
+                {!isMap && (
+                  <FullscreenChartButton title={chartTitle}>
+                    {barChart}
+                  </FullscreenChartButton>
+                )}
+                <ExportButton
+                  targetRef={chartRef}
+                  columns={columnsFor(levelId, measure)}
+                  rows={ranked}
+                  name={chartTitle}
+                />
+              </Stack>
             ) : null
           }
         >
           {isMap ? (
             <MtbfMttrMap points={mapPoints} plant={plant} onPick={goTo} />
           ) : (
-            <DrillColumnChart
-              items={items}
-              unit={unit}
-              xTitle={LEVELS[level].label}
-              yTitle={`${measureLabel} (${unit})`}
-              refLine={refLine}
-              groups={
-                levelId === "machine"
-                  ? categoryGroups(shown.map((r) => r.status))
-                  : null
-              }
-              onPick={goTo}
-            />
+            barChart
           )}
         </ChartPanel>
       </Box>

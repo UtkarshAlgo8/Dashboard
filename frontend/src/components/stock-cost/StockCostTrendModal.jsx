@@ -13,6 +13,7 @@ import Highcharts from "highcharts";
 import HighchartsReactImport from "highcharts-react-official";
 import JKLoader from "@/components/JKLoader.jsx";
 import { ModalFrame, ChartPanel } from "@/components/trend/TrendModalParts.jsx";
+import FullscreenChartButton from "@/components/trend/FullscreenChartButton.jsx";
 import { DTable } from "@/components/quality/shared/DTable.jsx";
 import useStockCostQuery from "@/hooks/useStockCostQuery.js";
 import MaintenanceDownloadButton from "@/components/engineering/MaintenanceDownloadButton.jsx";
@@ -234,7 +235,18 @@ export default function StockCostTrendModal({
                   . Values are shown as published.
                 </Alert>
               )}
-              <ChartPanel theme={theme} title="Stock cost trend">
+              <ChartPanel
+                theme={theme}
+                title="Stock cost trend"
+                action={
+                  <FullscreenChartButton title="Stock cost trend">
+                    <HighchartsReact
+                      highcharts={Highcharts}
+                      options={options}
+                    />
+                  </FullscreenChartButton>
+                }
+              >
                 <Box sx={{ overflowX: "auto", width: "100%" }}>
                   <Box sx={{ minWidth: 600 }}>
                     <HighchartsReact

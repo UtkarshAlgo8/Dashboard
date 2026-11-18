@@ -28,6 +28,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Stack } from "@mui/material";
 import CardDownloadButton from "@/components/CardDownloadButton.jsx";
 import { ModalFrame } from "@/components/trend/TrendModalParts.jsx";
+import FullscreenChartButton from "@/components/trend/FullscreenChartButton.jsx";
 import { getReliabilityZeroBreakdownCount } from "@/api/engineering.js";
 import JKLoader from "@/components/JKLoader.jsx";
 import { C, TrendChart, fmtNum } from "./reliabilityShared.jsx";
@@ -106,6 +107,17 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
     "Zero breakdown machines": value,
     Target: target,
   }));
+
+  const trajectory = (
+    <TrendChart
+      labels={points.map(([key]) =>
+        history.granularity === "DAY" ? key.slice(5) : key.slice(0, 7),
+      )}
+      values={points.map(([, value]) => value)}
+      unit=""
+      target={target}
+    />
+  );
 
   return (
     <ModalFrame
@@ -230,9 +242,17 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
               textTransform: "uppercase",
               marginTop: 14,
               marginBottom: 2,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
             }}
           >
             Trajectory
+            {!loading && points.length > 0 && (
+              <FullscreenChartButton title="Zero Breakdown Machines · Trajectory">
+                {trajectory}
+              </FullscreenChartButton>
+            )}
           </div>
           {loading ? (
             <JKLoader message="Loading trajectory" />
@@ -247,14 +267,7 @@ function ZeroBreakdownTrendModal({ open, onClose, total, asOf }) {
               rows in this window.
             </div>
           ) : (
-            <TrendChart
-              labels={points.map(([key]) =>
-                history.granularity === "DAY" ? key.slice(5) : key.slice(0, 7),
-              )}
-              values={points.map(([, value]) => value)}
-              unit=""
-              target={target}
-            />
+            trajectory
           )}
         </Block>
       </Box>
