@@ -3,8 +3,8 @@
  * Engineering Reliability drill panels that don't fit the generic recursive
  * `ReliabilityDrillPanel` shape (spec 16/17):
  *
- *   - LossTreePie: the Overview Loss Tree's L1 pie (Highcharts). Slices are
- *     not clickable — there is no drill-down below the five categories.
+ *   - LossTreePie: the Overview Loss Tree's L1 pie; slices and category
+ *     rows open the drill-down for that category.
  *   - ZeroBreakdownPanel: section tiles + a per-machine table. Two DAY-grain
  *     KPIs with their own latest dates (resolved via /latest-date), not a
  *     recursive drill.
@@ -74,7 +74,7 @@ const scheduledLabel = (pct) =>
  * LostTime_Pct_LossCategory). Slice size = share of downtime; each slice is
  * labelled with its % of scheduled time as read from Gold.
  */
-export function LossTreePie({ rows, loading, error }) {
+export function LossTreePie({ rows, loading, error, onSlice }) {
   const data = useMemo(
     () =>
       lossTreeSlices(rows).map((s, i) => ({
@@ -118,6 +118,14 @@ export function LossTreePie({ rows, loading, error }) {
       plotOptions: {
         pie: {
           borderWidth: 0,
+          cursor: "pointer",
+          point: {
+            events: {
+              click: function () {
+                onSlice?.(this.name);
+              },
+            },
+          },
           states: { inactive: { opacity: 1 } },
           dataLabels: {
             enabled: true,
@@ -143,7 +151,7 @@ export function LossTreePie({ rows, loading, error }) {
       },
       series: [{ name: "Lost time", data }],
     }),
-    [data],
+    [data, onSlice],
   );
 
   let body;
@@ -178,10 +186,19 @@ export function LossTreePie({ rows, loading, error }) {
         </div>
         <div style={{ flex: "1 1 320px", minWidth: 260 }}>
           {data.map((d, i) => (
-            <div
+            <button
               key={d.name}
+              type="button"
+              onClick={() => onSlice?.(d.name)}
+              aria-label={`Show loss breakdown for ${d.name}`}
               style={{
                 display: "flex",
+                width: "100%",
+                textAlign: "left",
+                font: "inherit",
+                background: "transparent",
+                border: 0,
+                cursor: "pointer",
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "11px 2px",
@@ -224,7 +241,7 @@ export function LossTreePie({ rows, loading, error }) {
                     ` · ${scheduledLabel(d.scheduledPct)}`}
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>

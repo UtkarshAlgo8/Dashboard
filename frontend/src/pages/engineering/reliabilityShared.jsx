@@ -945,6 +945,48 @@ export const MTTR_RANGE_LEVELS = [
   ),
 ];
 
+function lossLevel(groupBy, groupLabel, timeKpi, occKpi) {
+  const columns = [
+    {
+      key: timeKpi,
+      label: "Lost Time",
+      align: "right",
+      render: (r) => fmtMinHrs(r[timeKpi]),
+    },
+  ];
+  if (occKpi) {
+    columns.push({
+      key: occKpi,
+      label: "Occurrences",
+      align: "right",
+      render: (r) => fmtNum(r[occKpi]),
+    });
+  }
+  columns.push(shareColumn(timeKpi));
+  return {
+    groupBy,
+    groupLabel,
+    kpiNames: occKpi ? [timeKpi, occKpi] : [timeKpi],
+    columns,
+  };
+}
+
+export const LOSS_TREE_LEVELS = [
+  lossLevel(
+    "sub_section",
+    "Discipline / Loss Type",
+    "LostTime_LossType",
+    "Occurrences_LossType",
+  ),
+  lossLevel("machine", "Machine", "LostTime_Loss_m", null),
+  lossLevel(
+    "remarks",
+    "Failure",
+    "LostTime_Loss_Failure",
+    "Occurrences_Loss_Failure",
+  ),
+];
+
 /**
  * One level of a drill: its own fetch, its own loading/error state, its own
  * table. Owning the fetch per level is what lets the panel keep every level
