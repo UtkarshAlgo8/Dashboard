@@ -92,7 +92,7 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
     Category: d.name,
     "Lost Time (min)": d.minutes,
     "Share of downtime (%)":
-      d.sharePct == null ? null : Number(d.sharePct.toFixed(1)),
+      d.sharePct == null ? null : Number(d.sharePct.toFixed(2)),
     "% of scheduled time": d.scheduledPct,
   }));
 
@@ -109,7 +109,7 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
           const parts = [
             `<b>${p.name}</b>`,
             `${fmtNum(p.minutes)} min`,
-            `${fmtNum(p.sharePct, 1)} % of downtime`,
+            `${fmtNum(p.sharePct, 2)} % of downtime`,
           ];
           if (p.scheduledPct != null)
             parts.push(scheduledLabel(p.scheduledPct));
@@ -135,7 +135,7 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
             // range has no stored row, so it shows the share alone.
             formatter: function () {
               const p = this.point;
-              const share = `${fmtNum(p.sharePct, 1)}% of downtime`;
+              const share = `${fmtNum(p.sharePct, 2)}% of downtime`;
               if (p.scheduledPct == null) return share;
               return `<b>${fmtNum(p.scheduledPct, 2)}%</b> of scheduled<br/>${share}`;
             },
@@ -233,7 +233,7 @@ export function LossTreePie({ rows, loading, error, onSlice }) {
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>
-                  {fmtNum(d.sharePct, 1)}%
+                  {fmtNum(d.sharePct, 2)}%
                   <span style={{ fontSize: 11, fontWeight: 600, color: C.mu }}>
                     {" "}
                     of downtime
