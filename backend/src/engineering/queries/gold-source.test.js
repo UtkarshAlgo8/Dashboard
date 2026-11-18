@@ -322,6 +322,31 @@ test("mixed-range component totals and coverage never double count overlapping d
   );
 });
 
+test("zero-breakdown uses historical gold before today, daily today, and gold for custom ranges", (t) => {
+  setup(t);
+  const source = fixtures();
+  source.base.push(
+    row("2026-11-16", "DaysWithoutBreakdown_m", 76, { machine: "5501" }),
+    row("2026-11-17", "DaysWithoutBreakdown_m", 999, { machine: "5501" }),
+  );
+  source.daily.push(
+    row("2026-11-16", "DaysWithoutBreakdown_m", 1, { machine: "5501" }),
+    row("2026-11-17", "DaysWithoutBreakdown_m", 77, { machine: "5501" }),
+  );
+  const input = { kpiNames: ["DaysWithoutBreakdown_m"], granularity: "DAY", machine: "5501", includeUnmapped: true };
+  assert.equal(execute(queries.kpiChildrenQuery({ ...input, date: "2026-11-16" }), source)[0].actual_value, 76);
+  assert.equal(execute(queries.kpiChildrenQuery({ ...input, date: "2026-11-17" }), source)[0].actual_value, 77);
+  const rangeSql = queries.kpiChildrenQuery({ ...input, date: "2026-11-16", from: "2026-11-16", to: "2026-11-17" });
+  assert.doesNotMatch(rangeSql, /engineering_daily/);
+  assert.deepEqual(execute(rangeSql, source).map((r) => r.actual_value), [76, 999]);
+  const over = execute(queries.daysWithoutBreakdownCountQuery({ minDays: 30 }), source);
+  assert.equal(over.find((r) => r.date === "2026-11-16").machine_count, 1);
+  assert.equal(over.find((r) => r.date === "2026-11-17").machine_count, 2);
+  const latest = queries.latestDateQuery({ kpiName: "DaysWithoutBreakdown_m", granularity: "DAY" });
+  assert.match(latest, /< '20261117'/);
+  assert.match(latest, />= '20261117'/);
+});
+
 test("latest-date queries include fresh rows without relaxing complete-period requirements", (t) => {
   setup(t);
   const source = fixtures();

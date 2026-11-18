@@ -26,7 +26,8 @@ import {
 } from "@/lib/stockCost.js";
 import { safetyCard, safetyPeriod, SAFETY_PERIOD_HELP } from "@/lib/safety.js";
 
-const MAINTENANCE_APP_URL = "http://35.208.174.2:3001/";
+const MAINTENANCE_APP_URL =
+  "http://35.208.174.2:3001/engineering-checksheets/dashboard";
 
 const KPI_ICONS = {
   calibration: TuneOutlinedIcon,

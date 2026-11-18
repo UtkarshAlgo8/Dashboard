@@ -42,19 +42,26 @@ export function engineeringSourceCacheScope() {
 
 /** Engineering's thin adapter over the existing Production/Quality fresh/history policy. */
 export function engineeringGoldSource({
-  date, from, to, granularity, allTime = false,
+  date, from, to, granularity, allTime = false, todayOnly = false,
 } = {}) {
   const window = Boolean(from && to);
   const fromKey = allTime ? null : dateKey(window ? from : date);
-  const toKey = dateKey(allTime ? to : window ? to : date);
+  const requestedTo = dateKey(allTime ? to : window ? to : date);
+  const today = todayOnly ? freshCutoffKey(0) : null;
+  const toKey = requestedTo ?? today;
   if (fromKey && toKey && fromKey > toKey) invalidPeriod();
-  if (config.engineering.dataSource === "excel")
-    return config.engineering.sqlTable;
+  if (
+    config.engineering.dataSource === "excel" ||
+    (todayOnly && (window || (fromKey && fromKey !== today)))
+  ) return config.engineering.sqlTable;
   return resolveGoldSource({
     baseTable: config.engineering.sqlTable,
     dailyTable: config.engineering.dailySqlTable,
     fromKey,
     toKey,
     granularity,
+    // DaysWithoutBreakdown_m in gold_daily can reset across earlier days.
+    // Only today's values come from daily; historical rows come from gold.
+    cutoffKey: today,
   });
 }

@@ -34,7 +34,15 @@ import {
 
 // Invalidate cached empty/base-only responses after the source-policy correction.
 function reliabilityCacheKey(route, query) {
-  return buildCacheKey(`${route}:fresh-history-v1`, {
+  // Invalidate previous recent-day source results for the zero-breakdown KPI.
+  const zeroBreakdown =
+    route.endsWith("/zero-breakdown-count") ||
+    String(query.kpi_names ?? query.kpi_name ?? "")
+      .split(",")
+      .map((name) => name.trim())
+      .includes("DaysWithoutBreakdown_m");
+  const version = zeroBreakdown ? "zero-today-v2" : "fresh-history-v1";
+  return buildCacheKey(`${route}:${version}`, {
     ...query,
     __source: engineeringSourceCacheScope(),
   });
