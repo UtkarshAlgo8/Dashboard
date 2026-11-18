@@ -3,6 +3,8 @@ import {
   BanmoreProduction,
   BanmoreQuality,
   CtpQuality,
+  CtpEngineering,
+  CtpAnomalyDetection,
   BanmoreEngineering,
   BanmoreTechnical,
   LandingPage,
@@ -70,6 +72,22 @@ const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <LazyRoute Page={BanmoreEngineering} />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/chennai/engineering",
+    element: (
+      <ProtectedRoute>
+        <LazyRoute Page={CtpEngineering} />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/chennai/engineering/anomaly-detection",
+    element: (
+      <ProtectedRoute showAgent={false}>
+        <LazyRoute Page={CtpAnomalyDetection} />
       </ProtectedRoute>
     ),
   },

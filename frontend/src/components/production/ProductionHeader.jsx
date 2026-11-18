@@ -13,6 +13,7 @@ import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import TimeRangeSelect from "./TimeRangeSelect.jsx";
 import NavTabs from "./NavTabs.jsx";
 import UserMenu from "@/components/user-menu/UserMenu.jsx";
@@ -86,6 +87,9 @@ function ProductionHeader({
   spcAlertsDisabled = false,
   // Overrides the page name the navbar derives from the route.
   pageTitle = null,
+  // Dedicated workspaces own their controls below the primary navbar.
+  showSecondaryNav = true,
+  parentPage = null,
 }) {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -151,7 +155,10 @@ function ProductionHeader({
           px: { xs: 2, md: 3 },
           py: 1.25,
           display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
+          gridTemplateColumns: parentPage
+            ? { xs: "auto minmax(0, 1fr) auto", md: "1fr auto 1fr" }
+            : "1fr auto 1fr",
+          columnGap: parentPage ? { xs: 1, md: 0 } : undefined,
           alignItems: "center",
           position: "relative",
           zIndex: 2,
@@ -169,7 +176,7 @@ function ProductionHeader({
             src={jkLogo}
             alt="JK Tyre"
             sx={{
-              height: 28,
+              height: parentPage ? { xs: 15, md: 28 } : 28,
               width: "auto",
               objectFit: "contain",
               display: "block",
@@ -179,7 +186,9 @@ function ProductionHeader({
               the centre column never squeezes it onto three lines. */}
           <Box
             sx={{
-              display: { xs: "none", lg: "block" },
+              display: parentPage
+                ? { xs: "none", xl: "block" }
+                : { xs: "none", lg: "block" },
               width: "1.5px",
               height: 22,
               backgroundColor: "error.main",
@@ -188,7 +197,9 @@ function ProductionHeader({
           />
           <Typography
             sx={{
-              display: { xs: "none", lg: "block" },
+              display: parentPage
+                ? { xs: "none", xl: "block" }
+                : { xs: "none", lg: "block" },
               fontSize: 16.5,
               fontWeight: 700,
               letterSpacing: "-0.2px",
@@ -224,7 +235,7 @@ function ProductionHeader({
               }}
               sx={{
                 justifySelf: "center",
-                display: "flex",
+                display: parentPage ? { xs: "none", md: "flex" } : "flex",
                 alignItems: "center",
                 gap: 0.75,
                 px: 2,
@@ -259,20 +270,79 @@ function ProductionHeader({
               </Typography>
             </Box>
           </Tooltip>
+          {parentPage && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+              }}
+            >
+              <ChevronRightIcon
+                aria-hidden
+                sx={{
+                  fontSize: 20,
+                  color: "text.disabled",
+                  display: { xs: "none", xl: "block" },
+                }}
+              />
+              <Box
+                component="a"
+                href={parentPage.href}
+                aria-label={`Back to ${parentPage.label}`}
+                title={`Back to ${parentPage.label}`}
+                onClick={(event) => {
+                  if (
+                    event.button === 0 &&
+                    !event.metaKey &&
+                    !event.ctrlKey &&
+                    !event.shiftKey &&
+                    !event.altKey
+                  ) {
+                    event.preventDefault();
+                    navigate(parentPage.href);
+                  }
+                }}
+                sx={{
+                  color: "text.secondary",
+                  fontSize: 14,
+                  textDecoration: "none",
+                  "&:hover": { textDecoration: "underline" },
+                }}
+              >
+                <ArrowBackIcon
+                  sx={{ fontSize: 18, display: { xs: "block", xl: "none" } }}
+                />
+                <Box
+                  component="span"
+                  sx={{ display: { xs: "none", xl: "inline" } }}
+                >
+                  {parentPage.label}
+                </Box>
+              </Box>
+            </Box>
+          )}
           {currentPage && (
             <>
               <ChevronRightIcon
                 aria-hidden
-                sx={{ fontSize: 20, color: "text.disabled" }}
+                sx={{
+                  fontSize: 20,
+                  color: "text.disabled",
+                  display: parentPage ? { xs: "none", md: "block" } : undefined,
+                }}
               />
               <Typography
                 component="h1"
                 aria-current="page"
                 sx={{
-                  fontSize: 17,
+                  fontSize: parentPage ? { xs: 13, md: 17 } : 17,
                   fontWeight: 700,
                   color: "text.primary",
                   whiteSpace: "nowrap",
+                  overflow: parentPage ? "hidden" : undefined,
+                  textOverflow: parentPage ? "ellipsis" : undefined,
+                  maxWidth: parentPage ? { xs: 120, md: "none" } : undefined,
                   lineHeight: 1.2,
                 }}
               >
@@ -340,161 +410,163 @@ function ProductionHeader({
       </Box>
 
       {/* Second Row: Prominent Floating Navigation & Filter Capsules on Gray Canvas */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 2.5,
-          flexWrap: "wrap",
-          px: { xs: 2, md: 3 },
-          pt: 2.25,
-          pb: 0.75,
-        }}
-      >
-        {/* 1. Category Nav Pills in a Rounded Card (skipped when caller
+      {showSecondaryNav && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 2.5,
+            flexWrap: "wrap",
+            px: { xs: 2, md: 3 },
+            pt: 2.25,
+            pb: 0.75,
+          }}
+        >
+          {/* 1. Category Nav Pills in a Rounded Card (skipped when caller
             passes an empty categoryTabs array — e.g. Quality has its own
             sub-tab row and doesn't need the dept switcher). */}
-        {showCategoryTabs && (
-          <Box
-            sx={{
-              boxShadow: theme.custom.floatingShadow,
-              borderRadius: 999,
-            }}
-          >
-            <NavTabs
-              items={formattedCategories}
-              value={activeCategory}
-              onChange={(catId) => onCategoryChange?.(catId)}
-              layoutId="categoryFilterFill"
-              size="lg"
-            />
-          </Box>
-        )}
-
-        {/* 2. Tyre Type / Category Pills (skipped when caller passes an
-            empty tyreTypes array — Quality suppresses this and shows its
-            own sub-tab row, which is rendered above the right-side filters). */}
-        {showTyreTypes && (
-          <Box
-            sx={{
-              boxShadow: theme.custom.floatingShadow,
-              borderRadius: 999,
-            }}
-          >
-            <NavTabs
-              items={tyreTypeItems}
-              value={activeTyreId}
-              onChange={(id) => {
-                const match = tyreTypeItems.find((t) => t.id === id);
-                onTyreTypeChange?.(match ? match.label : id);
-              }}
-              layoutId="tyreTypeFilterFill"
-              size="lg"
-            />
-          </Box>
-        )}
-
-        {/* 3. Time Range Pills + Export Button Cluster */}
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <Box
-            sx={{
-              boxShadow: theme.custom.floatingShadow,
-              borderRadius: 999,
-            }}
-          >
-            <TimeRangeSelect
-              preset={timeRange?.preset}
-              from={timeRange?.from}
-              to={timeRange?.to}
-              shift={shift}
-              onShiftChange={onShiftChange}
-              onPresetChange={(p) =>
-                onTimeRangeChange?.((prev) => ({
-                  ...prev,
-                  preset: p.preset,
-                  from: p.from,
-                  to: p.to,
-                  // Carry the picker's month reset through; otherwise the
-                  // spread above keeps a month pinned from the dropdown.
-                  month: p.month ?? null,
-                }))
-              }
-              onFromChange={(v) =>
-                onTimeRangeChange?.((prev) => ({
-                  ...prev,
-                  from: v,
-                  preset: null,
-                }))
-              }
-              onToChange={(v) =>
-                onTimeRangeChange?.((prev) => ({
-                  ...prev,
-                  to: v,
-                  preset: null,
-                }))
-              }
-              asOf={asOf}
-              disabledPresets={disabledPresets}
-              hiddenPresets={hiddenPresets}
-              showYearPreset={showYearPreset}
-              hideCustomRange={hideCustomRange}
-              dayPickerInMenu={dayPickerInMenu}
-              singleDay={singleDay}
-              onSingleDayChange={onSingleDayChange}
-              month={timeRange?.month ?? null}
-              onMonthChange={(monthKey) =>
-                onTimeRangeChange?.((prev) => ({
-                  ...prev,
-                  preset: "month",
-                  from: "",
-                  to: "",
-                  month: monthKey,
-                }))
-              }
-              size="lg"
-            />
-          </Box>
-
-          {/* Action: Circular Download Button with white download icon */}
-          <Tooltip
-            title={
-              exportStatus === "done"
-                ? "Downloaded"
-                : exportStatus === "loading"
-                  ? "Generating PDF…"
-                  : "Download Dashboard PDF"
-            }
-            arrow
-          >
-            <IconButton
-              size="small"
-              onClick={handleExport}
+          {showCategoryTabs && (
+            <Box
               sx={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                backgroundColor: "primary.main",
-                color: "primary.contrastText",
                 boxShadow: theme.custom.floatingShadow,
-                transition: "opacity 0.2s, background-color 0.2s",
-                "&:hover": {
-                  backgroundColor: "primary.main",
-                  opacity: 0.9,
-                },
+                borderRadius: 999,
               }}
             >
-              {exportStatus === "loading" ? (
-                <CircularProgress size={22} thickness={5} color="inherit" />
-              ) : exportStatus === "done" ? (
-                <CheckIcon sx={{ fontSize: 22 }} />
-              ) : (
-                <FileDownloadOutlinedIcon sx={{ fontSize: 22 }} />
-              )}
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      </Box>
+              <NavTabs
+                items={formattedCategories}
+                value={activeCategory}
+                onChange={(catId) => onCategoryChange?.(catId)}
+                layoutId="categoryFilterFill"
+                size="lg"
+              />
+            </Box>
+          )}
+
+          {/* 2. Tyre Type / Category Pills (skipped when caller passes an
+            empty tyreTypes array — Quality suppresses this and shows its
+            own sub-tab row, which is rendered above the right-side filters). */}
+          {showTyreTypes && (
+            <Box
+              sx={{
+                boxShadow: theme.custom.floatingShadow,
+                borderRadius: 999,
+              }}
+            >
+              <NavTabs
+                items={tyreTypeItems}
+                value={activeTyreId}
+                onChange={(id) => {
+                  const match = tyreTypeItems.find((t) => t.id === id);
+                  onTyreTypeChange?.(match ? match.label : id);
+                }}
+                layoutId="tyreTypeFilterFill"
+                size="lg"
+              />
+            </Box>
+          )}
+
+          {/* 3. Time Range Pills + Export Button Cluster */}
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Box
+              sx={{
+                boxShadow: theme.custom.floatingShadow,
+                borderRadius: 999,
+              }}
+            >
+              <TimeRangeSelect
+                preset={timeRange?.preset}
+                from={timeRange?.from}
+                to={timeRange?.to}
+                shift={shift}
+                onShiftChange={onShiftChange}
+                onPresetChange={(p) =>
+                  onTimeRangeChange?.((prev) => ({
+                    ...prev,
+                    preset: p.preset,
+                    from: p.from,
+                    to: p.to,
+                    // Carry the picker's month reset through; otherwise the
+                    // spread above keeps a month pinned from the dropdown.
+                    month: p.month ?? null,
+                  }))
+                }
+                onFromChange={(v) =>
+                  onTimeRangeChange?.((prev) => ({
+                    ...prev,
+                    from: v,
+                    preset: null,
+                  }))
+                }
+                onToChange={(v) =>
+                  onTimeRangeChange?.((prev) => ({
+                    ...prev,
+                    to: v,
+                    preset: null,
+                  }))
+                }
+                asOf={asOf}
+                disabledPresets={disabledPresets}
+                hiddenPresets={hiddenPresets}
+                showYearPreset={showYearPreset}
+                hideCustomRange={hideCustomRange}
+                dayPickerInMenu={dayPickerInMenu}
+                singleDay={singleDay}
+                onSingleDayChange={onSingleDayChange}
+                month={timeRange?.month ?? null}
+                onMonthChange={(monthKey) =>
+                  onTimeRangeChange?.((prev) => ({
+                    ...prev,
+                    preset: "month",
+                    from: "",
+                    to: "",
+                    month: monthKey,
+                  }))
+                }
+                size="lg"
+              />
+            </Box>
+
+            {/* Action: Circular Download Button with white download icon */}
+            <Tooltip
+              title={
+                exportStatus === "done"
+                  ? "Downloaded"
+                  : exportStatus === "loading"
+                    ? "Generating PDF…"
+                    : "Download Dashboard PDF"
+              }
+              arrow
+            >
+              <IconButton
+                size="small"
+                onClick={handleExport}
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: "50%",
+                  backgroundColor: "primary.main",
+                  color: "primary.contrastText",
+                  boxShadow: theme.custom.floatingShadow,
+                  transition: "opacity 0.2s, background-color 0.2s",
+                  "&:hover": {
+                    backgroundColor: "primary.main",
+                    opacity: 0.9,
+                  },
+                }}
+              >
+                {exportStatus === "loading" ? (
+                  <CircularProgress size={22} thickness={5} color="inherit" />
+                ) : exportStatus === "done" ? (
+                  <CheckIcon sx={{ fontSize: 22 }} />
+                ) : (
+                  <FileDownloadOutlinedIcon sx={{ fontSize: 22 }} />
+                )}
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Box>
+      )}
     </Box>
   );
 }

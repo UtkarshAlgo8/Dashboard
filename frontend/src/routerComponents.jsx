@@ -8,6 +8,10 @@ export const BanmoreProduction = lazy(
 );
 export const BanmoreQuality = lazy(() => import("@/pages/BanmoreQuality.jsx"));
 export const CtpQuality = lazy(() => import("@/pages/CtpQuality.jsx"));
+export const CtpEngineering = lazy(() => import("@/pages/CtpEngineering.jsx"));
+export const CtpAnomalyDetection = lazy(
+  () => import("@/pages/CtpAnomalyDetection.jsx"),
+);
 export const BanmoreEngineering = lazy(
   () => import("@/pages/BanmoreEngineering.jsx"),
 );

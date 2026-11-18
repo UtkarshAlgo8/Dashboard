@@ -20,8 +20,8 @@ export const DEFAULT_FUNCTIONS = [
   { id: "eng", name: "Engineering" },
 ];
 
-// Chennai (CTP): Production plus the Quality Process tab.
-export const CTP_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual"]);
+// Chennai (CTP): Engineering exposes the Anomaly Detection workspace only.
+export const CTP_NAVIGABLE_FUNCTIONS = new Set(["prod", "qual", "eng"]);
 
 export const PLANT_GEO = {
   banmore: {

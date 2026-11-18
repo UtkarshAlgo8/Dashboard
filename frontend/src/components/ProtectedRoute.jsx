@@ -10,7 +10,7 @@ import JkAgent from "@/components/chat/JkAgent.jsx";
  * spinner so the user never sees a flash of the login page during
  * a hard reload.
  */
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, showAgent = true }) {
   const { isAuthenticated, isBootstrapping } = useAuth();
   const location = useLocation();
 
@@ -37,7 +37,7 @@ export default function ProtectedRoute({ children }) {
   return (
     <>
       {children}
-      <JkAgent />
+      {showAgent && <JkAgent />}
     </>
   );
 }
