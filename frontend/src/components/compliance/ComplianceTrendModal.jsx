@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -18,6 +18,7 @@ import {
 import JKLoader from "@/components/JKLoader.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import { COMPLIANCE_DEFINITIONS } from "@/lib/compliance.js";
+import { todayInIST } from "@/pages/engineering/reliabilityShared.jsx";
 
 const HighchartsReact = HighchartsReactImport?.default ?? HighchartsReactImport;
 
@@ -26,26 +27,47 @@ export default function ComplianceTrendModal({ id, anchor, onClose }) {
   const theme = useTheme();
   const [granularity, setGranularity] = useState("DAY");
   const [month, setMonth] = useState(anchor.slice(0, 7));
+  const [today, setToday] = useState(todayInIST);
+  useEffect(() => {
+    const timer = setInterval(() => setToday(todayInIST()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   const year = month.slice(0, 4);
   const from = granularity === "DAY" ? `${month}-01` : `${year}-01-01`;
-  const to =
+  const periodEnd =
     granularity === "DAY"
       ? new Date(Date.UTC(Number(year), Number(month.slice(5, 7)), 0))
           .toISOString()
           .slice(0, 10)
       : `${year}-12-31`;
+  // Future Gold rows can contain scheduled placeholders, not actual results.
+  const to = periodEnd < today ? periodEnd : today;
+  const hasElapsedPeriod = from <= to;
   const query = usePolledQuery(
     () => getComplianceHistory({ id, from, to, granularity }),
-    { deps: [id, from, to, granularity], interval: 60000 },
+    {
+      enabled: hasElapsedPeriod,
+      deps: [id, from, to, granularity],
+      interval: 60000,
+    },
   );
   const matching =
     query.data?.context?.id === id &&
     query.data.context.from === from &&
     query.data.context.to === to &&
     query.data.context.granularity === granularity;
-  const points = matching ? query.data.points : [];
+  const points =
+    matching && hasElapsedPeriod
+      ? query.data.points.filter(
+          (point) => point.date >= from && point.date <= to,
+        )
+      : [];
   const byDate = new Map(points.map((point) => [point.date, point.value]));
-  const count = granularity === "DAY" ? Number(to.slice(8, 10)) : 12;
+  const count = !hasElapsedPeriod
+    ? 0
+    : granularity === "DAY"
+      ? Number(to.slice(8, 10))
+      : Number(to.slice(5, 7));
   const dates = Array.from({ length: count }, (_, index) =>
     granularity === "DAY"
       ? `${month}-${String(index + 1).padStart(2, "0")}`
@@ -126,12 +148,16 @@ export default function ComplianceTrendModal({ id, anchor, onClose }) {
           BTP · All shifts · {granularity === "DAY" ? month : year}. Published
           values; missing periods are gaps.
         </Typography>
-        {query.error ? (
+        {!hasElapsedPeriod ? (
+          <Alert severity="info">
+            No data is available for a future period.
+          </Alert>
+        ) : !matching && (query.isLoading || !query.error) ? (
+          <JKLoader message="Loading compliance trend" />
+        ) : query.error ? (
           <Alert severity="error">
             Compliance trend unavailable: {query.error.message}
           </Alert>
-        ) : query.isLoading && !matching ? (
-          <JKLoader message="Loading compliance trend" />
         ) : !points.some((point) => point.value != null) ? (
           <Alert severity="info">
             No published compliance data for this period.
