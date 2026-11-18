@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Alert, Box, Stack, Typography } from "@mui/material";
-import { getCompliance } from "@/api/compliance.js";
 import { getCalibration } from "@/api/calibration.js";
 import { calibrationCard } from "@/lib/calibration.js";
 import { maintenanceKpiPresentation } from "@/lib/maintenanceKpiPresentation.js";
 import CalibrationDrillPanel from "@/components/calibration/CalibrationDrillPanel.jsx";
 import { usePolledQuery } from "@/hooks/usePolledQuery.js";
 import JKLoader from "@/components/JKLoader.jsx";
-import MaintenanceSummaryCard from "./MaintenanceSummaryCard.jsx";
-import ComplianceDrillPanel from "@/components/compliance/ComplianceDrillPanel.jsx";
-import ComplianceTrendModal from "@/components/compliance/ComplianceTrendModal.jsx";
+import MaintenanceSummaryCard, {
+  MaintenanceLinkCard,
+} from "./MaintenanceSummaryCard.jsx";
+import { C } from "./reliabilityShared.jsx";
 import SafetyDrillPanel from "@/components/safety/SafetyDrillPanel.jsx";
 import useSafetyQuery from "@/hooks/useSafetyQuery.js";
 import useStockCostQuery from "@/hooks/useStockCostQuery.js";
@@ -21,11 +21,8 @@ import {
   STOCK_COST_PERIOD_HELP,
 } from "@/lib/stockCost.js";
 import { safetyCard, safetyPeriod, SAFETY_PERIOD_HELP } from "@/lib/safety.js";
-import {
-  complianceCard,
-  COMPLIANCE_PERIOD_HELP,
-  storedCompliancePeriod,
-} from "@/lib/compliance.js";
+
+const MAINTENANCE_APP_URL = "http://35.208.174.2:3001/";
 
 /** BTP Maintenance: connected cards only, with one shared right-hand drill. */
 export default function EngineeringMaintenanceSection({
@@ -34,52 +31,26 @@ export default function EngineeringMaintenanceSection({
 }) {
   const [open, setOpen] = useState(null);
   const [stockTrend, setStockTrend] = useState(null);
-  const [complianceTrend, setComplianceTrend] = useState(null);
   const calibration = usePolledQuery(getCalibration, {
     interval: 60000,
   });
   const stockRange = stockCostRange(selectedPeriod);
   const stock = useStockCostQuery(stockRange);
-  const period = storedCompliancePeriod({ ...selectedPeriod, shift });
-  const query = usePolledQuery(
-    () => getCompliance({ ids: ["pm", "daily"], ...period }),
-    {
-      enabled: Boolean(period),
-      interval: 0,
-      deps: [period?.date, period?.granularity],
-    },
-  );
-  const context = query.data?.context;
-  const matches =
-    period &&
-    context?.date === period.date &&
-    context?.granularity === period.granularity;
   const safetyScope = safetyPeriod(selectedPeriod, shift);
   const safety = useSafetyQuery(
     safetyScope ? { ...safetyScope, level: "overall" } : null,
   );
   const drillOpen = Boolean(
     open &&
-    (open === "calibration"
-      ? true
-      : open === "stock-cost"
-        ? stockRange
-        : open === "safety"
-          ? safetyScope
-          : period),
+    (open === "calibration" ||
+      (open === "stock-cost" && stockRange) ||
+      (open === "safety" && safetyScope)),
   );
-
-  const complianceState = {
-    error: period ? query.error : null,
-    isLoading:
-      Boolean(period) && (query.isLoading || (!matches && !query.error)),
-  };
   // Background calibration refreshes keep the existing cards visible.
   const loading =
     (calibration.isLoading && !calibration.data) ||
     stock.isLoading ||
-    safety.isLoading ||
-    (complianceState.isLoading && !matches);
+    safety.isLoading;
   const cards = [
     {
       id: "calibration",
@@ -92,18 +63,22 @@ export default function EngineeringMaintenanceSection({
       state: stock,
       onTrend: () => setStockTrend({ category: "" }),
     },
-    ...["pm", "daily"].map((id) => ({
-      id,
-      kpi: {
-        ...complianceCard(id, matches ? query.data.kpis[id] : null, {
-          period,
-          ...complianceState,
-        }),
-        trendApi: true,
+    {
+      id: "pm",
+      link: {
+        name: "PM Compliance",
+        accent: C.cy,
+        description: "View preventive maintenance compliance",
       },
-      state: complianceState,
-      onTrend: () => setComplianceTrend(id),
-    })),
+    },
+    {
+      id: "daily",
+      link: {
+        name: "Daily Checksheet Compliance",
+        accent: C.am,
+        description: "View daily checksheet compliance",
+      },
+    },
     {
       id: "safety",
       kpi: safetyCard(safety.data, { period: safetyScope, ...safety }),
@@ -116,12 +91,6 @@ export default function EngineeringMaintenanceSection({
       <Typography component="h1" sx={{ fontSize: 20, fontWeight: 700 }}>
         Maintenance
       </Typography>
-      {!period && <Alert severity="info">{COMPLIANCE_PERIOD_HELP}</Alert>}
-      {query.error && period && (
-        <Alert severity="error">
-          Compliance unavailable: {query.error.message}
-        </Alert>
-      )}
       {!safetyScope && <Alert severity="info">{SAFETY_PERIOD_HELP}</Alert>}
       {!stockRange && <Alert severity="info">{STOCK_COST_PERIOD_HELP}</Alert>}
       {stock.error && (
@@ -156,15 +125,23 @@ export default function EngineeringMaintenanceSection({
                   },
             }}
           >
-            {cards.map(({ id, kpi, state, onTrend }) => (
-              <MaintenanceSummaryCard
-                key={id}
-                kpi={maintenanceKpiPresentation(kpi, state)}
-                isOpen={drillOpen && open === id}
-                onToggle={() => setOpen(open === id ? null : id)}
-                onTrend={onTrend}
-              />
-            ))}
+            {cards.map(({ id, kpi, state, onTrend, link }) =>
+              link ? (
+                <MaintenanceLinkCard
+                  key={id}
+                  {...link}
+                  href={MAINTENANCE_APP_URL}
+                />
+              ) : (
+                <MaintenanceSummaryCard
+                  key={id}
+                  kpi={maintenanceKpiPresentation(kpi, state)}
+                  isOpen={drillOpen && open === id}
+                  onToggle={() => setOpen(open === id ? null : id)}
+                  onTrend={onTrend}
+                />
+              ),
+            )}
           </Box>
           {drillOpen && (
             <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
@@ -185,26 +162,10 @@ export default function EngineeringMaintenanceSection({
                   period={safetyScope}
                   onClose={() => setOpen(null)}
                 />
-              ) : (
-                <ComplianceDrillPanel
-                  enableDownloads
-                  key={`${open}|${period.date}|${period.granularity}`}
-                  id={open}
-                  period={period}
-                  onClose={() => setOpen(null)}
-                />
-              )}
+              ) : null}
             </Box>
           )}
         </Box>
-      )}
-      {complianceTrend && (
-        <ComplianceTrendModal
-          key={complianceTrend}
-          id={complianceTrend}
-          anchor={selectedPeriod.date}
-          onClose={() => setComplianceTrend(null)}
-        />
       )}
       {stockTrend && stockRange && (
         <StockCostTrendModal
