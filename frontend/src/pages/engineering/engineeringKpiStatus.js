@@ -14,7 +14,7 @@ export function engineeringKpiStatus(id, value) {
             : "Red",
       target: `<${TARGETS.breakdownPct}%`,
       info: [
-        `Specification: target below ${TARGETS.breakdownPct}%; red above ${TARGETS.breakdownPct}%. At the boundary no status is defined.`,
+        `Specification: target below ${TARGETS.breakdownPct}%; amber above ${TARGETS.breakdownPct}%. At the boundary no status is defined.`,
       ],
     };
   }
@@ -45,7 +45,7 @@ export function engineeringKpiStatus(id, value) {
       target: "≥98% (provisional)",
       info: [
         "Provisional: the Production plan compliance rule is used pending plant approval.",
-        "Green: at least 98%; amber: 95% to below 98%; red: below 95%.",
+        "Green: at least 98%; amber: below 98%.",
       ],
     };
   }
@@ -55,7 +55,7 @@ export function engineeringKpiStatus(id, value) {
       target: `≥${TARGETS.mtbfHrs} hrs (provisional)`,
       info: [
         "Provisional: the specification's 500-hour target is flagged for plant re-baselining and may not reflect actual shift schedules.",
-        "Green: at or above target; red: below target.",
+        "Green: at or above target; amber: below target.",
       ],
     };
   if (id === "zeroBreakdown")

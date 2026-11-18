@@ -46,7 +46,13 @@ export function QKpiCard({
   iconComponent,
 }) {
   const theme = useTheme();
-  const tier = qualityCardTier(kpi);
+  const statusTier = qualityCardTier(kpi);
+  // Engineering retains its underlying status rules, but uses amber rather
+  // than red to present an unmet target on KPI cards.
+  const tier =
+    kpi.cardTintPalette === "engineering" && statusTier === "red"
+      ? "amber"
+      : statusTier;
   const cardTheme = {
     ...getKpiCardTheme(theme, tier),
     // Opt-in presentation only. Existing status-coloured cards (including
@@ -123,7 +129,9 @@ export function QKpiCard({
       ? theme.palette.text.secondary
       : trendPct === 0 || trendPct > 0 !== Boolean(kpi.lowerIsBetter)
         ? theme.custom.status.green
-        : theme.custom.status.red;
+        : kpi.cardTintPalette === "engineering"
+          ? theme.custom.status.amber
+          : theme.custom.status.red;
   const iconButtonSx = {
     p: 0.25,
     color: "text.secondary",
@@ -330,7 +338,9 @@ export function QKpiCard({
                   fontSize: 11.5,
                   fontWeight: 600,
                   color: kpi.subLine.alert
-                    ? theme.custom.status.red
+                    ? kpi.cardTintPalette === "engineering"
+                      ? theme.custom.status.amber
+                      : theme.custom.status.red
                     : "text.secondary",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
