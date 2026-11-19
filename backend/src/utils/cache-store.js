@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 /**
  * Cache storage drivers.
  *
@@ -160,9 +161,8 @@ class RedisStore {
   degrade(err) {
     if (!this.degraded) {
       this.degraded = true;
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[cache] redis unavailable, falling back to memory: ${err.message}`,
+      logger.warn(
+        `[cache] redis unavailable, falling back to memory: ${err.name}`,
       );
     }
   }
@@ -271,8 +271,7 @@ export async function createStore(cacheConfig) {
     // process-level crash, so swallow it here (RedisStore.degrade logs).
     client.on("error", () => {});
     await client.connect();
-    // eslint-disable-next-line no-console
-    console.log(`[cache] redis connected at ${cacheConfig.redisUrl}`);
+    logger.info(`[cache] redis connected at ${cacheConfig.redisUrl}`);
     return new RedisStore(client, {
       keyPrefix: cacheConfig.keyPrefix,
       fallback: memory,
@@ -283,9 +282,8 @@ export async function createStore(cacheConfig) {
     // open — the process then never exits on its own. `disconnect()` (not
     // `quit()`) is right here: there is no live connection to close politely.
     client?.disconnect();
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[cache] redis connect failed (${err.message}) — using memory store`,
+    logger.warn(
+      `[cache] redis connect failed (${err.name}) — using memory store`,
     );
     return memory;
   }

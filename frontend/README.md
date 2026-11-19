@@ -1,5 +1,7 @@
 # JK Dashboard — Frontend
 
+Self-hosted SigNoz configuration: [observability guide](../observability/README.md).
+
 Plant operations dashboard for JK Tyres. Phase 1: Banmore plant, Production
 function. Built with React 18 + Vite + Material UI v6 (React 19 compatible).
 

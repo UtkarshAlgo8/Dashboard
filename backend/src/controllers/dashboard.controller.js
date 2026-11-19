@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import {
@@ -212,7 +213,7 @@ export async function postFetch(req, res, next) {
     // the total as final rather than quietly under-reporting the range.
     const truncated = rows.length > effectiveLimit;
     if (truncated) {
-      console.warn(
+      logger.warn(
         `[dashboard] row cap ${effectiveLimit} reached — result truncated`,
       );
     }

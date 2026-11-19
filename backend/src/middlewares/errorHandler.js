@@ -1,3 +1,5 @@
+import { trace, SpanStatusCode } from "@opentelemetry/api";
+import { logger } from "../utils/logger.js";
 import { UpstreamError } from "../utils/upstream.js";
 import { ChatUpstreamError } from "../utils/chatUpstream.js";
 import { QueryValidationError } from "../queries/dashboard-query.js";
@@ -6,6 +8,12 @@ import { ApiError } from "../utils/ApiError.js";
 /** Central error handler — maps known errors to envelopes. */
 // eslint-disable-next-line no-unused-vars
 export function errorHandler(err, _req, res, _next) {
+  const status = err.statusCode || err.status || 500;
+  if (status >= 500) {
+    const span = trace.getActiveSpan();
+    span?.recordException({ name: err.name || "Error" });
+    span?.setStatus({ code: SpanStatusCode.ERROR });
+  }
   if (err instanceof UpstreamError || err instanceof ChatUpstreamError) {
     res
       .status(err.status)
@@ -24,8 +32,7 @@ export function errorHandler(err, _req, res, _next) {
     res.status(err.statusCode).json(err.toJSON());
     return;
   }
-  // eslint-disable-next-line no-console
-  console.error("Unhandled error:", err);
+  logger.error("Unhandled error:", err);
   res.status(500).json({
     error: {
       code: "INTERNAL_ERROR",

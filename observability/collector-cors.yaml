@@ -1,0 +1,18 @@
+# MERGE this receiver configuration into your EXISTING SigNoz collector config.
+# It is a fragment, not a standalone collector or SigNoz deployment.
+# Keep existing processors/exporters/service pipelines for traces, metrics, logs.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - http://localhost:5173
+            - http://localhost:3014
+            # Add the exact deployed frontend origin (scheme + hostname + port).
+          allowed_headers:
+            - Content-Type
+          max_age: 7200

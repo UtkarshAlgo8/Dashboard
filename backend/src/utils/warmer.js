@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 import { config } from "../config.js";
 import { recordWarmCycle } from "./cache.js";
 import { loadRecorded, topRecorded } from "./warm-recorder.js";
@@ -140,8 +141,7 @@ export async function warmCycle({ baseUrl } = {}) {
           ok++;
         } catch (err) {
           failed++;
-          // eslint-disable-next-line no-console
-          console.warn(`[warm] ${target.method} ${target.path}: ${err.message}`);
+          logger.warn(`[warm] ${target.method} ${target.path}: ${err.name}`);
         }
       },
       config.warm.concurrency,
@@ -149,14 +149,12 @@ export async function warmCycle({ baseUrl } = {}) {
 
     const durationMs = Date.now() - startedAt;
     recordWarmCycle({ durationMs, targets: targets.length });
-    // eslint-disable-next-line no-console
-    console.log(
+    logger.info(
       `[warm] cycle done in ${durationMs}ms — ${ok} ok, ${failed} failed, ${targets.length} targets`,
     );
     return { ok, failed, targets: targets.length, durationMs };
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn(`[warm] cycle aborted: ${err.message}`);
+    logger.warn(`[warm] cycle aborted: ${err.name}`);
     return { ok, failed, error: err.message };
   } finally {
     running = false;
@@ -166,12 +164,10 @@ export async function warmCycle({ baseUrl } = {}) {
 /** Schedule warming. No-op when disabled. Safe to call once at boot. */
 export function startWarmer() {
   if (!config.warm.enabled) {
-    // eslint-disable-next-line no-console
-    console.log("[warm] disabled (CACHE_WARM_ENABLED=false)");
+    logger.info("[warm] disabled (CACHE_WARM_ENABLED=false)");
     return;
   }
-  // eslint-disable-next-line no-console
-  console.log(
+  logger.info(
     `[warm] enabled — every ${Math.round(config.warm.intervalMs / 1000)}s for plants: ${config.warm.plants.join(", ")}`,
   );
 

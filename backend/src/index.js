@@ -1,3 +1,4 @@
+import { logger } from "./utils/logger.js";
 /**
  * Process entry point: bind the port.
  *
@@ -10,13 +11,11 @@ import { startWarmer } from "./utils/warmer.js";
 import { startMaterializer } from "./utils/materializer.js";
 import { startPreheater } from "./utils/preheater.js";
 
-app.listen(config.port, () => {
-  // eslint-disable-next-line no-console
-  console.log(
+export const server = app.listen(config.port, () => {
+  logger.info(
     `JK Dashboard backend listening on http://localhost:${config.port}`,
   );
-  // eslint-disable-next-line no-console
-  console.log(`CORS allow-origin: ${config.frontendOrigin}`);
+  logger.info(`CORS allow-origin: ${config.frontendOrigin}`);
   // Started here rather than in app.js so mounting the app in a test never
   // schedules background upstream traffic. The warmer replays HTTP requests
   // against this server, so it can only start once we are listening.

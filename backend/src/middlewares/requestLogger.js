@@ -1,3 +1,5 @@
+import { sanitizeUrl } from "../utils/telemetry-sanitize.js";
+import { logger } from "../utils/logger.js";
 import { withUpstreamTiming } from "../utils/upstream.js";
 
 /**
@@ -45,9 +47,8 @@ export function requestLogger(req, res, next) {
       upstream.queries > 0
         ? ` (upstream ${upstream.upstreamMs.toFixed(0)}ms, athena ${upstream.athenaMs?.toFixed(0) ?? "?"}ms, ${upstream.queries} queries)`
         : "";
-    // eslint-disable-next-line no-console
-    console.log(
-      `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${res.statusCode} ${ms.toFixed(1)}ms${split}${tag}`,
+    logger.info(
+      `[${new Date().toISOString()}] ${req.method} ${sanitizeUrl(req.originalUrl)} ${res.statusCode} ${ms.toFixed(1)}ms${split}${tag}`,
     );
   });
   withUpstreamTiming(upstream, next);

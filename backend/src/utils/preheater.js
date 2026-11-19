@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 /**
  * Deterministic cache preheater for Banmore (Phase 1).
  *
@@ -297,22 +298,19 @@ export async function preheatCycle({ baseUrl, plantIds, now = new Date() } = {})
           ok++;
         } catch (err) {
           failed++;
-          // eslint-disable-next-line no-console
-          console.warn(`[preheat] ${t.method} ${t.path}: ${err.message}`);
+          logger.warn(`[preheat] ${t.method} ${t.path}: ${err.name}`);
         }
       },
       config.preheat.concurrency,
     );
 
     const durationMs = Date.now() - startedAt;
-    // eslint-disable-next-line no-console
-    console.log(
+    logger.info(
       `[preheat] cycle done in ${durationMs}ms — ${ok} ok, ${failed} failed, ${targets.length} targets (plants: ${plants.join(", ")})`,
     );
     return { ok, failed, targets: targets.length, durationMs };
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn(`[preheat] cycle aborted: ${err.message}`);
+    logger.warn(`[preheat] cycle aborted: ${err.name}`);
     return { ok, failed, error: err.message };
   } finally {
     running = false;
@@ -328,12 +326,10 @@ export async function preheatCycle({ baseUrl, plantIds, now = new Date() } = {})
  */
 export function startPreheater() {
   if (!config.preheat.enabled) {
-    // eslint-disable-next-line no-console
-    console.log("[preheat] disabled (CACHE_PREHEAT_ENABLED=false)");
+    logger.info("[preheat] disabled (CACHE_PREHEAT_ENABLED=false)");
     return;
   }
-  // eslint-disable-next-line no-console
-  console.log(
+  logger.info(
     `[preheat] enabled — every ${Math.round(config.preheat.intervalMs / 1000)}s for plants: ${config.preheat.plants.join(", ")}`,
   );
 
