@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 /**
  * Quality SPC controllers.
  *
@@ -193,7 +194,7 @@ async function loadBoardSeries({ machine, recipe, shift }) {
         // affected widgets fall back to "no silver measurements". Log it:
         // silently swallowed, an upstream failure is indistinguishable from
         // a combo with no history, and the board just looks like no data.
-        console.warn(`[spc] board series ${src.table}: ${err.message}`);
+        logger.warn(`[spc] board series ${src.table}: ${err.name}`);
         return {
           src,
           params,
@@ -288,8 +289,8 @@ async function loadSilverReadings({ src, machine, recipe, parameter, shift }) {
       SILVER_CACHE_TTL_MS,
     );
   } catch (err) {
-    console.warn(
-      `[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.message}`,
+    logger.warn(
+      `[spc] silver readings ${src.table} ${machine}/${recipe}/${parameter}: ${err.name}`,
     );
     return [];
   }

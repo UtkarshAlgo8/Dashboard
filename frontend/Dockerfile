@@ -13,6 +13,16 @@ COPY . .
 # Backend the bundle talks to. Vite inlines this at BUILD time, so it cannot be
 # changed by a run-time -e flag — the test stack must pass it as --build-arg.
 ARG VITE_API_BASE_URL
+ARG VITE_OTEL_ENABLED=false
+ARG VITE_OTEL_SERVICE_NAME=jk-dashboard-frontend
+ARG VITE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces
+ARG VITE_OTEL_TRACES_SAMPLER_ARG=1
+ARG VITE_APP_VERSION=0.0.0
+ENV VITE_OTEL_ENABLED=${VITE_OTEL_ENABLED} \
+    VITE_OTEL_SERVICE_NAME=${VITE_OTEL_SERVICE_NAME} \
+    VITE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${VITE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT} \
+    VITE_OTEL_TRACES_SAMPLER_ARG=${VITE_OTEL_TRACES_SAMPLER_ARG} \
+    VITE_APP_VERSION=${VITE_APP_VERSION}
 
 # Written to .env.production.local rather than relied on as a process env var:
 # that file has the highest precedence of any Vite env source, so it beats the

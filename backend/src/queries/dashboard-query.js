@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 /**
  * Universal dashboard query builder.
  *
@@ -556,7 +557,7 @@ export function resolveGranularity(rawValue, isRangeMode = false) {
     // With no explicit value, a range still resolves to DAY — which is both
     // the general default and what Rule 0.1 requires.
     void isRangeMode;
-    console.warn(
+    logger.warn(
       `[granularity] missing/"all" value -> defaulting to ${DEFAULT_GRANULARITY}`,
     );
     return DEFAULT_GRANULARITY;
@@ -565,13 +566,13 @@ export function resolveGranularity(rawValue, isRangeMode = false) {
   if (key === "ytd" || key === "year" || key === "yearly") {
     const gran = normalizeGranularity(trimmed);
     if (gran != null) return gran;
-    console.warn("[granularity] Year/YTD requested while disabled -> no data");
+    logger.warn("[granularity] Year/YTD requested while disabled -> no data");
     return NO_DATA;
   }
 
   const gran = normalizeGranularity(trimmed);
   if (gran == null || !ALLOWED_GRANULARITIES.has(gran)) {
-    console.warn(
+    logger.warn(
       `[granularity] unrecognized "${trimmed}" -> defaulting to ${DEFAULT_GRANULARITY}`,
     );
     return DEFAULT_GRANULARITY;

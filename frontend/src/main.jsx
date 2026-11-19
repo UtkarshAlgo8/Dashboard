@@ -1,6 +1,4 @@
-import { createRoot } from "react-dom/client";
-import "./index.css";
-import App from "./App.jsx";
+import { initializeTelemetry } from "@/telemetry";
 
 // StrictMode intentionally double-invokes effects/renders in DEVELOPMENT to
 // surface unsafe effects. It's a no-op in production. We removed it because it
@@ -29,4 +27,5 @@ window.addEventListener("vite:preloadError", (event) => {
   window.location.reload();
 });
 
-createRoot(document.getElementById("root")).render(<App />);
+// Instrument XHR/fetch before importing App and its API clients.
+initializeTelemetry().finally(() => import("./renderApp.jsx"));

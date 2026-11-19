@@ -174,3 +174,10 @@ The 122-row intake table at
 PM walk. Once walked, the UNANSWERED + escalated-INFERRED rows will be
 added to this registry as Q01, Q02, … and the seed naming convention
 (Q-AUTH-01 etc.) will retire.
+
+## SigNoz deployment assumptions — 2026-11-19
+
+- User requested code readiness for a self-hosted SigNoz on a new branch; deployment is out of scope.
+- Telemetry is opt-in. The operator supplies a browser-accessible OTLP/HTTP trace URL and allows the deployed frontend origin in the collector. Backend endpoint may use an internal Docker hostname.
+- Browser instrumentation covers API XHR/fetch and uncaught error types; it excludes UI input values, arbitrary third-party requests, and exception messages/stacks. Sampling defaults to 100% when enabled and is configurable before building.
+- OpenTelemetry dependencies approved through the user's specified HTTP/Express/MySQL2/Winston instrumentation pipeline.

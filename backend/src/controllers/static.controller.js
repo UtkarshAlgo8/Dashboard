@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import { CACHE_TTL, cached, buildCacheKey } from "../utils/cache.js";
 import { runQuery } from "../utils/upstream.js";
 import { escapeLiteral } from "../queries/queries.js";
@@ -413,9 +414,8 @@ export async function perPlantSummaries(plants, load) {
       if (result.value) entries.push(result.value);
       return;
     }
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[plants] landing KPIs unavailable for '${plants[i].id}': ${result.reason?.message ?? result.reason}`,
+    logger.warn(
+      `[plants] landing KPIs unavailable for '${plants[i].id}': ${result.reason?.name ?? "Error"}`,
     );
   });
   return Object.fromEntries(entries);

@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import { Sequelize } from "sequelize";
 import { config } from "../config.js";
 
@@ -26,14 +27,12 @@ const authsequelize = new Sequelize(
 authsequelize
   .authenticate()
   .then(() => {
-    // eslint-disable-next-line no-console
-    console.log(`[db] connected auth=${config.db.authName}`);
+    logger.info(`[db] connected auth=${config.db.authName}`);
   })
   .catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error(
+    logger.error(
       `[db] connect failed auth=${config.db.authName}:`,
-      err.message,
+      err.name,
     );
   });
 

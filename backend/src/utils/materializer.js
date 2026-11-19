@@ -1,3 +1,4 @@
+import { logger } from "./logger.js";
 /**
  * Materializer — pulls level-1+2 deduped rows for the trailing window
  * into process memory, indexed for fast filter lookups.
@@ -339,10 +340,10 @@ async function refreshPlant(plantId) {
         count: state.byPlant.get(plantId).count,
       });
     } catch (err) {
-      console.warn(`[materializer] redis persist failed for ${plantId}: ${err.message}`);
+      logger.warn(`[materializer] redis persist failed for ${plantId}: ${err.name}`);
     }
 
-    console.log(
+    logger.info(
       `[materializer] ${plantId} refreshed in ${Date.now() - startedAt}ms (${rows.length} rows)`,
     );
     return state.byPlant.get(plantId);
@@ -351,7 +352,7 @@ async function refreshPlant(plantId) {
     if (prev) {
       prev.errors.push({ at: new Date().toISOString(), message: err.message });
     }
-    console.warn(`[materializer] ${plantId} refresh failed: ${err.message}`);
+    logger.warn(`[materializer] ${plantId} refresh failed: ${err.name}`);
     return prev ?? null;
   });
 
@@ -394,21 +395,21 @@ async function tryRestoreFromRedis() {
         buckets: indexed.buckets,
         allRows: indexed.allRows,
       });
-      console.log(
+      logger.info(
         `[materializer] ${plantId} restored from redis (${rows.length} rows, age ${Math.round(ageMs / 1000)}s)`,
       );
     } catch (err) {
-      console.warn(`[materializer] ${plantId} redis restore failed: ${err.message}`);
+      logger.warn(`[materializer] ${plantId} redis restore failed: ${err.name}`);
     }
   }
 }
 
 export function startMaterializer() {
   if (!config.materialize.enabled) {
-    console.log("[materializer] disabled (CACHE_MATERIALIZE_ENABLED=false)");
+    logger.info("[materializer] disabled (CACHE_MATERIALIZE_ENABLED=false)");
     return;
   }
-  console.log(
+  logger.info(
     `[materializer] enabled — every ${Math.round(config.materialize.intervalMs / 1000)}s, ` +
       `window ${config.materialize.windowDays}d, levels ${config.materialize.levels.join(",")}, ` +
       `plants: ${config.materialize.plants.join(", ")}`,

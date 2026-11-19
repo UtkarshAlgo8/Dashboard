@@ -1,5 +1,7 @@
 # JK Dashboard — Backend
 
+Self-hosted SigNoz configuration: [observability guide](../observability/README.md).
+
 Node.js + Express service that proxies a single upstream `gold_dummy`
 data API (AWS Lambda over parquet, SELECT/WITH only) and exposes the
 REST shape consumed by `../frontend/`. No DB, no ORM.

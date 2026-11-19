@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 /**
  * Send log for the Scheduler Adherence mail: every send and test send, with
  * the user, recipients and the 9 values. Lives in the auth MySQL DB — see
@@ -72,7 +73,7 @@ export async function logSend({ reportDate, isTest, status, user, to, cc, values
       },
     );
   } catch (err) {
-    console.error("[mail] send log write failed:", err.message);
+    logger.error("[mail] send log write failed:", err.name);
   }
 }
 
@@ -99,7 +100,7 @@ export async function lastSent(reportDate = null) {
       at: new Date(r.createdAt).toISOString(),
     };
   } catch (err) {
-    console.error("[mail] send log read failed:", err.message);
+    logger.error("[mail] send log read failed:", err.name);
     return null;
   }
 }
